@@ -2544,3 +2544,45 @@ needs the approved clinic financial intent/terms, exact account/action/amount/
 currency inspection, one-shot creation/recovery and durable provider-owned
 pending work before acknowledgement, separately permitted delivery/receipt/
 clinical expiry and restoration/quiescence guards. All13 gaps stay active.
+
+### Gap11 fresh Stripe provider evidence preparation — current synthetic refinement
+
+A concrete read-only `StripeCheckoutReader` now complements signed-event
+verification. It captures an independently supplied exact financial binding,
+checks the current credential-owning account, then retrieves only that Checkout
+Session with expanded PaymentIntent/latest Charge under the configured account,
+mode and API version. Client/action reference, positive integer amount and
+currency must match at every applicable level. A paid Session alone is
+insufficient: received evidence requires a succeeded Intent, exact received
+amount and matching paid/captured Charge. Refund/dispute evidence returns a
+separate adjusted result. An absent/unusable hosted receipt does not undo
+captured-money evidence; this proves neither net settlement nor coverage.
+
+Unpaid, pending and closed-payment evidence remain distinct. Only an expired
+unpaid Session with no Intent or a canceled Intent reports `paymentClosed`.
+That is a financial observation, not clinical expiry authority or a cancelled
+appointment. Per Stripe's Checkout contract, expiry belongs to the Session;
+do not directly confirm/cancel its PaymentIntent. This reader makes only GETs,
+bounds fetch/body waits, body size and clock progression, and releases rejected
+or interrupted private response bodies. Binding/result fields are explicitly
+allowlisted; no patient/contact/card/client-secret body enters a result or log.
+
+The refinement found a real field-copy mistake before publication: spreading
+a larger trusted host intent could leak extra patient/recipient fields into the
+result. `work1792190704353` reproduced it (18passed/1intentional failure).
+Explicit binding-field capture corrected it; after final strict-status and
+response-owner refinements `work1792190797135` passed19/19,0skips,
+2.121s test duration, peak64,581,632B, all memory limit/OOM events0. These tests
+use injected synthetic fetches; no real Stripe account/payment/provider call
+or clinical/email effect occurred. Current full TypeScript remains pending
+actual shared-resource admission, not operator permission.
+
+Primary contracts checked16October2026:
+https://docs.stripe.com/api/checkout/sessions/object,
+https://docs.stripe.com/api/payment_intents/object,
+https://docs.stripe.com/api/charges/object.
+This prepares provider evidence only. Approved immutable native financial
+intent/terms, caller/service permissions, one-shot payable creation and exact
+readonly unknown recovery, durable provider-owned pending work, actual link/
+receipt delivery and independently authorized expiry/race/process/backup
+journeys are still unfinished. The receptionist financial refusal remains.
