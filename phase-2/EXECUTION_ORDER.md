@@ -149,3 +149,11 @@ Use one coherent reviewable patch at a time, with focused semantic tests, actual
 Refine the detailed gap 11–13 specifications immediately before their implementations using the corresponding audit acceptance scenarios and then-current source. Do not treat this order as a settled payment, campaign or clinical-content product specification. Update the master roadmap's evidence as work lands; keep this document focused on dependencies and sequencing.
 
 This sequence was checked against the three documents for booking-step order, all thirteen gaps, all twenty-eight reuse items, operation-specific recovery, deferred external acceptance and source preservation. It records proposed work; it claims no newly executed product tests, implementation or deletion readiness.
+
+### Shared-host execution
+
+For future local jobs, follow the operator's live host policy at
+`/home/gust/infra/docs/shared-compute.md`. Independent bounded jobs may overlap
+when actual CPU/RAM headroom and file/database isolation permit. Historical
+exclusive-slot notes are not current resource authority. Preserve source pins,
+test concurrency/deadlines and real shared-file/database exclusions.

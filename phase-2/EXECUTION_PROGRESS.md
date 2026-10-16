@@ -2370,3 +2370,75 @@ reported1pass/1fail. The unpublished commit was corrected before any publication
 and resolved facts1792183474687 pass2. No qualification source contained those
 markers. This merge uses set-e and asserts all conflict markers are absent
 before staging/committing.
+
+### Current corrected serving and concurrent allocation qualification
+
+Frozenbe5f passes whole TypeScript/new451 serving build1792185359296,
+21:15:59.522366–21:17:37.608684UTC,natural0,1182 inputs unchanged,
+peak1,566,765,056B/OOMhighmax0. Only compiledClassMoveHost differs from984;
+the signed journey parent driver runs TypeScript and is whole-typechecked.
+
+Actual corrected cross-case/service pass date1792185841918 now passes1,zero
+skips,21:24:03.089840–21:29:33.932791UTC,324.249s body. Private same-patient
+renewal/newly played replacement consent, exact three writes/joint final
+inspection, physical180 budget and SQL/backup/public/raw privacy pass with the
+original420s/wait-count bounds.1182/451 unchanged;peak253,972,480B excludes
+DockerPG/OOMhighmax0. Exitfile0/wrapper333657 absent verified before release.
+
+Actual maximum-history cross-case pass preservation1792186263379 passes1,
+zero skips,21:31:03.759085–21:35:39.769566UTC,269.861s body.999 case and201
+roster history, private renewal/all phases/privacy retain the original360s/
+180 bounds.1182/451 unchanged;peak210,284,544B excludesDockerPG/OOMhighmax0.
+Exitfile0/wrapper337410 absence verified. These are scoped current positives;
+parent984 same-case date, a139 ordinary staff/ordinal and b202 full results
+remain scoped historical results until the combined regression is complete.
+
+Concurrency077 adds exactly one NodeTS test tobe5f's1182 byte-identical inputs.
+451 freshbe5f serving artifacts are independently copied and hashed, not linked.
+Two pre-work refusals occurred: a transient peer PID340471 naturally disappeared,
+then a manually mistyped expected runner digest was rejected (runner unchanged).
+Neither refusal invoked work/npm; the same authorized job was started once.
+Work1792186894344 passes full TypeScript60.523s then the ONE signed allocation
+PG case1/zero skips,135.730s body,21:41:34.941706–21:44:57.229717UTC, natural0.
+1183/451 unchanged;whole-scopepeak1,601,859,584B excludesDockerPG/OOMhighmax0;
+exitfile0/wrapper340609 absent verified. Actual separate-process SQL claims
+consume exactly unreserved capacity and cannot consume/release the held native
+allowance. After release, distinct played phase consent is required for the
+original cancellation; exact2attendance writes/1review,180 ceiling, no residual
+allocation, SQL/backup/public/raw privacy pass. This does not claim another
+remote clinical write or atomic last-seat guarantee. Original240s deadline and
+concurrency1 remain. No full current-graph result is inferred.
+
+Draft472 publishesbe5f; PR run38969404773 and push38969400263 both fail before
+startup, four jobs/zero steps. GitHub's account-payment/spending-limit annotation
+is an external CI blocker, not an executed test failure. Its body records actual
+cross-case/maximum results. No unchanged cloud retry, billing/workflow change,
+main merge or deployment. Independent review and clinic acceptance stay open.
+
+### Current host scheduling supersedes the historical handoff notes
+
+The operator replaced shared conventions after the above natural terminal.
+`/home/gust/infra/docs/shared-compute.md` is authoritative for future CPU/RAM
+scheduling. All old one-heavy/empty-peer-board/any-Node-process/manual-release
+rules recorded above are historical, not current admission requirements.
+Old frozen runners/results are preserved. Future launchers use live host and
+parent cgroup capacity, bounded phase budgets, other admitted jobs' possible
+growth and1.5GiB host reserve. Actual writable-worktree/generated-artifact/
+fixed-temp/destructive-database conflicts remain serialized. Repository test
+concurrency, source/artifact pins, quotas and deadlines remain unchanged.
+
+Before the next full suite: discovered six CPUs, about8GiB MemAvailable/PSI0,
+uncapped applicable parent cgroups and six persistent local PostgreSQL
+containers around29–38MiB each. Persistent usage already reduces MemAvailable.
+The previous full suite's Node scope peaked1,009,278,976B; the prospective full
+suite budget is1.5GiB Node scope (CPU200%,Swap0), plus a separate aggregate1GiB
+Docker slice (CPU100%,Swap0) for its main/fixture databases and backup clients.
+The external1GiB is a bounded headroom estimate, not a measured previous peak.
+Future fresh admission includes these2.5GiB, live peers' remaining cap growth
+and the host reserve; it does not wait on a remembered reservation. Actual new
+peaks will qualify this resource choice separately from test correctness.
+
+All thirteen gaps remain active. The next task is the complete migrated
+PostgreSQL regression on the current combined graph, then remaining independent
+engineering in EXECUTION_ORDER including owner-selected Stripe11, outbound12
+and approvedwriteback13. No current full regression/activation is claimed yet.
