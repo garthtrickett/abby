@@ -2219,3 +2219,62 @@ the physical180 account guard. This source needs a new whole TypeScript check,
 serving build and the previously failed signed PostgreSQL pass case. No such
 new-source compiled or full-graph acceptance is claimed yet. Other correction/
 maximum/concurrent cohorts and the thirteen-gap goal remain active.
+
+### Fresh-original build and actual signed date-correction results
+
+Frozen984de50 passes full TypeScript/new serving build1792183486389,
+20:44:46.600159–20:46:22.346654UTC,natural0,1181 inputs/451JS unchanged,
+peak1,578,102,784B/OOMhighmax0. Only compiledClassMoveHost differs from3592.
+Actual signed same-case pass date1792183629497 passes1,zero skips,
+20:47:10.469075–20:51:38.155451UTC,260.179s body. All phase/write/quota/
+SQL/backup/public/raw privacy assertions pass. Exitfile0/wrapper324323 absent;
+peak232,992,768B excludes DockerPG/OOMhighmax0. No3592 PG case started.
+
+Actual cross-case/service date-pass1792184155398 fails1,zero skips,
+20:55:55.842825–20:59:14.239000UTC,192.325s body: corrected readback succeeds,
+then journey69 expects the first replacement write1 and observes0.
+1181/451 unchanged,peak217,821,184B excludesDockerPG/OOMhighmax0.
+Exitfile1/wrapper327085 absent; slot released, no unchanged rerun.
+
+### Initial replacement quota wait needs the renewable native owner
+
+Memory1792184433572 reproduces the pre-send refusal. Read-only trace
+1792184535896 finds59s quote validity remaining but no eligible proof context
+on the retry; disposal trace1792184567836 rules out premature disposal.
+TransientPatientProofHost intentionally requires >120s remaining validity:
+the300s proof has117s after three61s windows. This guard and proof lifetime
+are unchanged. Diagnostic wrappers restore exact host/verifier bytes; their
+wrapper0 captures a failing Node result, not a passing weakened runtime.
+Spread fixture getters snapshot zero claims/windows; those debug counters
+are not live quota evidence and are not used for acceptance.
+
+The dedicated red1792184716709 expects pending replacement continuation but
+sees legacy awaitingConfirmation. A captured approved staged move now hands
+a valid1–60s account wait to its existing native replacement rendezvous.
+Native advance still requires the complete exact phase allocation before
+protected reads, review or attendance I/O. Unavailable/malformed responses
+cannot admit this path. Parked original/replacement are both notSent; old Yes
+cannot replay. Continuation performs quota admission/private same-patient
+proof succession, then requires a new exact played phase readback and separate
+Yes. Old request/quote remain immutable; replacement preparation cannot outlive
+that quote. No core interface, quota/expiry/headroom increase, autonomous timer,
+serialized owner or new authority is introduced.
+
+First positive1792184736157 passes. Surrounding correction/date/ordinary/pass/
+large-history/native-stage/phase-wait1792184781106 passes54,zero skips,67.123s.
+New expiry/permission controls1792184868650 initially assumed successful wrapper
+responses; denied TextReception preparations return effectFailure. Refined
+checks require exactly that denial plus no fresh consent/write/review and
+unchanged request. Five controls1792184900004 pass,zero skips,11.486s: private
+renewal, old-code/unplayed/old-affirmation denial, expired quote, permission
+revocation, unavailable budget and overlong wait. These are source-level
+checks, not compiled serving acceptance.
+
+The signed driver now handles an unsent replacement continuation using the
+same renewal/readback/affirmation path as later stages, retaining actual
+accepted-turn/playback/host-clock assertions. Scenario wait counts and deadlines
+are unchanged. This new source still requires full TypeScript, a fresh serving
+build and the failed cross-case signed PG retry. Current-graph full regression,
+concurrency and independent/cloud/clinic acceptance remain open. Concurrency
+preparation6f0275c/its984 artifact copies predate this refinement; no old runner
+or reservation qualifies that later graph. All thirteen gaps remain active.
