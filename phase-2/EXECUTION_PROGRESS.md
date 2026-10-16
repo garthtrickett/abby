@@ -1353,3 +1353,24 @@ qualification does not establish the clock hypothesis or a semantic pass.
 The next separately coordinated ordinary run must measure its continuation
 skew and preserve all existing deadline/permission/state assertions. No pass
 case or whole-suite claim is made.
+
+### Signed ordinary final-wording assertion correction
+
+The separately coordinated ordinary case on frozen `0c273ec` ran as
+work1792165940928/log `be9df097-1792165940928.log` from
+15:52:21.198235 to15:54:38.222326UTC, natural exit1. The test body reached
+both native writes, distinct played original-cancellation consent and the final
+staged `classMovement` receipt. Its next assertion incorrectly expected the
+legacy whole-move phrase "Your appointment move is confirmed." The staged
+receipt contract in `class-movement-continuation.ts` returns "Your class move
+is confirmed." The test now asserts that exact existing contract; runtime and
+legacy-path expectations are unchanged.
+
+The failure occurred before the clock-skew, final write-list, budget and privacy
+assertions. Those checks remain unqualified; this is not a passing journey or
+proof of the earlier clock hypothesis. Scope peak208,138,240B excludes the
+disposable Docker PostgreSQL server; OOM/high/max0 and source/artifact pins
+unchanged. Wrapper1338309 is absent and the actual terminal/release was sent to
+Gust. Its corrected356 diagnostic retains the next heavy slot. No pass case,
+full typecheck or unchanged retry is bundled. The wording correction is in the
+uncompiled parent test, leaving the448 serving artifacts unchanged.

@@ -64,7 +64,7 @@ for (const pass of [false, true]) test(`E2E-419 compiled signed ${pass ? "maximu
       if (pass && index < 2) assert.match(call.spoken.at(-1)!, /overall class move is not confirmed/);
       await call.mark();
     }
-    assert.equal(call.spoken.at(-1), "Your appointment move is confirmed.");
+    assert.equal(call.spoken.at(-1), "Your class move is confirmed.");
     const timings = call.messages.filter(row => row.kind === "classTurnTiming");
     assert.ok(timings.length > 0 && timings.every(row => typeof row.aheadByMs === "number" && row.aheadByMs <= 0),
       "the actual synthetic speech turn cannot outrun the captured host clock");
