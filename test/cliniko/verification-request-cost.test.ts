@@ -22,8 +22,8 @@ for (const revisionCost of [0, 1]) test(`E2E-419 actual proof ceiling covers loo
     assert.equal(f.session.nativeRequestCostCeilings(binding), undefined, "an account match does not invent unknown callback ceilings");
     f.session.dispose();
     const original = f.sessionConfig;
-    const policy = { operation: original.operation, current: declareClinikoRequestCost(async (...args: Parameters<typeof original.policy.current>) => {
-      assert.equal(await claimClinikoBudget(budget), null); return original.policy.current(...args);
+    const policy = { operation: original.operation, current: declareClinikoRequestCost(async (bound: Parameters<typeof original.policy.current>[0]) => {
+      assert.equal(await claimClinikoBudget(budget), null); return original.policy.current(bound);
     }, binding, 1) };
     const lookup = { candidates: declareClinikoRequestCost(async (...args: Parameters<typeof original.lookup.candidates>) => {
       assert.equal(await claimClinikoBudget(budget), null); return original.lookup.candidates(...args);

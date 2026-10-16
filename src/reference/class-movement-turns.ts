@@ -26,11 +26,11 @@ export class ClassMovementTurns {
         const checked = await awaitUntilAbort(Promise.all([this.#policies.read(scope), this.#ledger.readWriteStop(scope)]), signal);
         const at = Date.parse(this.#clock());
         if (!found?.ok || !checked || signal.aborted || !Number.isFinite(at) || at < startedAt) return undefined;
-        const [policy, stop] = checked;
+        const [policy, stop] = checked, lease = found.value.sessionLease;
         const valid = (p: CallState["policy"]) => p.automationEnabled && p.reschedulingEnabled && p.staffWorkEnabled && p.capabilities.reschedule === "execute";
         return policy.ok && stop.ok && !stop.value.stopped && valid(policy.value) && valid(found.value.policy) &&
           policy.value.policyVersion === found.value.policy.policyVersion && found.value.lifecycle === "active" && !found.value.callerIdentityDenied &&
-          found.value.sessionLease?.sessionId === turn.sessionId && Date.parse(found.value.sessionLease.expiresAt) > at ? found.value : undefined;
+          lease !== undefined && lease.sessionId === turn.sessionId && Date.parse(lease.expiresAt) > at ? found.value : undefined;
       };
       const before = await ready();
       if (!before) return err({ kind: external?.aborted ? "staleTurn" : "invalidTransition" });

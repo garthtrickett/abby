@@ -218,7 +218,7 @@ export class CallerVerificationSession {
       const lookup: CallerCandidateLookup = { candidates: inheritClinikoRequestCost(async (scope: Parameters<CallerCandidateLookup["candidates"]>[0], number: string, stop?: AbortSignal) => {
         const found = await config.lookup.candidates(scope, number, stop);
         return found.ok && found.value.kind === "one" && found.value.candidateIds.length === 1 && found.value.candidateIds[0] === patientId
-          ? found : ok({ kind: "none", candidateIds: [] });
+          ? found : ok({ kind: "none" as const, candidateIds: [] });
       }, config.lookup.candidates) };
       const created = CallerVerificationSession.create({ ...config, lookup });
       if (!created.ok) return unavailable();

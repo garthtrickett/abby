@@ -479,7 +479,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     return { kind: "classMovement", actionKey: mutation.actionKey, progress: owner.progress, outcome: "needsReview" };
   }
   async continueClassMovement(mutation: HostMutation, consent: ClassMovementConsent, now: string, external?: AbortSignal): Promise<HostWriteReceipt> {
-    const owner = this.#staged, reject = (): HostWriteReceipt => ({ kind: "rejected", actionKey: mutation.actionKey });
+    const owner = this.#staged, reject = (): HostWriteReceipt => ({ kind: "rejected", actionKey: mutation.actionKey, reason: "forbidden" });
     if (!owner || !owner.continuation || this.#busy || !isDeepStrictEqual(owner.mutation, mutation) ||
         !isDeepStrictEqual(owner.continuation, consent.evidence.continuation) || !Number.isFinite(Date.parse(now)) ||
         Math.abs(Date.parse(now) - Date.parse(this.#now())) > 30000 || external?.aborted) return reject();

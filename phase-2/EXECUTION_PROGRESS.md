@@ -939,3 +939,33 @@ its scope and heap were not explicitly capped. This is a useful observation,
 not a guarantee for this larger native tree. No new heavy job is automatically
 authorized by Gust's latest release; the next frozen standalone native typecheck
 requires a fresh board/source/live-process check and peer coordination.
+
+
+### Full native typecheck diagnostic and narrow corrections
+
+Frozen697fdbe4b63629d36bcba18db8005813160dba86 ran its first complete
+`npm run typecheck` under the explicitly coordinated single slot. Work
+1792159844988 naturally exited2 after73.59s at14:11:58.874204UTC; log
+`be9df097-1792159844988.log`. All1162 source/dependency/config inputs remained
+unchanged. Scope peak was1,574,649,856 bytes (1.467GiB), with no high/max/OOM
+events and no explicit scope/heap cap. No free-RAM floor was inferred from that
+measurement. Wrapper/Python/npm absence was verified14:12:18.313984UTC and
+the slot released to Gust; no automatic retry followed.
+
+The eight diagnostics were a missing session-lease narrowing, widened `none`
+lookup literal through the generic cost forwarder, two rejected phase receipts
+missing their required reason, a recursive fixture inference needing an explicit
+number, an un-narrowed presentation, a union-method spread in the cost fixture,
+and a fixture unavailable-action missing its action kind. Corrections preserve
+all runtime authority guards and add explicit forbidden rejection reasons. The
+withdrawal fixture now requires an actual notice/speech presentation before
+asserting that protected target text is absent. No test was removed or skipped.
+The corrected source still requires its own complete typecheck.
+
+The corrected `ABBY_LEDGER=memory node --test --test-concurrency=1
+test/text/class-movement-turns.test.ts test/text/class-movement-sam.test.ts
+test/cliniko/class-move-staged-host.test.ts
+test/cliniko/verification-request-cost.test.ts
+test/cliniko/class-move-staged-call-flow.test.ts` passed43 cases, zero failures/
+cancellations/skips, log `be9df097-1792159977225.log`. Facts were reviewed
+against the narrow type changes and directly cited fingerprints refreshed.

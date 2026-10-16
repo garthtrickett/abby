@@ -184,7 +184,7 @@ test(`a possibly-sent phase retains uncertainty after ${boundary} without retain
   const next = await nextConsent(app); await next.play(); success(await next.affirm());
   success(await app.runtime.markHostPossiblySent(app.callId, next.effectId, now));
   if (boundary === "speech") success(await app.runtime.beginSpeech(app.callId, app.sessionId, now));
-  else success(await app.turn("new-request", "Another question", { kind: "unavailableAction" }));
+  else success(await app.turn("new-request", "Another question", { kind: "unavailableAction", actionKind: "book" }));
   const state = await app.state(), action = state.actions[app.action.key]!;
   assert.equal(action.status, "needsReview");
   assert.equal(action.classMovement?.outcome, "needsReview");

@@ -1103,7 +1103,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   async continueClassMovement(mutation: HostMutation, consent: import("../core/class-movement-consent.ts").ClassMovementConsent, now: string, signal?: AbortSignal): Promise<HostWriteReceipt> {
     const owner = this.#owner;
     if (this.closed || this.#staffActive || this.#verificationRequired || this.patientAccessDenied || this.#tasks?.isRetired(mutation.actionKey) ||
-        !(owner instanceof ClinikoClassSession) || !owner.rescheduling) return { kind: "rejected", actionKey: mutation.actionKey };
+        !(owner instanceof ClinikoClassSession) || !owner.rescheduling) return { kind: "rejected", actionKey: mutation.actionKey, reason: "forbidden" };
     return owner.rescheduling.continueClassMovement(mutation, consent, now, signal);
   }
   async readStaffReviewProcess(query: import("../core/host.ts").StaffReviewProcessQuery) {

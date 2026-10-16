@@ -30,7 +30,7 @@ for (const pass of [false, true]) test(`E2E-419 actual staged ${pass ? "pass" : 
         prepared = resultValue(await f.host.prepareClassMovementContinuation(action.key, signal));
       }
       assert.ok(prepared.kind === "ready"); assert.equal(prepared.evidence.continuation.stage, stage);
-      const before = f.writes.length;
+      const before: number = f.writes.length;
       resultValue(await f.runtime.prepareClassMovementConsent(f.callId, action.key, prepared.evidence, at(), prepared.expectedConversationRevision));
       state = await f.state(); current = state.actions[action.key]!;
       assert.equal(current.status, "awaitingConfirmation"); assert.equal(f.writes.length, before);
@@ -77,9 +77,9 @@ test(`E2E-419 staged ${pass ? "pass" : "ordinary"} host refuses ${boundary} befo
       resultValue(await f.runtime.markHostPossiblySent(f.callId, `${initial.key}:classStage:${consent.digest}`, at()));
       const forged = { ...consent, evidence: { ...consent.evidence,
         continuation: { ...consent.evidence.continuation, ref: `class-move-stage:${randomUUID()}` } } };
-      assert.deepEqual(await f.host.continueClassMovement(initial.mutation, forged, at(), signal), { kind: "rejected", actionKey: initial.key });
+      assert.deepEqual(await f.host.continueClassMovement(initial.mutation, forged, at(), signal), { kind: "rejected", actionKey: initial.key, reason: "forbidden" });
     } else if (boundary === "unplayed") {
-      assert.deepEqual(await f.host.continueClassMovement(initial.mutation, consent, at(), signal), { kind: "rejected", actionKey: initial.key });
+      assert.deepEqual(await f.host.continueClassMovement(initial.mutation, consent, at(), signal), { kind: "rejected", actionKey: initial.key, reason: "forbidden" });
     } else {
       if (boundary === "permission") f.permit(false);
       if (boundary === "review") f.recalls[0]!.updated_at = new Date(Date.parse(at()) + 1).toISOString();
@@ -108,7 +108,8 @@ test(`E2E-419 withdrawn patient ${fault} cannot disclose a fresh phase readback`
     assert.equal(state.actions[initial.key]!.status, "needsReview");
     assert.equal(state.actions[initial.key]!.classMovementConsent, undefined);
     const notice = state.pendingPresentationId ? state.presentations[state.pendingPresentationId] : undefined;
-    assert.doesNotMatch(notice?.approvedText ?? "", /The original class is on|Demo Instructor|Mat Pilates/);
+    assert.ok(notice && (notice.kind === "speech" || notice.kind === "notice"));
+    assert.doesNotMatch(notice.approvedText, /The original class is on|Demo Instructor|Mat Pilates/);
     assert.equal(f.writes.length, 1); assert.equal(f.native.attendees.find(row => row.id === "101")!.cancelled_at, null);
   } finally { await f.close(); }
 });
