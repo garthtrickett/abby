@@ -291,6 +291,28 @@ function handleRequest(state: CallState, turn: FinalCallerTurn, request: ActionR
   return ok(undefined);
 }
 
+function prepareClassMovementConsent(state: CallState, actionKey: string,
+  evidence: import("./class-movement-consent.ts").ClassMovementConsentEvidence, now: string): Result<void, TransitionFailure> {
+  const target = state.actions[actionKey];
+  if (!target || target.status !== "pendingContinuation" || state.pendingPresentationId ||
+      Object.values(state.presentations).some(item => item.status === "started" || item.status === "possiblySent") ||
+      Object.values(state.actions).some(item => item.key !== target.key && ["awaitingConfirmation", "ready", "dispatched"].includes(item.status))) return err({ kind: "invalidTransition" });
+  const consent = readClassMovementConsent(state, target, evidence, now);
+  if (!consent) return err({ kind: "confirmationMissing" });
+  const id = `${target.key}:classStage:${consent.digest}:confirmation`;
+  if (state.presentations[id]) return err({ kind: "invalidTransition" });
+  state.actions[target.key] = { ...target, status: "awaitingConfirmation", presentationId: id,
+    classMovementConsent: { ...consent, presentationId: id } };
+  const request = target.mutation.request;
+  if (request.kind !== "reschedule") return err({ kind: "invalidTransition" });
+  const locale = state.policy.voiceProfile?.locale ?? "en-AU", details = request.offer.presentation;
+  const context = `The original class is on ${appointmentTime(request.target.startsAt, request.target.timeZone, locale)}. The replacement${details ? ` ${details.appointmentTypeName} with ${details.practitionerName}, for ${details.durationMinutes} minutes,` : " class"} is on ${appointmentTime(request.offer.startsAt, request.target.timeZone, locale)}. ${request.terms.approvedText}`;
+  const approvedText = `${classMovementOutcomeText(target.classMovement!)} ${context} ${classMovementConsentText(consent)}`;
+  state.presentations[id] = { kind: "speech", id, actionKey: target.key, digest: consent.digest, approvedText, status: "pending" };
+  state.pendingPresentationId = id;
+  return ok(undefined);
+}
+
 function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: TurnInterpretation, now: string): Result<void, TransitionFailure> {
   if (state.lifecycle !== "active") return err({ kind: "invalidTransition" });
   if (state.admission && (!state.sessionLease || turn.sessionId !== state.sessionLease.sessionId || Date.parse(now) >= Date.parse(state.sessionLease.expiresAt))) return err({ kind: "leaseLost" });
@@ -314,6 +336,20 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
   const messageCount = state.callerMessages.length;
 
   switch (interpretation.kind) {
+    case "classMovementPreparation": {
+      const target = state.actions[interpretation.actionKey];
+      if (turn.quality !== "clear" || !target || target.status !== "pendingContinuation" || target.classMovement?.outcome !== "pending" ||
+          state.pendingPresentationId || !state.policy.automationEnabled || !state.policy.reschedulingEnabled ||
+          !state.policy.staffWorkEnabled || state.policy.capabilities.reschedule !== "execute") return err({ kind: "invalidTransition" });
+      if (interpretation.preparation.kind === "verificationRequired") {
+        state.callerMessages.push("Before the next class stage, verify your registered email again. If you receive a six-digit code, enter it on the keypad, then press pound. Star clears your entry. Please do not say the code aloud. Verification alone makes no attendance change.");
+      } else {
+        if (interpretation.preparation.expectedConversationRevision !== state.conversationRevision - 1) return err({ kind: "staleTurn" });
+        const prepared = prepareClassMovementConsent(state, interpretation.actionKey, interpretation.preparation.evidence, now);
+        if (!prepared.ok) return prepared;
+      }
+      break;
+    }
     case "conversationControl":
       state.callerMessages.push(conversationControlText[interpretation.notice]);
       break;
@@ -939,23 +975,8 @@ export function transition(current: CallState, action: TransitionAction): Result
     case "classMovementConsentPrepared": {
       if (!Number.isSafeInteger(action.expectedConversationRevision) || state.conversationRevision !== action.expectedConversationRevision)
         return err({ kind: "staleTurn" });
-      const target = state.actions[action.actionKey];
-      if (!target || target.status !== "pendingContinuation" || state.pendingPresentationId ||
-          Object.values(state.presentations).some(item => item.status === "started" || item.status === "possiblySent") ||
-          Object.values(state.actions).some(item => item.key !== target.key && ["awaitingConfirmation", "ready", "dispatched"].includes(item.status))) return err({ kind: "invalidTransition" });
-      const consent = readClassMovementConsent(state, target, action.evidence, now);
-      if (!consent) return err({ kind: "confirmationMissing" });
-      const id = `${target.key}:classStage:${consent.digest}:confirmation`;
-      if (state.presentations[id]) return err({ kind: "invalidTransition" });
-      state.actions[target.key] = { ...target, status: "awaitingConfirmation", presentationId: id,
-        classMovementConsent: { ...consent, presentationId: id } };
-      const request = target.mutation.request;
-      if (request.kind !== "reschedule") return err({ kind: "invalidTransition" });
-      const locale = state.policy.voiceProfile?.locale ?? "en-AU", details = request.offer.presentation;
-      const context = `The original class is on ${appointmentTime(request.target.startsAt, request.target.timeZone, locale)}. The replacement${details ? ` ${details.appointmentTypeName} with ${details.practitionerName}, for ${details.durationMinutes} minutes,` : " class"} is on ${appointmentTime(request.offer.startsAt, request.target.timeZone, locale)}. ${request.terms.approvedText}`;
-      const approvedText = `${classMovementOutcomeText(target.classMovement!)} ${context} ${classMovementConsentText(consent)}`;
-      state.presentations[id] = { kind: "speech", id, actionKey: target.key, digest: consent.digest, approvedText, status: "pending" };
-      state.pendingPresentationId = id;
+      const prepared = prepareClassMovementConsent(state, action.actionKey, action.evidence, now);
+      if (!prepared.ok) return prepared;
       break;
     }
     case "markHostPossiblySent": {

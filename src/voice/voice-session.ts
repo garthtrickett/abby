@@ -46,6 +46,7 @@ export type VoiceIntent =
   | Readonly<{ kind: "appointmentEnquiry"; from: string; to: string }>
   | Readonly<{ kind: "appointmentEnquiryChoice"; choice: 1 | 2 | 3 }>
   | Readonly<{ kind: "affirm" }>
+  | Readonly<{ kind: "continueClassMovement" }>
   | Readonly<{ kind: "handoff"; reason: StaffReason; staffWorkUnavailable?: true; checkedAt?: string }>
   | Readonly<{ kind: "transfer"; reason: StaffReason }>;
 export type IntentResolver = (turn: FinalCallerTurn, signal?: AbortSignal) =>
@@ -403,6 +404,8 @@ export class VoiceSession {
       try { result = await this.reception.startWorkflow(this.scope, turn, this.cachedIntent.operation, now, existing.value.conversationRevision,
         controller.signal, this.cachedIntent.replaceCanceledChange, this.cachedIntent.serviceChoice, this.cachedIntent.forAnotherPerson, this.cachedIntent.classAttendance, this.cachedIntent.classSelectionRef); }
       finally { if (this.pendingIntent === pending) this.pendingIntent = undefined; }
+    } else if (this.cachedIntent.kind === "continueClassMovement") {
+      result = await this.withPendingIntent(signal => this.reception.continueClassMovement(this.scope, turn, existing.value.conversationRevision, signal));
     } else if (this.cachedIntent.kind === "outcome") {
       result = await this.runtime.acceptTurn(turn, { kind: "outcomeQuery" }, now, existing.value.conversationRevision);
     } else if (this.cachedIntent.kind === "notificationOutcome") {
@@ -485,7 +488,8 @@ export class VoiceSession {
       if (turn.quality !== "clear" || !clearAffirmation(turn.text)) return err({ kind: "confirmationMissing" });
       const candidates = Object.values(existing.value.actions).filter(action => action.status === "awaitingConfirmation" && existing.value.presentations[action.presentationId]?.status === "played");
       if (candidates.length !== 1) return err({ kind: "confirmationMissing" });
-      result = await this.withPendingIntent(signal => this.reception.affirm(this.scope, turn, candidates[0]!.key, candidates[0]!.digest, now, existing.value.conversationRevision, signal));
+      result = await this.withPendingIntent(signal => this.reception.affirm(this.scope, turn, candidates[0]!.key,
+        candidates[0]!.classMovementConsent?.digest ?? candidates[0]!.digest, now, existing.value.conversationRevision, signal));
     }
     if (result.ok && generation === this.assembler.currentGeneration()) {
       this.rememberPending(result.value);

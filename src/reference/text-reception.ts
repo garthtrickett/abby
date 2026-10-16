@@ -4,6 +4,7 @@ import { StaffOutcomeTurns } from "./staff-outcome-turns.ts";
 import { ReschedulingMenuTurns } from "./rescheduling-menu-turns.ts";
 import { AppointmentEnquiryTurns } from "./appointment-enquiry-turns.ts";
 import { BookingMenuTurns } from "./booking-menu-turns.ts";
+import { ClassMovementTurns } from "./class-movement-turns.ts";
 import { EffectWorker } from "../core/effect-worker.ts";
 import { EffectCallLeaseCoordinator } from "../core/effect-call-lease.ts";
 import type { EffectCallLeaseStore } from "../core/effect-call-lease.ts";
@@ -25,7 +26,7 @@ import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { patientCorrectionEvidenceFailure } from "../core/patient-correction.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").StaffReviewProcessHost & import("../core/host.ts").BookingHorizonHost & import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").PreviousPractitionerHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost & import("../core/host.ts").PatientCorrectionEvidenceHost & import("../core/host.ts").ConfirmationResendEvidenceHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").ClassMovementContinuationHost & import("../core/host.ts").StaffReviewProcessHost & import("../core/host.ts").BookingHorizonHost & import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").PreviousPractitionerHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost & import("../core/host.ts").PatientCorrectionEvidenceHost & import("../core/host.ts").ConfirmationResendEvidenceHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 export const appointmentProposalEvidenceDeadlineMs = 15_000;
@@ -666,8 +667,17 @@ export class TextReception {
     return this.runtime(scope).completeTextPresentation(callId, presentationId, now);
   }
 
+  continueClassMovement(scope: LocationScope, turn: FinalCallerTurn, expectedConversationRevision?: number, external?: AbortSignal) {
+    return new ClassMovementTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, expectedConversationRevision, external);
+  }
   async affirm(scope: LocationScope, turn: FinalCallerTurn, actionKey: string, digest: string, now: string, expectedConversationRevision?: number, external?: AbortSignal): Promise<Result<CallState, TransitionFailure>> {
     const runtime = this.runtime(scope);
+    if (this.host.prepareClassMovement) {
+      const found = await runtime.read(turn.callId);
+      const phase = found.ok ? found.value.actions[actionKey] : undefined;
+      if (phase?.classMovementConsent && phase.classMovement?.outcome === "pending")
+        return runtime.acceptTurn(turn, { kind: "classMovementAffirm", actionKey, digest }, now, expectedConversationRevision);
+    }
     if (!this.host.checkConfirmationCapacity) return runtime.acceptTurn(turn, { kind: "affirm", actionKey, digest, affirmative: true }, now, expectedConversationRevision);
     const state = await runtime.read(turn.callId); if (!state.ok) return state;
     if (expectedConversationRevision !== undefined && expectedConversationRevision !== state.value.conversationRevision) return err({ kind: "staleTurn" });

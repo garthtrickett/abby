@@ -4095,3 +4095,23 @@ and this new tree has not passed a full typecheck. The frozen809 foundation
 pass and failed parent PostgreSQL suite do not qualify this source. Exact
 commands, red/green history and the next implementation are recorded in
 [execution progress](EXECUTION_PROGRESS.md#native-movement-owner-follow-on-unpublished-source-checkpoint).
+
+## Native staged caller routing checkpoint
+
+The unpublished follow-on now connects the private native ordinary/pass stage
+owner, current exact phase SAM guard, fresh same-contract captured-policy terms,
+shared continuation gateway, actual admitted code renewal and VoiceSession
+playback/dispatch. The final light checkpoint passes 79 focused cases with
+zero failures/cancellations/skips, including eight late/stale preparation
+boundaries and actual native-host withdrawal cases. Manifest 1.232 keeps 419 IDs
+and full-call evidence planned. Exact commands, failed fixture history and
+separate regression scopes are in
+[execution progress](EXECUTION_PROGRESS.md#native-staged-caller-routing-unpublished-implementation-checkpoint).
+
+This advances the earlier numbered native-owner requirements; it does not
+complete gap 10. Complete transitive native cost ceilings/admission, independent
+operator recovery, mixed/concurrent/process/PostgreSQL/backup qualification,
+rebuilt signed serving, full typecheck and required review/cloud gates remain
+open. Existing provider floors/physical caps do not prove arbitrary callback
+upper costs. The runtime remains unpublished; no deployment or clinic
+activation has occurred. The booking-menu correction remains a separate branch.

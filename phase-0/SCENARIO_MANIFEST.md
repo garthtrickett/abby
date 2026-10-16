@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.231
+# Scenario manifest, version 1.232
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -855,3 +855,16 @@ new authority. New text witnesses are registered without changing 419 stable
 IDs or promoting planned full-call evidence. The native host/serving/renewal
 route, complete native cost admission, operator recovery, full typecheck and
 whole-process/database/cloud qualification remain unfinished.
+
+
+## Live staged caller source checkpoint, E2E-419
+
+The next unpublished source connects the private ordinary/pass native stage
+owner to current SAM phase effects, fresh captured-policy terms, the shared
+turn gateway and admitted call-flow/VoiceSession dispatch. A request to continue
+selects only that owner's next stage and prepares a new exact readback; only a
+separate played-prompt affirmative turn admits the phase. Near-expiry proof is
+retired and replaced through the original same-subject private-code route.
+This retains 419 IDs and planned full-call evidence. Complete cost admission,
+operator resolution, mixed/concurrent/process/database/privacy acceptance and
+full typecheck remain open; source-only routing does not activate clinic work.

@@ -54,7 +54,7 @@ export class ClassMovementVerifier {
     try {
       const at = Date.parse(this.#clock());
       if (!Number.isFinite(at)) return unavailable();
-      if (!this.#pending && at >= Date.parse(this.#current.expiresAt)) {
+      if (!this.#pending && at + 120_000 >= Date.parse(this.#current.expiresAt)) {
         // Do not call verifiedSubject/ownedGrant first: either can retire an
         // expired source before renewOnce has pinned its original subject.
         const successor = await this.#session.renewOnce(this.#current.verificationRef, signal);
@@ -68,11 +68,14 @@ export class ClassMovementVerifier {
         if (signal.aborted || this.#closed) { this.dispose(); return unavailable(); }
         return ok({ kind: "verificationRequired", prompt: verificationPrompt });
       }
-      const patient = await this.#session.verifiedSubject("appointments.reschedule", signal);
-      if (signal.aborted || this.#closed || !patient || !this.#matches(patient) || patient.verificationRef !== this.#current.verificationRef) {
+      // Preparing a separate confirmation exposes no new protected facts and
+      // must not spend the next phase's native allocation before it is held.
+      // Every eventual native boundary still uses the actual proof port.
+      const grant = await this.ownedGrant(signal);
+      if (signal.aborted || this.#closed || !grant) {
         this.dispose(); return unavailable();
       }
-      return ok({ kind: "ready", patient: structuredClone(patient) });
+      return ok({ kind: "ready", patient: structuredClone(this.#current) });
     } catch { this.dispose(); return unavailable(); }
     finally { this.#busy = false; }
   }
@@ -105,6 +108,16 @@ export class ClassMovementVerifier {
       return patient && this.#matches(patient) && patient.verificationRef === reference && session === this.#session &&
         !this.#pending && !this.#closed && !signal.aborted ? ok(structuredClone(patient)) : denied();
     } catch { return denied(); }
+  }
+
+  /** Private routing metadata, with no protected contact/native observation.
+   * Native phase reads and writes still use proof.verifyPatient independently. */
+  async ownedGrant(external: AbortSignal): Promise<Readonly<{ verificationRef: string; expiresAt: string }> | undefined> {
+    if (this.#closed || this.#pending || external.aborted || this.#lifetime.aborted) return undefined;
+    const session = this.#session, signal = AbortSignal.any([external, this.#lifetime]);
+    const grant = await session.ownedGrant("appointments.reschedule", signal);
+    return !signal.aborted && !this.#closed && !this.#pending && session === this.#session &&
+      grant?.verificationRef === this.#current.verificationRef && grant.expiresAt === this.#current.expiresAt ? grant : undefined;
   }
 
   dispose(): void {

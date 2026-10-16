@@ -17,12 +17,12 @@ import { addCaseHistory, addClassRosterHistory, visibleCaseRows, visibleArchived
 
 export type PassMoveOptions = Readonly<{ differentCase?: boolean; effect?: "releaseOne" | "unchanged" | "consumeOne"; full?: boolean; history?: number; rosterHistory?: number }>;
 
-export async function classMoveFixture(different = false, near = false, passes?: PassMoveOptions) {
+export async function classMoveFixture(different = false, near = false, passes?: PassMoveOptions, staging = false, activate = true) {
   let claims = 0, now = verificationNow;
   const budget = new ClinikoReadBudget(180, () => Date.parse(now));
   const windows = new Map<number, number>();
   const rateBudget = { claim: () => { claims++; const result = budget.claim(); if (result === null) { const window = Math.floor((Date.parse(now) - Date.parse(verificationNow)) / 60000); windows.set(window, (windows.get(window) ?? 0) + 1); } return result; }, observe429: budget.observe429.bind(budget), checkHeadroom: budget.checkHeadroom.bind(budget), withReservation: budget.withReservation.bind(budget) };
-  const f = await callerVerificationFixture({ apiKey: "synthetic-class-au5", operation: "appointments.reschedule", reschedulingExecute: true, rateBudget });
+  const f = await callerVerificationFixture({ apiKey: "synthetic-class-au5", operation: "appointments.reschedule", reschedulingExecute: true, rateBudget, activate });
   const native = classAttendanceFixture({ scope: f.scope, now, patientId: verificationCanaries[2]!, rateBudget });
   native.groups.splice(1, 2);
   Object.assign(native.groups[1]!, { starts_at: "2026-10-09T10:00:00.000Z", ends_at: different ? "2026-10-09T10:30:00.000Z" : "2026-10-09T11:00:00.000Z",
@@ -66,6 +66,7 @@ export async function classMoveFixture(different = false, near = false, passes?:
       sameCaseUnchanged: "This move keeps your pass session use unchanged.", sameCaseConsumeOne: "This move uses one additional pass session.", sameCaseConsumeTwo: "This move uses two additional pass sessions.",
       differentCaseReleaseOne: "Your original pass releases one session and your destination pass uses one session.", differentCaseUnchanged: "Your original pass use is unchanged and your destination pass uses one session.",
       differentCaseConsumeOne: "Your original pass uses one additional session and your destination pass uses one session." } };
+  if (staging) move = { ...move, quotaStaging: { version: move.passMovement?.version ?? "ordinary-stages-v1" } };
   for (const [path, value] of [[sourcePath, source], [destinationPath, destination], [movePath, move]] as const) await writeFile(path, JSON.stringify(value), { mode: 0o600 });
   const binding = { scope: f.scope, policyVersion: source.policyVersion, businessId: "11", credentialFingerprint: source.credentialFingerprint, recallTypeId: "7", timeZone: source.timeZone,
     directory: f.config.directory, clock: () => now };
@@ -87,11 +88,12 @@ export async function classMoveFixture(different = false, near = false, passes?:
     const url = new URL(String(value)), method = init?.method ?? "GET";
     if (url.pathname.startsWith("/v1/patients/")) return f.fetchPort(value, init);
     if (url.pathname === "/v1/recalls" && method === "POST") {
-      const body = JSON.parse(String(init?.body)), row = { id: "71", archived_at: null, recalled: false, recall_at: body.recall_at, notes: body.notes,
+      const body = JSON.parse(String(init?.body)), row = { id: "71", ...classLink("recalls", "71"), updated_at: now, archived_at: null, recalled: false, recall_at: body.recall_at, notes: body.notes,
         patient: classLink("patients", body.patient_id), recall_type: classLink("recall_types", "7") };
       recalls.push(row); if (lost === "review") throw new Error("synthetic lost class move review");
       return Response.json(row, { status: 201 });
     }
+    if (url.pathname === "/v1/recalls/71" && method === "GET") return recalls.length ? Response.json(recalls[0]) : new Response(null, { status: 404 });
     if (method === "POST" || method === "PATCH") {
       assert.equal(recalls.length, 1);
       const dispatched = Object.values((await callState()).actions).filter(action => action.status === "dispatched");

@@ -341,6 +341,9 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
         return before.lastAction?.status === "awaitingConfirmation" && before.lastAction.confirmationPlayed
           ? ok({ kind: "affirm" }) : err(unavailable);
       }
+      const classMovement = await config.owner.classMovementIntent(turn);
+      if (signal?.aborted) return err(unavailable);
+      if (classMovement) return ok(classMovement);
       const enquiryChoice = await config.owner.enquiryChoiceIntent(turn.text);
       if (signal?.aborted) return err(unavailable);
       if (enquiryChoice) return ok(enquiryChoice);

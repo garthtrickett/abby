@@ -12,7 +12,7 @@
 | 4 Individual booking | Published in draft [PR #460](https://github.com/garthtrickett/abby/pull/460), `codex/abby-provider-ack-individual`, based on receipt correction `92a16e5`. Final online/roster availability follows preparation; exact acknowledgement survives host/review/worker cancellation. Focused, isolated database/process/compiled-location and complete local `npm test` checks passed. Independent review and cloud qualification remain open; cloud jobs have not started because of billing. |
 | 5 Native class creation | Implemented candidate in `codex/abby-provider-ack-class`, based on stage 4 `40a51f2`. Exact attendee acknowledgement and final double capacity ordering apply to ordinary/approved-pass creation. Focused, process-loss/privacy and unchanged movement/cancellation regressions passed; corrected compiled cases, final typecheck and manifest checks passed. The full class text pool ended with 2,214 passes, one E2E-353 deadline failure and 225 gated skips; isolated E2E-353 rerun passed. Combined correction qualification remains open. Published in draft [PR #461](https://github.com/garthtrickett/abby/pull/461); independent review and cloud qualification remain open. |
 | 6 Earlier-gap qualification | Dispatch-lease omission reproduced for online/roster/class creation and corrected in `codex/abby-booking-dispatch-lease`. Twelve final-read/transport expiry/renewal cases and 124 shared-host regressions pass; typecheck and ordering checks pass. Corrected full `npm test` passed:2,227 main-pool passes,225 gated skips,zero failures/cancellations; separate ordered runner6 passes,zero skips. Full PostgreSQL qualification finished naturally, exit1:2,958 passes,4 failures,1 existing gated skip,zero cancellations; migrations, generation/parity and builds passed, ordered runner not reached. Gust7fa released naturally, exit0; unchanged first-file and concurrent four-file PostgreSQL reproductions passed4 and9 tests respectively, with overlap, while the failed full-suite timing cause remains unproven. The reader/foundation typecheck is tracked separately. The separate correction/resend reader-kind fix passes focused gateway checks; its typecheck now passes; independent and database/cloud qualification remain open. The original full class run failed E2E-353; its unchanged isolated rerun passed. Preserve all gaps 1–9 and their remaining engineering/acceptance requirements. |
-| 7 Class/pass completion | Unpublished E2E-419 observation/receipt/consent/SAM foundation now has 33 memory contract passes plus 2 registry checks; focused staged ordinary native cases also pass. The actual native caller/renewal route, operator integration, complete cost admission and mixed combinations remain unfinished. The final refined foundation `809e993d` passes its complete typecheck and those 35 focused checks. Synthetic native/review regressions pass 76 cases. Database/process and cloud qualification remain required. |
+| 7 Class/pass completion | Qualified foundation is published in draft PR #465 (`2593364`, runtime `809e993d`), with its full typecheck,35 focused core/registry and76 synthetic native/review passes. A separate unpublished native caller follow-on now connects actual ordinary/pass stages, same-subject renewal, current captured-policy terms and distinct played phase effects through shared text/admitted-flow/VoiceSession dispatch; its final light checkpoint passes79 tests. Complete cost admission, operator resolution, mixed/concurrent/process/database/privacy and full typecheck of the follow-on remain open. Failed parent PostgreSQL and zero-step cloud runs are retained; no clinic activation is established. |
 | 8 Payments | Pending gap 11 specification and implementation, including audit R18/R19 and any necessary approved receipt attachment dependency. The owner selected Stripe Checkout on October16; clinic account/policy acceptance and live activation remain distinct. |
 | 9 Outbound | Pending gap 12, audit R20/R21 and contact-policy decisions. |
 | 10 Writeback | Pending gap 13, exact permissions/content/storage decisions and audit R08/R22. |
@@ -722,3 +722,101 @@ proof request floor. Independent operator resolution, mixed catalogue/pass/
 correction journeys, process loss, database/backup privacy, full typecheck and
 exact-head cloud qualification remain open. Stage 7 and all thirteen gaps
 remain active.
+
+
+## Native staged caller routing: unpublished implementation checkpoint
+
+Above local `e47e32c`, the native class movement host now keeps one private
+staged execution and verifier for the call lifetime, with each advance still
+using its own bounded native allocation and effect signal. The initial
+`:write` guard authorizes only the replacement stage. Later phases validate
+their actual consent-derived in-flight effect, played presentation, immutable
+mutation, current owner reference/version/ordinal, current approval and native
+permission. Ordinary `undefined` native case association is normalized only
+to public `notApplicable`; pass association remains a separate stage. Only
+joint inspected completion produces a moved receipt. Waiting rotates the
+one-use continuation and does not replay an earlier send.
+
+The native host issues fresh same-contract terms after re-reading the captured
+source/destination/movement policies. The version, wording and movement targets
+remain identical to the original immutable action; its original expiry is not
+edited. The current live lease, proof, fresh policy expiry and two-minute
+maximum bound the next confirmation, and replacement remains bound to its
+original offer deadline. A changed quote or captured source is refused.
+
+The private verifier now renews when the remaining proof cannot cover the
+native boundary's required two-minute margin, as well as after expiry. It
+retires the old owner and requires the original same-subject private-code
+succession. Preparing a live readback uses non-disclosing ownership metadata;
+actual protected provider boundaries still use the original real proof port,
+inside their native allocation. This avoids spending a native contact request
+before reserving a full phase. Unknown callback costs are still unknown: this
+change does not convert the existing request floor or a physical cap into a
+complete phase admission ceiling.
+
+A shared `ClassMovementTurns` gateway and core reducer accept the caller's
+continuation request once, check the current call/session/lease/policy/write
+stop and revision, and prepare the exact target/terms/stage readback. The
+private owner selects the stage; the model receives no stage-selection or
+resume capability. Near-expiry renewal routes through private code entry;
+code success prepares no send. Only a subsequent exact affirmative turn after
+actual playback admits a distinct phase effect. The admitted call flow and
+VoiceSession now delegate that effect to the existing owner. Closing the
+owner retires its proof/native lifetime; serialized references cannot rebuild it.
+
+The first actual host check failed after a real replacement because the
+synthetic fixture lacked the required provider-owned review GET response,
+log `be9df097-1792152602638.log`. Supplying the exact row/self link/update
+version, without weakening the reader, passed seven host/verifier checks in
+`be9df097-1792152648993.log`. The expanded 59-case run passed 57 and failed two
+new test calls to nonexistent `speechBegan`; the existing runtime method is
+`beginSpeech`. Correcting those fixture calls then passed all 14 staged host
+cases in `be9df097-1792152760957.log`. The 40 existing ordinary/pass host cases
+passed in the earlier 59-case run; this is not a clean 59-case aggregate claim.
+
+Further scoped evidence:
+
+| Command / scope | Actual result |
+| --- | --- |
+| `env ABBY_LEDGER=memory node --test --test-concurrency=1 test/cliniko/class-move-staged-call-flow.test.ts test/text/class-movement-sam.test.ts test/text/class-movement-consent.test.ts` | 25 passed,zero failed/canceled/skipped; log `be9df097-1792153020903.log`. Actual admitted ordinary/pass routing, same-subject renewal, unplayed refusal and core contracts. |
+| `env ABBY_LEDGER=memory node --test --test-concurrency=1 test/voice/class-move-staged-session.test.ts` | 1 passed,zero failed/canceled/skipped; log `be9df097-1792153155379.log`. Actual source VoiceSession activation, maintained lease, queued/played readback and later affirmative phase dispatch. This is not a signed-carrier/full listener test. |
+| `env ABBY_LEDGER=memory node --test --test-concurrency=1 test/text/class-movement-turns.test.ts test/voice/class-move-staged-session.test.ts test/cliniko/class-move-call-flow.test.ts test/cliniko/class-move-session.test.ts` | 42 passed,zero failed/canceled/skipped; log `be9df097-1792153206859.log`. Included six initial gateway boundaries, actual voice and existing admitted class/session regression. |
+
+The final combined light checkpoint, after invalid/backwards-clock gateway
+coverage and explicit optional-field type corrections, passed **79** tests,
+zero failures/cancellations/skips, natural exit0 in 26 seconds, tracked log
+`be9df097-1792153359854.log`:
+
+```sh
+env ABBY_LEDGER=memory node --test --test-concurrency=1 \
+  test/text/class-movement-progress.test.ts \
+  test/text/class-movement-receipt.test.ts \
+  test/text/class-movement-consent.test.ts \
+  test/text/class-movement-sam.test.ts \
+  test/text/class-movement-turns.test.ts \
+  test/cliniko/class-movement-verifier.test.ts \
+  test/cliniko/class-move-staging-policy.test.ts \
+  test/cliniko/class-move-staged-host.test.ts \
+  test/cliniko/class-move-staged-call-flow.test.ts \
+  test/voice/class-move-staged-session.test.ts \
+  test/text/effect-deadline.test.ts \
+  test/contract/scenario-manifest.test.ts \
+  test/contract/no-number-gap-trace.test.ts \
+  test/contract/product-facts.test.ts
+```
+
+Eight gateway boundaries retain state after late/stale preparation; physical
+native claims stayed within 180 in the synthetic host journeys. Manifest 1.232
+keeps 419 stable IDs and full-call evidence planned. The product facts were
+reviewed against changed source, with all directly cited fingerprints refreshed.
+Earlier scoped runs overlap this checkpoint and are not added to 79.
+
+This follow-on is unpublished and has not passed a full typecheck. Complete
+transitive request-cost ceilings/admission, independent operator resolution,
+mixed/catalogue/correction/concurrent cohorts, process-loss and PostgreSQL/
+backup/output privacy, rebuilt signed serving, whole-suite and exact-head cloud
+qualification remain open. In particular arbitrary proof/lookup/permission
+native I/O is not bounded by the old request floor. Do not activate this route
+or land it as completed gap10 while those dependencies remain unfinished.
+Gust e252 retains the next heavy slot after the 12:01:36 UTC release. No new
+Abby typecheck, compiler, PostgreSQL job or automatic heavy retry was launched.

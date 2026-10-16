@@ -7,6 +7,12 @@ import type { CallState, FinalCallerTurn } from "./model.ts";
 
 export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable"; target: "patient" | "offer" | "appointment" }> |
   Readonly<{ kind: "outsideHorizon"; target: "offer"; snapshot: import("./booking-horizon.ts").BookingHorizonRead }>;
+export type ClassMovementPreparationQuery = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
+  actionKey: string; now: string; signal: AbortSignal }>;
+export interface ClassMovementContinuationHost {
+  /** Prepare only the private owner's next stage; this grants no send. */
+  prepareClassMovement(query: ClassMovementPreparationQuery): Promise<Result<import("./class-movement-consent.ts").ClassMovementPreparation, HostReadFailure>>;
+}
 export type PolicyFailure = Readonly<{ kind: "versionConflict" | "invalidValue" | "storageFailure" }> | ReadinessFailure;
 export type AutomationSettingAuditEntry = Readonly<{
   version: string;

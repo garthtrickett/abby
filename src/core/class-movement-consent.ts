@@ -16,6 +16,8 @@ export type ClassMovementConsentEvidence = Readonly<{
 export type ClassMovementConsent = Readonly<{
   evidence: ClassMovementConsentEvidence; digest: string;
 }>;
+export type ClassMovementPreparation = Readonly<{ kind: "verificationRequired" }> |
+  Readonly<{ kind: "ready"; evidence: ClassMovementConsentEvidence; expectedConversationRevision: number }>;
 
 const phaseDescription: Readonly<Record<PendingClassMovementStage["stage"], string>> = {
   replacement: "create the replacement class attendance",

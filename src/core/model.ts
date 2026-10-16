@@ -285,6 +285,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "requestAction"; request: ActionRequest }>
   | Readonly<{ kind: "affirm"; actionKey: string; digest: string; affirmative: boolean }>
   | Readonly<{ kind: "classMovementAffirm"; actionKey: string; digest: string }>
+  | Readonly<{ kind: "classMovementPreparation"; actionKey: string; preparation: import("./class-movement-consent.ts").ClassMovementPreparation }>
   | Readonly<{ kind: "confirmationWait"; actionKey: string; digest: string; seconds: number }>
   | Readonly<{ kind: "handoff"; reason: StaffReason; requestedPerson?: string; staffWorkUnavailable?: true }>
   | Readonly<{ kind: "transfer"; reason: StaffReason }>

@@ -28,7 +28,7 @@ export const verificationNow = "2026-10-04T06:00:00.000Z";
 export const verificationCanaries = ["registered-session@example.test", "private-session-chart", "482746192837465"];
 
 export async function callerVerificationFixture(options: { apiKey?: string; scope?: LocationScope; folder?: string; approved?: boolean; enabled?: boolean; patientId?: string; now?: string;
-  rateBudget?: import("../../src/cliniko/read-budget.ts").ClinikoRequestBudget;
+  rateBudget?: import("../../src/cliniko/read-budget.ts").ClinikoRequestBudget; activate?: boolean;
   contactRevision?: import("../../src/cliniko/contact-revision.ts").ClinikoContactRevisionReader;
   capturePolicy?: (policy: CallPolicy, folder: string) => Promise<CallPolicy>;
   operation?: PatientOperation; budget?: PatientVerificationBudget; delivery?: PatientCodeDelivery; timeoutMs?: number; cancellationExecute?: boolean; bookingExecute?: boolean; reschedulingExecute?: boolean; patientUpdateExecute?: boolean; staffWorkEnabled?: boolean } = {}) {
@@ -75,7 +75,7 @@ export async function callerVerificationFixture(options: { apiKey?: string; scop
     const callId = callIdFor(inbound.key), sessionId = `session-${crypto.randomUUID()}`, runtime = new CallRuntime(ledger, scope);
     resultValue(await runtime.admit(callId, captured, { key: inbound.key, dialedNumber: inbound.dialedNumber,
       acceptedAt: now, deadline: new Date(Date.parse(now) + 30000).toISOString() }));
-    resultValue(await runtime.activate(callId, sessionId, now));
+    if (options.activate !== false) resultValue(await runtime.activate(callId, sessionId, now));
     const receipt: AdmissionReceipt = resultValue(await ledger.findAdmission(callId))!;
     const directory = new OwnerFileAdminDirectory(accountPath, scope);
     const config = { path, scope, policyVersion: captured.policyVersion, operation: options.operation ?? "appointments.read", directory, clock: () => now };
