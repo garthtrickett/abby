@@ -2126,3 +2126,30 @@ All451 serving artifacts remain byte-identical. New-source full TypeScript and
 the strengthened single case still need execution; no complete privacy or
 independent/external acceptance is inferred. The three correction/mixed cases,
 maximum-history extraction and concurrent breadth remain open.
+
+### Prepared staged reservation concurrency serving case
+
+An isolated test-only branch abovea1398d7 prepares one actual compiled staged
+ordinary journey. The existing fake provider holds its replacement POST after
+the runtime has acquired a native stage allocation. A separate-process parent
+constructs the real PostgreSQL budget client for the same account/database and
+claims exactly the unreserved capacity. These are real SQL budget claims
+modeling competing account use, not additional clinical or remote provider
+requests. The held reservation must remain byte-for-byte unchanged; further
+claims, headroom and a new reservation are refused without a callback.
+
+After releasing only that held request, the caller still has a partial move.
+Fresh continuation, quota/proof preparation, a played phase and a new Yes are
+required before original cancellation. The prepared case expects exactly one
+review and two native writes, the unchanged180 account limit and no remaining
+reservation. It includes direct public speech/model/transcription, forbidden
+SQL, raw process output and unfiltered backup canary checks; the allowed
+phone-ID index is asserted separately. Its new240s budget allows at most three
+real quota windows plus60s serving/scans; existing cases are unchanged.
+
+Only Node syntax and diff checks have run. There is no new-branch TypeScript,
+compiled serving or PostgreSQL/concurrency result. The separatea139 staff
+privacy qualification remains frozen elsewhere and is not changed by this
+preparation. This case does not model two admitted callers competing for one
+last seat and does not promise atomic native exclusion. Those broader limits
+remain explicit. No production source, dependencies or runtime policy changed.
