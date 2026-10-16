@@ -1855,3 +1855,64 @@ affirmation must report accepted with a nonnegative time after playedAt and
 no future time beyond the host. This exercises delayed callbacks even outside
 a busy full suite. It is prepared, not yet executed. All such new-source
 PostgreSQL and full TypeScript claims remain open.
+
+### Combined media/deadline correction qualifies the full migrated regression
+
+Frozen b2022c29f156ecd239a254e8c61c2f5cca586e60 completed the declared
+qualification on gust-contabo with Node v22.23.2. Work1792176751212 passed
+`npm run typecheck` (61.43s), `npm run build:voice-tests` (29.59s),30 migrated
+PostgreSQL admission/consent cases and the isolated ordinary signed staged
+journey (139.026s), all without skips. The latter deliberately includes the
+1500ms callback gap and actual nonstale/nonfuture accepted phase assertions.
+1175 source inputs stayed unchanged and449 compiled JavaScript artifacts were
+pinned. Overall natural terminal18:56:38.139865UTC, exit0; wrapper214347 absent.
+Scope peak1,601,040,384B excludes Docker PostgreSQL; OOM/high/max counters0.
+
+The separately coordinated complete regression work1792177167568 started
+18:59:27.997883UTC and ended naturally19:27:32.760200UTC, exit0 (28m4.76s).
+The exact outer test command, against its new disposable database, was:
+
+```sh
+bash scripts/with-postgres.sh bash -c 'npm run db:migrate && ABBY_LEDGER=postgres npm run test:postgres'
+```
+
+The repository script rebuilt serving and dashboards and ran the complete
+Node PostgreSQL cohort at its original default4-file concurrency and original
+deadlines. It passed3156 of3157 tests, zero failures/cancellations,20 suites;
+the sole unchanged skip is C-LIVE-40's real demo-created patient case. The
+conditional ordered-node runner then ran and passed all6 checks, zero skips,
+including forward/reverse file dispatch at concurrency1 and2 and descendant
+cleanup controls. Main gate duration1628.586s; ordered gate16.988s.
+
+Both formerly failing full-context cases now pass: immutable admitted startup
+deadline and ordinary staged signed movement137.638s. Maximum-history
+cross-case staged pass also passes268.782s, and both existing cold staff
+process/database/backup cases pass. This closes those local regression
+failures on this exact graph; it does not claim every new correction/recovery
+cohort or external acceptance is complete. Clear-fence handling alone was
+insufficient: the later source also corrects elapsed-media and cross-channel
+playback processing order, without relaxing production consent.
+
+The final runner verified all1175 source inputs unchanged and pinned452
+generated artifacts. Scope peak1,009,278,976B excludes Docker PostgreSQL; all
+OOM/high/max counters0. Authoritative exitfile0 and current-host wrapper216749
+absence were verified19:27:40UTC and actual release sent to Gust promptly.
+No automatic follow-on job launched. Log:
+`/home/gust/paseo/paseo-home/work/logs/be9df097-1792177167568.log`.
+Runner SHA256:30b68970045db4ffedb33921aa5d28f7941acab47bb7a19782f40ac55b47a192.
+
+Direct author review against combined6a55a12 found no material standards or
+scope defect. Production src/scripts/dependencies are unchanged by this fixture
+correction; native180 quota, proof/lease/terms guards, existing scenario
+deadlines and concurrency stay intact. No independent review is claimed.
+Earlier outer-schema and healthy-schema failures remain preserved above.
+Cloud runner startup/account billing, independent review and real clinic,
+provider, operator, acoustic and deployment acceptance remain separate.
+
+Gap10 still needs its new correction/mixed, signed-call-to-cold-staff and
+concurrent breadth qualified. The isolated408e28ba preparation includes the
+corrected media/deadline source but has no TypeScript/build/signed/cold result
+yet; a reserved standalone TypeScript check awaits final handoff. It cannot
+borrow this b202 full pass. All thirteen gaps remain active in execution order,
+with Stripe selected for gap11 and no payment, outbound or writeback completion
+inferred from class-pass counters or this green regression.
