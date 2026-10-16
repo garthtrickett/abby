@@ -36,7 +36,9 @@ test("E2E-419 signed uncertain staged movement stays ended while cold staff sepa
   await withClinicalRunner("reschedule", async call => {
     await prepareSignedStagedReplacement(call, { waits: 2 });
     await prepareSignedStagedPhase(call, "original"); await call.mark();
-    call.child.send({ kind: "loseOriginal" }); await call.say("Yes");
+    call.child.send({ kind: "loseOriginal" });
+    await voiceUntil(() => call.messages.some(row => row.kind === "coldOriginalLossArmed"), "synthetic cancellation response loss armed");
+    await call.say("Yes");
     const nativeWrites = () => call.mutations.filter(row => row.path?.startsWith("/v1/attendees"));
     assert.deepEqual(nativeWrites().map(row => [row.method, row.path]), [["POST", "/v1/attendees"], ["PATCH", "/v1/attendees/101/cancel"]]);
     assert.match(call.spoken.at(-1)!, /not confirmed|can't confirm|couldn't confirm|unconfirmed/i);
@@ -59,6 +61,7 @@ test("E2E-419 signed uncertain staged movement stays ended while cold staff sepa
     for (const value of [...privateValues, envelope.request.patientId, "+61400111222"]) assert.equal(serialized.includes(value), false);
     const auditBefore = await call.coldProviderAudit();
     const denied = await cold(context, call.connectionString, false), auditDenied = await call.coldProviderAudit();
+    assert.ok(auditDenied.reads > auditBefore.reads, "denied staff still resolves the selected provider review");
     assert.equal(auditDenied.protectedReads, auditBefore.protectedReads, "investigation permission is separate from reading the selected admin review");
     const pending = await cold(context, call.connectionString, true);
     assert.equal(pending.status?.kind, "needsReview"); assert.equal(pending.status?.reviewAcknowledged, false);

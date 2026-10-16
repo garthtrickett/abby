@@ -211,7 +211,9 @@ process.on("message", message => {
   if (message.kind === "revokeDestination" && "replaceDestination" in f) void f.replaceDestination({ enabled: false }).then(() => process.send?.({ kind: "destinationRevoked" }));
   if (message.kind === "changeMember") void f.replaceAccount({ membershipVersion: "changed-member" }).then(() => process.send?.({ kind: "membershipChanged" }));
   if (message.kind === "loseReview" && "lose" in f) f.lose("review");
-  if (message.kind === "loseOriginal" && "lose" in f) f.lose("original");
+  if (message.kind === "loseOriginal" && "lose" in f) {
+    f.lose("original"); if (coldRecovery) process.send?.({ kind: "coldOriginalLossArmed" });
+  }
   if (message.kind === "denyOriginalCancel" && "phasePermission" in f) f.phasePermission(phase => phase !== "cancelOriginal");
   if (message.kind === "fillClass") { occupyClass(); process.send?.({ kind: "classOccupied" }); }
   if (message.kind === "overbookAfterWrite" || message.kind === "overbookExhaustedRecovery") {

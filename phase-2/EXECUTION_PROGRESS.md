@@ -1968,3 +1968,9 @@ The earlier eight pure facts/protocol cases passed work1792177450186 before
 this merge. New graph TypeScript, compiled baseline/correction/staff journeys
 and old cold-worker preservation remain pending. The separate b2022 full suite
 is still running and cannot qualify this new graph.
+
+Source refinement also waits for an explicit isolated cancellation-loss arm
+receipt before sending the affirmative over a different transport. The denied
+staff control must actually read the selected provider review while performing
+no protected attendance/case reads; a startup failure cannot satisfy that
+control by doing no work. These added checks remain unexecuted.

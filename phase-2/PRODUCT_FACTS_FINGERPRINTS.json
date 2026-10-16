@@ -76,7 +76,7 @@
     "test/text/class-movement-sam.test.ts": "053465529634f37ef8556b8f13cd2bfc13ed44e89b2111aabf5ce7d85b77a074",
     "test/text/class-movement-turns.test.ts": "3ffdd5721585d43852837312768b4c801eedeef1b56daf4e3768611378baf56e",
     "test/text/effect-deadline.test.ts": "a3e025c4a5c52bb6d352be5157eed12cd0628a5a2689b73eb41298667f787e6f",
-    "test/voice/class-move-signed-staff-recovery.test.ts": "dc5867a9cb54dc7b811f14a1b6fadc7517bb098222c1645ac05a2cb3ae1399e1",
+    "test/voice/class-move-signed-staff-recovery.test.ts": "da17c42509a64d446e8f9a73d7e9bf85d614c04d4c04fd59a399331d266ae7e3",
     "test/voice/class-move-staged-runner.test.ts": "ffcc72a434fd6e010ff14a55b1d8efb15f74471ef240c8f14cdd38393b1704c0",
     "test/voice/class-move-staged-session.test.ts": "4266e54e3348220ac5efb1d7ac8935b87b53b4a137d4ab9243580b55249db443",
     "test/voice/class-pass-runner.test.ts": "bea619a4f8a7a2970067743c3686bc3ab531ad9bfaf907667fc30d0f4a6a6091",
