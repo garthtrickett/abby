@@ -2,6 +2,8 @@
 
 **Status:** Proposed sequence, documentation only. **Date:** 16 October 2026.
 
+**Execution:** The owner subsequently instructed work through this order. See [current progress and evidence](EXECUTION_PROGRESS.md). That instruction activates the planned engineering; clinic/provider acceptance, deployment and Aeva removal retain their separate requirements below.
+
 Preserve access to the useful Aeva material now. For Abby engineering, deliver the provider acknowledged booking change first, requalify the affected receptionist flows, finish the remaining earlier-gap and class work, then build payments, outbound and approved writeback in that order. Apply the Aeva lessons inside those changes rather than creating a separate Aeva feature-parity project.
 
 ## The three source documents

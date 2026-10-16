@@ -2,6 +2,8 @@
 
 **Status:** Draft for product and engineering review
 
+**Booking revision in progress:** [ADR 0002](docs/adr/0002-provider-acknowledged-booking.md) proposes exact provider acknowledged success for individual and native class creation. The first implementation binds the complete individual interval in the request and acknowledgement; existing host readback/conflict success gates remain until the respective runtime steps ship. This foundation does not change other operations or clinic activation requirements. [Execution order](phase-2/EXECUTION_ORDER.md).
+
 **Date:** 2026-09-28
 
 **Decision owner:** Abby product leadership

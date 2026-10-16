@@ -5,7 +5,7 @@ import { standaloneBookingFixture } from "../support/standalone-booking.ts";
 
 const config = { scope: { tenantId: "booking-edge", clinicId: "clinic", locationId: "main" }, apiKey: "synthetic-key-au5",
   contactEmail: "test@example.test", businessId: "11", practitionerId: "22", appointmentTypeId: "33" };
-const request = { scope: config.scope, patientId: "42", startsAt: "2026-10-08T04:00:00.000Z", marker: "7a6b240c-94fa-45d8-ae0b-f4ee91cb2bd1" };
+const request = { scope: config.scope, patientId: "42", startsAt: "2026-10-08T04:00:00.000Z", endsAt: "2026-10-08T04:30:00.000Z", marker: "7a6b240c-94fa-45d8-ae0b-f4ee91cb2bd1" };
 const base = "https://api.au5.cliniko.com/v1";
 function row() { return { id: "91", notes: `Abby booking ${request.marker}`, starts_at: request.startsAt, ends_at: "2026-10-08T04:30:00.000Z",
   cancelled_at: null, archived_at: null, deleted_at: null,
@@ -68,12 +68,13 @@ test("E2E-280 emergency stop at the actual booking budget edge prevents POST aft
 test("E2E-280 caller-owned booking input cannot change after the budget wait", async () => {
   const incoming = structuredClone(request); let posted: Record<string, unknown> | undefined;
   const created = ClinikoBookingWriter.create({ ...config, rateBudget: { claim: async () => {
-    incoming.patientId = "43"; incoming.startsAt = "2026-10-08T05:00:00.000Z"; incoming.scope.clinicId = "foreign"; return null;
+    incoming.patientId = "43"; incoming.startsAt = "2026-10-08T05:00:00.000Z"; incoming.endsAt = "2026-10-08T05:30:00.000Z"; incoming.scope.clinicId = "foreign"; return null;
   }, observe429: async () => ({ kind: "rateLimited" }) } }, async (_input, init) => {
     posted = JSON.parse(String(init?.body)); return Response.json(row(), { status: 201 });
   }); assert.ok(created.ok);
   const result = await created.value.writeOnce(incoming, undefined, async () => true);
   assert.ok(result.ok && result.value.kind === "accepted"); assert.equal(posted?.patient_id, request.patientId); assert.equal(posted?.starts_at, request.startsAt);
+  assert.equal(posted?.ends_at, request.endsAt);
 });
 
 test("E2E-280 read-back and conflict reads recheck trusted authority after their budget waits", async () => {

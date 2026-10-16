@@ -21,6 +21,7 @@ export type ClinikoBookingRequest = Readonly<{
   scope: LocationScope;
   patientId: string;
   startsAt: string;
+  endsAt: string;
   marker: string;
 }>;
 
@@ -77,9 +78,11 @@ function validStatus(row: Record<string, unknown>): boolean {
 
 function validRequest(value: unknown): value is ClinikoBookingRequest {
   const request = record(value);
+  const start = instant(request?.startsAt), end = instant(request?.endsAt);
   return !!request && validScope(request.scope) && typeof request.patientId === "string" &&
     idPattern.test(request.patientId) && typeof request.marker === "string" &&
-    markerPattern.test(request.marker) && instant(request.startsAt) !== undefined;
+    markerPattern.test(request.marker) && start !== undefined && end !== undefined &&
+    end > start && end - start <= 480 * 60_000;
 }
 
 function notes(marker: string): string { return `Abby booking ${marker}`; }
@@ -215,6 +218,7 @@ export class ClinikoBookingWriter {
   private matches(row: Record<string, unknown>, request: ClinikoBookingRequest): boolean {
     const link = (name: string) => record(record(row[name])?.links)?.self;
     return row.notes === notes(request.marker) && instant(row.starts_at) === instant(request.startsAt) &&
+      instant(row.ends_at) === instant(request.endsAt) &&
       link("patient") === `${this.baseUrl}/patients/${request.patientId}` &&
       link("business") === `${this.baseUrl}/businesses/${this.config.businessId}` &&
       link("practitioner") === `${this.baseUrl}/practitioners/${this.config.practitionerId}` &&
@@ -245,7 +249,7 @@ export class ClinikoBookingWriter {
           "Content-Type": "application/json", "User-Agent": this.userAgent },
         body: JSON.stringify({ business_id: this.config.businessId, practitioner_id: this.config.practitionerId,
           appointment_type_id: this.config.appointmentTypeId, patient_id: request.patientId,
-          starts_at: request.startsAt, notes: notes(request.marker) }),
+          starts_at: request.startsAt, ends_at: request.endsAt, notes: notes(request.marker) }),
         redirect: "error", signal: requestSignal,
       }), requestSignal);
       if (!received || requestSignal.aborted) return ok({ kind: "uncertain" });
@@ -272,7 +276,7 @@ export class ClinikoBookingWriter {
     beforeRead?: (signal: AbortSignal) => Promise<boolean>):
     Promise<Result<boolean, ClinikoBookingFailure>> {
     const id = typeof appointmentRef === "string" ? appointmentRef.match(/^cliniko:appointment:([1-9][0-9]{0,18})$/)?.[1] : undefined;
-    if (!validRequest(request) || !id || instant(endsAt) === undefined || instant(endsAt)! <= instant(request.startsAt)!) return err({ kind: "invalidQuery" });
+    if (!validRequest(request) || !id || instant(endsAt) !== instant(request.endsAt)) return err({ kind: "invalidQuery" });
     if (!sameScope(this.scope, request.scope)) return err({ kind: "scopeMismatch" });
     request = structuredClone(request);
     const stop = signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000);

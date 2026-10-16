@@ -1,5 +1,7 @@
 # Cliniko write activation contract
 
+**Booking revision pending:** [ADR 0002](../docs/adr/0002-provider-acknowledged-booking.md) scopes a staged change to individual/native class creation. The exact individual interval receipt foundation is implemented first; post-write host success gates and all existing activation requirements remain in force until the corresponding runtime and acceptance evidence exists. Other operation contracts are unchanged by this foundation.
+
 **Version:** 0.2, 2026-10-04. **Engineering decision:** D-16 accepts best-effort standalone Cliniko writes and their concurrency limits. **Current executable decision:** booking, cancellation, rescheduling, patient creation and patient-specific recalls remain `unavailable` until the applicable implementation, clinic and recovery gates pass. Acceptance of this contract is not clinic approval.
 
 Scope: individual appointments, first-time intake and Cliniko-owned staff review. Group bookings, recurring appointment changes, treatment notes, invoices and arbitrary patient edits remain outside this release. Cancellation targets one occurrence; rescheduling is an in-place move.

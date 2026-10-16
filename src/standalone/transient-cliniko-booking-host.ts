@@ -11,6 +11,7 @@ import { NoStoredKnowledge } from "./no-stored-knowledge.ts";
 import { TransientPatientProofHost } from "./transient-patient-proof.ts";
 
 type BookingRequest = Extract<ActionRequest, { kind: "book" }>;
+type ResolvedBooking = Readonly<{ request: BookingRequest; endsAt: string }>;
 
 export type HostBookingOfferEvidence = Readonly<{
   scope: LocationScope;
@@ -22,6 +23,7 @@ export type HostBookingOfferEvidence = Readonly<{
   practitionerId: string;
   appointmentTypeId: string;
   offer: BookableOffer;
+  endsAt: string;
   /** A host must back this with an independently proven safe commit mechanism.
    * A Cliniko available-time response alone cannot grant this permit. */
   exclusiveCommitPermitted: boolean;
@@ -116,7 +118,7 @@ export class TransientClinikoBookingHost extends NoStoredKnowledge implements Bo
   readonly #writer: ClinikoBookingWriter;
   readonly #selection: ClinikoBookingSelection;
   readonly #clock: () => string;
-  #prepared: BookingRequest | undefined;
+  #prepared: ResolvedBooking | undefined;
   #attempt: Attempt | undefined;
   #conflictObserved = false;
   #busy = false;
@@ -202,7 +204,7 @@ export class TransientClinikoBookingHost extends NoStoredKnowledge implements Bo
 
   async #evidence(verificationRef: string, offerRef: string, now: string,
                   phase: "proposal" | "commit", signal: AbortSignal):
-    Promise<Result<BookingRequest, HostReadFailure>> {
+    Promise<Result<ResolvedBooking, HostReadFailure>> {
     const nowMs = this.#time(now);
     if (nowMs === undefined || signal.aborted || this.#closed) return err({ kind: "unavailable", target: "offer" });
     if (!await this.#callReady(nowMs, signal)) return err({ kind: "unavailable", target: "offer" });
@@ -224,7 +226,7 @@ export class TransientClinikoBookingHost extends NoStoredKnowledge implements Bo
         return err({ kind: host?.ok === false && host.error.kind === "notFound" ? "notFound" : "unavailable",
           target: "offer" });
       }
-      const evidence = host.value;
+      const evidence = structuredClone(host.value);
       const offer = evidence.offer;
       const freshMs = this.#time(now);
       if (!validScope(evidence.scope) || !sameScope(evidence.scope, this.#scope) ||
@@ -242,6 +244,9 @@ export class TransientClinikoBookingHost extends NoStoredKnowledge implements Bo
           instant(offer.expiresAt)! <= freshMs ||
           appointmentInstant(offer.startsAt) === undefined ||
           appointmentInstant(offer.startsAt)! <= freshMs ||
+          appointmentInstant(evidence.endsAt) === undefined ||
+          appointmentInstant(evidence.endsAt)! <= appointmentInstant(offer.startsAt)! ||
+          appointmentInstant(evidence.endsAt)! - appointmentInstant(offer.startsAt)! > 480 * 60_000 ||
           instant(patient.value.expiresAt)! <= freshMs ||
           !await this.#callReady(freshMs, signal)) {
         return err({ kind: "unavailable", target: "offer" });
@@ -253,7 +258,8 @@ export class TransientClinikoBookingHost extends NoStoredKnowledge implements Bo
           digestActionRequest({ kind: "book", patient: patient.value, offer })) {
         return err({ kind: "notFound", target: "patient" });
       }
-      return ok({ kind: "book", patient: structuredClone(patient.value), offer: structuredClone(offer) });
+      return ok({ request: { kind: "book", patient: structuredClone(patient.value), offer: structuredClone(offer) },
+        endsAt: evidence.endsAt });
     } catch { return err({ kind: "unavailable", target: "offer" }); }
   }
 
@@ -269,14 +275,14 @@ export class TransientClinikoBookingHost extends NoStoredKnowledge implements Bo
     try {
       const resolved = await this.#evidence(verificationRef, offerRef, now, "proposal", signal);
       if (resolved.ok && !this.#closed && !signal.aborted) this.#prepared = structuredClone(resolved.value);
-      return resolved;
+      return resolved.ok ? ok(structuredClone(resolved.value.request)) : resolved;
     } finally { this.#busy = false; }
   }
 
   async write(mutation: HostMutation, now: string, signal?: AbortSignal): Promise<HostWriteReceipt> {
     const reject = (): HostWriteReceipt =>
       ({ kind: "rejected", actionKey: mutation.actionKey, reason: "forbidden" });
-    const pending = this.#prepared;
+    const pending = this.#prepared?.request;
     if (this.#closed || this.#busy || this.#attempt || mutation.kind !== "book" ||
         mutation.request.kind !== "book" || !pending ||
         !validScope(mutation.scope) || !sameScope(mutation.scope, this.#scope) ||
@@ -286,7 +292,7 @@ export class TransientClinikoBookingHost extends NoStoredKnowledge implements Bo
         !refPattern.test(mutation.actionKey)) return reject();
     const attempt: Attempt = { actionKey: mutation.actionKey, digest: mutation.payloadDigest,
       request: { scope: this.#scope, patientId: pending.patient.patientRef,
-        startsAt: pending.offer.startsAt, marker: randomUUID() } };
+        startsAt: pending.offer.startsAt, endsAt: this.#prepared!.endsAt, marker: randomUUID() } };
     this.#attempt = attempt;
     const combined = signal
       ? AbortSignal.any([this.#lifetime.signal, signal, AbortSignal.timeout(15_000)])
@@ -296,7 +302,8 @@ export class TransientClinikoBookingHost extends NoStoredKnowledge implements Bo
     const fresh = await this.#evidence(pending.patient.verificationRef, pending.offer.offerRef,
       now, "commit", combined);
     const commitMs = this.#time(now);
-    if (!fresh.ok || digestActionRequest(fresh.value) !== attempt.digest ||
+    if (!fresh.ok || digestActionRequest(fresh.value.request) !== attempt.digest ||
+        appointmentInstant(fresh.value.endsAt) !== appointmentInstant(attempt.request.endsAt) ||
         commitMs === undefined || instant(pending.patient.expiresAt)! <= commitMs ||
         instant(pending.offer.expiresAt)! <= commitMs ||
         combined.aborted || this.#closed || !await this.#callReady(commitMs, combined, mutation)) return reject();

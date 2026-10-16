@@ -1,5 +1,7 @@
 # Abby technical design
 
+The [staged booking revision](docs/adr/0002-provider-acknowledged-booking.md) first requires `ClinikoBookingRequest.endsAt`, sends `ends_at`, and validates the acknowledged interval together with the existing native bindings and active status. Trusted standalone offer evidence supplies the end time; the earlier embedded offer authority must likewise supply an exact end and preserve it across proposal/commit. This patch retains existing host readback/conflict gates. Final availability ordering and acknowledgement-based host success are subsequent [booking-plan steps](phase-2/PROVIDER_ACKNOWLEDGED_BOOKING_PLAN.md#implementation-steps-and-acceptance-gates); the descriptions of current inspection semantics below remain applicable until then.
+
 **Status:** Proposed design for implementation review. The [phone-index and patient-data boundary](phase-0/PHONE_INDEX_AND_PRIVACY_GATE.md) is a binding amendment; existing rich ledger payloads remain an implementation blocker.
 
 **Product contract:** [PRD.md](PRD.md), version dated 2026-09-28

@@ -78,7 +78,7 @@ test("E2E-264 independent booking writers can create the same slot with distinct
   const markers = ["7a6b240c-94fa-45d8-ae0b-f4ee91cb2bd1", "7a6b240c-94fa-45d8-ae0b-f4ee91cb2bd2"];
   const results = await Promise.all(markers.map(marker =>
     value(ClinikoBookingWriter.create({ ...config, practitionerId: "22", appointmentTypeId: "33" }, provider, () => now))
-      .writeOnce({ scope, patientId: "42", startsAt, marker })));
+      .writeOnce({ scope, patientId: "42", startsAt, endsAt, marker })));
   assert.ok(results.every(result => result.ok && result.value.kind === "accepted"));
   assert.equal(rows.length, 2); assert.equal(rows[0]?.starts_at, rows[1]?.starts_at);
   assert.notEqual(rows[0]?.id, rows[1]?.id);

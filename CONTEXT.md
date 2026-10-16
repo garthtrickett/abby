@@ -45,6 +45,10 @@ a confirmation resend has its own authorization and outcome.
 
 A confirmed request is checked and attempted once, then inspected under the approved external provider contract. Competing edits, overlaps or duplicates may still occur; unknown outcomes require owned review rather than replay or a completion claim. It does not promise commit protection.
 
+## Provider acknowledged booking (proposed)
+
+An external booking whose exact authorized appointment creation is established by the provider's successful acknowledgement. Later observation or notification failure cannot erase that established result; a missing or ambiguous acknowledgement remains uncertain.
+
 ## Review request
 
 A durable request for a staff owner to examine an intended action and its unresolved outcome. Its presence proves neither that the action was sent nor that it completed, and does not authorize an automatic mutation.

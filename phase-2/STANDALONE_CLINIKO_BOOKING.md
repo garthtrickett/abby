@@ -1,5 +1,7 @@
 # Standalone Cliniko best-effort booking
 
+**Staged revision:** [ADR 0002](../docs/adr/0002-provider-acknowledged-booking.md) proposes replacing creation's post-write success gate with an exact provider acknowledgement. The first patch sends and matches both confirmed start and end times, without changing this host's inspection requirements. Individual host ordering/success and class creation follow as separate steps; this document's current runtime contract remains applicable until its matching step is delivered.
+
 ## Status and declared contract
 
 D-16 accepts best-effort standalone writes. `ClinikoBookingHost` supplies a local one-call/one-attempt booking host using the existing SAM, verifier, provider writers and review runner. It requires no invented exclusive-slot permit. The previous `TransientClinikoBookingHost` retains its exclusive-permit contract for its earlier embedded tests. None of these local constructions enable the production runner.

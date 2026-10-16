@@ -42,7 +42,7 @@ export function validClinikoBookingEvidence(value: ClinikoBookingEvidence, query
 }
 export function bookingProviderRequest(prepared: PreparedClinikoBooking, marker: string): ClinikoBookingRequest {
   return { scope: prepared.request.patient.scope, patientId: prepared.request.patient.patientRef,
-    startsAt: prepared.request.offer.startsAt, marker };
+    startsAt: prepared.request.offer.startsAt, endsAt: prepared.evidence.endsAt, marker };
 }
 export function sameClinikoBookingEvidence(left: ClinikoBookingEvidence, right: ClinikoBookingEvidence): boolean {
   return left.endsAt === right.endsAt && left.timeZone === right.timeZone && left.bookingPolicyVersion === right.bookingPolicyVersion &&

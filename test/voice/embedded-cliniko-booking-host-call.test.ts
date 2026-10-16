@@ -24,6 +24,7 @@ const base = "https://api.au5.cliniko.com/v1";
 type Options = Readonly<{
   permit?: boolean;
   changedOfferAtCommit?: boolean;
+  changedEndAtCommit?: boolean;
   revokeProofAtCommit?: boolean;
   stopDuringCommit?: boolean;
   provider?: "accepted" | "lostAfterCommit" | "failedBeforeCommit" | "conflict";
@@ -72,7 +73,7 @@ async function fixture(options: Options = {}) {
     if (init?.method === "POST") {
       const body = JSON.parse(String(init.body)) as Record<string, unknown>;
       posts.push(body);
-      stored = { id: "91", notes: body.notes, starts_at: body.starts_at,
+      stored = { id: "91", notes: body.notes, starts_at: body.starts_at, ends_at: body.ends_at,
         cancelled_at: null, archived_at: null, deleted_at: null,
         patient: { links: { self: `${base}/patients/42` } },
         business: { links: { self: `${base}/businesses/11` } },
@@ -108,7 +109,8 @@ async function fixture(options: Options = {}) {
         ? { ...proposedOffer, startsAt: "2026-10-08T12:00:00.000Z" } : proposedOffer;
       return ok({ scope, callId, sessionId, policyVersion: "1", patientId: "42",
         businessId: "11", practitionerId: options.wrongSelection ? "99" : "22",
-        appointmentTypeId: "33",
+        appointmentTypeId: "33", endsAt: new Date(Date.parse(currentOffer.startsAt) +
+          (query.phase === "commit" && options.changedEndAtCommit ? 60 : 30) * 60_000).toISOString(),
         offer: currentOffer, exclusiveCommitPermitted: options.permit !== false });
     } }, clock: () => now,
   });
@@ -289,8 +291,9 @@ test("E2E-226 wrong proof, missing permit or mismatched writer selection make no
 });
 
 test("E2E-226 current policy, offer, proof or write stop blocks a previously played booking", async () => {
-  for (const change of ["policy", "offer", "proof", "stop"] as const) {
+  for (const change of ["policy", "offer", "duration", "proof", "stop"] as const) {
     const app = await fixture({ changedOfferAtCommit: change === "offer",
+      changedEndAtCommit: change === "duration",
       revokeProofAtCommit: change === "proof", stopDuringCommit: change === "stop" });
     await app.begin();
     const details = await app.speak();
@@ -342,7 +345,7 @@ test("E2E-226 a TCP reset after provider commit stays uncertain until exact obse
       const chunks: Buffer[] = [];
       for await (const chunk of request) chunks.push(Buffer.from(chunk as Uint8Array));
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
-      stored = { id: "91", notes: body.notes, starts_at: body.starts_at,
+      stored = { id: "91", notes: body.notes, starts_at: body.starts_at, ends_at: body.ends_at,
         cancelled_at: null, archived_at: null, deleted_at: null,
         patient: { links: { self: `${base}/patients/${body.patient_id}` } },
         business: { links: { self: `${base}/businesses/${body.business_id}` } },

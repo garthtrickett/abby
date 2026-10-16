@@ -25,7 +25,7 @@ try {
     process.stdout.write(JSON.stringify({ ok: false, kind: created.error.kind }));
     process.exitCode = 1;
   } else {
-    const request = { scope, patientId: String(input.patientId), startsAt: String(input.startsAt),
+    const request = { scope, patientId: String(input.patientId), startsAt: String(input.startsAt), endsAt: String(input.endsAt),
       marker: String(input.markerToken) };
     const sent = await created.value.writeOnce(request);
     const observed = await created.value.observe(request);
