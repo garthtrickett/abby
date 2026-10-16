@@ -641,3 +641,84 @@ all four jobs started (zero steps). Typecheck checks 116950100968 and
 116950106907 explicitly report the account billing/spending startup failure.
 No source failure or cloud qualification follows, and no billing/workflow
 configuration was changed. Both PRs remain draft.
+
+
+## Native movement owner follow-on: unpublished source checkpoint
+
+Worktree `abby-class-staged-native-owner`, branch
+`codex/abby-class-staged-native-owner`, starts at published foundation
+`25933648ba7f33e6582ca4de50c8707561424f59`, draft
+[PR #465](https://github.com/garthtrickett/abby/pull/465). Its new source is
+unpublished and has not run a full typecheck. The foundation's successful
+frozen809 typecheck does not qualify these changes. The separate booking-menu
+candidate `2cf1d51` remains outside this tree and awaits its own typecheck.
+No follow-on heavy job is queued under the Gust e252 hold.
+
+The preparation now makes fresh same-contract terms evidence explicit in phase
+consent. The private host must issue it after current policy checks; version
+and approved wording must match the immutable original request, while its
+separate expiry bounds the new played consent. Patient-proof renewal cannot
+renew terms. A terms-evidence regression failed before this interface existed,
+log `be9df097-1792150560839.log`; corrected terms/SAM checks passed in
+`be9df097-1792150593048.log`. There is no connected native terms issuer yet.
+
+`ClassMovementVerifier` owns actual rescheduling-verifier succession for one
+private subject. It reuses a live proof; when expired, it invokes `renewOnce`
+before a protected read can clear the old source. Dedicated private code entry
+establishes only a fresh proof. It cannot redirect an old proof object, adopt
+a different patient, reset exhausted answers or grant phase consent. An
+interrupted held answer retires the successor and ignores late success.
+Five actual fixture cases pass, including real session renewals across the
+five-minute proof expiry. No ordinary caller turn or durable queue carries
+code/contact/proof values.
+
+An independent `quotaStaging.version` may be captured in the owner-controlled
+move policy. Pass staging must match the separately approved membership
+contract. The first two schema tests correctly failed before support existed,
+log `be9df097-1792151018116.log`. The next run also failed because the test
+tried to hot-load edited content through a captured source, log
+`be9df097-1792151044470.log`. The existing source/membership hash fence was
+correct. The refined fixture captures a fresh policy and asserts the old
+owner stays revoked; both cases pass in `be9df097-1792151121605.log`. No
+production revocation guard was relaxed.
+
+A real SAM regression also reproduced a ready phase surviving new caller
+speech after affirmation, log `be9df097-1792151324908.log`. New speech now
+retires ready/dispatched movement authority. A new nonaffirmative turn also
+retires a dispatched phase. An unsent phase is canceled; a possible send keeps
+its uncertainty and observed replacement, without retaining continuation or
+consent. A parked pending continuation remains available for a later request
+to continue. These source corrections are mandatory before this new route is
+landed; the older foundation PR remains draft.
+
+The new read-only active-consent check recognizes only the exact played,
+dispatched, possibly-sent phase effect with current proof/terms/lease and
+matching immutable payload. It rejects original/parallel/completed effects,
+altered payloads, interruption, revocation and expiry. It does not admit a new
+effect or replace independent native permission/observation/quota checks.
+
+| Actual checkpoint command | Natural result |
+| --- | --- |
+| `env ABBY_LEDGER=memory node --test --test-concurrency=1 test/text/class-movement-progress.test.ts test/text/class-movement-receipt.test.ts test/text/class-movement-consent.test.ts test/text/class-movement-sam.test.ts test/cliniko/class-movement-verifier.test.ts test/cliniko/class-move-staging-policy.test.ts test/text/effect-deadline.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts` | 53 passes, zero failures/cancellations/skips; log `be9df097-1792151521983.log`. Pure/memory SAM, actual private verifier fixtures, policy capture, shared booking deadline and registry contracts. |
+| `env ABBY_LEDGER=memory node --test --test-concurrency=1 test/cliniko/class-move-host.test.ts test/cliniko/class-pass-move-host.test.ts` | 40 passes, zero failures/cancellations/skips; log `be9df097-1792151560686.log`. Existing actual SAM ordinary/pass synthetic host regressions. |
+| `node --test test/contract/product-facts.test.ts` | 1 pass, zero failures/cancellations/skips; log `be9df097-1792151561035.log`. Reviewed current claims and directly cited hashes; no behavioral attestation is inferred from hashing. |
+
+Earlier 39-case and 29-case subsets overlap this checkpoint; do not add them.
+All jobs finished naturally and their authoritative waits were consumed.
+Manifest 1.231 keeps 419 stable IDs, adds the private-verifier/policy witnesses
+to E2E-419 and retains planned full-call evidence. No compiler, browser,
+database, live provider or deployment ran for this checkpoint.
+
+Next implementation remains the actual native owner and foreground serving
+route, bounded by complete proof/permission/native request ceilings. Attach
+the owner to the call lifetime and keep each active segment bounded; correlate
+the exact in-flight SAM phase rather than the initial `:write` effect. Issue
+fresh same-contract terms from current captured approvals without changing the
+original request. Preserve explicit ordinary `notApplicable` association and
+private one-use continuation references. Route private renewal and fresh
+played confirmation through the serving owner; code/continue cannot send.
+Unknown request costs cannot be treated as zero or inferred from the existing
+proof request floor. Independent operator resolution, mixed catalogue/pass/
+correction journeys, process loss, database/backup privacy, full typecheck and
+exact-head cloud qualification remain open. Stage 7 and all thirteen gaps
+remain active.

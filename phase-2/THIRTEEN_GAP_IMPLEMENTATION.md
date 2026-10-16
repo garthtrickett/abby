@@ -4073,3 +4073,25 @@ contracts pass. The final refined foundation now passes its own full typecheck a
 explicit compute swap; the one Gust e252 window is requeued after its actual
 terminal/release. Exact red/green
 logs and remaining native serving limits are in the execution ledger.
+
+
+## Native movement owner follow-on checkpoint
+
+Above qualified foundation draft [PR #465](https://github.com/garthtrickett/abby/pull/465),
+unpublished source now has explicit fresh same-contract phase terms, a private
+actual verifier-succession owner, exact read-only in-flight SAM consent checks,
+speech/new-turn phase retirement and independently captured staging approval.
+The policy fixture preserves the exact source-hash revocation contract; edits
+require a new capture. New speech cancels an unsent confirmed phase and retains
+possible-send uncertainty, while a parked continuation can still be continued.
+
+The checkpoint passes 53 focused ownership/SAM/deadline/registry cases, 40
+existing ordinary/pass host regressions and one reviewed fact-drift contract.
+These are separate scopes with earlier overlapping subsets, not full native
+caller acceptance. Manifest 1.231 retains 419 IDs and planned full-call
+acceptance. The current native owner is not connected to the host/serving
+route, complete request-cost ceilings and operator recovery remain unfinished,
+and this new tree has not passed a full typecheck. The frozen809 foundation
+pass and failed parent PostgreSQL suite do not qualify this source. Exact
+commands, red/green history and the next implementation are recorded in
+[execution progress](EXECUTION_PROGRESS.md#native-movement-owner-follow-on-unpublished-source-checkpoint).

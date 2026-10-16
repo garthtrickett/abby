@@ -223,6 +223,9 @@ function supersedeUnsent(state: CallState): void {
     delete state.pendingPresentationId;
   }
   for (const [key, action] of Object.entries(state.actions)) {
+    if (action.classMovement && action.status === "dispatched") {
+      retireClassMovementAction(state, action); continue;
+    }
     if (action.status !== "awaitingConfirmation" && action.status !== "ready") continue;
     const presentation = state.presentations[action.presentationId];
     if (presentation && presentation.status !== "played") {
@@ -769,6 +772,9 @@ export function transition(current: CallState, action: TransitionAction): Result
         delete state.pendingPresentationId;
       }
       for (const [key, candidate] of Object.entries(state.actions)) {
+        if (candidate.classMovement && (candidate.status === "ready" || candidate.status === "dispatched")) {
+          retireClassMovementAction(state, candidate); continue;
+        }
         const presentation = state.presentations[candidate.presentationId];
         if (candidate.status === "awaitingConfirmation" && presentation && (presentation.status === "started" || presentation.status === "superseded")) {
           if (candidate.classMovement) retireClassMovementAction(state, candidate);

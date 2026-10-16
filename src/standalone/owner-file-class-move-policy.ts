@@ -17,6 +17,8 @@ export type ClassMoveApproval = ClinicApproval & Readonly<{
   sourceServiceRef: string; destinationServiceRef: string;
   writeContract: "bestEffort"; notificationOwner: "cliniko"; membership: "independentHost" | "nativeCaseSessions";
   passMovement?: ClassPassMoveTerms;
+  /** Independent approval for caller-confirmed quota phases, not a setting. */
+  quotaStaging?: Readonly<{ version: string }>;
   compensation: "cancelReplacementIfOriginalUnsent";
   cancellationReason: 10 | 20 | 30 | 40 | 50 | 60;
   lateNoticeHours: number; maxAdvanceDays: number; offerTtlSeconds: number;
@@ -41,9 +43,10 @@ function passMovement(value: unknown): value is ClassPassMoveTerms {
 }
 function decode(value: unknown, scope: LocationScope): ClassMoveApproval | undefined {
   const hasPass = value !== null && typeof value === "object" && Object.hasOwn(value, "passMovement");
+  const hasStaging = value !== null && typeof value === "object" && Object.hasOwn(value, "quotaStaging");
   const common = decodeClinicApproval(value, scope, [...clinicApprovalKeys, "policyVersion", "businessId", "credentialFingerprint", "recallTypeId", "timeZone",
     "sourceServiceRef", "destinationServiceRef", "writeContract", "notificationOwner", "membership", "compensation", "cancellationReason",
-    "lateNoticeHours", "maxAdvanceDays", "offerTtlSeconds", "standardTerms", "lateTerms", "recoveryTerms", ...(hasPass ? ["passMovement"] : [])]);
+    "lateNoticeHours", "maxAdvanceDays", "offerTtlSeconds", "standardTerms", "lateTerms", "recoveryTerms", ...(hasPass ? ["passMovement"] : []), ...(hasStaging ? ["quotaStaging"] : [])]);
   if (!common) return undefined;
   const row = value as Record<string, unknown>;
   const integer = (key: string, min: number, max: number) => Number.isSafeInteger(row[key]) && Number(row[key]) >= min && Number(row[key]) <= max;
@@ -54,6 +57,12 @@ function decode(value: unknown, scope: LocationScope): ClassMoveApproval | undef
       ![10, 20, 30, 40, 50, 60].includes(Number(row.cancellationReason)) || typeof row.cancellationReason !== "number" || !integer("lateNoticeHours", 1, 168) ||
       !integer("maxAdvanceDays", 1, 90) || !integer("offerTtlSeconds", 15, 120) || !terms(row.standardTerms, 150) || !terms(row.lateTerms, 150) || !terms(row.recoveryTerms, 180) ||
       new Set([row.standardTerms.version, row.lateTerms.version, row.recoveryTerms.version]).size !== 3) return undefined;
+  if (hasStaging) {
+    const staging = row.quotaStaging;
+    if (!staging || typeof staging !== "object" || Array.isArray(staging) || Object.keys(staging).join(",") !== "version" ||
+        !approvalRef((staging as Record<string, unknown>).version)) return undefined;
+    if (hasPass && (!passMovement(row.passMovement) || (staging as Record<string, unknown>).version !== row.passMovement.version)) return undefined;
+  }
   try { new Intl.DateTimeFormat("en", { timeZone: row.timeZone }); } catch { return undefined; }
   return row as unknown as ClassMoveApproval;
 }

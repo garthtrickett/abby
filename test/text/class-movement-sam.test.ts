@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 import type { ActionRequest, HostWriteReceipt, TurnInterpretation } from "../../src/core/model.ts";
 import type { ClassMovementConsent } from "../../src/core/class-movement-consent.ts";
+import { readActiveClassMovementConsent, readClassMovementConsent } from "../../src/core/class-movement-consent.ts";
 import { EffectRecovery } from "../../src/core/effect-recovery.ts";
 import { POSSIBLE_SEND_RECOVERY_DELAY_MS } from "../../src/core/model.ts";
 import { summarizeCall } from "../../src/reference/call-review.ts";
@@ -141,8 +142,10 @@ async function nextConsent(app: Awaited<ReturnType<typeof activeMove>>, verifica
   }
   const action = state.actions[app.action.key]!, movement = action.classMovement;
   assert.equal(movement?.outcome, "pending"); assert.ok(movement && movement.outcome === "pending");
+  const request = action.mutation.request; assert.ok(request.kind === "reschedule");
   const evidence = { callId: app.callId, sessionId: app.sessionId, policyVersion: state.policy.policyVersion,
-    continuation: movement.continuation, patient: { ...app.patient, verificationRef }, expiresAt: new Date(Date.parse(now) + 1000).toISOString() };
+    continuation: movement.continuation, patient: { ...app.patient, verificationRef }, terms: { ...request.terms },
+    expiresAt: new Date(Date.parse(now) + 1000).toISOString() };
   assert.deepEqual(await app.runtime.prepareClassMovementConsent(app.callId, action.key, evidence, now, state.conversationRevision - 1),
     { ok: false, error: { kind: "staleTurn" } });
   const prepared = success(await app.runtime.prepareClassMovementConsent(app.callId, action.key, evidence, now, state.conversationRevision));
@@ -154,6 +157,75 @@ async function nextConsent(app: Awaited<ReturnType<typeof activeMove>>, verifica
       success(await app.runtime.resolvePresentation(app.callId, consent.presentationId, "played", app.sessionId, now));
     } };
 }
+
+test("new caller speech withdraws an affirmed unsent phase while a parked continuation remains available", async () => {
+  const app = await activeMove(`phase-barge-${randomUUID()}`);
+  await app.worker.process(app.callId, app.effectId, now);
+  success(await app.runtime.beginSpeech(app.callId, app.sessionId, now));
+  assert.equal((await app.state()).actions[app.action.key]?.status, "pendingContinuation");
+  const next = await nextConsent(app); await next.play(); success(await next.affirm());
+  let calls = 0;
+  Object.assign(app.host, { continueClassMovement: async (): Promise<HostWriteReceipt> => {
+    calls++; return { kind: "rejected", actionKey: app.action.key, reason: "forbidden" };
+  } });
+  success(await app.runtime.beginSpeech(app.callId, app.sessionId, now));
+  const state = await app.state();
+  assert.equal(state.actions[app.action.key]?.status, "needsReview");
+  assert.equal(state.effects[next.effectId]?.status, "canceled");
+  assert.deepEqual(state.actions[app.action.key]?.classMovement?.progress, progress);
+  await assert.rejects(app.worker.process(app.callId, next.effectId, now), /invalidTransition/);
+  assert.equal(calls, 0);
+});
+
+for (const boundary of ["speech", "newTurn"] as const)
+test(`a possibly-sent phase retains uncertainty after ${boundary} without retaining continuation authority`, async () => {
+  const app = await activeMove(`phase-possible-${boundary}-${randomUUID()}`);
+  await app.worker.process(app.callId, app.effectId, now);
+  const next = await nextConsent(app); await next.play(); success(await next.affirm());
+  success(await app.runtime.markHostPossiblySent(app.callId, next.effectId, now));
+  if (boundary === "speech") success(await app.runtime.beginSpeech(app.callId, app.sessionId, now));
+  else success(await app.turn("new-request", "Another question", { kind: "unavailableAction" }));
+  const state = await app.state(), action = state.actions[app.action.key]!;
+  assert.equal(action.status, "needsReview");
+  assert.equal(action.classMovement?.outcome, "needsReview");
+  assert.deepEqual(action.classMovement?.progress, { ...progress, original: "uncertain" });
+  assert.equal(action.classMovementConsent, undefined);
+  assert.equal(state.effects[next.effectId]?.status, "possiblySent", "a new utterance cannot prove the native send did not happen");
+  assert.equal(app.host.writes.length, 1);
+});
+
+test("native phase guards read only the exact played in-flight SAM consent without authorizing a new phase", async () => {
+  const app = await activeMove(`phase-native-guard-${randomUUID()}`);
+  await app.worker.process(app.callId, app.effectId, now);
+  const next = await nextConsent(app); await next.play(); success(await next.affirm());
+  assert.equal(readActiveClassMovementConsent(await app.state(), next.effectId, now), undefined, "ready is not possibly sent");
+  let guarded = false;
+  Object.assign(app.host, { continueClassMovement: async (_mutation: unknown, consent: ClassMovementConsent): Promise<HostWriteReceipt> => {
+    const state = await app.state(), action = state.actions[app.action.key]!, effect = state.effects[next.effectId];
+    assert.ok(effect?.kind === "hostWrite");
+    assert.deepEqual(readActiveClassMovementConsent(state, next.effectId, now), consent);
+    assert.equal(readClassMovementConsent(state, action, consent.evidence, now), undefined, "an in-flight phase cannot prepare another send");
+    assert.equal(readActiveClassMovementConsent(state, app.effectId, now), undefined, "the original write is not phase authority");
+    assert.equal(readActiveClassMovementConsent(state, next.effectId, consent.evidence.expiresAt), undefined);
+    const status = structuredClone(state); status.actions[action.key] = { ...action, status: "ready" };
+    const interrupted = structuredClone(state), presentation = state.presentations[next.consent.presentationId];
+    assert.ok(presentation?.kind === "speech");
+    interrupted.presentations[presentation.id] = { ...presentation, status: "interrupted" };
+    const wrongId = structuredClone(state); wrongId.effects[next.effectId] = { ...effect, id: "another-phase" };
+    const wrongPayload = structuredClone(state);
+    wrongPayload.effects[next.effectId] = { ...effect, mutation: { ...effect.mutation, payloadDigest: "another-digest" } };
+    const parallel = structuredClone(state); parallel.effects["parallel-phase"] = { ...effect, id: "parallel-phase" };
+    for (const invalid of [status, interrupted, wrongId, wrongPayload, parallel, { ...state, lifecycle: "ended" as const },
+      { ...state, policy: { ...state.policy, automationEnabled: false } }])
+      assert.equal(readActiveClassMovementConsent(invalid, next.effectId, now), undefined);
+    guarded = true;
+    return { kind: "classMovement", actionKey: action.key, outcome: "pending", progress: { ...progress, original: "inspectedCancelled" },
+      continuation: { ...app.continuation, ref: `class-move-stage:${randomUUID()}`, ordinal: 2, stage: "association" } };
+  } });
+  await app.worker.process(app.callId, next.effectId, now);
+  assert.equal(guarded, true);
+  assert.equal(readActiveClassMovementConsent(await app.state(), next.effectId, now), undefined, "a completed phase cannot be replayed");
+});
 
 test("SAM advances actual distinct stage effects only after each fresh played confirmation", async () => {
   const app = await activeMove(`separate-stages-${randomUUID()}`), stageCalls: ClassMovementConsent[] = [];

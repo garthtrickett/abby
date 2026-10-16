@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.230
+# Scenario manifest, version 1.231
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -839,3 +839,19 @@ for exact commands, results and outstanding qualification.
 E2E-362/E2E-373 also qualify completed and uncertain correction/resend outcomes through the scoped call-review and reporting gateway. Fixed redacted fields preserve the actual outcome; private proof, host and request references remain absent, foreign scope is denied, and unknown action kinds remain corrupt. This is local SAM/reader evidence, with no new provider write or external acceptance claim.
 
 E2E-419 adds pure observation/receipt contracts and actual memory SAM tests for staged class movement. Separate played phase consent, fixed public progress, identity denial and fresh-host effect recovery preserve partial native truth without reconstructing a stage owner or treating a leg acknowledgement as a whole move. Native caller/renewal routing, operator resolution, complete cost admission, process/backup and combined acceptance remain open. Full-call evidence remains planned.
+
+
+## Native movement owner preparation, E2E-419
+
+The unpublished follow-on source adds explicit fresh same-contract terms
+bindings, an exact read-only in-flight SAM consent check, withdrawal of a ready
+phase on new speech, and retained uncertainty for an interrupted possible send.
+The actual private verifier owner reuses a live proof and invokes existing
+same-patient succession before an expired read clears the old source. A fresh
+code cannot reuse the old proof object, change patient or grant movement
+consent. Independently captured staging policy binds the membership contract
+version; editing an already captured file revokes it rather than hot-loading
+new authority. New text witnesses are registered without changing 419 stable
+IDs or promoting planned full-call evidence. The native host/serving/renewal
+route, complete native cost admission, operator recovery, full typecheck and
+whole-process/database/cloud qualification remain unfinished.

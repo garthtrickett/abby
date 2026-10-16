@@ -30,7 +30,7 @@ async function partialMove(admissionDeadline = deadline, termsDeadline = deadlin
   await app.worker.process(callId, `${initial.key}:write`, now);
   state = success(await app.runtime.read(callId)); const action = state.actions[initial.key]!;
   const evidence = { callId, sessionId, policyVersion: state.policy.policyVersion, continuation,
-    patient: { ...app.patient, verificationRef: `renewed-${randomUUID()}` },
+    patient: { ...app.patient, verificationRef: `renewed-${randomUUID()}` }, terms: { ...request.terms },
     expiresAt: new Date(Date.parse(now) + 1000).toISOString() };
   return { ...app, state, action, evidence };
 }
@@ -91,6 +91,27 @@ test("current patient proof cannot extend the separately approved movement terms
   assert.equal(f.host.writes.length, 1);
 });
 
+test("fresh same-contract terms evidence can cover a later phase without changing the original quote", async () => {
+  const originalExpiry = new Date(Date.parse(now) + 500).toISOString();
+  const f = await partialMove(deadline, originalExpiry);
+  const request = f.action.mutation.request; assert.equal(request.kind, "reschedule");
+  assert.ok(request.kind === "reschedule");
+  const at = new Date(Date.parse(now) + 600).toISOString();
+  const evidence = { ...f.evidence, terms: { ...request.terms, expiresAt: new Date(Date.parse(now) + 2000).toISOString() } };
+  const current = readClassMovementConsent(f.state, f.action, evidence, at);
+  assert.ok(current, "a trusted owner supplies fresh same-contract terms separately from patient proof");
+  assert.equal(request.terms.expiresAt, originalExpiry);
+  assert.equal(f.patient.expiresAt, deadline);
+  assert.equal(readClassMovementConsent(f.state, f.action, { ...evidence,
+    terms: { ...evidence.terms, version: "changed-terms" } }, at), undefined);
+  assert.equal(readClassMovementConsent(f.state, f.action, { ...evidence,
+    terms: { ...evidence.terms, approvedText: "A different fee applies." } }, at), undefined);
+  assert.equal(readClassMovementConsent(f.state, f.action, { ...evidence,
+    terms: { ...evidence.terms, expiresAt: at } }, at), undefined);
+  assert.equal(readClassMovementConsent(f.state, f.action, { ...evidence, terms: undefined }, at), undefined);
+  assert.equal(f.host.writes.length, 1, "terms evidence alone grants no provider send");
+});
+
 test("stale call, session, policy and rotated stage bindings require new consent", async () => {
   const f = await partialMove();
   for (const changed of [{ callId: "another-call" }, { sessionId: "another-session" }, { policyVersion: "policy-2" },
@@ -122,6 +143,9 @@ test("private fields and getters cannot enter a class-stage consent binding", as
   const f = await partialMove(); let getterCalls = 0;
   const poisoned = { ...f.evidence, get patient() { getterCalls++; return f.evidence.patient; } };
   assert.equal(readClassMovementConsent(f.state, f.action, poisoned, now), undefined);
+  assert.equal(getterCalls, 0);
+  assert.equal(readClassMovementConsent(f.state, f.action, { ...f.evidence,
+    terms: { ...f.evidence.terms, get approvedText() { getterCalls++; return f.evidence.terms.approvedText; } } }, now), undefined);
   assert.equal(getterCalls, 0);
   assert.equal(readClassMovementConsent(f.state, f.action, { ...f.evidence, nativePatientId: "private-canary" }, now), undefined);
   assert.equal(readClassMovementConsent(f.state, f.action, { ...f.evidence,

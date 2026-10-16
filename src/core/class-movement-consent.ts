@@ -1,13 +1,17 @@
-import { digestTurn } from "./digest.ts";
+import { isDeepStrictEqual } from "node:util";
+import { digestActionRequest, digestTurn } from "./digest.ts";
 import { classMovementCanContinue } from "./class-movement-progress.ts";
 import type { PendingClassMovementStage } from "./class-movement-continuation.ts";
-import type { ActionState, CallState, VerifiedPatient } from "./model.ts";
+import type { ActionRequest, ActionState, CallState, VerifiedPatient } from "./model.ts";
 
 /** A current host-issued subject proof, bound to the live call and exact next
  * native stage. This record cannot reconstruct a host stage owner. */
 export type ClassMovementConsentEvidence = Readonly<{
   callId: string; sessionId: string; policyVersion: string;
-  continuation: PendingClassMovementStage; patient: VerifiedPatient; expiresAt: string;
+  continuation: PendingClassMovementStage; patient: VerifiedPatient;
+  /** Issued independently by the live native owner after current policy checks.
+   * Renewal may change this expiry, never the original contract version/text. */
+  terms: Extract<ActionRequest, { kind: "reschedule" }>["terms"]; expiresAt: string;
 }>;
 export type ClassMovementConsent = Readonly<{
   evidence: ClassMovementConsentEvidence; digest: string;
@@ -53,16 +57,21 @@ const instant = (value: unknown): number => typeof value === "string" && /^\d{4}
  * lease bounds consent, including across quota windows. */
 export function readClassMovementConsent(state: CallState, action: ActionState, input: unknown,
   now: string): ClassMovementConsent | undefined {
+  if (!["pendingContinuation", "awaitingConfirmation", "ready"].includes(action.status) ||
+      Object.values(state.effects).some(effect => effect.kind === "hostWrite" && effect.actionKey === action.key && effect.status === "possiblySent")) return undefined;
+  return boundConsent(state, action, input, now);
+}
+
+function boundConsent(state: CallState, action: ActionState, input: unknown, now: string): ClassMovementConsent | undefined {
   const movement = action.classMovement, request = action.mutation.request, lease = state.sessionLease;
   const at = instant(now), leaseExpiry = instant(lease?.expiresAt), admissionDeadline = instant(state.admission?.deadline);
   if (state.lifecycle !== "active" || state.callerIdentityDenied || !state.admission || !lease ||
       !Number.isFinite(at) || !Number.isFinite(leaseExpiry) || !Number.isFinite(admissionDeadline) || at >= leaseExpiry ||
       !state.policy.automationEnabled || !state.policy.staffWorkEnabled || !state.policy.reschedulingEnabled ||
       state.policy.capabilities.reschedule !== "execute" || state.policy.policyVersion !== action.mutation.policyVersion ||
-      request.kind !== "reschedule" || !["pendingContinuation", "awaitingConfirmation", "ready"].includes(action.status) ||
-      !movement || movement.outcome !== "pending" || !classMovementCanContinue(movement.progress, movement.continuation.stage) ||
-      Object.values(state.effects).some(effect => effect.kind === "hostWrite" && effect.actionKey === action.key && effect.status === "possiblySent")) return undefined;
-  const read = record(input, ["callId", "sessionId", "policyVersion", "continuation", "patient", "expiresAt"]);
+      request.kind !== "reschedule" || !movement || movement.outcome !== "pending" ||
+      !classMovementCanContinue(movement.progress, movement.continuation.stage)) return undefined;
+  const read = record(input, ["callId", "sessionId", "policyVersion", "continuation", "patient", "terms", "expiresAt"]);
   if (!read || read.callId !== state.callId || read.sessionId !== lease.sessionId || read.policyVersion !== state.policy.policyVersion) return undefined;
   const continuation = record(read.continuation, ["ref", "contractVersion", "ordinal", "stage"]);
   if (!continuation || Object.entries(movement.continuation).some(([key, value]) => continuation[key] !== value)) return undefined;
@@ -70,17 +79,44 @@ export function readClassMovementConsent(state: CallState, action: ActionState, 
   const scope = patient && record(patient.scope, ["tenantId", "clinicId", "locationId"]);
   if (!patient || !scope || Object.entries(state.policy.scope).some(([key, value]) => scope[key] !== value) ||
       patient.patientRef !== request.patient.patientRef || !ref(patient.verificationRef)) return undefined;
-  const expires = instant(read.expiresAt), proofExpires = instant(patient.expiresAt), termsExpiry = instant(request.terms.expiresAt);
+  const terms = record(read.terms, ["version", "approvedText", "expiresAt"]);
+  if (!terms || !ref(terms.version) || terms.version !== request.terms.version || terms.approvedText !== request.terms.approvedText) return undefined;
+  const expires = instant(read.expiresAt), proofExpires = instant(patient.expiresAt), termsExpiry = instant(terms.expiresAt);
   if (!Number.isFinite(expires) || !Number.isFinite(proofExpires) || !Number.isFinite(termsExpiry) || termsExpiry <= at ||
       expires <= at || expires - at > 120_000 || expires > proofExpires || expires > leaseExpiry || expires > termsExpiry ||
       movement.continuation.stage === "replacement" && (!Number.isFinite(instant(request.offer.expiresAt)) || expires > instant(request.offer.expiresAt))) return undefined;
   const evidence: ClassMovementConsentEvidence = Object.freeze({ callId: state.callId, sessionId: lease.sessionId,
     policyVersion: state.policy.policyVersion, continuation: Object.freeze({ ...movement.continuation }),
     patient: Object.freeze({ scope: Object.freeze({ ...state.policy.scope }), patientRef: request.patient.patientRef,
-      verificationRef: patient.verificationRef, expiresAt: patient.expiresAt as string }), expiresAt: read.expiresAt as string });
+      verificationRef: patient.verificationRef, expiresAt: patient.expiresAt as string }),
+    terms: Object.freeze({ version: request.terms.version, approvedText: request.terms.approvedText, expiresAt: terms.expiresAt as string }),
+    expiresAt: read.expiresAt as string });
   // Include inspected progress as well as both targets' immutable action digest.
   // A new observation or a rotated stage/proof requires a different playback.
   const digest = digestTurn({ kind: "classMovementConsent", actionKey: action.key, originalDigest: action.digest,
     progress: movement.progress, evidence });
   return Object.freeze({ evidence, digest });
+}
+
+/** Necessary SAM evidence for the exact phase already in flight. This cannot
+ * admit another effect; the native owner still checks proof, policy, permission,
+ * observations and physical quota at each provider operation. */
+export function readActiveClassMovementConsent(state: CallState, effectId: string, now: string): ClassMovementConsent | undefined {
+  try {
+    const effect = state.effects[effectId];
+    if (!effect || effect.kind !== "hostWrite" || effect.id !== effectId || effect.status !== "possiblySent" || !effect.classMovementConsent || effect.mutation.notification) return undefined;
+    const action = state.actions[effect.actionKey], consent = action?.classMovementConsent;
+    if (!action || action.kind !== "reschedule" || action.status !== "dispatched" || !consent ||
+        effectId !== `${action.key}:classStage:${consent.digest}` || effect.mutation.actionKey !== action.key ||
+        effect.mutation.payloadDigest !== action.digest || digestActionRequest(action.mutation.request) !== action.digest ||
+        !isDeepStrictEqual(effect.mutation, action.mutation) || !isDeepStrictEqual(action.mutation.scope, state.policy.scope) ||
+        !isDeepStrictEqual(effect.classMovementConsent.evidence, consent.evidence) || effect.classMovementConsent.digest !== consent.digest ||
+        !Number.isFinite(instant(consent.playedAt)) || instant(consent.playedAt) > instant(now) || state.pendingPresentationId ||
+        Object.values(state.presentations).some(item => item.status === "started" || item.status === "possiblySent") ||
+        Object.values(state.effects).some(item => item.kind === "hostWrite" && item.actionKey === action.key && item.status === "possiblySent" && item.id !== effectId)) return undefined;
+    const played = state.presentations[consent.presentationId];
+    if (played?.kind !== "speech" || played.actionKey !== action.key || played.digest !== consent.digest || played.status !== "played") return undefined;
+    const current = boundConsent(state, action, effect.classMovementConsent.evidence, now);
+    return current?.digest === consent.digest ? current : undefined;
+  } catch { return undefined; }
 }
