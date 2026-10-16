@@ -1763,3 +1763,33 @@ cause is fixed. The healthy-schema combined command remains required.
 The fixture helper uses the existing ES2022 filter/at surface rather than
 ES2023 findLast; runtime and compiler settings stay unchanged. This is the
 same focused qualification candidate, not another job or deadline change.
+
+### Healthy-schema full run finds a store-owned startup-deadline fixture mismatch
+
+Frozen52e920 full PostgreSQL suite1792174592309 is running naturally after
+successful explicit migration. Its first shared-PG admission now passes. At
+class-movement-consent.test.ts70 the new activated-stage test fails: expected
+supplied startup deadline10:00:01, observed admitted deadline10:00:30. This
+is separate from the earlier outer-schema and compiled playback issues.
+
+PostgresLedger.admit deliberately derives acceptedAt and its30s deadline
+inside the locked transaction; the memory ledger preserves the supplied
+fixture admission. Existing admission tests separately assert the30s server
+bound. The new stage test incorrectly treated the supplied1s deadline as the
+store's accepted deadline. The isolated test-only correction captures the
+actual admission receipt before activation. After renewals at20/40/60s it
+asserts the deadline stayed exactly equal to that receipt and that65s is
+already beyond it. Consent must still fit the live renewed lease, expire at
+its boundary, refuse an ended call and preserve patient/terms expiry, with
+exactly one initial write and no send from renewal/preparation. All original
+lease/proof/terms assertions remain; no runtime deadline or concurrency changes.
+
+The original PostgreSQL failure is the focused reproduction evidence in the
+active full log. This source must still qualify in PostgreSQL after the current
+suite's natural terminal/release and fresh coordination; no parallel PG retry
+or current-source change was made. Healthy full acceptance remains open.
+
+The memory consent and reviewed facts/registry pass10, work1792175255013.
+The admitted deadline is captured as an immutable string immediately before
+activation, rather than reading a potentially aliased receipt after activation.
+The actual corrected PostgreSQL case remains unrun.
