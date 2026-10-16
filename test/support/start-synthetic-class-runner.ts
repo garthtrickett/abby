@@ -1,4 +1,9 @@
 import assert from "node:assert/strict";
+import { ClinikoPhoneLookup } from "../../src/standalone/cliniko-phone-lookup.ts";
+import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
+import { PostgresPatientPhoneIndex } from "../../src/storage/postgres-patient-phone-index.ts";
+import { connectPostgres } from "../../src/storage/connect.ts";
+import { declareClinikoRequestCost } from "../../src/cliniko/request-cost.ts";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { serveClinikoVoice } from "../../scripts/serve-cliniko-voice.ts";
@@ -24,6 +29,8 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}` || operation !== "book" && operation !== "cancel" && operation !== "reschedule") {
   throw new Error("synthetic class runner requires an isolated attendance fixture");
 }
+const staging = process.env.ABBY_SYNTHETIC_CLASS_QUOTA_STAGING === "1";
+if (process.env.ABBY_SYNTHETIC_CLASS_QUOTA_STAGING && (!staging || operation !== "reschedule")) throw new Error("invalid synthetic staged class mode");
 const multiple = process.env.ABBY_SYNTHETIC_MULTIPLE_CLASSES === "1";
 const passes = process.env.ABBY_SYNTHETIC_CLASS_PASSES === "1";
 if (process.env.ABBY_SYNTHETIC_CLASS_PASSES && (!passes || operation !== "book" || multiple)) throw new Error("invalid synthetic class pass mode");
@@ -39,7 +46,7 @@ const rosterText = process.env.ABBY_SYNTHETIC_CLASS_ROSTER_HISTORY;
 if (rosterText !== undefined && (!moveMode || !["99", "100", "101", "201", "500"].includes(rosterText))) throw new Error("invalid synthetic class attendance history");
 const roster = rosterText === undefined ? {} : { rosterHistory: Number(rosterText) };
 const f = operation === "reschedule" ? await classMoveCallFlowFixture(process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1", multiple,
-  moveMode === "full" ? { full: true, ...(history === undefined ? {} : { history }), ...roster } : moveMode === "transfer" ? { differentCase: true, ...(history === undefined ? {} : { history }), ...roster } : undefined) : await classCallFlowFixture(operation, multiple, passes, passCancellation); f.flow.dispose();
+  moveMode === "full" ? { full: true, ...(history === undefined ? {} : { history }), ...roster } : moveMode === "transfer" ? { differentCase: true, ...(history === undefined ? {} : { history }), ...roster } : undefined, staging) : await classCallFlowFixture(operation, multiple, passes, passCancellation); f.flow.dispose();
 if (operation === "reschedule" && (process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1" || process.env.ABBY_SYNTHETIC_CLASS_DATE_CORRECTION === "1"))
   f.native.groups.push({ ...structuredClone(f.native.groups[1]!), id: "95", ...classLink("group_appointments", "95"),
     starts_at: `2026-10-${process.env.ABBY_SYNTHETIC_CLASS_DATE_CORRECTION === "1" ? "10" : "09"}T12:00:00.000Z`,
@@ -198,6 +205,13 @@ const policies = new Proxy(approved, { get(target, key) {
   const value = Reflect.get(target, key); return typeof value === "function" ? value.bind(target) : value;
 } });
 const snapshot = resultValue(await policies.read(f.scope));
+// Only these audited synthetic in-memory callbacks add no native I/O. Bind
+// their cost to the actual runner account/budget, never the parent fixture's.
+function knownSyntheticCost<Args extends unknown[], Value>(port: (...args: Args) => Value): (...args: Args) => Value {
+  if (!staging) return port;
+  assert.ok(sharedBudget);
+  return declareClinikoRequestCost(port, { scope: f.scope, credentialFingerprint: clinikoCredentialFingerprint(apiKey), budget: sharedBudget }, 0);
+}
 const permissions = (service: ClassServiceConfig): ClassServiceConfig => ({ ...service,
   bookPermission: { allows: async query => {
     const allowed = !classDenied && await service.bookPermission.allows(query);
@@ -205,22 +219,34 @@ const permissions = (service: ClassServiceConfig): ClassServiceConfig => ({ ...s
   } }, cancelPermission: { allows: async query => {
     const allowed = !classDenied && await service.cancelPermission.allows(query);
     process.send?.({ kind: "classPermissionDecision", operation: "cancel", phase: query.phase, allowed }); return allowed;
-  } }, ...(service.move ? { move: { ...service.move, permission: { allows: async query => {
+  } }, ...(service.move ? { move: { ...service.move,
+    ...(service.move.passAuthority ? { passAuthority: { select: knownSyntheticCost(service.move.passAuthority.select), allows: knownSyntheticCost(service.move.passAuthority.allows) } } : {}),
+    permission: { allows: knownSyntheticCost(async (query: Parameters<NonNullable<ClassServiceConfig["move"]>["permission"]["allows"]>[0]) => {
     const allowed = !classDenied && await service.move!.permission.allows(query);
     process.send?.({ kind: "classPermissionDecision", operation: "reschedule", phase: query.phase, allowed }); return allowed;
-  } } } } : {}) });
+  }) } } } : {}) });
+if (staging) {
+  const setup = connectPostgres(process.env.DATABASE_URL!);
+  try {
+    resultValue(await new PostgresPatientPhoneIndex(setup).publish(f.scope,
+      [{ normalizedPhone: f.inbound.presentedCallerNumber!, patientId: "482746192837465" }], "61", clinikoCredentialFingerprint(apiKey)));
+  } finally { await setup.destroy(); }
+}
 process.send?.({ kind: "fixtureReady", scope: f.scope, policyVersion: c.policyVersion });
 try {
   await serveClinikoVoice({ clinikoFetch: provider, openaiFetch: speech, syntheticClock: now, transcriptionFactory: transcription, voiceProfiles: profiles,
     speechQuality: (_scope, configurationHash) => ok({ configurationHash, qualityVersion: "synthetic-class-runner.v1" }),
     clinicalHost(context) {
       sharedBudget = context.rateBudget;
-      const host = new ClinikoVoiceClinicalHost({ ...c, scope: context.scope, policies, greeting: snapshot.greeting!, fetchPort: provider,
+      const nativeLookup = staging ? new ClinikoPhoneLookup(resultValue(ClinikoPatientCandidateReader.create({ scope: context.scope,
+        apiKey: context.apiKey, contactEmail: context.contactEmail, rateBudget: context.rateBudget, contactRevision: context.contactRevision }, provider)),
+        new PostgresPatientPhoneIndex(context.db), "61", 600000) : undefined;
+      const host = new ClinikoVoiceClinicalHost({ ...c, ...(nativeLookup ? { lookup: nativeLookup } : {}), scope: context.scope, policies, greeting: snapshot.greeting!, fetchPort: provider,
         cliniko: { ...c.cliniko, apiKey: context.apiKey, contactEmail: context.contactEmail, rateBudget: context.rateBudget, contactRevision: context.contactRevision },
-        permission: { allows: async (...args) => {
+        permission: { allows: knownSyntheticCost(async (...args: Parameters<typeof c.permission.allows>) => {
           const allowed = !denied && await c.permission.allows(...args);
           process.send?.({ kind: "permissionDecision", operation: args[2], allowed }); return allowed;
-        } },
+        }) },
         ...(multiple ? { classServices: c.classServices!.map(permissions) } : { classAttendance: permissions(c.classAttendance!) }),
         delivery: { send: async (email, code) => { process.send?.({ kind: "verificationEmail", email, code, accepted: !mailLost }); return !mailLost; } },
         intent(owner) {

@@ -28,7 +28,7 @@ export type ClinicalRunnerOperation = "book" | "cancel" | "reschedule" | "intake
 /** Actual compiled runner in a separate process and database. All network
  * providers are fixtures; private caller material is kept in this test memory. */
 export async function withClinicalRunner(operation: ClinicalRunnerOperation,
-  run: (call: Awaited<ReturnType<typeof start>>) => Promise<void>, options: { classPassHistory?: 201 | 301 | 501 | 999; classRosterHistory?: 99 | 100 | 101 | 201 | 500; classPassMovement?: "full" | "transfer"; classPasses?: boolean; classPassCancellation?: "releaseOne" | "unchanged" | "consumeOne"; recurringBusy?: "approved" | "legacy"; recurringOpening?: "approved" | "legacy"; classDateCorrection?: boolean; differentClass?: boolean; multipleClasses?: boolean; classes?: boolean; taskSequence?: boolean; resendContent?: "telehealth" | "cancelled"; intakeFields?: boolean; services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean; practitionerMove?: "changedTime" | "sameTime" | "directory" } = {}): Promise<void> {
+  run: (call: Awaited<ReturnType<typeof start>>) => Promise<void>, options: { classQuotaStaging?: boolean; classPassHistory?: 201 | 301 | 501 | 999; classRosterHistory?: 99 | 100 | 101 | 201 | 500; classPassMovement?: "full" | "transfer"; classPasses?: boolean; classPassCancellation?: "releaseOne" | "unchanged" | "consumeOne"; recurringBusy?: "approved" | "legacy"; recurringOpening?: "approved" | "legacy"; classDateCorrection?: boolean; differentClass?: boolean; multipleClasses?: boolean; classes?: boolean; taskSequence?: boolean; resendContent?: "telehealth" | "cancelled"; intakeFields?: boolean; services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean; practitionerMove?: "changedTime" | "sameTime" | "directory" } = {}): Promise<void> {
   const adminUrl = process.env.DATABASE_URL; assert.ok(adminUrl);
   const admin = connectPostgres(adminUrl), name = `abby_test_voice_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl); target.pathname = `/${name}`;
@@ -48,7 +48,8 @@ export async function withClinicalRunner(operation: ClinicalRunnerOperation,
     if (failures.length) throw new AggregateError(originalFailure === undefined ? failures : [originalFailure, ...failures], "clinical runner test or cleanup failed");
   }
 }
-async function start(operation: ClinicalRunnerOperation, connectionString: string, db: ReturnType<typeof connectPostgres>, options: { classPassHistory?: 201 | 301 | 501 | 999; classRosterHistory?: 99 | 100 | 101 | 201 | 500; classPassMovement?: "full" | "transfer"; classPasses?: boolean; classPassCancellation?: "releaseOne" | "unchanged" | "consumeOne"; recurringBusy?: "approved" | "legacy"; recurringOpening?: "approved" | "legacy"; classDateCorrection?: boolean; differentClass?: boolean; multipleClasses?: boolean; classes?: boolean; taskSequence?: boolean; resendContent?: "telehealth" | "cancelled"; intakeFields?: boolean; services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean; practitionerMove?: "changedTime" | "sameTime" | "directory" }) {
+async function start(operation: ClinicalRunnerOperation, connectionString: string, db: ReturnType<typeof connectPostgres>, options: { classQuotaStaging?: boolean; classPassHistory?: 201 | 301 | 501 | 999; classRosterHistory?: 99 | 100 | 101 | 201 | 500; classPassMovement?: "full" | "transfer"; classPasses?: boolean; classPassCancellation?: "releaseOne" | "unchanged" | "consumeOne"; recurringBusy?: "approved" | "legacy"; recurringOpening?: "approved" | "legacy"; classDateCorrection?: boolean; differentClass?: boolean; multipleClasses?: boolean; classes?: boolean; taskSequence?: boolean; resendContent?: "telehealth" | "cancelled"; intakeFields?: boolean; services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean; practitionerMove?: "changedTime" | "sameTime" | "directory" }) {
+  if (options.classQuotaStaging && (!options.classes || operation !== "reschedule")) throw new Error("staged class runner requires class rescheduling");
   const accountSid = `AC${"1".repeat(32)}`, authToken = "synthetic-clinical-runner-token", number = "+6125550199", caller = "+61400111222";
   const webhookUrl = "https://clinical-runner.example.test/twilio/inbound", streamUrl = "wss://clinical-runner.example.test/twilio/media/";
   const messages: Message[] = [], output: string[] = [];
@@ -56,6 +57,7 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
     cwd: new URL("../../", import.meta.url), stdio: ["ignore", "pipe", "pipe", "ipc"],
     env: { ...process.env, DATABASE_URL: connectionString, ABBY_ISOLATED_POSTGRES_PROBE: "1", ABBY_VOICE_TEST_MODE: "1", ABBY_VOICE_PORT: "0",
       ABBY_SYNTHETIC_CLINICAL_OPERATION: operation,
+      ABBY_SYNTHETIC_CLASS_QUOTA_STAGING: options.classQuotaStaging ? "1" : undefined,
       ABBY_SYNTHETIC_MULTIPLE_CLASSES: options.multipleClasses ? "1" : undefined,
       ABBY_SYNTHETIC_CLASS_PASSES: options.classPasses ? "1" : undefined,
       ABBY_SYNTHETIC_CLASS_PASS_MOVE: options.classPassMovement,
@@ -138,7 +140,7 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
       const m = wire.filter(m => m.event === "mark" && m.mark && !ack.has(m.mark.name)).at(-1)!.mark!; ack.add(m.name); send({ event: "mark", mark: m });
     };
     await mark();
-    return { child, messages, output, scope, locations, db, mark, say, media, close, signedWebhook,
+    return { child, messages, output, scope, locations, db, connectionString, mark, say, media, close, signedWebhook,
       async keypad(entry: string) { for (const digit of entry) send({ event: "dtmf", dtmf: { track: "inbound_track", digit } }); },
       async quietAfterPrivateInput() { for (let i = 0; i < 40; i++) { media(false); await new Promise<void>(resolve => setTimeout(resolve, 20)); } },
       get spoken() { return messages.filter(m => m.kind === "speech").map(m => m.text!); },
