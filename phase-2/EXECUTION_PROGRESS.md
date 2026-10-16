@@ -2501,3 +2501,46 @@ sets `NODE_OPTIONS=--max-old-space-size=1536` within the unchanged2GiB
 MemoryMax/Swap0/CPU200% scope. No assertion, deadline or source change was
 made between these attempts. Documentation following5cb preserves every
 one of those1183 TypeScript/configuration/package input hashes.
+
+### Gap11 independent Stripe protocol preparation — lifecycle still absent
+
+Stripe is the owner-selected payment provider. While the isolated class/budget
+full regressions finish, a separate source branch prepares the concrete
+signed-Checkout notification module. This is a provider protocol prerequisite,
+not completed payment/link/receipt/expiry work or an activated HTTP endpoint.
+The existing receptionist financial refusal remains unchanged.
+
+`StripeWebhookVerifier` captures bounded raw bytes, checks SHA256 HMAC/v1
+signatures with constant-time comparisons and a fixed300s past/future delivery
+window, supports multiple rotating v1 digests, and rejects ambiguous timestamp
+headers. A trusted endpoint pins direct/Connect account scope, live/test mode
+and the recognized snapshot API version. Success contains only an immutable
+Checkout/event reference for fresh provider inspection; an unpaid snapshot can
+be authenticated and repeated delivery remains authenticated. Neither result
+proves payment, financial/clinical permission, idempotent action processing or
+a durable work handoff. Authentic unrelated events return no selector.
+No raw patient payload, Stripe secret, money state or event inbox is persisted.
+
+Current synthetic protocol checks pass10/10,0skips
+(`work1792190228479`,612.603ms; peak61,431,808B, no memory limit/OOM event).
+They cover an independently Python-generated UTF8 HMAC vector, raw whitespace
+mutation, wrong secret/timestamp/downgrade scheme, rotating signatures,
+malformed/duplicate/oversize headers, five-minute boundaries, stale/future
+and failed clocks, account/mode/version mismatches, bad JSON/UTF8/object IDs,
+all four Checkout lifecycle references, private-field exclusion and captured
+body/config ownership. Earlier7/9-check refinement runs passed before the
+last protocol/input-ownership changes; they are not substituted for this result.
+
+Current full TypeScript is pending fresh shared-resource admission: at22:37UTC
+6,925,979,648B MemAvailable versus7,891,406,848B required for2GiB TSC,
+remaining growth of the two live bounded regressions and1.5GiB host reserve.
+No compiler launched; wait on actual job completion/resource changes, not a
+peer reservation. Existing source-frozen regressions continue naturally.
+
+Provider-primary references: https://docs.stripe.com/webhooks and
+https://docs.stripe.com/events/manage-webhook-endpoints, checked16October2026.
+No SDK/dependency or Stripe CLI was installed. Actual host composition still
+needs the approved clinic financial intent/terms, exact account/action/amount/
+currency inspection, one-shot creation/recovery and durable provider-owned
+pending work before acknowledgement, separately permitted delivery/receipt/
+clinical expiry and restoration/quiescence guards. All13 gaps stay active.
