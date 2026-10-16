@@ -18,5 +18,15 @@ export function catalogueBookingAuthority(source: ClinikoBookingOffers, catalogu
     if (!read.ok || !after.ok || query.signal.aborted || read.value.offer.presentation?.practitionerName !== member.name ||
         read.value.offer.presentation.appointmentTypeName !== before.value.appointmentTypeName) return denied();
     return ok({ ...read.value, offer: { ...read.value.offer, presentation: { ...read.value.offer.presentation, locationName: before.value.locationName } } });
+  }, async resolveForSend(query, nativeRead) {
+    const denied = () => err({ kind: "unavailable" as const, target: "offer" as const });
+    const current = await catalogue.current(scope);
+    if (!current.ok || query.signal.aborted) return denied();
+    const member = current.value.practitioners.find(item => item.practitionerId === practitionerId);
+    if (!member) return denied();
+    const read = await source.resolveForSend(query, nativeRead);
+    if (!read.ok || query.signal.aborted || read.value.offer.presentation?.practitionerName !== member.name ||
+        read.value.offer.presentation.appointmentTypeName !== current.value.appointmentTypeName) return denied();
+    return ok({ ...read.value, offer: { ...read.value.offer, presentation: { ...read.value.offer.presentation, locationName: current.value.locationName } } });
   } };
 }

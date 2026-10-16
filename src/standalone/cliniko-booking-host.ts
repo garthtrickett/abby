@@ -69,7 +69,8 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
       this.#prepared = selected.value; return ok(structuredClone(selected.value.request));
     } finally { this.#busy = false; }
   }
-  async write(mutation: HostMutation, now: string, external?: AbortSignal): Promise<HostWriteReceipt> {
+  async write(mutation: HostMutation, now: string, external?: AbortSignal,
+    onBookingAcknowledged?: Parameters<HostEffects["write"]>[3]): Promise<HostWriteReceipt> {
     const reject = (): HostWriteReceipt => ({ kind: "rejected", actionKey: mutation.actionKey, reason: "forbidden" });
     const config = this.#config, prepared = this.#prepared;
     if (this.#lifetime.signal.aborted || this.#busy || this.#attempted || !prepared || mutation.kind !== "book" || mutation.request.kind !== "book" ||
@@ -87,21 +88,21 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
       operation: { kind: "book", practitionerId: source.practitionerId, appointmentTypeId: source.appointmentTypeId,
         startsAt: prepared.request.offer.startsAt, endsAt: source.endsAt } };
     const providerRequest = bookingProviderRequest(prepared, randomUUID());
+    let acknowledged: Extract<ClinikoBookingWrite, { kind: "accepted" }> | undefined;
+    let committed: Extract<HostWriteReceipt, { kind: "committed" }> | undefined;
     const result = await this.#review.run(confirmed, {
       authorize: async (_request, stop) => this.#guard.authorize(prepared, mutation, this.#now(), stop),
+      acknowledgedBooking: () => acknowledged ? ok(acknowledged) : undefined,
       send: async (_request, stop): Promise<Result<ClinikoBookingWrite, ClinikoBookingFailure>> => {
-        const sent = await config.writer.writeOnce(providerRequest, stop, finalStop => this.#guard.authorize(prepared, mutation, this.#now(), finalStop));
-        if (!sent.ok || sent.value.kind !== "accepted") return sent;
-        // Each native reader checks authority immediately before its request.
-        // The next reader's check also revalidates after the preceding read;
-        // final result interpretation revalidates after the last native read.
-        const readBack = await config.writer.inspectCreated(providerRequest, sent.value.appointmentRef, source.endsAt, stop, finalStop => this.#guard.mayInspect(prepared, mutation, this.#now(), finalStop));
-        if (!readBack.ok || !readBack.value) return ok({ kind: "uncertain" });
-        const conflicts = await config.writer.inspectConflicts(sent.value.appointmentRef, stop, finalStop => this.#guard.mayInspect(prepared, mutation, this.#now(), finalStop));
-        if (!conflicts.ok || conflicts.value || !await this.#guard.mayInspect(prepared, mutation, this.#now(), stop)) return ok({ kind: "uncertain" });
-        return sent;
+        return config.writer.writeOnce(providerRequest, stop,
+          finalStop => this.#guard.authorizeForSend(prepared, mutation, this.#now(), finalStop), receipt => {
+            acknowledged = receipt;
+            committed = Object.freeze({ kind: "committed", actionKey: mutation.actionKey, hostRef: receipt.appointmentRef });
+            try { onBookingAcknowledged?.(committed); } catch { /* Observers cannot veto this receipt. */ }
+          }, finalStop => this.#guard.currentForSend(prepared, this.#now(), finalStop));
       },
     }, signal);
+    if (committed) return committed;
     if (!result.ok) return result.error.kind === "reviewUncertain" || result.error.kind === "mutationUncertain" ? uncertain() : reject();
     if (!result.value.outcome.ok) return reject();
     if (result.value.outcome.value.kind !== "accepted" || signal.aborted) return uncertain();

@@ -110,14 +110,16 @@ test("E2E-296 independent permission, original OTP expiry, contact, public appro
   }
 });
 
-test("E2E-296 rejected booking, failed review and lost responses retain the created patient and never replay, compensate or claim an exact appointment", async () => {
+test("E2E-296 booking failures retain the created patient; exact creation acknowledgement survives later inspection or conflicts", async () => {
   for (const cause of ["slot", "bookingRejected", "reviewRejected", "reviewLoss", "bookingLoss", "inspection", "conflict"] as const) {
     const f = await intakeBookingSessionFixture();
     try {
       await f.register(); await f.playPending(); resultValue(await f.readMenu()); await f.playPending(); resultValue(await f.select());
       resultValue(await f.confirm("book")); f.provider.fail(cause); resultValue(await f.drain());
       const action = Object.values((await f.state()).actions).find(action => action.kind === "book")!;
-      assert.equal(action.status, cause === "slot" ? "rejected" : "uncertain", cause);
+      const acknowledged = cause === "inspection" || cause === "conflict";
+      assert.equal(action.status, acknowledged ? "committed" : cause === "slot" ? "rejected" : "uncertain", cause);
+      if (acknowledged) assert.equal(f.provider.traffic.some(item => item.startsWith("GET /v1/individual_appointments/91")), false);
       assert.equal(f.provider.patientPosts, 1); assert.ok(f.provider.patient); assert.equal(f.mail.length, 1);
       assert.equal(f.provider.bookingPosts, cause.startsWith("review") || cause === "slot" ? 0 : 1);
       assert.equal(f.provider.recalls.length, ["slot", "reviewRejected"].includes(cause) ? 0 : 1);
@@ -125,7 +127,7 @@ test("E2E-296 rejected booking, failed review and lost responses retain the crea
       assert.equal(Object.values((await f.state()).actions).find(item => item.kind === "book")!.status, action.status);
       assert.equal(f.provider.traffic.some(item => /^(DELETE|PATCH)/.test(item)), false);
       const shown = (await f.state()).presentations[(await f.state()).pendingPresentationId!];
-      if (shown?.kind === "notice") assert.doesNotMatch(shown.approvedText, /appointment is booked|successfully booked/i);
+      if (shown?.kind === "notice" && !acknowledged) assert.doesNotMatch(shown.approvedText, /appointment is booked|successfully booked/i);
     } finally { await f.close(); }
   }
 });

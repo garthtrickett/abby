@@ -248,7 +248,11 @@ export interface HostEffects {
    * and readback. Dispatcher validates 1..120000 ms; absent means 15000 ms.
    * This is not caller/model input and cannot extend proof or call lifetimes. */
   readonly effectDeadlineMs?: number;
-  write(mutation: HostMutation, now: string, signal?: AbortSignal): Promise<HostWriteReceipt>;
+  /** Trusted in-process notification only after a booking's exact native acknowledgement
+   * is validated. It preserves that result through wrapper cancellation; it grants no
+   * authority, replay or persistence and never applies to another operation. */
+  write(mutation: HostMutation, now: string, signal?: AbortSignal,
+    onBookingAcknowledged?: (receipt: Extract<HostWriteReceipt, { kind: "committed" }>) => void): Promise<HostWriteReceipt>;
   reconcile(mutation: HostMutation, signal?: AbortSignal): Promise<ReconcileObservation>;
   openTask(item: StaffItem, signal?: AbortSignal): Promise<StaffTaskReceipt>;
   reconcileTask(item: StaffItem, signal?: AbortSignal): Promise<StaffTaskObservation>;

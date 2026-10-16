@@ -129,6 +129,37 @@ export class ClinikoBookingGuard {
         Date.parse(prepared.request.offer.expiresAt) > finalTime && Date.parse(prepared.request.offer.startsAt) > finalTime && !this.#closed && !signal.aborted;
     } catch { return false; }
   }
+  /** Finish current authority before the source's final exact availability observation. */
+  async authorizeForSend(prepared: PreparedClinikoBooking, mutation: HostMutation, now: string, signal: AbortSignal): Promise<boolean> {
+    const config = this.#config;
+    try {
+      const at = this.#time(now);
+      if (at === undefined || !await this.#ready(at, signal, mutation)) return false;
+      const patient = await untilAbort(config.proof.verifyOperation(config.scope, prepared.query.verificationRef, "appointments.book", now, signal), signal);
+      const freshTime = this.#time(now);
+      if (!patient?.ok || freshTime === undefined || patient.value.patientRef !== prepared.request.patient.patientRef ||
+          !await this.#ready(freshTime, signal, mutation)) return false;
+      const query: ClinikoBookingQuery = Object.freeze({ ...prepared.query, scope: Object.freeze({ ...config.scope }), now, phase: "commit", signal });
+      const receipt = Object.freeze({}); this.#nativeReads.set(receipt, query);
+      let fresh;
+      try { fresh = await untilAbort(config.authority.resolveForSend(query, { source: this, receipt }), signal); }
+      finally { this.#nativeReads.delete(receipt); }
+      const current = this.#time(now);
+      return !!fresh?.ok && current !== undefined && !this.#closed && !signal.aborted &&
+        config.proof.ownsLiveReference(prepared.query.verificationRef, "appointments.book", new Date(current).toISOString()) &&
+        validClinikoBookingEvidence(fresh.value, { ...query, now: new Date(current).toISOString() }, config.writer.selection(), config.writer.credentialFingerprint()) &&
+        digestActionRequest({ kind: "book", patient: patient.value, offer: fresh.value.offer }) === mutation.payloadDigest &&
+        sameClinikoBookingEvidence(fresh.value, prepared.evidence);
+    } catch { return false; }
+  }
+  /** Local expiry/lifetime checks at transport invocation; never a remote write-stop replica. */
+  currentForSend(prepared: PreparedClinikoBooking, now: string, signal: AbortSignal): boolean {
+    const at = this.#time(now);
+    return at !== undefined && !this.#closed && !signal.aborted &&
+      this.#config.proof.ownsLiveReference(prepared.query.verificationRef, "appointments.book", new Date(at).toISOString()) &&
+      Date.parse(prepared.request.patient.expiresAt) > at && Date.parse(prepared.request.offer.expiresAt) > at &&
+      Date.parse(prepared.request.offer.startsAt) > at;
+  }
   /** Protect result inspection without demanding that the just-booked slot remain available. */
   async mayInspect(prepared: PreparedClinikoBooking, mutation: HostMutation, now: string, signal: AbortSignal): Promise<boolean> {
     try {

@@ -154,6 +154,15 @@ export class ClinikoRosterAvailabilityReader {
   }
   async listBooking(scope: LocationScope, from: string, to: string, durationMinutes: number, plan: RosterSearchPlan,
     parentSignal?: AbortSignal): Promise<Result<ClinikoAvailability, ClinikoAvailabilityFailure>> {
+    return this.#listBooking(scope, from, to, durationMinutes, plan, false, parentSignal);
+  }
+  /** Dispatch preparation has already authorized this read. No metadata refresh follows the calendar snapshots. */
+  async listBookingForSend(scope: LocationScope, from: string, to: string, durationMinutes: number, plan: RosterSearchPlan,
+    parentSignal?: AbortSignal): Promise<Result<ClinikoAvailability, ClinikoAvailabilityFailure>> {
+    return this.#listBooking(scope, from, to, durationMinutes, plan, true, parentSignal);
+  }
+  async #listBooking(scope: LocationScope, from: string, to: string, durationMinutes: number, plan: RosterSearchPlan,
+    forSend: boolean, parentSignal?: AbortSignal): Promise<Result<ClinikoAvailability, ClinikoAvailabilityFailure>> {
     const failure = () => err({ kind: "unavailable" as const });
     const first = calendarDate(from), last = calendarDate(to);
     if (!this.#metadata.matchesScope(scope)) return err({ kind: "scopeMismatch" });
@@ -168,8 +177,11 @@ export class ClinikoRosterAvailabilityReader {
         const zone = metadata.value.timeZone, lower = clinicDayStartUtc(zone, from), upper = clinicDayStartUtc(zone, new Date(last + 86_400_000).toISOString().slice(0, 10));
         const busyUpper = new Date(Date.parse(upper) + durationMinutes * 60_000).toISOString();
         const before = await this.#snapshot(lower, busyUpper, zone, plan, signal), after = await this.#snapshot(lower, busyUpper, zone, plan, signal);
-        const again = await this.#metadata.describeRosterBooking(scope, durationMinutes, signal);
-        if (!again.ok || JSON.stringify(again.value) !== JSON.stringify(metadata.value) || JSON.stringify(before) !== JSON.stringify(after) || signal.aborted) return failure();
+        if (!forSend) {
+          const again = await this.#metadata.describeRosterBooking(scope, durationMinutes, signal);
+          if (!again.ok || JSON.stringify(again.value) !== JSON.stringify(metadata.value)) return failure();
+        }
+        if (JSON.stringify(before) !== JSON.stringify(after) || signal.aborted) return failure();
         const startsAt = rosterStarts({ from, to, timeZone: zone, durationMinutes, plan, ...after, signal });
         return ok({ kind: "times", scope: { ...scope }, sourceRef: `cliniko:roster:${this.#config.businessId}:${this.#config.practitionerId}:${this.#config.appointmentTypeId}`,
           reservable: false, startsAt, observedAt: this.#clock(), timeZone: zone, offering: metadata.value.offering,

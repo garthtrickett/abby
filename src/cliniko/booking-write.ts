@@ -227,7 +227,9 @@ export class ClinikoBookingWriter {
 
   /** At most one POST per marker in this process; abort before send prevents the POST. */
   async writeOnce(request: ClinikoBookingRequest, signal?: AbortSignal,
-    beforeSend?: (signal: AbortSignal) => Promise<boolean>):
+    beforeSend?: (signal: AbortSignal) => Promise<boolean>,
+    onAccepted?: (receipt: Extract<ClinikoBookingWrite, { kind: "accepted" }>) => void,
+    atDispatch?: (signal: AbortSignal) => boolean):
     Promise<Result<ClinikoBookingWrite, ClinikoBookingFailure>> {
     if (!validRequest(request)) return err({ kind: "invalidQuery" });
     request = structuredClone(request);
@@ -241,6 +243,10 @@ export class ClinikoBookingWriter {
     if (requestSignal.aborted || limited === undefined) return err({ kind: "unavailable" });
     if (limited) return err(limited);
     if (beforeSend !== undefined && !await permitted(beforeSend, requestSignal)) return err({ kind: "forbidden" });
+    if (requestSignal.aborted) return err({ kind: "unavailable" });
+    try {
+      if (atDispatch !== undefined && atDispatch(requestSignal) !== true) return err({ kind: "forbidden" });
+    } catch { return err({ kind: "forbidden" }); }
     if (requestSignal.aborted) return err({ kind: "unavailable" });
     let response: Response;
     try {
@@ -267,7 +273,11 @@ export class ClinikoBookingWriter {
         row.cancelled_at !== null || row.archived_at !== null || row.deleted_at !== null) {
       return ok({ kind: "uncertain" });
     }
-    return ok({ kind: "accepted", appointmentRef: `cliniko:appointment:${row.id}` });
+    const accepted = { kind: "accepted" as const, appointmentRef: `cliniko:appointment:${row.id}` };
+    // Establish the exact receipt before returning across asynchronous wrappers.
+    // An observer is not allowed to erase native success or permit another POST.
+    try { onAccepted?.(Object.freeze(accepted)); } catch { /* Receipt remains established. */ }
+    return ok(accepted);
   }
 
   /** Exact active read-back for a clear create response, including the clinic-approved duration.

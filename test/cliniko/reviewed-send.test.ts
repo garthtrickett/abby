@@ -36,6 +36,24 @@ function setup(fetchPort: typeof fetch, rateBudget?: ClinikoRequestBudget, deadl
 }
 const live = () => new AbortController().signal;
 
+test("an already validated booking outcome survives reviewed-send abort without weakening other operations", async () => {
+  for (const operation of ["book", "cancel", "reschedule"] as const) {
+    const controller = new AbortController();
+    const { gate } = setup(async (_url, init) => accepted(init));
+    let established: string | undefined;
+    const result = await gate.run(request(operation), {
+      authorize: async () => true,
+      send: async () => { established = "exact-native-receipt"; controller.abort(); return new Promise<string>(() => undefined); },
+      acknowledgedBooking: () => established,
+    }, controller.signal);
+    if (operation === "book") {
+      assert.ok(result.ok);
+      assert.equal(result.value.outcome, "exact-native-receipt");
+    } else assert.deepEqual(result, { ok: false, error: { kind: "mutationUncertain" } });
+    assert.equal((await gate.run(request(operation), { authorize: async () => true, send: async () => "never" }, live())).ok, false);
+  }
+});
+
 test("E2E-268 all confirmed operation envelopes are acknowledged before one clinical send, with fresh authorization", async () => {
   for (const kind of ["book", "cancel", "reschedule"] as const) {
     const order: string[] = [];

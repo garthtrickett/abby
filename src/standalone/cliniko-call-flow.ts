@@ -21,7 +21,7 @@ import { normalizedSpokenName } from "../core/pending-location.ts";
 import { bookingDateRangeLanguage } from "./booking-date-range-language.ts";
 import { PlayedMenuSearch } from "./played-menu-search.ts";
 import { clinicDateAt } from "./clinic-clock.ts";
-import type { AppointmentEnquiryQuery, AppointmentChangeEvidenceQuery, BookingMenuQuery, BookingMenuReadQuery, IntakeEvidenceQuery, ReschedulingMenuQuery, ReschedulingMenuReadQuery, StaffRequestQuery, WorkflowQuery } from "../core/host.ts";
+import type { HostEffects, AppointmentEnquiryQuery, AppointmentChangeEvidenceQuery, BookingMenuQuery, BookingMenuReadQuery, IntakeEvidenceQuery, ReschedulingMenuQuery, ReschedulingMenuReadQuery, StaffRequestQuery, WorkflowQuery } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { HostMutation, HostWriteReceipt, LocationScope, Result, StaffItem } from "../core/model.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
@@ -1045,12 +1045,14 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   async resolvePatientCorrection(query: import("../core/host.ts").PatientCorrectionEvidenceQuery) {
     return this.patientCorrection?.resolvePatientCorrection(query) ?? readDenied();
   }
-  async write(mutation: HostMutation, now: string, signal?: AbortSignal): Promise<HostWriteReceipt> {
+  async write(mutation: HostMutation, now: string, signal?: AbortSignal,
+    onBookingAcknowledged?: Parameters<HostEffects["write"]>[3]): Promise<HostWriteReceipt> {
     const owner = this.#owner;
     if (this.#tasks?.isRetired(mutation.actionKey)) return { kind: "rejected", actionKey: mutation.actionKey, reason: "forbidden" };
     if (!owner || owner instanceof ClinikoAppointmentEnquirySession || owner instanceof ClinikoPractitionerHistorySession || this.#staffActive || this.#lifetime.signal.aborted ||
         ["book", "intake"].includes(mutation.kind) && !(owner instanceof ClinikoClassSession) && this.#config.serviceCatalogue && !this.#serviceChoice) return { kind: "rejected", actionKey: mutation.actionKey, reason: "forbidden" };
-    return (owner instanceof ClinikoIntakeBookingSession ? owner : owner.effects).write(mutation, now, signal);
+    const effects: HostEffects = owner instanceof ClinikoIntakeBookingSession ? owner : owner.effects;
+    return effects.write(mutation, now, signal, onBookingAcknowledged);
   }
   async reconcile(mutation: HostMutation) {
     const receipt = this.#tasks?.receipt(mutation); if (receipt) return receipt;

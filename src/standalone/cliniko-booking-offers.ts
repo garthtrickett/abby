@@ -13,7 +13,7 @@ import { ClinikoBookingGuard } from "./cliniko-booking-guard.ts";
 import type { BookableOffer, LocationScope, Result } from "../core/model.ts";
 import { normalizeEmailAddress } from "../shared/email-address.ts";
 import { sameScope } from "./appointment-change-authority.ts";
-import type { ClinikoBookingAuthority, ClinikoBookingEvidence, ClinikoBookingQuery } from "./cliniko-booking-authority.ts";
+import type { BookingNativeRead, ClinikoBookingAuthority, ClinikoBookingEvidence, ClinikoBookingQuery } from "./cliniko-booking-authority.ts";
 import { clinicDateAt } from "./clinic-clock.ts";
 import { approvalInstant } from "./owner-file-clinic-approval.ts";
 import { OwnerFileBookingPolicy } from "./owner-file-booking-policy.ts";
@@ -105,10 +105,11 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
   #expiry(policy: BookingApproval, proofExpiry: string, at: number): string {
     return new Date(Math.min(at + policy.offerTtlSeconds * 1000, Date.parse(policy.effectiveUntil), Date.parse(proofExpiry))).toISOString();
   }
-  #availability(policy: BookingApproval, from: string, to: string, signal: AbortSignal) {
+  #availability(policy: BookingApproval, from: string, to: string, signal: AbortSignal, forSend = false) {
     const plan = policy.availabilityPlan;
     return plan?.mode === "roster"
-      ? this.#roster.listBooking(this.#config.scope, from, to, policy.durationMinutes, plan, signal)
+      ? forSend ? this.#roster.listBookingForSend(this.#config.scope, from, to, policy.durationMinutes, plan, signal)
+        : this.#roster.listBooking(this.#config.scope, from, to, policy.durationMinutes, plan, signal)
       : plan ? this.#reader.listBookingRange(this.#config.scope, from, to, policy.durationMinutes, plan.maxSearchDays, signal)
         : this.#reader.listBooking(this.#config.scope, from, to, policy.durationMinutes, signal);
   }
@@ -177,6 +178,36 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
       if (!fresh || at === undefined || fresh.patient.patientRef !== evidence.patientId || this.#offers.get(query.offerRef) !== selected ||
           Date.parse(evidence.offer.expiresAt) <= at || signal.aborted || JSON.stringify(fresh.policy) !== JSON.stringify(before.policy) ||
           !OwnerFileBookingPolicy.allows(fresh.policy, evidence.offer.startsAt, new Date(at).toISOString())) return undefined;
+      return structuredClone(evidence);
+    }, query.signal);
+    return result ? ok(result) : denied();
+  }
+  /** The dispatch path completes all asynchronous authorization before final availability. */
+  async resolveForSend(incoming: ClinikoBookingQuery, nativeRead?: BookingNativeRead): Promise<Result<ClinikoBookingEvidence, HostReadFailure>> {
+    const query = { ...incoming, scope: { ...incoming.scope } }, config = this.#config, selected = this.#offers.get(query.offerRef);
+    if (!selected || (config.operation ?? "appointments.book") !== "appointments.book" || query.phase !== "commit" ||
+        !sameScope(query.scope, config.scope) || query.callId !== config.callId || query.sessionId !== config.sessionId ||
+        query.policyVersion !== config.policyVersion || query.patientId !== selected.evidence.patientId ||
+        query.verificationRef !== selected.verificationRef || !(query.signal instanceof AbortSignal) || this.#time(query.now) === undefined) return denied();
+    const withinGuardRead = !!nativeRead && nativeRead.source instanceof ClinikoBookingGuard &&
+      nativeRead.source.constructor === ClinikoBookingGuard && nativeRead.source.consumeNativeRead(nativeRead.receipt, query, config.proof);
+    if (nativeRead && !withinGuardRead) return denied();
+    const epoch = this.#epoch;
+    const result = await this.#bounded(async signal => {
+      const before = await this.#current(query.verificationRef, query.now, signal, withinGuardRead), evidence = selected.evidence;
+      if (!before || before.patient.patientRef !== evidence.patientId || Date.parse(evidence.offer.expiresAt) <= before.at ||
+          !OwnerFileBookingPolicy.allows(before.policy, evidence.offer.startsAt, new Date(before.at).toISOString())) return undefined;
+      const date = clinicDateAt(evidence.timeZone, new Date(evidence.offer.startsAt));
+      const read = await this.#availability(before.policy, date, date, signal, true);
+      // The exact final observation is followed only by synchronous local expiry,
+      // retained-offer and proof-generation checks. No policy/contact/database read.
+      const at = this.#time(query.now);
+      if (!read.ok || read.value.kind !== "times" || read.value.timeZone !== evidence.timeZone ||
+          read.value.offering?.practitionerName !== selected.practitionerName || read.value.offering?.appointmentTypeName !== selected.appointmentTypeName ||
+          !read.value.startsAt.includes(evidence.offer.startsAt) || at === undefined || signal.aborted || epoch !== this.#epoch ||
+          this.#offers.get(query.offerRef) !== selected || !config.proof.ownsLiveReference(query.verificationRef, "appointments.book", new Date(at).toISOString()) ||
+          Date.parse(before.patient.expiresAt) <= at || Date.parse(evidence.offer.expiresAt) <= at ||
+          !OwnerFileBookingPolicy.allows(before.policy, evidence.offer.startsAt, new Date(at).toISOString())) return undefined;
       return structuredClone(evidence);
     }, query.signal);
     return result ? ok(result) : denied();

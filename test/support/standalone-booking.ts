@@ -89,10 +89,11 @@ export async function standaloneBookingFixture(options: { scope?: LocationScope;
       budget: options.verificationBudget ?? { reserve: async () => true }, delivery: { send: async (email, code) => { mail.push({ email, code }); return true; } } }));
     const writerConfig = { scope: f.scope, apiKey, contactEmail: "test@example.test", businessId: "11", practitionerId: "22", appointmentTypeId: "33", rateBudget };
     const writer = resultValue(ClinikoBookingWriter.create(writerConfig, fetchPort, f.sessionConfig.clock));
-    const authority: ClinikoBookingAuthority = options.authorityFor ? await options.authorityFor({ ...writerConfig, proof: session.proof,
-      callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion, clock: f.sessionConfig.clock }, fetchPort) : { resolve: async query => {
+    const resolve: ClinikoBookingAuthority["resolve"] = async query => {
       sourceQueries.push(query.phase); return authorityPermitted ? ok(structuredClone(evidence)) : { ok: false, error: { kind: "unavailable", target: "offer" } };
-    } };
+    };
+    const authority: ClinikoBookingAuthority = options.authorityFor ? await options.authorityFor({ ...writerConfig, proof: session.proof,
+      callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion, clock: f.sessionConfig.clock }, fetchPort) : { resolve, resolveForSend: resolve };
     host = new ClinikoBookingHost({ scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion,
       ledger: f.ledger, policy: f.policies, proof: session.proof, authority, writer,
       recallWriter: resultValue(ClinikoRecallWriter.create(writerConfig, fetchPort)), recallTypeId: "7", timeZone: "Australia/Sydney", clock: f.sessionConfig.clock });

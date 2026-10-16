@@ -315,6 +315,23 @@ test("an abort while reading a successful booking body cannot become an accepted
   assert.deepEqual(await adapter.writeOnce(request), { ok: false, error: { kind: "invalidQuery" } });
 });
 
+test("an exact validated acknowledgement is established before a later abort or failing observer", async () => {
+  for (const failure of ["abort", "throw"] as const) {
+    const controller = new AbortController();
+    const adapter = writer(async () => Response.json(appointment("91"), { status: 201 }));
+    let established = 0;
+    const result = await adapter.writeOnce(request, controller.signal, undefined, receipt => {
+      assert.equal(receipt.appointmentRef, "cliniko:appointment:91");
+      established += 1;
+      if (failure === "abort") controller.abort();
+      else throw new Error("synthetic observer failure");
+    });
+    assert.deepEqual(result, { ok: true, value: { kind: "accepted", appointmentRef: "cliniko:appointment:91" } });
+    assert.equal(established, 1);
+    assert.equal((await adapter.writeOnce(request)).ok, false);
+  }
+});
+
 test("observation abort before or during the budget claim prevents a patient GET", async () => {
   let claims = 0;
   let gets = 0;

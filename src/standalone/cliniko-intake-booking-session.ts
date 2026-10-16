@@ -4,7 +4,7 @@ import { OwnerFileBookingCatalogue } from "./owner-file-booking-catalogue.ts";
 import type { ClinikoBookingSessionConfig } from "./cliniko-booking-session.ts";
 import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
 import { ClinikoVerificationContactReader } from "../cliniko/verification-contact.ts";
-import type { BookingEvidenceHost, BookingMenuHost, BookingMenuQuery, BookingMenuReadQuery, IntakeEvidenceHost, IntakeEvidenceQuery, PolicyStore } from "../core/host.ts";
+import type { HostEffects, BookingEvidenceHost, BookingMenuHost, BookingMenuQuery, BookingMenuReadQuery, IntakeEvidenceHost, IntakeEvidenceQuery, PolicyStore } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
 import type { HostMutation, HostWriteReceipt, LocationScope, Result, StaffItem } from "../core/model.ts";
@@ -105,8 +105,9 @@ export class ClinikoIntakeBookingSession extends NoStoredKnowledge implements In
   readBookingMenu(query: BookingMenuReadQuery) { return this.#composition.host.readBookingMenu(query); }
   selectBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>) { return this.#composition.host.selectBookingMenu(query); }
   correctBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; startsAt: string }>) { return this.#composition.host.correctBookingMenu(query); }
-  write(mutation: HostMutation, now: string, signal?: AbortSignal): Promise<HostWriteReceipt> {
-    return mutation.kind === "intake" ? this.intake.write(mutation, now, signal) : this.#composition.host.write(mutation, now, signal);
+  write(mutation: HostMutation, now: string, signal?: AbortSignal,
+    onBookingAcknowledged?: Parameters<HostEffects["write"]>[3]): Promise<HostWriteReceipt> {
+    return mutation.kind === "intake" ? this.intake.write(mutation, now, signal) : this.#composition.host.write(mutation, now, signal, onBookingAcknowledged);
   }
   reconcile(mutation: HostMutation) { return mutation.kind === "intake" ? this.intake.reconcile(mutation) : this.#composition.host.reconcile(mutation); }
   openTask(item: StaffItem) { return this.intake.openTask(item); }

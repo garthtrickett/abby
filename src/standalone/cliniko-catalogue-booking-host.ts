@@ -129,13 +129,14 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
       return resolved;
     } finally { this.#busy = false; }
   }
-  async write(mutation: HostMutation, now: string, signal?: AbortSignal): Promise<HostWriteReceipt> {
+  async write(mutation: HostMutation, now: string, signal?: AbortSignal,
+    onBookingAcknowledged?: Parameters<HostEffects["write"]>[3]): Promise<HostWriteReceipt> {
     const prepared = this.#prepared;
     if (this.#attempted || this.#busy || this.#lifetime.signal.aborted || !prepared || mutation.kind !== "book" ||
         mutation.payloadDigest !== digestActionRequest(prepared.request) || digestActionRequest(mutation.request) !== mutation.payloadDigest)
       return { kind: "rejected", actionKey: mutation.actionKey, reason: "forbidden" };
     this.#attempted = true;
-    return prepared.member.host.write(mutation, now, signal);
+    return prepared.member.host.write(mutation, now, signal, onBookingAcknowledged);
   }
   async reconcile(mutation: HostMutation) { return { kind: "stillUnknown" as const, actionKey: mutation.actionKey }; }
   async openTask(item: StaffItem) { return { kind: "rejected" as const, taskKey: item.key }; }

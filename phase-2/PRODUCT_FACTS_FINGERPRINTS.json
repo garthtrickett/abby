@@ -1,0 +1,29 @@
+{
+  "verifiedDate": "2026-10-16",
+  "factsFile": "phase-2/PRODUCT_FACTS.md",
+  "factsSha256": "04b18fc3690f277e2aaceb2e83c468d6537d148c23d1fb719cba69941e10b583",
+  "sources": {
+    "docs/adr/0002-provider-acknowledged-booking.md": "3e561f547d3e9b4a080e1cd30df99dbe961b0f803922dc9ebdab56078fa4f3c0",
+    "src/cliniko/booking-write.ts": "01a64fe2f73e22281ec48ec0b238a7033d694ce9ecd0b7c434aeda538aff0a04",
+    "src/core/effect-worker.ts": "fdc1e4c5490fdd98370aae437a990dd383b5bd6b8a4e24465fe690bbf395d0f2",
+    "src/core/host.ts": "9913c30ae065d4dfbbba78425bbf107bd3499809bd7c22f6de19fe334b224e25",
+    "src/core/runtime.ts": "51fe43a512922f7b8d0e15a303b0fd94552aca162754fede2bb677e715f2253c",
+    "src/core/transition.ts": "e50b56adb16821e16987cc2f15a1a0f3ee0b26150e8ef27e8ba86df96a472ff2",
+    "src/standalone/cliniko-booking-guard.ts": "74a0ca5b8e7de4cda42dcc8bc12b91e3016d3fbd7c59cfbadd408b7e775c76e8",
+    "src/standalone/cliniko-booking-host.ts": "b7d66230a6096193420a061d58018adc4c5c2bebbe894d406660822b0fa80ae4",
+    "src/standalone/cliniko-booking-offers.ts": "3977b6204843a68ea817bfadcf8e850c00f0f837ddf42ac9f7a766ced3580c5c",
+    "src/standalone/cliniko-class-booking-host.ts": "9b52abd167c9bdb69b1515e77c92230bc6c1c94a12c7a34dddc8753c4260be1c",
+    "src/standalone/cliniko-intake-booking-session.ts": "96a258341828980bb9255f66a8d17b4409a43636a91aac660f9a73ac9ee9250d",
+    "src/standalone/cliniko-reviewed-send.ts": "eeede02b9a6422223df68f3df1bb291e63cdb8d9a853d40bb70ccaa67d61c25c",
+    "test/cliniko/booking-write.test.ts": "d45ac249f5ac2ab70197c68daf22435e0212378e528e0b97cbd1ff2eabf08f1f",
+    "test/cliniko/intake-booking-session.test.ts": "de67d7568e589c32728827fdd574f16771fcdd72b68d61213f07c2c0d1006551",
+    "test/cliniko/provider-acknowledged-booking.test.ts": "b05ae3563ae38cf1d2c8fb20bd051100a22a352078a92d1bdafc084db46d6efc",
+    "test/cliniko/reviewed-send.test.ts": "cf356bf9561630f1729326b2b75084803e924a6c7c6803101978bf5713a1b06a",
+    "test/cliniko/standalone-booking-postgres.test.ts": "2ee8687289f8f5e1a35f40915494fa9edffc6906f54a62d7d41f542ab483c205",
+    "test/cliniko/standalone-booking-process.test.ts": "53b59ebb4adbc422bc79930f4a339538ed0ea9ee5a1ed668e7d06d80444607a6",
+    "test/cliniko/standalone-booking.test.ts": "5cf61b3ec82fb3653e613e1c350285d2ef0ae10be3e6162571ef5ff7812b1f73",
+    "test/storage/owning-host-write-contract.test.ts": "63fe6e4cddc29f33c0aae2fbc4a0c1c154f612d8e506cd869cbf001c5de70090",
+    "test/text/effect-deadline.test.ts": "a3e025c4a5c52bb6d352be5157eed12cd0628a5a2689b73eb41298667f787e6f"
+  },
+  "limits": "Content/source drift aid only; no automated behavioral, deployment or publication attestation."
+}

@@ -43,9 +43,9 @@ a confirmation resend has its own authorization and outcome.
 
 ## Best-effort write
 
-A confirmed request is checked and attempted once, then inspected under the approved external provider contract. Competing edits, overlaps or duplicates may still occur; unknown outcomes require owned review rather than replay or a completion claim. It does not promise commit protection.
+A confirmed request is checked and attempted once under the approved external provider contract. Completion requires the evidence declared for that operation. Competing edits, overlaps or duplicates may still occur; unknown outcomes require owned review rather than replay or a completion claim. It does not promise commit protection.
 
-## Provider acknowledged booking (proposed)
+## Provider acknowledged booking
 
 An external booking whose exact authorized appointment creation is established by the provider's successful acknowledgement. Later observation or notification failure cannot erase that established result; a missing or ambiguous acknowledgement remains uncertain.
 
