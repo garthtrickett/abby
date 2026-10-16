@@ -1742,3 +1742,24 @@ inferred from these pure wire and metadata checks.
 A failure-only diagnostic now includes the numeric WebSocket close code and
 playback counts/booleans. It excludes close reason text, mark names, patient
 fields and utterances. It does not change readiness, authority or timing.
+
+### Combined6a55 full regression natural terminal
+
+Work1792171749450 ended naturally17:57:20.871680UTC, exit1; wrapper37284
+was absent and the slot released. Total28m10.43s,2607 pass/505 fail/34
+cancelled/1 skipped,20 suites. Ordered runner did not run. Source1171 stayed
+unchanged;451 generated artifacts (runtime plus dashboards) were pinned.
+Scope peak1,118,756,864B excludes Docker PostgreSQL; OOM/high/max all0.
+The disposable outer container was gone after cleanup; restored databases
+were not used. This run had the diagnosed missing outer migration and the
+separate ordinary staged failure; it cannot qualify a clean full regression.
+
+Compiled first-time South/offline female, cancelled confirmation resend and
+initial service/gender cases passed in this run, as did the staged maximum-
+history pass. Because shared-store setup failures changed the complete test
+context, these scoped results do not prove that the older full-suite timing
+cause is fixed. The healthy-schema combined command remains required.
+
+The fixture helper uses the existing ES2022 filter/at surface rather than
+ES2023 findLast; runtime and compiler settings stay unchanged. This is the
+same focused qualification candidate, not another job or deadline change.

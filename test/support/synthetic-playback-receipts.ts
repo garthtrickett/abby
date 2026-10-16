@@ -20,7 +20,7 @@ export class SyntheticPlaybackReceipts {
     }
   }
   acknowledgeLatest(): boolean {
-    const name = this.#marks.findLast(value => !this.#acknowledged.has(value));
+    const name = this.#marks.filter(value => !this.#acknowledged.has(value)).at(-1);
     if (name === undefined) return false;
     this.#acknowledged.add(name); this.#send(name); return true;
   }
