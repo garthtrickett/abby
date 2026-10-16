@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.234
+# Scenario manifest, version 1.235
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -904,3 +904,23 @@ filter for separately approved staging with complete per-phase admission; legacy
 execution keeps its existing limit. Large cross-case proposal and complete host
 journey checks pass in the29-case host/cost scope. Frozen93b subsequently passed its own
 full typecheck. Manifest1.234 retains419 IDs and planned full-call evidence.
+
+
+## Cold staff movement review, E2E-419
+
+Unpublished source now checks current clinic-admin membership, independently
+investigated/quiescent authority, exact captured policy/terms/staging, native
+original/replacement markers and pass effects. Fresh joint observations and
+an acknowledged provider review can yield a distinct staff-reviewed moved or
+restored result; the ended caller action is unchanged. Restoration requires
+an exact cancelled replacement citation and unlinked inspection. No sender,
+stage owner or local patient-bearing recovery journal is constructed.
+
+The optional host-provisioned same-origin/admin HTTP route accepts only review
+and replacement citations and returns fixed observations. The combined cold
+recovery/live staged/legacy movement/dashboard-listener scope passes89 memory
+cases, with separate fixed-output HTTP checks. Full operator-source typecheck,
+process/database/backup, signed serving and real operator acceptance remain
+pending. The initial route covers current contracts/upcoming occurrences; other
+investigations stay manual in Cliniko. Version1.235 retains419 IDs/full-call
+planned. This is not completed gap10 or clinic activation.

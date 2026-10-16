@@ -4148,3 +4148,22 @@ and qualification limits are in the execution ledger. Frozen93b subsequently pas
 its own full typecheck; signed serving, independent operator resolution,
 high-cost/mixed/concurrent/backup/full-suite/cloud acceptance remain open.
 All13 gaps remain active in the existing execution order.
+
+
+## Cold staff movement recovery source checkpoint
+
+Above native caller draft PR467, unpublished source adds independent cold
+clinic-admin review of exact current joint native movement/restoration. It
+requires current membership, investigated/quiescent authority, captured policy/
+terms/staging and exact record/case evidence. No caller owner, replay, provider
+mutation, local patient-linked journal or caller completion is produced. The
+optional host-provisioned same-origin/admin HTTP route returns fixed fields.
+Current contracts/upcoming occurrences bound the initial route; other
+investigations remain manual in Cliniko. ADR0003 defines the distinction.
+
+The combined89-case memory recovery/movement/listener scope passes, with
+commands and failed fixture history in the execution ledger. Manifest1.235
+retains419 IDs/full-call planned. Full new-source TypeScript, operator process/
+database/backup/output privacy, signed serving, broader cohorts and real
+operator/cloud acceptance remain open. This advances numbered requirement6
+without closing gap10 or changing the13-gap execution order.

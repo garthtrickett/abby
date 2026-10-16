@@ -1055,3 +1055,69 @@ high-cost/mixed/concurrent cohorts, rebuilt signed serving, disposable backup/
 output privacy and authoritative cloud acceptance remain open. All13 gaps stay
 active; Stripe remains selected for gap11. No deployment, provider access or
 clinic activation occurred.
+
+
+### Published native caller draft and exact cloud startup result
+
+Draft PR467 publishes1d3668a9e20e84d7b560c0f46cf434da77d6f470 above
+PR465: https://github.com/garthtrickett/abby/pull/467. Exact-head push
+run38916126275 and PR run38916136059 both completed failure, all eight
+jobs zero steps. Check117023977419 explicitly reports failed account payments
+or a spending limit. No cloud code ran, no retry/configuration change/ready
+transition/merge followed; the exact evidence is also on the draft. Billing
+does not prevent the independent gap10 source work below.
+
+### Cold staff movement recovery: unpublished memory checkpoint
+
+A separate worktree/branch above native caller PR467 adds cold staff resolution
+without reconstructing a caller owner, proof or confirmation. A current clinic
+administrator and directory membership, independently investigated/quiescent
+authority, exact captured policy/terms/staging and fresh joint native records
+are required. An acknowledged review can yield distinct reviewed-moved or
+reviewed-restored observations; the ended caller action is unchanged. The
+reader makes only native GETs, never replays a mutation or persists a local
+patient-linked resolution. Missing replacement evidence cannot establish
+restoration from an empty active roster. Current policies/upcoming occurrences
+bound this initial route; expired/different contracts and past occurrences
+stay for manual Cliniko investigation. ADR0003 records this domain distinction.
+
+The exact policy/terms digest and text generation is shared with the live
+host through one contract helper, preserving the existing serialized version
+and wording. Native reader/writer inspection and pass evidence are reused;
+no weaker alternate native parser is added. A final joint class re-observation
+rejects changed attendance after the exact record inspections. The private
+staff read scope is freshly authenticated, expires/aborts independently, is
+never returned or serialized and grants no caller or provider-write authority.
+
+The optional authenticated dashboard hook exposes POST
+`/api/class-movements/review` only when explicitly provisioned by the owning
+host. Same-origin/admin checks, actor re-read after factory creation, exact
+citation-only input and fixed output redaction precede the response. Setup-only
+and unprovisioned surfaces return404. No new public setting activates it.
+
+Validation (`ABBY_LEDGER=memory`, no real provider/database):
+
+- Initial `node --test --test-concurrency=1 test/cliniko/class-move-recovery.test.ts`:9 pass/3 fail, log `be9df097-1792161513013.log`. Ordinary recovery correctly refused incomplete synthetic native responses: the fixture omitted arrived and implemented the is-null case predicate only for passes. The fixture now supplies native arrived=null on created attendance and enforces exact ID/patient/booking/is-null predicates for ordinary and pass reads. No runtime check was weakened.
+- The corrected12-case scope passed, log `be9df097-1792161583001.log`; extended drift/cross-case scope24 passed, log `be9df097-1792161649475.log`. These overlap.
+- Focused authenticated HTTP test passed1 case, log `be9df097-1792161794847.log`; it uses a temporary synthetic bundle to exercise the real listener/route, not a compiled browser acceptance claim.
+- `node --test --test-concurrency=1 test/cliniko/class-move-recovery.test.ts test/cliniko/class-move-staged-host.test.ts test/cliniko/class-move-host.test.ts test/cliniko/class-pass-move-host.test.ts test/text/dashboard-listener-origin.test.ts`:89 passed, zero failures/cancellations/skips, log `be9df097-1792161892368.log`,71.58s. This includes ended caller, ordinary/pass/cross-case moved observation, exact cited restoration, partial/acknowledgement uncertainty, permission/directory/policy/review/roster/entitlement/time/abort drift, final joint re-observation and actual HTTP authorization/privacy, plus existing movement/listener regressions. Counts are not added into a whole-suite result.
+
+Manifest1.235 keeps419 stable IDs/full-call planned and registers this E2E-419
+operator witness. Product facts and directly cited fingerprints were reviewed
+against the new source. This tree still requires full TypeScript; current
+operator process/database/backup/output privacy, rebuilt signed serving, broad
+cohorts and real clinic/operator/cloud acceptance remain open. Gap10 and all13
+gaps remain active. No heavy job was launched for this source.
+
+Two additional lost-reply contracts passed after the89-case checkpoint:
+`ABBY_LEDGER=memory node --test --test-concurrency=1
+--test-name-pattern="uncertain.*caller action"
+test/cliniko/class-move-recovery.test.ts`, log
+`be9df097-1792162144628.log`,2 passed, zero failures/cancellations/skips.
+The synthetic provider applies original cancellation/association before losing
+the reply. Fresh staff inspection can report current moved state, while the
+actual ended caller action remains needsReview byte-for-byte. This specifically
+qualifies the distinction between staff assessment and caller completion. The
+fixture now accepts the explicit lost-reply mode; unchanged modes retain their
+previous behavior. The earlier facts/registry/portability/gap-trace scope passed
+all4 contracts, log `be9df097-1792162101415.log`.

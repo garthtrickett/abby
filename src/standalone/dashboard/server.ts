@@ -1,3 +1,5 @@
+import { ClinikoClassMoveRecovery } from "../cliniko-class-move-recovery.ts";
+import { readClassMovementProgress } from "../../core/class-movement-progress.ts";
 import { ClinikoConfirmationResendRecovery } from "../cliniko-confirmation-resend-recovery.ts";
 import { readFile } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
@@ -84,6 +86,7 @@ export type HostDashboardIdentity = Readonly<{
   readSpeechGate?: () => Promise<unknown>;
   /** Optional privileged account recovery; identity and investigation/quiescence authority are host-owned. */
   confirmationResendRecoveryFor?: (actor: HostActor, request: IncomingMessage) => ClinikoConfirmationResendRecovery | Promise<ClinikoConfirmationResendRecovery>;
+  classMovementRecoveryFor?: (actor: HostActor, request: IncomingMessage) => ClinikoClassMoveRecovery | Promise<ClinikoClassMoveRecovery>;
   correctionRecoveryFor?: (actor: HostActor, request: IncomingMessage) => ClinikoPatientCorrectionRecovery | Promise<ClinikoPatientCorrectionRecovery>;
   /** Optional host-specific wording constraint applied before the generic policy command. */
   greetingTextValidator?: (text: string) => boolean;
@@ -115,6 +118,7 @@ export async function createHostAuthenticatedDashboardRequestHandler(identity: H
         !/^\/[A-Za-z0-9/_-]+$/.test(identity.signOutPath) || identity.signOutPath.startsWith("//"))) ||
       (identity.greetingTextValidator !== undefined && typeof identity.greetingTextValidator !== "function") ||
       (identity.readSpeechGate !== undefined && typeof identity.readSpeechGate !== "function") ||
+      (identity.classMovementRecoveryFor !== undefined && typeof identity.classMovementRecoveryFor !== "function") ||
       (identity.correctionRecoveryFor !== undefined && typeof identity.correctionRecoveryFor !== "function") ||
       (identity.confirmationResendRecoveryFor !== undefined && typeof identity.confirmationResendRecoveryFor !== "function")) {
     throw new RangeError("invalid dashboard identity configuration");
@@ -153,6 +157,13 @@ export async function createHostAuthenticatedDashboardRequestHandler(identity: H
           const currentActor = await identity.resolveActor(request);
           if (!currentActor || !isDeepStrictEqual(currentActor, actor)) return undefined;
           return recovery.inspect(input, undefined, currentActor);
+        } : undefined,
+        identity.classMovementRecoveryFor ? async input => {
+          const recovery = await identity.classMovementRecoveryFor!(actor, request);
+          if (!(recovery instanceof ClinikoClassMoveRecovery)) return undefined;
+          const currentActor = await identity.resolveActor(request);
+          if (!currentActor || !isDeepStrictEqual(currentActor, actor)) return undefined;
+          return recovery.inspect(input, undefined, currentActor);
         } : undefined);
     } catch { return json(response, 403, { ok: false, error: { kind: "forbidden" } }); }
   })(); };
@@ -164,7 +175,8 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
                       readSpeechGate?: () => Promise<unknown>, speechGateAdmin = false,
                       greetingTextValidator?: (text: string) => boolean, signOutPath?: string,
                       correctionRecovery?: (input: Parameters<ClinikoPatientCorrectionRecovery["resolve"]>[0]) => Promise<Awaited<ReturnType<ClinikoPatientCorrectionRecovery["resolve"]>> | undefined>,
-                      resendRecovery?: (input: Parameters<ClinikoConfirmationResendRecovery["inspect"]>[0]) => Promise<Awaited<ReturnType<ClinikoConfirmationResendRecovery["inspect"]>> | undefined>): Promise<void> {
+                      resendRecovery?: (input: Parameters<ClinikoConfirmationResendRecovery["inspect"]>[0]) => Promise<Awaited<ReturnType<ClinikoConfirmationResendRecovery["inspect"]>> | undefined>,
+                      classMovementRecovery?: (input: Parameters<ClinikoClassMoveRecovery["inspect"]>[0]) => Promise<Awaited<ReturnType<ClinikoClassMoveRecovery["inspect"]>> | undefined>): Promise<void> {
   try {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (surface === "availabilitySetup" && !(
@@ -178,6 +190,22 @@ async function handle(request: IncomingMessage, response: ServerResponse, gatewa
     if (request.method === "POST" && url.pathname.startsWith("/api/") &&
         !acceptsCommandOrigin(request, authenticatedOrigin)) {
       return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+    }
+    if (request.method === "POST" && url.pathname === "/api/class-movements/review") {
+      if (!authenticatedOrigin || !classMovementRecovery) return json(response, 404, { ok: false, error: { kind: "notFound" } });
+      if (!speechGateAdmin) return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+      const input = record(await body(request));
+      if (url.searchParams.size || !input || !["recallRef", "recallRef,replacementAttendeeRef"].includes(Object.keys(input).sort().join(",")) ||
+          typeof input.recallRef !== "string" || input.replacementAttendeeRef !== undefined && typeof input.replacementAttendeeRef !== "string")
+        return json(response, 400, { ok: false, error: { kind: "invalid" } });
+      const result = await classMovementRecovery({ recallRef: input.recallRef,
+        ...(typeof input.replacementAttendeeRef === "string" ? { replacementAttendeeRef: input.replacementAttendeeRef } : {}) });
+      const value = result?.ok ? result.value : undefined, progress = value ? readClassMovementProgress(value.progress) : undefined;
+      if (!value || !progress || !["reviewedMoved", "reviewedRestored", "needsReview"].includes(value.kind) ||
+          typeof value.reviewAcknowledged !== "boolean" || value.kind !== "needsReview" && !value.reviewAcknowledged ||
+          typeof value.observedAt !== "string" || !Number.isFinite(Date.parse(value.observedAt)))
+        return json(response, 403, { ok: false, error: { kind: "classMoveRecoveryUnavailable" } });
+      return json(response, 200, { ok: true, value: { kind: value.kind, reviewAcknowledged: value.reviewAcknowledged, progress, observedAt: value.observedAt } });
     }
     if (request.method === "POST" && url.pathname === "/api/confirmation-resends/receipt") {
       if (!authenticatedOrigin || !resendRecovery) return json(response, 404, { ok: false, error: { kind: "notFound" } });

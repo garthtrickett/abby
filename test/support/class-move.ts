@@ -102,7 +102,7 @@ export async function classMoveFixture(different = false, near = false, passes?:
       const body = JSON.parse(String(init?.body)); writes.push({ path: url.pathname, body });
       const phase = method === "POST" ? "replacement" : passes && url.pathname === "/v1/attendees/401" ? "association" : url.pathname.includes("/101/") ? "original" : "compensation";
       let row: Record<string, unknown>;
-      if (method === "POST") { assert.equal(url.pathname, "/v1/attendees"); row = { ...classAttendee("401", body.booking_id, body.patient_id), notes: body.notes, ...(passes ? { arrived: null } : {}) }; native.attendees.push(row); }
+      if (method === "POST") { assert.equal(url.pathname, "/v1/attendees"); row = { ...classAttendee("401", body.booking_id, body.patient_id), notes: body.notes, arrived: null }; native.attendees.push(row); }
       else if (phase === "association") { assert.deepEqual(body, { patient_case_id: destinationCaseId }); row = native.attendees.find(row => row.id === "401")!; row.patient_case = classLink("patient_cases", body.patient_case_id); }
       else {
         assert.deepEqual(body, { cancellation_reason: 50, apply_to_repeats: false });
@@ -120,9 +120,15 @@ export async function classMoveFixture(different = false, near = false, passes?:
       assert.ok(records[id]); return url.pathname.endsWith("/attendees") ? Response.json({ attendees: rows.slice((Number(url.searchParams.get("page")) - 1) * 100, Number(url.searchParams.get("page")) * 100), total_entries: rows.length }) :
         visibleArchivedCase(url, records[id]!) ? Response.json({ ...records[id], attendee_ids: all.map(row => row.id) }) : new Response(null, { status: 404 });
     }
-    if (passes && url.pathname === "/v1/attendees" && url.searchParams.getAll("q[]").includes("patient_case_id:!?")) {
+    if (url.pathname === "/v1/attendees" && url.searchParams.getAll("q[]").includes("patient_case_id:!?")) {
       const filters = url.searchParams.getAll("q[]"), id = filters.find(v => v.startsWith("id:="))?.slice(4);
-      const rows = native.attendees.filter(row => row.id === id && !caseOf(row) && (row.cancelled_at === null || filters.includes("cancelled_at:*")));
+      const patient = filters.find(v => v.startsWith("patient_id:="))?.slice("patient_id:=".length),
+        booking = filters.find(v => v.startsWith("booking_id:="))?.slice("booking_id:=".length);
+      assert.ok(id && patient && booking);
+      const rows = native.attendees.filter(row => row.id === id && !caseOf(row) &&
+        (row.patient as { links: { self: string } }).links.self === classLink("patients", patient).links.self &&
+        (row.booking as { links: { self: string } }).links.self === classLink("bookings", booking).links.self &&
+        (row.cancelled_at === null || filters.includes("cancelled_at:*")));
       return Response.json({ attendees: rows, total_entries: rows.length });
     }
     if (different) {

@@ -32,6 +32,7 @@ import { OwnerFileClassPolicy } from "./owner-file-class-policy.ts";
 import type { ClassApproval } from "./owner-file-class-policy.ts";
 import { NoStoredKnowledge } from "./no-stored-knowledge.ts";
 import { preparationMayBeDiscarded } from "./prepared-proposal.ts";
+import { classMoveContract, classMovePolicyVersion } from "./class-move-contract.ts";
 import { ClassMovementVerifier } from "./class-movement-verifier.ts";
 import { readActiveClassMovementConsent } from "../core/class-movement-consent.ts";
 import type { ClassMovementConsent, ClassMovementPreparation } from "../core/class-movement-consent.ts";
@@ -184,7 +185,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     const [source, destination, move, current] = await Promise.all([c.sourcePolicy.current(c.scope), c.destinationPolicy.current(c.scope), c.movePolicy.current(c.scope),
       this.#staged ? this.#staged.verifier.ownedGrant(signal) : c.verification.ownedGrant("appointments.reschedule", signal)]);
     if (!source.ok || !destination.ok || !move.ok || !current || ref && ref !== current.verificationRef || !ClinikoClassMoveHost.#bindings(c, source.value, destination.value, move.value) || !await this.#ready(signal, mutation, consent)) return undefined;
-    return { source: source.value, destination: destination.value, move: move.value, grant: current, version: signature([source.value, destination.value, move.value]) };
+    return { source: source.value, destination: destination.value, move: move.value, grant: current, version: classMovePolicyVersion(source.value, destination.value, move.value) };
   }
   async #permit(context: Context, target: Target, offer: Offer | undefined, phase: "targets" | "offers" | "proposal" | ClinikoClassMovePhase, signal: AbortSignal): Promise<boolean> {
     const c = this.#config;
@@ -341,13 +342,8 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     return !!current && isDeepStrictEqual(current.binding, offer.pass) && this.#passWorkAdmitted(context, requests);
   }
   #terms(context: Context, target: Target, offer: Offer, expiresAt: string): Move["terms"] | undefined {
-    const fee = OwnerFileClassMovePolicy.termsFor(context.move, target.session.startsAt, this.#now());
-    if (!fee || (context.move.membership === "nativeCaseSessions") !== !!offer.pass) return undefined;
-    const passTerms = offer.pass ? OwnerFileClassMovePolicy.passTermsFor(context.move, offer.pass) : undefined;
-    if (offer.pass && !passTerms) return undefined;
-    const approvedText = `Move only your ${context.source.className} attendance. ${fee.approvedText} ${passTerms ? `${passTerms.approvedText} ` : ""}${context.move.recoveryTerms.approvedText}`;
-    return approvedText.length <= 500 ? { version: `class-move:${signature([context.version, fee.version, ...(offer.pass ? [passTerms!.version, offer.pass] : [])])}`,
-      approvedText, expiresAt } : undefined;
+    const contract = classMoveContract(context.source, context.destination, context.move, target.session.startsAt, this.#now(), offer.pass);
+    return contract ? { ...contract, expiresAt } : undefined;
   }
   #request(context: Context, target: Target, offer: Offer): Move | undefined {
     if (context.move.quotaStaging && !classMoveStageRequestCeilings(this.#stageRequestCosts(), !!offer.pass)) return undefined;
