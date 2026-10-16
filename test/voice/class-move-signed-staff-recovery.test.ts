@@ -72,6 +72,10 @@ test("E2E-419 signed uncertain staged movement stays ended while cold staff sepa
     assert.equal(auditAfter.nonGet, 0); assert.ok(auditAfter.protectedReads > auditDenied.protectedReads);
     assert.equal(call.mutations.length, mutationCount); assert.deepEqual(call.spoken, spoken);
     assert.deepEqual(call.messages.filter(row => row.kind === "classWriteOutcome"), outcomes, "staff observation cannot revive the ended caller action");
+    const publicOutput = JSON.stringify([call.spoken,
+      call.messages.filter(row => row.kind === "modelTurn" || row.kind === "ordinaryFinal")]);
+    for (const value of [...privateValues, envelope.request.patientId, "+61400111222"])
+      assert.equal(publicOutput.includes(value), false, "public caller/model output excludes private recovery canaries");
     const budget = await call.db.selectFrom("cliniko_request_budgets").selectAll().execute();
     assert.ok(budget.length && budget.every(row => row.max_per_minute === 180 && Array.isArray(row.sent_at_ms) && row.sent_at_ms.length <= 180));
     assert.equal((await call.db.selectFrom("cliniko_request_reservations").selectAll().execute()).length, 0);

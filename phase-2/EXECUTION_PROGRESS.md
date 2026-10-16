@@ -2068,3 +2068,61 @@ Push runs38955292572 and38955306070 also ended failure. PR bodies record that
 blocker separately from local green evidence. No billing/workflow/permission
 change, unchanged retry push or main merge occurred. Independent engineering
 continues through the thirteen-gap execution order.
+
+### Signed graph serving and existing-worker preservation pass
+
+Frozen7320f1452c80bbe894550ce25671b3d8e31efe3b adds documentation only to
+the1180 inputs typechecked on408e. Standalone `npm run build:voice-tests`
+work1792179370145 passed19:36:10.382093–19:36:41.622471UTC, exit0; wrapper305848
+absent/exitfile0 verified. All1180 inputs unchanged and451 compiled JavaScript
+artifacts pinned; scope peak804,130,816B, OOM/high/max0. Actual release preceded
+Gust's corrected diagnostic. No PostgreSQL test was bundled with that build.
+
+The separately coordinated preservation work1792179759944 passed all3 cases,
+zero skips,19:42:40.421493–19:45:23.339021UTC. It used the fresh disposable
+PostgreSQL command below without rebuilding or changing existing case deadlines:
+
+```sh
+bash scripts/with-postgres.sh env ABBY_LEDGER=postgres node --test --test-concurrency=1 --test-name-pattern='fresh staff process inspects|compiled signed ordinary' test/cliniko/class-move-recovery-process.test.ts test/voice/class-move-staged-runner.test.ts
+```
+
+Both original fresh cold-worker/process/backup cases pass (8.365s and7.484s);
+the extracted ordinary staged signed journey passes139.633s, preserving every
+played native phase and the1500ms callback-gap witness. This proves the shared
+worker's legacy mode and the extracted ordinary path on this source, not the
+new corrections or maximum-history extraction. All1180 inputs/451 artifacts
+stayed unchanged. Scope peak219,168,768B excludes Docker PostgreSQL; OOM/high/max0.
+Exitfile0 and wrapper306998 absence verified; actual release sent before next
+coordination. No automatic follow-on ran.
+
+### First signed uncertainty-to-cold-staff execution and privacy refinement
+
+ONE new case work1792180051218 passed on frozen7320, zero skips, with
+`bash scripts/with-postgres.sh env ABBY_LEDGER=postgres node --test --test-concurrency=1 --test-name-pattern='signed uncertain staged movement stays ended' test/voice/class-move-signed-staff-recovery.test.ts`.
+Actual19:47:31.650059–19:50:57.382983UTC; test body199.735s. The fake provider
+applies the original cancellation but loses its response. Actual signed caller
+speech remains unconfirmed, its flow is disposed, and fresh staff processes
+use the same independently live provider records. Denied permission reads the
+selected review without protected attendance/case reads. Permitted inspection
+returns moved progress but needsReview before a separate provider-side staff
+acknowledgement; a later fresh process returns reviewedMoved. All reader traffic
+is GET-only, with no new provider mutation, caller speech or caller outcome.
+Real quota release is used, never edited budget timestamps or limits.
+
+SQL/backup/worker and runner raw-output scans pass; the allowed phone-ID index
+is checked separately.1180 inputs/451 artifacts unchanged; scope peak
+219,824,128B excludes Docker PostgreSQL, OOM/high/max0. Exitfile0 and wrapper308934
+absence verified, actual slot released and no follow-on launched. Log:
+`/home/gust/paseo/paseo-home/work/logs/be9df097-1792180051218.log`.
+
+Direct author review found that call.scan checks SQL and process output, while
+this case invoked only the shared preparation helpers rather than the full
+journey's public model/speech scan. Therefore the preceding pass does not prove
+that missing assertion. After natural terminal this branch adds four Node test
+lines checking the same private canaries plus patient/phone against speech,
+model turns and ordinary transcription. No compiled serving/worker/production
+input changes, quota change, deadline increase or authority relaxation occurs.
+All451 serving artifacts remain byte-identical. New-source full TypeScript and
+the strengthened single case still need execution; no complete privacy or
+independent/external acceptance is inferred. The three correction/mixed cases,
+maximum-history extraction and concurrent breadth remain open.
