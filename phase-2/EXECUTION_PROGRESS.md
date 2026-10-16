@@ -1802,6 +1802,98 @@ The fixture helper uses the existing ES2022 filter/at surface rather than
 ES2023 findLast; runtime and compiler settings stay unchanged. This is the
 same focused qualification candidate, not another job or deadline change.
 
+### Healthy-schema full run finds a store-owned startup-deadline fixture mismatch
+
+Frozen52e920 full PostgreSQL suite1792174592309 is running naturally after
+successful explicit migration. Its first shared-PG admission now passes. At
+class-movement-consent.test.ts70 the new activated-stage test fails: expected
+supplied startup deadline10:00:01, observed admitted deadline10:00:30. This
+is separate from the earlier outer-schema and compiled playback issues.
+
+PostgresLedger.admit deliberately derives acceptedAt and its30s deadline
+inside the locked transaction; the memory ledger preserves the supplied
+fixture admission. Existing admission tests separately assert the30s server
+bound. The new stage test incorrectly treated the supplied1s deadline as the
+store's accepted deadline. The isolated test-only correction captures the
+actual admission receipt before activation. After renewals at20/40/60s it
+asserts the deadline stayed exactly equal to that receipt and that65s is
+already beyond it. Consent must still fit the live renewed lease, expire at
+its boundary, refuse an ended call and preserve patient/terms expiry, with
+exactly one initial write and no send from renewal/preparation. All original
+lease/proof/terms assertions remain; no runtime deadline or concurrency changes.
+
+The original PostgreSQL failure is the focused reproduction evidence in the
+active full log. This source must still qualify in PostgreSQL after the current
+suite's natural terminal/release and fresh coordination; no parallel PG retry
+or current-source change was made. Healthy full acceptance remains open.
+
+The memory consent and reviewed facts/registry pass10, work1792175255013.
+The admitted deadline is captured as an immutable string immediately before
+activation, rather than reading a potentially aliased receipt after activation.
+The actual corrected PostgreSQL case remains unrun.
+
+### Healthy52e920 full natural terminal and separate staged timestamp reproduction
+
+Full migrated suite1792174592309 ended naturally18:44:35.756236UTC, exit1;
+wrapper127430 absent and actual slot released. It ran28m2.98s with3150 tests,
+3147 pass/two fail/zero cancelled/one skip; ordered runner did not run.
+Source1173 unchanged/451 generated artifacts pinned; scope peak1,130,401,792B
+excludes Docker PostgreSQL, all OOM/high/max0. The shared-schema startup problem
+is fixed. The remaining failures are the admission-deadline test oracle and
+ordinary staged original-phase Yes. Maximum-history staged pass succeeds.
+
+The latter fails152.84s with closeCode1008, marks10/outstandingfalse, child
+alive, review/replacement only, no original cancellation. Thus the earlier
+real clear-fence fixture defect is not the complete full-context explanation;
+its isolated ordinary pass cannot close this failure. Production consent
+explicitly rejects a turn timestamp before its playedAt. Real quota waits age
+the fixture host clock by elapsed seconds, but its media timestamps previously
+counted20ms per callback; delayed/dropped quiet callbacks can make the later
+utterance stale. No active source or guard changed during the full run.
+
+An actual TwilioMediaStream reproduction using original counter-only timestamps
+fails work1792176098869: a later Yes normalizes before a readback played during
+that elapsed interval. End-only media reconciliation passes12 initial protocol
+checks1792176187033, but a refinement then fails the first speech frame in
+work1792176270105 (five pass/one fail). A last-frame-only correction still
+allowed early speech before playedAt; it was not accepted as complete.
+
+The refined test fixture separates contiguous packet sequence from elapsed
+media time. It receives the actual bounded synthetic host clock and reserves
+the existing42-frame utterance after that instant. Missing silence packets
+advance timestamps rather than fabricating audio or packet numbers. All new
+speech samples must follow previous playback; the last packet cannot outrun
+the confirmed host clock. Existing15s clock-step/15min fixture bounds,42 frames,
+20ms cadence,700ms turn silence,20s response timeout, native180 quota and all
+SAM/lease/proof/terms/played-affirmation guards remain. Non-staged media behavior
+is unchanged. This is test transport modeling, not clinical authority.
+
+A staging-only observer records only the actual phase acceptance/error enum and
+two time differences at CallRuntime.acceptTurn; it returns the original result
+and cannot change consent. No raw text, identifiers, codes or proof leaves the
+fixed diagnostic. The refined actual-transport/playback suite passes13 cases,
+work1792176308731. This proves a concrete timestamp fixture defect and bounded
+correction; actual new-source TypeScript, signed PostgreSQL and complete healthy
+full-context qualification remain required. No clean regression is claimed.
+
+
+Further ordering review found that a sent WebSocket playback mark and the next
+IPC clock request used separate channels. The synthetic clock could advance
+before the server processed the earlier mark. Staging now receives a private
+correlated mark-processing receipt from the original TwilioConnectedCall.receive
+result before advancing the next turn's clock. It retains the same total10s
+fixture mark wait. The opaque mark token exists only in private fixture IPC;
+no mark names enter diagnostics, model/speech, stdout or persistent data. Clear
+fences still remain ignored, not played. Non-staged transport is unchanged.
+
+The ordinary signed witness now deliberately ages the fixture clock1500ms
+without inventing silence packets before phase playback. The existing180s test
+deadline and actual database quota are unchanged. Each actual subsequent SAM
+affirmation must report accepted with a nonnegative time after playedAt and
+no future time beyond the host. This exercises delayed callbacks even outside
+a busy full suite. It is prepared, not yet executed. All such new-source
+PostgreSQL and full TypeScript claims remain open.
+
 ### Staged correction source includes qualified playback fixture
 
 This local merge incorporates fixture-fix52e920 into the separate staged
@@ -1864,3 +1956,15 @@ There is no TypeScript, signed/cold execution, privacy or new acceptance claim.
 The frozenb2022c2 full regression is running in another checkout untouched;
 this preparation is not part of its compute slot or result. It still needs the
 qualified media/deadline source reconciled before heavy validation/publication.
+
+### Staff preparation reconciles the frozen media/deadline corrections
+
+The isolated staff/correction graph now includes b2022c29's startup receipt
+oracle, elapsed media timeline and processed-playback ordering. The shared
+journey retains the original ordinary/maximum case names and180s/360s bounds;
+its ordinary phase injects the same1500ms clock gap and every phase checks
+actual accepted/nonstale/nonfuture affirmation. No production source changed.
+The earlier eight pure facts/protocol cases passed work1792177450186 before
+this merge. New graph TypeScript, compiled baseline/correction/staff journeys
+and old cold-worker preservation remain pending. The separate b2022 full suite
+is still running and cannot qualify this new graph.

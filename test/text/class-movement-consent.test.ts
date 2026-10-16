@@ -9,9 +9,10 @@ import { deadline, now, setup, success } from "./fixture.ts";
 async function partialMove(admissionDeadline = deadline, termsDeadline = deadline) {
   const app = await setup(`stage-consent-${randomUUID()}`, { reschedule: "execute" });
   const callId = `${app.callId}-admitted`, sessionId = `session-${randomUUID()}`;
-  success(await app.runtime.admit(callId, { ...app.policy, reschedulingEnabled: true, staffWorkEnabled: true }, {
+  const admitted = success(await app.runtime.admit(callId, { ...app.policy, reschedulingEnabled: true, staffWorkEnabled: true }, {
     key: { accountRef: "synthetic-class-consent", providerCallRef: callId }, dialedNumber: "+6125550101", acceptedAt: now, deadline: admissionDeadline,
   }));
+  const admittedDeadline = admitted.receipt.admission.deadline;
   success(await app.runtime.activate(callId, sessionId, now));
   const request: Extract<ActionRequest, { kind: "reschedule" }> = { kind: "reschedule", patient: app.patient,
     target: { scope: app.scope, patientRef: app.patient.patientRef, appointmentRef: "class-original",
@@ -32,7 +33,7 @@ async function partialMove(admissionDeadline = deadline, termsDeadline = deadlin
   const evidence = { callId, sessionId, policyVersion: state.policy.policyVersion, continuation,
     patient: { ...app.patient, verificationRef: `renewed-${randomUUID()}` }, terms: { ...request.terms },
     expiresAt: new Date(Date.parse(now) + 1000).toISOString() };
-  return { ...app, state, action, evidence };
+  return { ...app, state, action, evidence, admittedDeadline };
 }
 
 test("a later class stage binds current same-patient proof and inspected facts to a new digest", async () => {
@@ -67,7 +68,8 @@ test("an activated class move follows its renewed session lease after the startu
   }
   const live = success(await f.runtime.read(f.state.callId));
   assert.equal(live.lifecycle, "active");
-  assert.equal(live.admission!.deadline, startupDeadline, "activation does not extend the startup deadline");
+  assert.equal(live.admission!.deadline, f.admittedDeadline, "activation and renewal do not extend the admitted startup deadline");
+  assert.ok(Date.parse(f.admittedDeadline) < Date.parse(at), "the stage is prepared after the store-owned startup deadline");
   const evidence = { ...f.evidence, expiresAt: new Date(Date.parse(at) + 1000).toISOString() };
   const consent = readClassMovementConsent(live, live.actions[f.action.key]!, evidence, at);
   assert.ok(consent, "startup expiry cannot shorten an already active renewed lease");

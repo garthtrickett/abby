@@ -1,4 +1,5 @@
 import type { ClassMoveColdContext } from "./class-move-cold-context.ts";
+import { SyntheticMediaTimeline } from "./synthetic-media-timeline.ts";
 import { SyntheticPlaybackReceipts } from "./synthetic-playback-receipts.ts";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -18,7 +19,7 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 import { voiceUntil } from "./cliniko-workflow-voice.ts";
 import type { LocationScope } from "../../src/core/model.ts";
 
-type Message = { kind: string; coldContext?: ClassMoveColdContext; diagnostic?: unknown; aheadByMs?: number; actionStatus?: string; text?: string; method?: string; path?: string; body?: Record<string, unknown>;
+type Message = { kind: string; coldContext?: ClassMoveColdContext; markName?: string; diagnostic?: unknown; aheadByMs?: number; actionStatus?: string; text?: string; method?: string; path?: string; body?: Record<string, unknown>;
   originalActive?: boolean; replacementActive?: boolean; sourceUsed?: number; destinationUsed?: number; caseLinked?: boolean;
   phase?: string; elapsedMs?: number;
   claims?: number; denialKind?: string;
@@ -93,6 +94,7 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
   child.stdout!.on("data", data => output.push(data.toString())); child.stderr!.on("data", data => output.push(data.toString()));
   let socket: WebSocket | undefined, closed = false, sequence = 1, chunk = 0;
   let transportCloseCode: number | undefined;
+  const stagedMedia = options.classQuotaStaging ? new SyntheticMediaTimeline() : undefined;
   const close = async () => {
     if (closed) return; closed = true;
     if (socket && socket.readyState !== WebSocket.CLOSED) { socket.terminate(); await once(socket, "close"); }
@@ -122,7 +124,8 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
     const binding = /<Parameter name="abbyBinding" value="([^"]+)"/.exec(await response.text())?.[1]; assert.ok(binding);
     socket = new WebSocket(`ws://127.0.0.1:${port}/twilio/media/`, { headers: { "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, streamUrl, {}) } });
     const send = (event: object) => socket!.send(JSON.stringify({ ...event, streamSid, sequenceNumber: String(sequence++) }));
-    const playback = new SyntheticPlaybackReceipts(name => send({ event: "mark", mark: { name } }));
+    let lastSentMark: string | undefined;
+    const playback = new SyntheticPlaybackReceipts(name => { lastSentMark = name; send({ event: "mark", mark: { name } }); });
     socket.on("close", code => { transportCloseCode = code; });
     socket.on("message", data => { if (!closed) playback.receive(JSON.parse(data.toString())); });
     await once(socket, "open"); socket.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
@@ -130,9 +133,12 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
     const count = (kind: string) => messages.filter(m => m.kind === kind).length;
     const say = async (text: string, privateField = false, expectFailure = false) => {
       if (options.classQuotaStaging) {
-        const aligned = count("mediaClockAligned"); child.send({ kind: "alignMediaClock", elapsedMs: (chunk + 41) * 20 });
+        assert.ok(stagedMedia);
+        const aligned = count("mediaClockAligned"); child.send({ kind: "alignMediaClock", elapsedMs: stagedMedia.nextTurnEndMs });
         await voiceUntil(() => count("mediaClockAligned") > aligned, "synthetic class media clock");
-        assert.equal(messages.filter(row => row.kind === "mediaClockAligned").at(-1)!.allowed, true);
+        const alignment = messages.filter(row => row.kind === "mediaClockAligned").at(-1)!;
+        assert.equal(alignment.allowed, true); assert.ok(typeof alignment.elapsedMs === "number");
+        stagedMedia.alignTurnEnd(alignment.elapsedMs);
       }
       let beforeState: unknown;
       if (options.classQuotaStaging && text === "Continue my class move") {
@@ -160,14 +166,27 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
         const trace = messages.slice(-16).map(row => ({ kind: row.kind, phase: row.phase,
           actionStatus: row.actionStatus, verified: row.verified, allowed: row.allowed }));
         throw new Error("Staged signed response unavailable: " + JSON.stringify({ socket: socket!.readyState, closeCode: transportCloseCode, childExit: child.exitCode,
-          playback: { marks: playback.count, outstanding: playback.hasPendingAfter() }, counts, trace, beforeState, state: messages.filter(row => row.kind === "classDiagnostic").at(-1)?.diagnostic ?? null }), { cause: error });
+          playback: { marks: playback.count, outstanding: playback.hasPendingAfter() },
+          phaseAffirmation: messages.filter(row => row.kind === "classPhaseAffirmation").at(-1)?.diagnostic, counts, trace, beforeState, state: messages.filter(row => row.kind === "classDiagnostic").at(-1)?.diagnostic ?? null }), { cause: error });
       }
       assert.equal(child.exitCode, null);
     };
-    const media = (voiced: boolean) => send({ event: "media", media: { track: "inbound", chunk: String(++chunk), timestamp: String((chunk - 1) * 20), payload: Buffer.alloc(160, voiced ? 0x9f : 0xff).toString("base64") } });
+    const media = (voiced: boolean) => {
+      const packet = stagedMedia?.next() ?? { chunk: String(++chunk), timestamp: String((chunk - 1) * 20) };
+      send({ event: "media", media: { track: "inbound", ...packet, payload: Buffer.alloc(160, voiced ? 0x9f : 0xff).toString("base64") } });
+    };
     const mark = async () => {
+      const deadline = Date.now() + 10000;
       await voiceUntil(() => playback.hasPendingAfter(), "runner playback mark");
       assert.equal(playback.acknowledgeLatest(), true);
+      if (options.classQuotaStaging) {
+        // Wire and IPC use separate channels. Complete this real receipt before
+        // the next turn advances the synthetic host clock.
+        const name = lastSentMark; assert.ok(name);
+        await voiceUntil(() => messages.some(row => row.kind === "classMarkProcessed" && row.markName === name),
+          "processed staged playback receipt", Math.max(1, deadline - Date.now()));
+        assert.equal(messages.find(row => row.kind === "classMarkProcessed" && row.markName === name)!.accepted, true);
+      }
     };
     await mark();
     return { child, messages, output, scope, locations, db, connectionString, mark, say, media, close, signedWebhook,

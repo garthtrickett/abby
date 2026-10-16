@@ -1,5 +1,8 @@
 import { classProviderProxy } from "./class-provider-proxy.ts";
 import type { ClassMoveColdContext } from "./class-move-cold-context.ts";
+import { TwilioConnectedCall } from "../../src/voice/twilio-connected-call.ts";
+import { alignedSyntheticReplyEnd } from "./synthetic-media-timeline.ts";
+import { CallRuntime } from "../../src/core/runtime.ts";
 import assert from "node:assert/strict";
 import { ClinikoPhoneLookup } from "../../src/standalone/cliniko-phone-lookup.ts";
 import { ClinikoPatientCandidateReader } from "../../src/cliniko/patients.ts";
@@ -59,6 +62,38 @@ if (operation === "reschedule" && (process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS ==
     ends_at: `2026-10-${process.env.ABBY_SYNTHETIC_CLASS_DATE_CORRECTION === "1" ? "10" : "09"}T${process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS === "1" ? "12:30" : "13:00"}:00.000Z` });
 const c = f.flowConfig, apiKey = process.env.ABBY_CLINIKO_API_KEY!, now = c.clock!;
 const mediaClockOrigin = Date.parse(now());
+if (staging) {
+  const receive = TwilioConnectedCall.prototype.receive;
+  TwilioConnectedCall.prototype.receive = function(this: TwilioConnectedCall, raw: string | Uint8Array) {
+    let markName: string | undefined;
+    try { const event = JSON.parse(typeof raw === "string" ? raw : Buffer.from(raw).toString("utf8"));
+      if (event.event === "mark" && typeof event.mark?.name === "string") markName = event.mark.name;
+    } catch { /* the real receiver validates malformed input */ }
+    const received = receive.call(this, raw);
+    if (!markName) return received;
+    return received.then(result => {
+      try { if (process.connected) process.send?.({ kind: "classMarkProcessed", markName, accepted: result.ok,
+        diagnostic: result.ok ? result.value.kind : result.error.kind }); } catch { /* receipt cannot change the result */ }
+      return result;
+    });
+  };
+  const accept = CallRuntime.prototype.acceptTurn;
+  CallRuntime.prototype.acceptTurn = async function(this: CallRuntime, ...args: Parameters<CallRuntime["acceptTurn"]>) {
+    const [turn, interpretation] = args;
+    if (interpretation.kind !== "classMovementAffirm") return accept.apply(this, args);
+    let playedAt: string | undefined;
+    try { const state = await this.read(turn.callId); if (state.ok) playedAt = state.value.actions[interpretation.actionKey]?.classMovementConsent?.playedAt; } catch { /* diagnostic only */ }
+    const result = await accept.apply(this, args);
+    try {
+      if (process.connected) process.send?.({ kind: "classPhaseAffirmation", diagnostic: {
+        outcome: result.ok ? "accepted" : result.error.kind,
+        turnToPlayedMs: playedAt ? Date.parse(turn.at) - Date.parse(playedAt) : null,
+        turnToClockMs: Date.parse(turn.at) - Date.parse(now()),
+      } });
+    } catch { /* diagnostics cannot alter consent */ }
+    return result;
+  };
+}
 process.env.ABBY_TENANT_ID = f.scope.tenantId; process.env.ABBY_CLINIC_ID = f.scope.clinicId; process.env.ABBY_LOCATION_ID = f.scope.locationId;
 process.env.ABBY_TWILIO_TEST_CALLER_NUMBER = f.inbound.presentedCallerNumber;
 // Only public synthetic approvals are rebound. The runtime supplies its actual
@@ -116,9 +151,10 @@ process.on("message", message => {
   if (message.kind === "input" && "text" in message && typeof message.text === "string") { inputs.push(message.text); process.send?.({ kind: "inputAccepted" }); }
   if (staging && message.kind === "alignMediaClock" && "elapsedMs" in message && typeof message.elapsedMs === "number" &&
       Number.isSafeInteger(message.elapsedMs) && message.elapsedMs >= 0 && message.elapsedMs <= 900000) {
-    const at = Date.parse(now()), aligned = Math.max(at, mediaClockOrigin + message.elapsedMs), allowed = aligned - at <= 15000;
-    if (allowed) f.setTime(new Date(aligned).toISOString());
-    process.send?.({ kind: "mediaClockAligned", allowed });
+    const at = Date.parse(now()); let elapsedMs: number | undefined;
+    try { elapsedMs = alignedSyntheticReplyEnd(at - mediaClockOrigin, message.elapsedMs); } catch { /* fixed failure below */ }
+    if (elapsedMs !== undefined) f.setTime(new Date(mediaClockOrigin + elapsedMs).toISOString());
+    process.send?.({ kind: "mediaClockAligned", allowed: elapsedMs !== undefined, elapsedMs: elapsedMs ?? at - mediaClockOrigin });
   }
   if (message.kind === "advanceClock" && "milliseconds" in message && Number.isSafeInteger(message.milliseconds) &&
       typeof message.milliseconds === "number" && message.milliseconds >= 0 && message.milliseconds <= 15000) {
