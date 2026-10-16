@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { ClinikoBookingWriter } from "../../src/cliniko/booking-write.ts";
 import { ClinikoRecallReader } from "../../src/cliniko/recalls.ts";
 import { ClinikoRecallWriter } from "../../src/cliniko/recall-write.ts";
+import { decodeClinikoReview } from "../../src/cliniko/review-request.ts";
 import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 import { ClinikoVerificationContactReader } from "../../src/cliniko/verification-contact.ts";
@@ -57,7 +58,9 @@ export async function standaloneBookingFixture(options: { scope?: LocationScope;
       assert.equal(action.status, "dispatched"); assert.equal((await f.state()).presentations[action.presentationId]?.status, "played");
       const body = JSON.parse(String(init?.body));
       assert.deepEqual([body.business_id, body.practitioner_id, body.appointment_type_id], ["11", "22", "33"]);
-      assert.equal(body.ends_at, evidence.endsAt, "the write must bind the confirmed offer's complete interval");
+      const review = decodeClinikoReview(recalls[0]!.notes); assert.ok(review.ok);
+      assert.ok(review.value.request.operation.kind === "book");
+      assert.equal(body.ends_at, review.value.request.operation.endsAt, "the write must bind the confirmed review's complete interval");
       stored = { id: "91", notes: body.notes, starts_at: body.starts_at, ends_at: body.ends_at, cancelled_at: null, archived_at: null, deleted_at: null,
         patient: { links: { self: `${base}/patients/${body.patient_id}` } }, business: { links: { self: `${base}/businesses/11` } },
         practitioner: { links: { self: `${base}/practitioners/22` } }, appointment_type: { links: { self: `${base}/appointment_types/33` } } };
