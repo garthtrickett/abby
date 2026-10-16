@@ -1702,3 +1702,36 @@ that recent account payments failed or the spending limit needs increasing.
 This is a cloud-startup blocker, not a source regression or passing CI. No
 billing/configuration change or unchanged retry push was made. Draft469 remains
 unmerged; current combined engineering continues locally.
+
+### Prepared staged correction cohorts, not execution evidence
+
+This isolated branch leaves the active combined6a55 regression source unchanged.
+The existing ordinary and maximum-history driver is extracted into a shared
+signed journey helper with the same original180s/360s limits and protocol/privacy
+assertions. Three new cases prepare ordinal cross-service ordinary, date
+same-case pass and date cross-case/cross-service pass corrections after a played
+initial readback, before any review/write. Each must target only occurrence95,
+play and affirm the corrected proposal, and complete each later native phase
+separately. Their new budgets allow one further bounded preparation window and
+independently cap observed waits; existing case deadlines stay unchanged.
+No correction execution, typecheck, build or semantic pass is claimed here.
+Registry419 and its historical3960 synthetic evidence are not promoted for this
+new graph. The shared helper is directly fingerprinted after source review.
+
+Parent combined6a55 full TypeScript work1792171599733 passes exit0,
+17:26:39.984553–17:27:43.336174UTC,63.35s/1,599,033,344B peak/OOM0,
+source1171 unchanged. Its separately coordinated full PostgreSQL suite
+work1792171749450 began17:29:10.438804UTC and is still running naturally.
+The launch wrapper omitted CI's prerequisite database migration. The first
+shared-PG admission fails storageFailure; read-only inspection of the exact
+outer disposable container340e95a921bd found calls and kysely_migration absent,
+zero public tables. This is a runner setup error, not a measured runtime defect.
+No active schema, source, assertion, deadline or concurrency was changed.
+The current run cannot qualify clean regression; isolated self-migrating case
+results remain scoped. A corrected migrated runner is prepared separately,
+not launched or authorized as a follow-on. Original restored databases remain
+untouched. Preserve actual natural terminal and the first failing excerpt.
+
+Preparation-only native Node syntax checks pass for the shared helper and new
+correction file; facts/registry pass2, work1792171979665. These are metadata
+and parsing checks, not executed correction journeys or full TypeScript.
