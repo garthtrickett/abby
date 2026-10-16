@@ -1,5 +1,6 @@
 import { err, ok } from "../../core/model.ts";
 import type { Result } from "../../core/model.ts";
+import { StripeBodyError, stripeBodyBytes } from "./body-bytes.ts";
 
 export type StripeReadFailureKind = "invalidBinding" | "unavailable" | "forbidden" | "malformed" | "mismatched" | "ambiguous";
 export type StripeReadFailure = Readonly<{ kind: StripeReadFailureKind }>;
@@ -49,20 +50,14 @@ export class StripeApiRead {
         throw new ReadError(response.status === 401 || response.status === 403 ? "forbidden" : "unavailable");
       }
       if (!response.body) throw new ReadError("malformed");
-      const reader = response.body.getReader(), chunks: Buffer[] = []; let size = 0;
       try {
-        while (true) {
-          const next = await wait(reader.read()); if (next.done) break;
-          size += next.value.byteLength; if (size > 1_000_000) throw new ReadError("malformed");
-          chunks.push(Buffer.from(next.value));
-        }
+        const bytes = await stripeBodyBytes(response.body, 1_000_000, signal);
         let value: unknown;
-        try { value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks))); }
+        try { value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); }
         catch { throw new ReadError("malformed"); }
         const object = record(value); if (!object) throw new ReadError("malformed"); return object;
-      } finally {
-        void reader.cancel().catch(() => {});
-        try { reader.releaseLock(); } catch { /* Cancellation retires a held read. */ }
+      } catch (error) {
+        throw error instanceof StripeBodyError ? new ReadError(error.kind) : error;
       }
     };
     try {

@@ -2651,3 +2651,30 @@ regression remains live: all nine37a failures have passed in that cohort,
 including all five disposable-PG setup-dependent cases. Its final whole verdict
 and ordered followup remain pending; authoritative cloud/independent/clinic/
 provider/operator acceptance is still open.
+
+### Stripe captured raw transport boundary
+
+The reference-only signature verifier now has a bounded stream entry point for
+an eventual host. It captures up to262,144 original bytes before authentication,
+with a finite at-most10s body deadline and caller cancellation. It preserves
+signed whitespace/split UTF-8 and returns only the existing fixed selector/failure
+shape. This is no public webhook route, HTTP processing acknowledgement, durable
+work handoff or payment authority. Financial-work ownership remains pending.
+
+Share body ownership with the existing read adapters: fixed bounded byte storage,
+periodic event-loop yields, cancellation and owned-lock cleanup. Neither an
+upstream body/error nor partial data escapes. The finite legacy20,000-empty-chunk
+control (`work1792195129096`) fails because the prior account reader consumes the
+body before a queued abort is serviced. This demonstrates scheduling behavior,
+not an observed provider exploit or money outcome. The new reader stops early.
+
+Initial missing-stream behavior fails5/5 (`work1792194996824`). Final protocol
+qualification (`work1792195152009`) passes34/34,0skips,3.191s,
+peak100,024,320B/512MiB/CPU100%/Swap0,no memory limit/OOM events. It retains all
+26 prior signature/money/discovery checks and adds actual loopback HTTP raw-body
+capture, exact byte limit/oversize retirement, finite stalled-body deadline,
+uncooperative cancellation, empty-chunk abort fairness, upstream chunk mutation,
+foreign reader ownership and malformed/pre-aborted input. The fixture HTTP result
+is authentication evidence only; actual provider acknowledgement still requires
+a separately durable host handoff. Full TypeScript is next; no real provider,
+mail, payment, permission, clinical expiry or activation is added.
