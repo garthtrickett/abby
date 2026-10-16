@@ -81,3 +81,32 @@ signed/reordered/duplicate events, exact recipient delivery/receipt, payment ver
 expiry/manual-paid races, process loss, restore/quiescence and SQL/backup/public
 privacy through the actual host. Clinic approval/configuration, real provider/
 sender activation and authoritative CI are separate gates. All13 gaps remain active.
+
+## Refinement against the existing code
+
+- [Recall writer](../src/cliniko/recall-write.ts) supplies one possible create
+  and readonly observation, with a1,000-character summary limit. Its process-local
+  attempt set alone is not a durable financial claim. The existing
+  [review reader](../src/cliniko/recalls.ts) decodes booking-family envelopes;
+  a financial record needs its own strict codec/reader and current permission,
+  rather than interpreting existing notes as financial authority.
+- The [resend journal](../src/standalone/confirmation-resend-journal.ts) is an
+  existing precedent for scoped opaque one-use IDs. Its mail-specific statuses
+  are not financial truth. Restore/handoff must retain provider attempt evidence
+  and independent quiescence, not reset or expire a possibly used effect ID.
+- A prospective intent refers to the intended booking action; a separately
+  authenticated acknowledgement citation must retain the exact native created
+  target after the owner observes a valid201. If that retention is lost, staff
+  owns the durable unresolved review. Automatic collection cannot reconstruct a
+  missing acknowledgement from a matching appointment or review checkbox.
+- `onBookingAcknowledged` remains an observer of irreversible booking truth.
+  Financial failure cannot become a success veto. A later reconciler needs its
+  own current clinic financial/service authority, rather than the ended caller's
+  verification code or old proof. Clinical expiry has a further distinct grant.
+- A manually recalled/edited record is not received-money or fee-waiver evidence.
+  Changes pause automatic work until independently inspected under the applicable
+  financial contract. Processing or uncertain payment/cancellation never becomes
+  an automatic restore, second charge or blind clinical retry.
+- Native financial-record/proof/recipient reads and writes must be included in
+  the same physical Cliniko account's cost and allocation admission. Stripe's
+  separate quota does not add Cliniko headroom; the180-request ceiling remains.
