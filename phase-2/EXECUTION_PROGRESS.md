@@ -1740,3 +1740,84 @@ A source review additionally requires the exact synthetic approved no-fee and
 same-case unchanged/different-case release/use disclosures in both initial and
 corrected readbacks. This asserts the captured contract rather than inferring
 pass consent from three native writes. Execution remains pending.
+
+### Synthetic caller clear-fence and reply boundary defect
+
+During the still-running combined6a55 full suite1792171749450, the ordinary
+staged signed journey failed157.39s at staged-runner line68, the Yes for original
+cancellation, with socket3/child live and unavailable diagnostic state. Only the
+initial code was issued; two provider mutations (review/replacement), one native
+write outcome and120 clock ticks were recorded. The maximum-history staged
+signed case passed271.80s in this combined run. The outer unmigrated shared
+schema separately causes storage failures. No clean overall regression follows.
+No active source, schema, assertion, deadline or concurrency was changed.
+
+Source inspection found the shared synthetic compiled caller recorded outbound
+marks but ignored clear messages. The actual stream emits a clear fence and
+waits for its echo; the fixture can leave it unresolved until the normal2s
+clear deadline. Also say/digit waited only for speech IPC, allowing an old
+unacknowledged marker to precede the new response's actual wire mark. A
+separate test helper first preserved the old behavior, and the real stream
+clear-fence test failed false != true after2s, work1792173191681. The second
+fresh-response boundary case passed. This establishes a fixture protocol defect;
+it does not establish the ordinary journey failure's complete timing cause.
+
+The isolated correction automatically echoes outstanding completion marks and
+the final fence exactly once in wire order on clear. The real production stream
+classifies these as ignored, never played. Explicit normal playback still needs
+its own manual receipt. Say/digit retain their existing deadlines but await a
+new wire marker as well as speech IPC; an older prompt cannot satisfy the
+response boundary. No production consent, timer, admission or transport code
+changed. Five pure protocol cases (including existing Twilio stream tests)
+passed work1792173249345. New-source full TypeScript, affected signed journeys,
+healthy-schema combined regression and cloud/review/clinic acceptance remain
+open. The existing full run continues naturally and is not retried in parallel.
+
+Adding the already-played-before-clear case and reviewed facts/registry yields
+eight passing cases/zero skips, work1792173314782. No signed acceptance is
+inferred from these pure wire and metadata checks.
+
+A failure-only diagnostic now includes the numeric WebSocket close code and
+playback counts/booleans. It excludes close reason text, mark names, patient
+fields and utterances. It does not change readiness, authority or timing.
+
+### Combined6a55 full regression natural terminal
+
+Work1792171749450 ended naturally17:57:20.871680UTC, exit1; wrapper37284
+was absent and the slot released. Total28m10.43s,2607 pass/505 fail/34
+cancelled/1 skipped,20 suites. Ordered runner did not run. Source1171 stayed
+unchanged;451 generated artifacts (runtime plus dashboards) were pinned.
+Scope peak1,118,756,864B excludes Docker PostgreSQL; OOM/high/max all0.
+The disposable outer container was gone after cleanup; restored databases
+were not used. This run had the diagnosed missing outer migration and the
+separate ordinary staged failure; it cannot qualify a clean full regression.
+
+Compiled first-time South/offline female, cancelled confirmation resend and
+initial service/gender cases passed in this run, as did the staged maximum-
+history pass. Because shared-store setup failures changed the complete test
+context, these scoped results do not prove that the older full-suite timing
+cause is fixed. The healthy-schema combined command remains required.
+
+The fixture helper uses the existing ES2022 filter/at surface rather than
+ES2023 findLast; runtime and compiler settings stay unchanged. This is the
+same focused qualification candidate, not another job or deadline change.
+
+### Staged correction source includes qualified playback fixture
+
+This local merge incorporates fixture-fix52e920 into the separate staged
+correction branch. No production source conflicts or changes were introduced.
+The parent52e920 sequential qualification1792173861877 passes: full TypeScript
+18:04:22.354868–18:05:26.213941UTC, fresh serving build
+18:05:26.330390–18:05:58.887349UTC, and one ordinary signed staged PostgreSQL
+case (139.97s test body, zero skips) ending18:08:23.724697UTC. Overall terminal
+18:08:23.844317 exit0; wrapper124619 absent and slot released.1173 inputs
+unchanged,448 JavaScript artifacts pinned and identical to prior6a55 serving;
+peak1,565,028,352B excludes Docker PostgreSQL, OOM/high/max0.
+
+This is scoped parent qualification, not a new-branch TypeScript or three-case
+correction pass. The shared signed-journey extraction, original two-case
+preservation after extraction and the three new correction/mixed pass cases
+remain unqualified. Healthy-schema full regression on frozen52e920 is reserved
+separately after a ready Gust diagnostic; this branch does not use that slot.
+The root cause of the earlier full-context socket failure is not closed by an
+isolated pass, despite the independently proven clear-fence fixture defect.
