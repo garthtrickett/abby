@@ -6,7 +6,7 @@ import { CallReview, summarizeCall } from "../../src/reference/call-review.ts";
 import { CallOutcomeReport } from "../../src/reference/call-outcome-report.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
-import { TextReception } from "../../src/reference/text-reception.ts";
+import { TextReception, type TextHost } from "../../src/reference/text-reception.ts";
 import { now, setup } from "./fixture.ts";
 
 for (const kind of ["patientUpdate", "confirmationResend"] as const)
@@ -28,7 +28,11 @@ for (const kind of ["patientUpdate", "confirmationResend"] as const)
       await app.worker.process(app.callId, `${action.key}:write`, now);
       assert.equal((await app.state()).actions[action.key]?.status, outcome);
 
-      const policy = new MemoryPolicyStore(), reception = new TextReception(app.ledger, policy, app.host);
+      const host: TextHost = Object.assign(app.host, {
+        async resolveBooking() { throw new Error("result reading must not resolve a booking"); },
+        async readKnowledge() { throw new Error("result reading must not read unrelated knowledge"); },
+      });
+      const policy = new MemoryPolicyStore(), reception = new TextReception(app.ledger, policy, host);
       const review = new CallReview(app.ledger), report = new CallOutcomeReport(app.ledger);
       const gateway = new CommandGateway({ actorRef: "reader-staff", role: "staff", scope: app.scope },
         policy, reception, review, undefined, report);

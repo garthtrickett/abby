@@ -345,3 +345,30 @@ diagnostic, subject to that lane's own fresh guards and actual start/terminal
 release. Abby heavy diagnostics, builds and database jobs remain unqueued
 until its actual release and Abby's own fresh checks. Light source work can
 continue. This note neither starts a compiler nor uses an estimated handoff.
+
+
+## Result-reader fixture type qualification
+
+The fixture passed runtime checks but initially failed `npm run typecheck`:
+`FakeHost` omitted the booking resolver required by `TextReception`. The first
+sequential job, log `be9df097-1792148386294.log`, naturally exited 2. The next
+job exposed the other required port, `readKnowledge`, and naturally exited 2,
+log `be9df097-1792148558873.log`. The staged foundation check did not run in
+either job.
+
+The corrected fixture explicitly satisfies the complete `TextHost` interface,
+retains the actual SAM host and mutation counters, and throws if result reading
+attempts an unrelated booking or knowledge read. No production port or type
+assertion was added. Full `npm run typecheck` and all four actual gateway memory
+cases passed in `be9df097-1792148713720.log`, with source inputs unchanged.
+That combined job subsequently exited 2 on the separate unpublished staged
+foundation; its later errors do not change this reader typecheck pass.
+
+After Gust7fa released, unchanged parent-runtime PostgreSQL diagnostics passed
+four cases in the original first-failure file and nine overlapping cases with
+all four previously failing files at original concurrency 4. Logs are
+`be9df097-1792148090945.log` and `be9df097-1792148234292.log`. They do not
+establish the original timing cause or qualify this reader delta. The failed
+whole PostgreSQL suite remains failed; reader PostgreSQL qualification,
+independent review and required cloud checks remain outstanding. No landing
+or clinic activation is claimed.
