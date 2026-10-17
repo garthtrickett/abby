@@ -42,9 +42,28 @@ export type FinancialBookingCapture = Readonly<{ kind: "notRequired" }> | Readon
 }>;
 type Pending = { fence: object; selection: FinancialBookingSelection; assessment: FinancialBookingAssessment; marker: string;
   intent?: ClinikoFinancialIntent; recallRef?: string; consent?: FinancialBookingConsent;
+  readback?: Readonly<{ segments: readonly string[]; receipts: { presentationRef: string; playedAt: string }[] }>;
   phase: "notRequired" | "unplayed" | "playing" | "awaiting" | "accepted" | "declined" };
 function freeze<T>(v: T): T { if (v !== null && typeof v === "object") { for (const child of Object.values(v)) freeze(child); Object.freeze(v); } return v; }
 const instant = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v) && Number.isFinite(Date.parse(v)) && new Date(v).toISOString() === v;
+
+/** Each clip keeps the existing private-prompt deadline. A new, post-play digit
+ * requests the next clip; only the digit after the final clip can consent. */
+function financialReadback(intent: ClinikoFinancialIntent, assessment: Extract<FinancialBookingAssessment, { kind: "required" }>, timeZone: string): readonly string[] | undefined {
+  const deadline = new Intl.DateTimeFormat("en-GB", { timeZone, dateStyle: "full", timeStyle: "short" }).format(new Date(intent.payment.deadline));
+  const text = `The clinic requires a post-booking deposit of ${intent.payment.currency.toUpperCase()} ${(intent.payment.amount / 100).toFixed(2)}, payable by ${deadline} in the clinic time zone. With your permission, the clinic will email a secure Stripe payment link to ${intent.recipient.address}. ${assessment.approvedTerms} This does not pay now or reserve the time.`;
+  const parts: string[] = []; let part = "", count = 0;
+  for (const word of text.split(/\s+/)) {
+    // An unusually long address/word needs a separately qualified readback.
+    if (word.length > 160) return undefined;
+    if (part && (part.length + word.length + 1 > 160 || count >= 24)) { parts.push(part); part = ""; count = 0; }
+    part += `${part ? " " : ""}${word}`; count++;
+  }
+  if (part) parts.push(part);
+  if (!parts.length || parts.length > 14) return undefined;
+  return Object.freeze([...parts.map(p => `${p} Press 1 to hear the next part, or 2 to decline.`),
+    "The financial terms are complete. Press 1 to agree to these terms and the payment email, or 2 to decline. If you agree, say continue booking. A separate booking confirmation follows."]);
+}
 
 /** Call-private quote/consent owner. Money, recipient, text and receipt never enter
  * SAM/action/local storage. Only the real producer later signs the receipt into
@@ -127,7 +146,8 @@ export class ClinikoFinancialBookingPreparation {
         stripe: { ...selected.stripe }, payment: assessment.payment, recipient: assessment.recipient, createdAt: now,
         effects: { checkout: randomUUID(), linkDelivery: randomUUID(), receiptDelivery: randomUUID(), checkoutExpiry: randomUUID(), clinicalExpiry: randomUUID() } });
       if (!encodeClinikoFinancialIntent(intent).ok) return undefined;
-      const pending: Pending = { fence: Object.freeze({}), selection, assessment, marker, intent, phase: "unplayed" }; this.#pending = pending;
+      const segments = financialReadback(intent, assessment, selection.timeZone); if (!segments) return undefined;
+      const pending: Pending = { fence: Object.freeze({}), selection, assessment, marker, intent, readback: { segments, receipts: [] }, phase: "unplayed" }; this.#pending = pending;
       if (!await this.#permit(pending, signal)) return undefined;
       const retained = await awaitUntilAbort(this.#records.retainIntentOnce(intent, assessment.reviewDate, signal), signal);
       if (!retained?.ok || retained.value.kind !== "accepted" || !await this.#permit(pending, signal)) { this.#pending = undefined; return undefined; }
@@ -149,18 +169,21 @@ export class ClinikoFinancialBookingPreparation {
     this.#busy = true; const signal = AbortSignal.any([this.#lifetime.signal, this.#quoteLifetime.signal, AbortSignal.timeout(25_000)]);
     try {
       if (!await this.#permit(p, signal) || p.assessment.kind !== "required" || !p.intent) return "pending";
+      if (digit === "2" || digit === "*") { delete p.consent; p.phase = "declined"; return "verified"; }
       if (p.phase === "unplayed") {
-        if (digit !== "1") return "pending";
+        if (digit !== "1" || !p.readback) return "pending";
         p.phase = "playing";
-        const deadline = new Intl.DateTimeFormat("en-GB", { timeZone: p.selection.timeZone, dateStyle: "full", timeStyle: "short" }).format(new Date(p.intent.payment.deadline));
-        const text = `The clinic requires a post-booking deposit of ${p.intent.payment.currency.toUpperCase()} ${(p.intent.payment.amount / 100).toFixed(2)}, payable by ${deadline} in the clinic time zone. With your permission, the clinic will email a secure Stripe payment link to ${p.intent.recipient.address}. ${p.assessment.approvedTerms} This does not pay now or reserve the time. After this finishes, press 1 to agree to these financial terms and this payment email, or 2 to decline. If you agree, then say continue booking. A separate booking confirmation will follow.`;
+        const text = p.readback.segments[p.readback.receipts.length]; if (!text) { p.phase = "declined"; return "verified"; }
         const receipt = await awaitUntilAbort(this.#config.presentation.play(text, signal, () => { try { return this.#current(p, signal); } catch { return false; } }), signal);
-        if (!receipt || !instant(receipt.playedAt) || receipt.playedAt < p.intent.createdAt || receipt.playedAt > this.#now() || !validRecallMarker(receipt.presentationRef) || !await this.#permit(p, signal)) { p.phase = "declined"; return "verified"; }
-        p.consent = freeze({ presentationRef: receipt.presentationRef, presentationDigest: createHash("sha256").update(text).digest("hex"), playedAt: receipt.playedAt, acceptedAt: receipt.playedAt, acceptanceRef: randomUUID() });
+        const previous = p.readback.receipts.at(-1);
+        if (!receipt || !instant(receipt.playedAt) || receipt.playedAt < (previous?.playedAt ?? p.intent.createdAt) || receipt.playedAt > this.#now() || !validRecallMarker(receipt.presentationRef) ||
+            p.readback.receipts.some(r => r.presentationRef === receipt.presentationRef) || !await this.#permit(p, signal)) { p.phase = "declined"; return "verified"; }
+        p.readback.receipts.push(Object.freeze({ ...receipt })); p.fence = Object.freeze({});
+        if (p.readback.receipts.length < p.readback.segments.length) { p.phase = "unplayed"; return "pending"; }
+        p.consent = freeze({ presentationRef: receipt.presentationRef, presentationDigest: createHash("sha256").update(JSON.stringify(p.readback.segments)).digest("hex"), playedAt: receipt.playedAt, acceptedAt: receipt.playedAt, acceptanceRef: randomUUID() });
         p.phase = "awaiting"; return "pending";
       }
       if (p.phase !== "awaiting") return "pending";
-      if (digit === "2" || digit === "*") { delete p.consent; p.phase = "declined"; return "verified"; }
       if (digit !== "1" || !p.consent || this.#now() < p.consent.playedAt) return "pending";
       p.consent = freeze({ ...p.consent, acceptedAt: this.#now(), acceptanceRef: randomUUID() }); p.phase = "accepted";
       return "verified";

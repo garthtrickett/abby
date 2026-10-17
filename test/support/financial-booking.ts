@@ -30,7 +30,8 @@ export async function financialBookingFixture(options: { scope?: import("../../s
       return Response.json(row, { status: 201 });
     }
     if (url.pathname === "/v1/recalls" && init?.method === "GET" && url.searchParams.getAll("q[]").some(q => q.startsWith("patient_id:="))) {
-      const all = [...rows.values(), ...f.recalls.map(r => ({ ...r, links: { self: `${url.origin}/v1/recalls/${r.id}` }, created_at: verificationNow, updated_at: verificationNow }))]
+      const all: Record<string, unknown>[] = [...rows.values(), ...f.recalls.map(r => ({ ...r, links: { self: `${url.origin}/v1/recalls/${r.id}` }, created_at: verificationNow, updated_at: verificationNow }))];
+      all
         .sort((a, b) => Number(a.id) - Number(b.id));
       const page = Number(url.searchParams.get("page") ?? "1");
       return Response.json({ total_entries: all.length, recalls: all.slice((page - 1) * 100, page * 100) });
@@ -56,7 +57,13 @@ export async function financialBookingFixture(options: { scope?: import("../../s
     return config;
   } });
   const pending = () => { assert.ok(f.host.financial); return f.host.financial; };
-  const play = async () => pending().acceptDigit("1", pending().inputAdmission());
+  const playSegment = async () => pending().acceptDigit("1", pending().inputAdmission());
+  const play = async () => {
+    let result = await playSegment();
+    for (let i = 0; pending().inputAdmission()?.phase === "unplayed" && i < 16; i++) result = await playSegment();
+    assert.notEqual(pending().inputAdmission()?.phase, "unplayed");
+    return result;
+  };
   const accept = async () => pending().acceptDigit("1", pending().inputAdmission());
   const proof = () => {
     const intentRow = [...rows.values()].find(r => String(r.notes).includes("financial intent")); assert.ok(intentRow);
@@ -64,6 +71,6 @@ export async function financialBookingFixture(options: { scope?: import("../../s
     const row = [...rows.values()].find(r => String(r.notes).includes("financial booking observation")); assert.ok(row);
     return value(verifyFinancialBookingObservation(row.notes, { intent, intentRecallRef: `cliniko:recall:${intentRow.id}`, producerKeyRef: keyRef, publicKey: keys.publicKey }));
   };
-  return { ...f, config: config!, rows, texts, events, burned, financialLife, pending, play, accept, proof,
+  return { ...f, config: config!, rows, texts, events, burned, financialLife, pending, play, playSegment, accept, proof,
     get posts() { return f.posts; }, denyFinancial: () => { allowed = false; }, withdrawFinancial: () => { live = false; } };
 }

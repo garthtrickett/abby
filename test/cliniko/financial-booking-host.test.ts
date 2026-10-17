@@ -21,7 +21,7 @@ test("actual native booking host requires private played financial consent, then
     const ref = await selected(f); const first = await f.state();
     assert.equal(Object.keys(first.actions).length, 0); assert.equal(f.posts, 0); assert.equal(f.rows.size, 1);
     assert.equal(f.pending().inputActive, true); assert.equal(f.pending().readySelection, undefined);
-    assert.equal(await f.play(), "pending"); assert.ok(f.texts[0]?.includes("GBP 50.00")); assert.ok(f.texts[0]?.includes("financial-recipient@example.invalid"));
+    assert.equal(await f.play(), "pending"); assert.ok(f.texts.join(" ").includes("GBP 50.00")); assert.ok(f.texts.join(" ").includes("financial-recipient@example.invalid"));
     assert.equal(f.pending().readySelection, undefined);
     assert.equal(await f.accept(), "verified"); assert.ok(f.pending().readySelection);
     resultValue(await f.propose(ref, "financial-resume")); assert.equal(f.posts, 0);
@@ -38,7 +38,26 @@ test("an unplayed or pre-play queued digit cannot become financial acceptance", 
     await f.pending().acceptDigit("1", old);
     assert.equal(await f.pending().acceptDigit("1", old), "pending"); assert.equal(f.pending().readySelection, undefined);
     assert.equal(await f.pending().acceptDigit("1", undefined), "pending"); assert.equal(f.pending().readySelection, undefined);
+    await f.play();
     await f.accept(); assert.ok(f.pending().readySelection); assert.equal(f.posts, 0);
+  } finally { await f.close(); }
+});
+test("every bounded financial readback part needs a new post-play digit before final acceptance", async () => {
+  const f = await financialBookingFixture(); try {
+    await selected(f); const first = f.pending().inputAdmission(); await f.playSegment();
+    assert.equal(f.pending().inputAdmission()?.phase, "unplayed"); assert.equal(f.texts.length, 1);
+    await f.pending().acceptDigit("1", first); assert.equal(f.texts.length, 1);
+    await f.play(); assert.ok(f.texts.length > 2); assert.ok(f.texts.every(s => s.length <= 210));
+    assert.equal(f.pending().readySelection, undefined); assert.equal(f.pending().inputAdmission()?.phase, "awaiting");
+    await f.accept(); assert.ok(f.pending().readySelection); assert.equal(f.posts, 0);
+  } finally { await f.close(); }
+});
+for (const failure of ["interrupted", "duplicateReceipt"] as const) test(`incomplete multipart financial readback (${failure}) grants no consent`, async () => {
+  let n = 0; const id = crypto.randomUUID();
+  const f = await financialBookingFixture({ play: async () => ++n > 1 && failure === "interrupted" ? undefined : { presentationRef: id, playedAt: verificationNow } });
+  try {
+    await selected(f); await f.play(); await f.accept(); assert.equal(n, 2);
+    assert.equal(f.pending().readySelection, undefined); assert.equal(f.pending().inputActive, false); assert.equal(f.posts, 0);
   } finally { await f.close(); }
 });
 for (const played of [false, true]) test(`private decline/failure (played=${played}) cannot create a clinical proposal or receipt`, async () => {
@@ -100,7 +119,7 @@ test("ending the call owner immediately after the exact clinical ACK preserves s
   try {
     await consented(f); resultValue(await f.confirm());
     const write = f.host.write.bind(f.host);
-    t.mock.method(f.host, "write", (mutation, now, signal, acknowledged) => write(mutation, now, signal, receipt => {
+    t.mock.method(f.host, "write", (...[mutation, now, signal, acknowledged]: Parameters<typeof write>) => write(mutation, now, signal, receipt => {
       acknowledged?.(receipt); f.host.dispose();
     }));
     resultValue(await f.drain());

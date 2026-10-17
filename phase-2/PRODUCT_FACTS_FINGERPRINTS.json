@@ -1,7 +1,7 @@
 {
   "verifiedDate": "2026-10-17",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "d57e8a0379ffe86bc6406906943c783d7170ae6b13f3b43394b874897361fca3",
+  "factsSha256": "51b733596ce1464473a43eebb845236adb05247d80655c4cc6fdddff572b9dc9",
   "sources": {
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
     "docs/adr/0003-class-movement-staff-resolution.md": "683bdd10660afc00309bac21e32ceda976573aa5e29aca4106fb1cddcb71b62f",
@@ -33,7 +33,7 @@
     "src/standalone/cliniko-class-move-host.ts": "fcd01ec234639a769ee070ddf6d61b4a4df7ae70acf0837f0b65355b878725c3",
     "src/standalone/cliniko-class-move-recovery.ts": "be3b1dcde0e38ada0b536919c2ee289d7642c6e719a06f25eced092dd924c4b3",
     "src/standalone/cliniko-class-move-stages.ts": "67eea7b74c00e4b8ee11b6b0786c4ae3e838f6522e1c7c0660f012be0501d551",
-    "src/standalone/cliniko-financial-booking-preparation.ts": "56711a42730faff65c73aad70d5edfc95df36c0c081d26658c6ef56d16b3afc6",
+    "src/standalone/cliniko-financial-booking-preparation.ts": "13a7f33d0e0e446e62db6e75b07beb84a832cc7c7f4a5603cc0a08be41c046af",
     "src/standalone/cliniko-intake-booking-session.ts": "5c47952405be15d5e247ae8bde13d975dbe744ad37cd06bda240eeed7c409bb5",
     "src/standalone/cliniko-phone-lookup.ts": "ec3fe7a7d70902dcfdb3a4df3848db574c50116d6e400622a2156f7d36a577c8",
     "src/standalone/cliniko-reviewed-send.ts": "d86787bec6f884c1afd07725c0e8ef1cf44e41d66b31e4c7219648f466bcf094",
@@ -61,7 +61,7 @@
     "test/cliniko/class-move-stages.test.ts": "47803c0dd6d6219a5c188d740dde7766363803f39d12ddbe92fa01edfd387c55",
     "test/cliniko/class-movement-verifier.test.ts": "58c336efc7fa7b2211a8d75094acaf599485acb45eab9c19706a39db37dc7984",
     "test/cliniko/class-pass-booking-host.test.ts": "9c2d8fc914ab83bb14b171bacfdaa2c117234fd676d6cb2fb01e2693745e5853",
-    "test/cliniko/financial-booking-host.test.ts": "1bda69816ce02f344032fcbb64238640056f09b10b079323defd6c090ede1e99",
+    "test/cliniko/financial-booking-host.test.ts": "ff3412f39736b5649093cfe6d41b455c5f6045244684b13fb07803b1a7e4cdc5",
     "test/cliniko/financial-consent-observation.test.ts": "ad37e42b7bf48a9daf393400e628d5d2889c7fa1e207afbc54bf083c63a2920b",
     "test/cliniko/intake-booking-session.test.ts": "c76d5aa107ab3770392aa940a1efe5cfa43f64da83fe5082eed55dfee581b62e",
     "test/cliniko/phone-lookup-request-cost.test.ts": "de727ea536bcdab0870ca255df190daf95633c6626344ca4f8364a520c8e8090",
@@ -92,7 +92,7 @@
     "test/voice/class-pass-runner.test.ts": "bea619a4f8a7a2970067743c3686bc3ab531ad9bfaf907667fc30d0f4a6a6091",
     "test/voice/class-runner.test.ts": "59428433d441ac52f5239ed7e1094e01f057f05c0ae88f8ffcba586982163716",
     "test/voice/private-digit-arrival.test.ts": "8d882060f1cebb00ebab87f0263403794759bf6c4943b4d3b789d4d67f9ca345",
-    "test/voice/private-financial-booking.test.ts": "f356a637cef7300b113897bb2407e94c0755e0fdbf1316cc8c3225151eaa76d0",
+    "test/voice/private-financial-booking.test.ts": "01fdc3e7596482be7a3255e56a0e34275c8d012a3ee638ee615e75dfbb32d815",
     "test/voice/synthetic-media-timeline.test.ts": "ebbed4cc6f63226753401391837e1d60815a84fd015a9ef53bec231787f7c6b2"
   },
   "limits": "Content/source drift aid only; no automated behavioral, deployment or publication attestation."

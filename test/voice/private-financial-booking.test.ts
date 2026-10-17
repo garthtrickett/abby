@@ -26,7 +26,8 @@ async function select(f: Awaited<ReturnType<typeof financialBookingFixture>>) {
 }
 test("financial input discards media and rejects pre-play or queued quote-phase digits", async () => {
   const play = deferred<{ presentationRef: string; playedAt: string } | undefined>();
-  const f = await financialBookingFixture({ play: () => play.promise }); const mux = inputFor(f);
+  let requested = false;
+  const f = await financialBookingFixture({ play: () => { if (!requested) { requested = true; return play.promise; } return Promise.resolve({ presentationRef: crypto.randomUUID(), playedAt: verificationNow }); } }); const mux = inputFor(f);
   try {
     await select(f); assert.equal(mux.input.blocked(), true);
     const first = mux.input.captureDigit("1", false), earlySecond = mux.input.captureDigit("1", false);
@@ -37,6 +38,7 @@ test("financial input discards media and rejects pre-play or queued quote-phase 
     play.resolve({ presentationRef: crypto.randomUUID(), playedAt: verificationNow }); await settled(); await settled();
     assert.equal(await mux.input.accept("1", earlySecond), "pending"); assert.equal(f.pending().readySelection, undefined);
     assert.equal(await mux.input.accept("1", Object.freeze({})), "pending"); assert.equal(f.pending().readySelection, undefined);
+    await f.play();
     const valid = mux.input.captureDigit("1", false); assert.ok(valid);
     assert.equal(await mux.input.accept("1", valid), "verified"); assert.ok(f.pending().readySelection);
     assert.equal(mux.ordinaryKeys, 0); assert.equal(mux.input.blocked(), false); assert.equal(f.posts, 0);
@@ -54,6 +56,7 @@ test("financial playback runs outside the semantic wire queue and an interrupted
 });
 test("actual VoiceSession playback mark supplies the opaque financial receipt with no fee or recipient in SAM", async () => {
   let voice: VoiceSession | undefined;
+  let playRemaining = false, marks = 0;
   const dispatched = deferred<{ id: string; text: string }>();
   const f = await financialBookingFixture({ activate: false, play: async (text, signal, canPresent) => {
     const receipt = await voice!.presentPrivateFinancialBooking(text, signal, verificationNow, canPresent);
@@ -62,7 +65,7 @@ test("actual VoiceSession playback mark supplies the opaque financial receipt wi
   try {
     const original = await f.state(); assert.ok(original.policy.greeting);
     voice = new VoiceSession(f.callId, f.sessionId, f.scope, f.ledger, f.reception,
-      { enqueue: async (id, text) => { dispatched.resolve({ id, text }); return "queued"; }, clear: async () => true },
+      { enqueue: async (id, text) => { marks++; dispatched.resolve({ id, text }); if (playRemaining) setImmediate(() => { void voice!.acceptPlaybackResult(id, "played", verificationNow); }); return "queued"; }, clear: async () => true },
       async () => ok({ kind: "clarify" }), undefined, () => 0, { greeting: original.policy.greeting });
     resultValue(await voice.attach(verificationNow));
     await select(f);
@@ -71,7 +74,8 @@ test("actual VoiceSession playback mark supplies the opaque financial receipt wi
     const during = await f.state(); assert.ok(!JSON.stringify(during).includes("financial-recipient")); assert.ok(!JSON.stringify(during).includes("GBP 50.00"));
     const privateNotice = Object.values(during.presentations).find(p => p.status === "started"); assert.ok(privateNotice?.kind === "notice");
     assert.equal(privateNotice.approvedText, "");
-    resultValue(await voice.acceptPlaybackResult(sent.id, "played", verificationNow)); assert.equal(await presenting, "pending");
+    playRemaining = true;
+    resultValue(await voice.acceptPlaybackResult(sent.id, "played", verificationNow)); assert.equal(await presenting, "pending"); assert.ok(marks > 2);
     assert.equal(f.pending().readySelection, undefined); await f.accept(); assert.ok(f.pending().readySelection);
     assert.equal(f.posts, 0);
   } finally { voice?.stopTransientWork(); await f.close(); }
