@@ -48,7 +48,7 @@ export type FinancialClinicalExpiryConfig = Readonly<{ cliniko: FinancialRecordR
 export type FinancialClinicalExpiryOutcome = Readonly<{ kind: "cancelled" | "uncertain"; money: StripeCheckoutEvidence["kind"] | "unknown"; reviewRequired: boolean }>;
 type FailureKind = "invalidConfig" | "invalidQuery" | "forbidden" | "mismatched" | "alreadyClaimed" | "attemptUncertain" | "unavailable";
 export type FinancialClinicalExpiryFailure = Readonly<{ kind: FailureKind }>;
-class Failure extends Error { constructor(readonly kind: FailureKind) { super(kind); } }
+class Failure extends Error { readonly kind: FailureKind; constructor(kind: FailureKind) { super("Clinical expiry unavailable"); this.kind = kind; } }
 type Prepared = Readonly<{ query: FinancialClinicalExpiryQuery; approval: FinancialClinicalApproval; request: ClinikoCancellationRequest; payloadDigest: string }>;
 function data(q: FinancialClinicalExpiryQuery) {
   const { observedAt: _correlationTime, ...correlation } = q.correlation;
