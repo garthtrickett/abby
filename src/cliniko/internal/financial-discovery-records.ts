@@ -124,7 +124,7 @@ export async function assembleFinancialRecords(selected: readonly FinancialListe
       recalled: native.recalled, archivedAt: native.archivedAt });
   }
   const sameResendSources = (request: FinancialResendRequest): boolean => {
-    const pair = work.find(w => w.kind === "pairedContext" && w.request.intentRecallRef === request.intentRecallRef);
+    const pair = work.find(w => w.kind === "pairedContext" && w.intent.recallRef === request.intentRecallRef);
     if (pair?.kind === "pairedContext" && (pair.observationRecallRef !== request.observationRecallRef || pair.observation.actionRef !== request.observationActionRef ||
         pair.observation.targetRef !== request.targetRef)) return false;
     const creation = attempts.find(a => a.recallRef === request.checkoutAttemptRecallRef);
