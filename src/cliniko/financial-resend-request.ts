@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import { financialIntentDigest } from "./financial-booking-observation.ts";
@@ -63,4 +64,10 @@ export function resendRequestMatchesIntent(a: FinancialResendRequest, intent: Cl
       [a.actionRef, a.effectRef, a.approvalRef, a.observationActionRef, a.checkoutAttemptActionRef]
         .every(id => ![intent.actionRef, intent.booking.actionRef, ...Object.values(intent.effects)].includes(id));
   } catch { return false; }
+}
+
+/** Private native request fingerprint only; never persist this in local SQL. */
+export function financialResendRequestDigest(request: FinancialResendRequest): string | undefined {
+  const encoded = encodeFinancialResendRequest(request);
+  return encoded.ok ? createHash("sha256").update(JSON.stringify(["abby.financial-resend-request.v1", encoded.value])).digest("hex") : undefined;
 }
