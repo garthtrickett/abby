@@ -207,3 +207,42 @@ producer/restore quiescence and the actual composed booking-to-payment workflow
 remain open. Missing retained acknowledgement stays unresolved for staff; diary
 matching must not reconstruct it. Clinic record/key/permission provisioning and
 real Stripe/sender activation remain separate acceptance gates.
+
+
+## Opaque financial-effect barrier and transfer candidate
+
+`FinancialEffectBarrier.claimOnce` is a durable submission barrier only. The
+PostgreSQL implementation atomically consumes an independently random UUIDv4
+before external work; a repeated claim returns false, and scope/owner mismatch
+or unknown storage outcome supplies no retry permission. No reset, expiry,
+reassignment, completion or received-money API exists. The table retains only
+tenant/clinic/location, opaque effect UUID, non-patient owner-configuration
+binding and barrier audit time. The owner binding must identify approved
+clinic/account/producer configuration; it must never hash patient context,
+intent bodies, recipients, provider references or a financial result.
+
+Migration049 installs the existing portability write/truncate guards. The
+strict separate staff-work record carries original UUID/binding/time through
+mapped import and later transfers, preserving original logical scope. Both
+resend and financial families share one canonical section digest, checked in
+full rather than validating one projection against the whole section. Unknown
+fields, financial/private content, duplicate IDs, unmapped ownership, occupied
+targets, missing/extra consumed rows and changed retained metadata refuse.
+Repeated staging, re-export and actual cutover reconciliation inspect current
+rows; a cached receipt cannot repair or hide missing barrier history.
+
+A fresh journal claim takes the tenant import/freeze lock and checks audited
+import history. An ID known to have been consumed by that import can never be
+recreated after relational-row loss. Invalid retained metadata blocks new claims.
+A restored snapshot can still omit activity newer than the snapshot: local
+absence is not evidence of an unused effect. Independent current financial-owner
+permission, exact provider records and admitted/quiesced producer state remain
+mandatory before any external effect. This barrier does not create pending work,
+authorize a checkout, retain an observed booking receipt or activate payments.
+
+The composed standalone transfer test exposed a prior target-readiness mismatch:
+minimal policy JSON was compared with a full reference-host policy. Import and
+readiness now share the exact existing minimal storage projection. It is allowed
+only for a verified minimal source, rejects extra capability fields and preserves
+the existing full representation for embedded targets. No clinical/financial
+permission, source approval, stop or cutover authority is weakened.

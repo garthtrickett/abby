@@ -7,16 +7,16 @@
 | Execution stage | Current evidence and next action |
 | --- | --- |
 | 1 Aeva preservation | Independently retrieved and hash-checked 113 explicit source/test/map references at the audited revision through GitHub. All four original planning documents were published and independently retrieved at Abby `229a3596696d8ebb9bf263e58457f412898c1327`. Local-only material still requires owner selection and preservation before deletion. |
-| 2 Delivery baseline | Draft457 is the initial integrated baseline; later owned changes are stacked through draft487. None is landed. Frozen clinical source ff795012/draft485 completed full PostgreSQL qualification with3218passes, one cancelled-email private-choice failure and one existing skip; ordered did not run. Draft487 additionally qualifies the composed signed pass-to-cold-staff cohort. Exact-head authoritative cloud jobs have not executed because of billing/spending limits. |
+| 2 Delivery baseline | Initial integrated baseline is draft457; owned reviewable work is stacked through draft491 and the financial-effect-barrier candidate. None is landed. Frozen clinical36b5285c/draft489 passed the complete local PostgreSQL regression:3225main passes/one existing skip, then6/6ordered. Newer financial adapters have separate focused qualification. Authoritative cloud jobs remain unavailable before execution because of billing/spending limits. |
 | 3 Exact receipt foundation | Implemented and locally qualified in `codex/abby-provider-ack-receipt`, stacked on the published plans and integrated candidate. The full interval is captured, sent and validated. The later individual/class changes consume this exact receipt; post-create observations cannot erase an established creation acknowledgement. Independent review and exact-head CI remain outstanding. |
 | 4 Individual booking | Published in draft [PR #460](https://github.com/garthtrickett/abby/pull/460), `codex/abby-provider-ack-individual`, based on receipt correction `92a16e5`. Final online/roster availability follows preparation; exact acknowledgement survives host/review/worker cancellation. Focused, isolated database/process/compiled-location and complete local `npm test` checks passed. Independent review and cloud qualification remain open; cloud jobs have not started because of billing. |
 | 5 Native class creation | Draft [PR #461](https://github.com/garthtrickett/abby/pull/461) supplies exact attendee acknowledgement and final double capacity ordering for ordinary/approved-pass creation. Focused process-loss/privacy and movement/cancellation preservation evidence is retained below. Later staged caller work composes these creation semantics; acknowledgement of replacement creation alone never completes a move. Current whole-graph and authoritative cloud qualification remain open. |
-| 6 Earlier-gap qualification | The earlier completed full7ca result was3171pass/7fail/1existing skip; ordered did not run. Played-reply and intake-routing fixes have focused current qualification, including the original five-file reproduction14/14. Corrected full ff795012 work1792198488746 finished3218pass/1fail/1existing skip; the remaining cancelled-email E2E-380 private-choice timeout requires diagnosis. No whole-graph pass is inferred; preserve first-failure diagnosis before another full run. Gaps1–9 retain clinic, mail, recovery/operator and failing speech/public-route gates. |
-| 7 Class/pass completion | Drafts465–473 now include actual staged caller/SAM/private same-subject renewal, separate played phase consent, complete bounded native/proposal cost admission, cold staff observation, signed uncertainty-to-staff recovery, corrected same/cross-case date/ordinal journeys and a compiled competing-account allocation case. Current focused ordinary, maximum-history and cross-case pass journeys have real disposable PostgreSQL/quota/privacy evidence. Larger current whole-graph qualification is pending; scope limits for pass restoration/financial provisioning and broader operator acceptance remain explicit. No blanket completion follows from the focused cases. |
-| 8 Payments | Stripe was selected by the owner. Draft [PR #475](https://github.com/garthtrickett/abby/pull/475) locally qualifies raw signed event validation and fresh exact Checkout money/receipt evidence; draft [PR #476](https://github.com/garthtrickett/abby/pull/476) adds bounded complete-window readonly discovery after uncertain creation. The captured raw-input/shared-reader follow-up is qualified in draft482 with34/34 checks and full TypeScript; no public payment route is active. Authoritative CI has not executed. No payment lifecycle, payable creation, link delivery, durable webhook handoff or clinical expiry is activated. The owner selected dedicated Cliniko financial reviews on17October. Pending: qualify the concrete schema/permissions and actual host lifecycle. No local patient-financial database is assumed. |
+| 6 Earlier-gap qualification | Combined clinical36b5285c work1792203076121 passed3225main/0fail/1existing skip plus6/6ordered, with source/runtime hashes unchanged. Earlier7ca seven-failure and ff795012 cancelled-choice failure remain historical evidence. Both instrumented E2E-380 content cases passed this full; no production root-cause fix is inferred. Gaps1–9 retain clinic, mail, recovery/operator, acoustic and public-route acceptance limits. |
+| 7 Class/pass completion | Drafts465–473 and487 include staged caller/SAM/private renewal, separate played consent, bounded native/proposal cost admission, cold staff observation, signed uncertainty-to-staff recovery and same/cross-case date/ordinal/pass journeys. Their current composed cohorts also ran in the passing36b5285c complete clinical graph. Broader operator acceptance, original/replacement recovery obligations and separate financial provisioning remain explicit; no blanket cohort or clinic activation follows. |
+| 8 Payments | Stripe and dedicated Cliniko financial reviews are selected. Drafts475/476/482 qualify signed event/money/receipt reading and bounded discovery;488 supplies private intent context,490 the current-owner reader and491 producer booking-observation capture. The financial-effect-barrier candidate qualifies opaque consumed-ID storage, actual mapped/cutover transfer and logical restore. No payment host, payable creation, durable native acknowledgement retention, link delivery, webhook handoff or clinical expiry is activated. Actual clinic record/permission/key configuration and composed financial lifecycle remain open. |
 | 9 Outbound | Pending gap 12, audit R20/R21 and contact-policy decisions. |
 | 10 Writeback | Pending gap 13, exact permissions/content/storage decisions and audit R08/R22. |
-| 11 Combined qualification | Corrected full ff795012 work1792198488746 ended3218pass/1fail/1existing skip with1195 source inputs/452 runtime pins unchanged; ordered did not run. Latest completed7ca full failed seven; ordered did not run. Subsequent draft487 staff-cohort and financial-intent checks are focused evidence, not a replacement full result. Clinic, mail, native provider, cloud, deployment, speech/public-route and carrier acceptance remain distinct. |
+| 11 Combined qualification | Latest complete clinical graph36b5285c naturally passed work1792203076121 at03:07:14.717255UTC:3225main passes/0fail/1existing skip, then6/6ordered. All1197source/455runtime hashes stayed unchanged. Newer reader/capture/barrier graphs have scoped focused+TypeScript evidence, not a replacement full result. Authoritative cloud, independent review, clinic/mail/native provider, acoustic/public-route, deployment and carrier gates remain distinct. |
 
 The three detailed plans retain the requirements and acceptance matrices. No source merge, deployment, real provider mutation, mail send or Aeva deletion is established by this ledger.
 
@@ -3092,11 +3092,110 @@ preceded the successful changed-source rerun; no typecheck flags or tests were
 weakened. `git diff --check` passed. Final evidence documentation changes do not
 alter any tested executable input.
 
-The older complete current-graph regression remains separately frozen at
+At the capture checkpoint, the older complete current-graph regression was separately frozen at
 36b5285c in work1792203076121 and was still running at02:54UTC, through E2E-357,
 without reported failure. It does not qualify this later unwired financial
-adapter. The latest completed full regression remains ff795012 with3218passes,
+adapter. At that checkpoint the latest completed full regression was ff795012 with3218passes,
 one cancelled-email private-choice failure and one existing skip; ordered did
-not run. The new diagnostic run is investigating that failure, not already green.
+not run. That was the pending state at the capture checkpoint; the completed result is recorded below.
 All13 gaps remain active; independent review, exact-head authoritative CI and
 composed provider-owned financial lifecycle/restore/privacy acceptance remain.
+
+
+## Completed combined clinical regression — 17October2026
+
+Frozen36b5285cdd3752804ee0bfc1a37b2b773274e0bb/draft489 naturally passed
+work1792203076121 at03:07:14.717255UTC, after55m58s. Command:
+`bash scripts/with-postgres.sh bash -c 'npm run db:migrate && ABBY_LEDGER=postgres npm run test:postgres'`.
+The repository serving/dashboard builds and main pool passed3225/3226, with
+zero failures/cancellations and the existing `C-LIVE-40 embedded voice keeps a
+real demo-created patient after synthetic booking rejection` skip. The separate
+ordered runner then passed6/6 with zero skips. Default4-file concurrency, all
+case deadlines and the10-second first-reply wait stayed unchanged.
+
+All1197 source inputs and455 runtime hashes matched before and after; final455
+artifact hashes also matched. Node peak963,096,576B under1.5GiB/CPU200%/Swap0;
+aggregate Docker peak560,840,704B under1GiB/CPU200%/Swap0; all memory events0.
+Exitfile0, wrapper755527 absent, scope inactive, own-label Docker empty and
+paired wait64349 reaped. No restored or peer database was modified.
+
+Both E2E-380 content cases passed. Telehealth first reply was6770ms and cancelled
+was6993ms. Whole choices8589/11338ms include played readback, so those durations
+are not first-reply latency. Whole-call source counts overlap and are not
+per-choice attribution. This is a current-graph local pass; the prior intermittent
+ff795012 failure's root cause and a production fix are not established. Drafts
+489–491 record the actual result and its scope without changing their HEADs.
+This full does not qualify the later financial reader/capture/barrier graph,
+cloud checks, acoustic/public transport, real providers or clinic activation.
+
+## Durable opaque financial-effect barrier candidate
+
+`codex/abby-financial-effect-barrier`, stacked on draft491/246f83fd, adds a
+permanent opaque-ID submission barrier and complete metadata carryover, not a
+payment state machine. Migration049 and generated Kanel types retain only
+scope, random UUIDv4, non-patient owner binding and barrier audit time. Scope or
+owner mismatch, unknown storage, restored imported-row loss and invalid retained
+history never create retry permission. No reset, payment result, private pending
+work, recipient, provider reference, money or native note is stored locally.
+
+Actual PostgreSQL tests cover16 racing independent stores, a fresh store,
+existing freeze guards, strict schema/privacy, mixed resend/financial sections,
+repeat staging, two mapped imports, original-scope carryover, actual cutover
+readiness, extra/missing rows, edited retained projections and a complete
+`pg_dump`/`psql` restore into a new empty database. A claim checks retained import
+history under the tenant lock, so a known imported consumed UUID cannot be
+recreated after its relational row disappears. Current financial permission and
+independent producer/restore admission remain separate; the snapshot cannot
+prove absence of activity newer than its backup.
+
+The composed standalone test found an existing readiness mismatch between full
+reference policies and exact minimal stored policy JSON. Importer and readiness
+now share the unchanged minimal projection. Only a verified minimal source can
+use that representation; injected capability fields still fail, and full embedded
+representation retains its existing comparison. The typed mapping now preserves
+source storage shape. This is a prerequisite for the actual transfer assertion,
+not a relaxed receipt, financial permission or cutover authorization.
+
+Final semantic7990cf956da08244023f4f634fabd74967f96903 naturally passed
+work1792207103917 at03:20:34.236978UTC. Exact focused command after migration:
+
+```sh
+ABBY_LEDGER=postgres node --test --test-concurrency=2 \
+  test/portability/financial-effect-history.test.ts \
+  test/storage/postgres-financial-effect-barrier.test.ts \
+  test/storage/postgres-confirmation-resend-journal.test.ts \
+  test/storage/postgres-config-archive.test.ts \
+  test/storage/postgres-minimal-config-archive.test.ts \
+  test/storage/postgres-minimal-config-import.test.ts \
+  test/storage/postgres-fenced-final-archive.test.ts \
+  test/storage/postgres-durable-config-import.test.ts \
+  test/contract/product-facts.test.ts \
+  test/contract/scenario-manifest.test.ts
+NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck
+```
+
+All42 checks passed with no failures, skips or cancellations, followed by a
+successful full TypeScript check. All1584 tracked hashes and shared dependency
+lock remained unchanged. Node peak1,459,826,688B under2GiB/CPU200%/Swap0;
+aggregate Docker peak200,962,048B under1GiB/CPU100%/Swap0; all memory events0.
+Actual exit0, PID861416 absent, scope inactive, own-label Docker empty and paired
+wait3321 reaped. Final evidence changes only these two Markdown documents.
+
+Migration/type generation separately passed work1792206287819 on52278c08, with
+only the declared two generated files changed, Node peak80,715,776B/1GiB and
+Docker168,177,664B/512MiB, all events0. The rollback retained-history guard changed
+later and was exercised in the final semantic run. Early failed attempts remain:
+
+| Work/source | Result and correction |
+| --- | --- |
+|1792206410512/663b20c|40/42, exit1: archive location-key mismatch and data-only restore fixture; corrected decoder key and complete empty-database restore.|
+|1792206571981/171a7fc|41/42, exit1: cached `stage` correctly returned the same staged receipt; fixture now tests exact receipt equality and separately checks `preflight` status.|
+|1792206689641/803b6c3|41/42, exit1: actual standalone cutover exposed the full/minimal policy representation mismatch; fixed with the existing exact minimal contract.|
+|1792206875078/eca9b00|42/42 then TypeScript exit2: fallback mapping metadata and generic migration-fixture typing; corrected without weakening flags/assertions.|
+
+Native financial intent and observed-booking retention, the actual financial
+owner/host, one-shot Stripe creation/discovery, webhook handoff, communication,
+receipt and expiry/race/restore composition remain open. No live provider,
+sender, activation, deployment, Aeva removal, dependency addition or merge was
+performed. All13 gaps remain active; exact-head authoritative CI and independent
+review remain required.
