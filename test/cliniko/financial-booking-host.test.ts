@@ -93,3 +93,19 @@ test("financial preparation and refresh finish before final native availability"
     assert.ok(final > 0 && post > final); assert.deepEqual(f.events.slice(final + 1, post), []); assert.equal(f.posts, 1);
   } finally { await f.close(); }
 });
+
+test("ending the call owner immediately after the exact clinical ACK preserves success and independent financial retention", async t => {
+  let retained!: () => void; const observed = new Promise<void>(resolve => { retained = resolve; });
+  const f = await financialBookingFixture({ onObservation: retained });
+  try {
+    await consented(f); resultValue(await f.confirm());
+    const write = f.host.write.bind(f.host);
+    t.mock.method(f.host, "write", (mutation, now, signal, acknowledged) => write(mutation, now, signal, receipt => {
+      acknowledged?.(receipt); f.host.dispose();
+    }));
+    resultValue(await f.drain());
+    await Promise.race([observed, new Promise<never>((_, reject) => { const timer = setTimeout(() => reject(new Error("Independent financial retention missing")), 5_000); timer.unref(); })]);
+    assert.equal(f.posts, 1); assert.equal(Object.values((await f.state()).actions)[0]?.status, "committed");
+    assert.equal(f.financialLife.signal.aborted, false); assert.ok(f.proof().financialConsent);
+  } finally { await f.close(); }
+});

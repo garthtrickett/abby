@@ -7,13 +7,13 @@ import type { FinancialBookingAssessment, FinancialBookingPreparationConfig } fr
 import { decodeClinikoFinancialIntent } from "../../src/cliniko/financial-review-intent.ts";
 import { verifyFinancialBookingObservation } from "../../src/cliniko/financial-booking-observation.ts";
 
-export async function financialBookingFixture(options: { activate?: boolean; required?: boolean; play?: FinancialBookingPreparationConfig["presentation"]["play"];
+export async function financialBookingFixture(options: { scope?: import("../../src/core/model.ts").LocationScope; barrierFor?: (native: FinancialBookingPreparationConfig["native"]) => FinancialBookingPreparationConfig["barrier"]; onObservation?: () => void; activate?: boolean; required?: boolean; play?: FinancialBookingPreparationConfig["presentation"]["play"];
   lostObservation?: boolean; lostIntent?: boolean; observationResponse?: (row: Record<string, unknown>) => Response;
   quote?: (q: FinancialBookingAssessment) => FinancialBookingAssessment | undefined } = {}) {
   const rows = new Map<string, Record<string, unknown>>(), texts: string[] = [], events: string[] = [], burned = new Set<string>();
   const financialLife = new AbortController(); let allowed = true, live = true, next = 100;
   let config: FinancialBookingPreparationConfig;
-  const f = await standaloneBookingFixture({ ...(options.activate === undefined ? {} : { activate: options.activate }), fetchAround: port => async (input, init) => {
+  const f = await standaloneBookingFixture({ ...(options.scope ? { scope: options.scope } : {}), ...(options.activate === undefined ? {} : { activate: options.activate }), fetchAround: port => async (input, init) => {
     const url = new URL(String(input));
     const body = init?.method === "POST" ? JSON.parse(String(init.body)) : undefined;
     if (url.pathname === "/v1/recalls" && body?.recall_type_id === "40") {
@@ -23,10 +23,17 @@ export async function financialBookingFixture(options: { activate?: boolean; req
       rows.set(id, row);
       if (options.lostIntent && String(row.notes).includes("financial intent")) throw new Error("Synthetic lost financial intent response");
       if (String(row.notes).includes("financial booking observation")) {
+        options.onObservation?.();
         if (options.lostObservation) throw new Error("Synthetic lost observation response");
         if (options.observationResponse) return options.observationResponse(row);
       }
       return Response.json(row, { status: 201 });
+    }
+    if (url.pathname === "/v1/recalls" && init?.method === "GET" && url.searchParams.getAll("q[]").some(q => q.startsWith("patient_id:="))) {
+      const all = [...rows.values(), ...f.recalls.map(r => ({ ...r, links: { self: `${url.origin}/v1/recalls/${r.id}` }, created_at: verificationNow, updated_at: verificationNow }))]
+        .sort((a, b) => Number(a.id) - Number(b.id));
+      const page = Number(url.searchParams.get("page") ?? "1");
+      return Response.json({ total_entries: all.length, recalls: all.slice((page - 1) * 100, page * 100) });
     }
     const id = url.pathname.match(/^\/v1\/recalls\/([0-9]+)$/)?.[1];
     if (id && rows.has(id)) { events.push("financial:GET"); return Response.json(rows.get(id)); }
@@ -45,6 +52,7 @@ export async function financialBookingFixture(options: { activate?: boolean; req
         return options.quote ? options.quote(q) : q;
       }, current: async () => { events.push("financial:permission"); return allowed; }, currentForSend: () => live },
       presentation: { play: async (text, signal) => { texts.push(text); return options.play ? options.play(text, signal) : { presentationRef: randomUUID(), playedAt: verificationNow }; } } };
+    if (options.barrierFor) config = { ...config, barrier: options.barrierFor(config.native) };
     return config;
   } });
   const pending = () => { assert.ok(f.host.financial); return f.host.financial; };

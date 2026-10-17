@@ -90,6 +90,7 @@ function auditPayload(action: TransitionAction): Record<string, string> {
     case "privateIntakePrompt":
     case "privateCorrectionPrompt":
     case "privateRepresentativePrompt":
+    case "privateFinancialBookingPrompt":
     case "privateResendPrompt": return { presentationId: action.presentationId, sessionId: action.sessionId };
     case "admissionExpired": return {};
     case "callerTurn": return { turnId: action.turn.turnId, interpretation: action.interpretation.kind };
