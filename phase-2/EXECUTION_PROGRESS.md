@@ -3922,3 +3922,8 @@ signed date-corrected same-case pass failure2578 (native writes expected3/saw2),
 not a green verdict. Its job continues naturally; safe isolated diagnosis is in
 a separate checkout. Required cloud checks remain unavailable from billing;
 all13 gaps remain active and no merge or deployment is implied.
+
+Reviewed fact/fingerprint and scenario manifest work1792221723081 passed2/2
+at07:22:04.778592UTC, exit0, on845a34a. Peak66,064,384B/512MiB/
+CPU200%/Swap0, all memory events0 and pins unchanged; paired wait reaped.
+This evidence-only update changes no executable or directly fingerprinted input.
