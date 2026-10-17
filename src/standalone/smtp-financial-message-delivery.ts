@@ -42,6 +42,12 @@ function render(s: FinancialMessageSelection, m: FinancialMail): Readonly<{ subj
       `The clinic requested a payment of ${amount}, due by ${due} (${s.timeZone}).\r\nPay securely with Stripe: ${url.toString()}\r\nThis link does not reserve a time or change an appointment. This email is not a receipt.` };
   } catch { return undefined; }
 }
+/** Approved sender/template selection only. A digest binds configuration, never
+ * recipient authority, provider truth or permission to send. */
+export function financialMessageSelectionDigest(selection: FinancialMessageSelection): string | undefined {
+  return validFinancialMessageSelection(selection) ? createHash("sha256").update(JSON.stringify([
+    "abby.financial-message-selection.v1", selection.sender, selection.template, selection.timeZone])).digest("hex") : undefined;
+}
 /** Native private fingerprint only; never persist this or recipient/URL in the
  * local operational barrier. It binds the exact approved template and content. */
 export function financialMessageDigest(selection: FinancialMessageSelection, message: FinancialMail): string | undefined {
