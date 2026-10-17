@@ -4434,3 +4434,69 @@ observed c562 failures now have focused passing witnesses, not a new full result
 Individual clinical expiry and the compiled204-response fixture correction are
 separate unfinished qualification. All thirteen gaps and actual clinic/provider/
 acoustic/cloud/deployment gates remain; no activation, merge or Aeva deletion.
+
+
+### Independently authorized individual financial clinical expiry, 17 October 2026
+
+The configured consumer has an optional clinicalExpiry authority, distinct from
+Checkout expiry, money, messages and original caller proof. It requires a future
+exact individual target, overdue expired/closed-unpaid Session, fresh independent
+provider/financial/manual-paid/waiver and clinical grants, complete producer/
+restore admission and authenticated v2 played/accepted financial consent. The
+producer and validator share identical readback serialization; its four-clip
+legacy golden digest isba02658b58fb6f561b59b3ad7796edd4cf00c60d1b6d5a61dffb0299d0de1664.
+Current approved consequence/fee versions, time zone and clinic-chosen cancellation
+reason are bound; changed consent bytes, reason, target or current grants refuse.
+Clinic authority must honor current automation/cancellation and emergency-stop
+policy. Clinic-specific provisioning remains an acceptance requirement; no
+permissive production grant or automatic activation is supplied.
+
+An opaque SQL exclusion and acknowledged native possible-clinical-expiry review
+precede one cancellation. The existing individual writer still requires its own
+fresh native cancelled inspection after204; creation's fast acknowledgement
+contract is not borrowed. Final writer preparation rechecks source, money,
+clinical approval, target and exact still-open native review after budget waits.
+Native closed history fences replay after missing/restored local claims. Later
+money/permission loss cannot erase an inspected cancellation. Received money
+remains received and needs clinic review; no refund/restoration follows. Class/
+case/pass clinical expiry and separately approved financial resend remain open.
+
+Qualification and corrected failure history:
+
+- Initial1792230412920 had51 existing adapter/financial-preparation passes; the
+  new file could not load a Node strip-only parameter property. That declaration
+  was corrected.1792230499225 then had2/25:new fixtures signed v2 consent with
+  the v1 domain and correctly failed native verification. Fixing the fixture's
+  signature version led to25/25 in1792230554865 at09:49:18.752062UTC.
+- Expanded1792230722959 had51/57:new closure witness used recalled_at instead
+  of native recalled, and five new consumer starts omitted their required lifetime
+  signal. Corrections passed42/42 in1792230788834. Adding reason-change refusal
+  passed43/43 in1792231258910 at10:01:08.357157UTC, peak153,206,784B/512MiB/
+  CPU100/Swap0/events0. Prior51 native writer/private preparation controls and15
+  existing consumer controls retain their separate passing evidence.
+- First full TypeScript1792230830258 failed three strict type issues (accepted
+  record narrowing across a callback, readonly target union compatibility and an
+  exact-optional fixture field). Corrected8d4 full TypeScript/build1792231259013
+  passed at10:05:02.321806UTC, peak1,468,076,032B/2GiB;494 artifacts pinned.
+- First compiled SQL1792231618768 finished13/15 at10:08:11.049727UTC. All nine
+  existing and four new cases passed; positive and concurrent cancellation counters
+  failed because the synthetic RPC reconstructed HTTP204 with an empty-string
+  body. Node correctly rejects that body. The fixture now uses null for204/205/304;
+  production cancellation/inspection was not weakened.
+- After rebasing onto qualified clock508, current4521dac full TypeScript/serving
+  build1792232825054 passed; current494 artifacts pinned. Corrected actual compiled
+  SQL1792233130891 naturally DONE0 at10:33:29.624925UTC:15/15, including six
+  clinical and nine existing financial cases. Actual SQL exclusion is checked
+  before native PATCH; SIGKILL/cold closed-review replay, independent concurrent
+  consumers, payment-winning preparation, separate TLS hosted receipt, real backup/
+  restore and private-data scans pass. Node291,143,680B/1GiB and Docker142,049,280B/
+  512MiB,CPU100% each/Swap0/events0; source/494 artifacts unchanged, own cleanup,
+  paired wait6200 reaped. No private payload/retry queue/receipt is added to SQL.
+
+The older frozen c562 complete graph is still running and red with seven observed
+failures. Six clock failures have passing signed witnesses on508; E376 compiled
+last-page resend still needs full-context diagnosis despite one isolated pass.
+Current clinical full-graph/cloud and actual clinic/provider/acoustic/deployment
+acceptance remain open. All thirteen gaps continue, including remaining gap11,
+gaps12/13 and earlier acceptance limits. No live cancellation, payment/email,
+refund, restoration, merge, deployment or Aeva deletion is authorized here.
