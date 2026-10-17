@@ -5,13 +5,16 @@ import type { FinancialConsumerConfig, FinancialConsumerCycle } from "../../src/
 import type { ClinikoFinancialIntent } from "../../src/cliniko/financial-review-intent.ts";
 import type { CheckoutCreationReceipt } from "../../src/standalone/cliniko-stripe-checkout.ts";
 import type { SmtpMailConfig } from "../../src/standalone/smtp-text-mail-transport.ts";
-import type { FinancialConsumerProcessSetup } from "./financial-consumer-process.ts";
+import type { FinancialUnlinkedClassExpiryQuery, FinancialUnlinkedClassApproval } from "../../src/standalone/cliniko-financial-unlinked-class-expiry.ts";
+import type { FinancialConsumerClassExpirySetup, FinancialConsumerProcessSetup } from "./financial-consumer-process.ts";
 import { now } from "./financial-retention.ts";
 
 export type FinancialConsumerPeerFixture = Readonly<{ config: FinancialConsumerConfig; intent: ClinikoFinancialIntent;
   dependencies: Readonly<{ native: typeof fetch; stripe: typeof fetch }>; approved: Set<string>; receipts: CheckoutCreationReceipt[] }>;
 export type FinancialConsumerPeerOptions = Readonly<{ now?: string; enableCheckoutExpiry?: boolean; enableClinicalExpiry?: boolean; producerAdmitted?(): boolean;
   allows?(purpose: string, query: unknown): boolean; holdExpiryReply?: boolean; onExpirySubmitted?(): void;
+  classClinicalExpiry?: FinancialConsumerClassExpirySetup;
+  classClinicalApproval?(query: FinancialUnlinkedClassExpiryQuery): FinancialUnlinkedClassApproval | null | Promise<FinancialUnlinkedClassApproval | null>;
   clinicalApproval?(query: FinancialClinicalExpiryQuery): FinancialClinicalApproval | null | Promise<FinancialClinicalApproval | null>;
   holdClinicalReply?: boolean; onClinicalSubmitted?(): void }>;
 /** Actual compiled host with outliving independently authorized fixture providers.
@@ -40,15 +43,16 @@ export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smt
       if (m.kind === "fetch") {
         const request = m.data as { input: string; method: string; body?: string; headers: Record<string, string> };
         const response = await (request.input.startsWith("https://api.stripe.com/") ? f.dependencies.stripe : f.dependencies.native)(request.input,
-          { method: request.method, redirect: "error", headers: request.headers, ...(request.body === undefined ? {} : { body: request.body }) });
+          { method: request.method, redirect: "error", headers: request.headers, signal: AbortSignal.timeout(30_000), ...(request.body === undefined ? {} : { body: request.body }) });
         if (options.holdExpiryReply && request.method === "POST" && request.input.endsWith("/expire")) { options.onExpirySubmitted?.(); return; }
-        if (options.holdClinicalReply && request.method === "PATCH" && /\/individual_appointments\/[1-9][0-9]*\/cancel$/.test(request.input)) { options.onClinicalSubmitted?.(); return; }
+        if (options.holdClinicalReply && request.method === "PATCH" && /\/(?:individual_appointments|attendees)\/[1-9][0-9]*\/cancel$/.test(request.input)) { options.onClinicalSubmitted?.(); return; }
         data = { body: await response.text(), status: response.status };
       } else if (m.kind === "grant") {
         const grant = m.data as { purpose: string; query: { checkoutRef?: string; binding?: { checkoutRef: string } } };
-        data = grant.purpose === "producer" ? (options.producerAdmitted?.() ?? true) : grant.purpose === "providerBinding" || grant.purpose === "messageBinding" || grant.purpose === "clinicalBinding"
+        data = grant.purpose === "producer" ? (options.producerAdmitted?.() ?? true) : grant.purpose === "providerBinding" || grant.purpose === "messageBinding" || grant.purpose === "clinicalBinding" || grant.purpose === "classClinicalBinding"
           ? f.approved.has(grant.query.checkoutRef ?? grant.query.binding?.checkoutRef ?? "") : options.allows?.(grant.purpose, grant.query) ?? true;
       } else if (m.kind === "clinicalApproval") data = await options.clinicalApproval?.(m.data as FinancialClinicalExpiryQuery) ?? null;
+      else if (m.kind === "classClinicalApproval") data = await options.classClinicalApproval?.(m.data as FinancialUnlinkedClassExpiryQuery) ?? null;
       else if (m.kind === "claim") data = await f.config.checkout.cliniko.rateBudget.claim();
       else if (m.kind === "observe429") data = await f.config.checkout.cliniko.rateBudget.observe429(null);
       else if (m.kind === "acknowledged") { const receipt = m.data as CheckoutCreationReceipt; f.receipts.push(receipt); f.approved.add(receipt.checkoutRef); data = true; }
@@ -58,7 +62,7 @@ export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smt
   });
   const { producer, rateBudget: _budget, clock: _nativeClock, ...cliniko } = f.config.checkout.cliniko;
   const { clock: _stripeClock, ...stripe } = f.config.checkout.stripe, { clock: _webhookClock, ...webhook } = f.config.webhook;
-  const start: FinancialConsumerProcessSetup = { kind: "start", now: options.now ?? now, ...(options.enableCheckoutExpiry ? { enableCheckoutExpiry: true } : {}), ...(options.enableClinicalExpiry ? { enableClinicalExpiry: true } : {}), smtp: { ...smtp, ...(smtp.ca ? { ca: Buffer.from(smtp.ca).toString() } : {}) },
+  const start: FinancialConsumerProcessSetup = { kind: "start", now: options.now ?? now, ...(options.enableCheckoutExpiry ? { enableCheckoutExpiry: true } : {}), ...(options.enableClinicalExpiry ? { enableClinicalExpiry: true } : {}), ...(options.classClinicalExpiry ? { classClinicalExpiry: options.classClinicalExpiry } : {}), smtp: { ...smtp, ...(smtp.ca ? { ca: Buffer.from(smtp.ca).toString() } : {}) },
     config: { ...f.config, checkout: { ...f.config.checkout, cliniko: { ...cliniko,
       producer: { keyRef: producer.keyRef, pem: producer.publicKey.export({ type: "spki", format: "pem" }).toString() } }, stripe }, webhook } };
   child.send(start);

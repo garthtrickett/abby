@@ -13,15 +13,19 @@ import { financialBookingObservationPayload, financialBookingObservationMessage,
 import { financialConsentReadback, financialConsentDigest } from "../../src/standalone/financial-consent-readback.ts";
 import { ClinikoFinancialUnlinkedClassExpiryOwner } from "../../src/standalone/cliniko-financial-unlinked-class-expiry.ts";
 import type { FinancialUnlinkedClassExpiryAuthority, FinancialUnlinkedClassApproval } from "../../src/standalone/cliniko-financial-unlinked-class-expiry.ts";
+import type { ClinikoFinancialIntent } from "../../src/cliniko/financial-review-intent.ts";
+import type { FinancialRecordRetentionConfig } from "../../src/cliniko/financial-record-retention.ts";
+import type { FinancialEffectBarrier } from "../../src/standalone/financial-effect-barrier.ts";
 export const classExpiryTerms = "If this exact class deposit remains unpaid and unwaived after the deadline, the clinic may cancel this attendance.";
 export async function unlinkedClassExpiryFixture(options: {
+  intent?: ClinikoFinancialIntent; barrierFor?: (config: FinancialRecordRetentionConfig) => FinancialEffectBarrier;
   legacy?: boolean; requestedCase?: string; deadlineMs?: number; authority?: Partial<FinancialUnlinkedClassExpiryAuthority>;
   retained?(row: Record<string, unknown>): void | Promise<void>;
   read?(path: string, count: number, signal: AbortSignal): void | Promise<void>;
   beforeCancel?(): void | Promise<void>; cancel?(row: Record<string, unknown>): Response | Promise<Response>;
 } = {}) {
-  const i = intentValue(), intent = { ...i, booking: { ...i.booking, kind: "classBook" as const, sessionId: "91", practitionerId: "22", appointmentTypeId: "33" } };
-  const f = await expiryFixture({ checkout: { native: { intent }, bookingObservation: i => {
+  const i = options.intent ?? intentValue(), intent = { ...i, booking: { ...i.booking, kind: "classBook" as const, sessionId: "91", practitionerId: "22", appointmentTypeId: "33" } };
+  const f = await expiryFixture({ checkout: { native: { intent, ...(options.barrierFor ? { barrierFactory: options.barrierFor } : {}) }, bookingObservation: i => {
     const row = { actionRef: uuid(8), financialActionRef: i.actionRef, intentRecallRef: "cliniko:recall:30", intentDigest: financialIntentDigest(i)!,
       bookingActionRef: i.booking.actionRef, targetRef: "cliniko:attendee:91", observedAt: now, producerKeyRef: keyRef,
       financialConsent: { presentationRef: uuid(40), presentationDigest: financialConsentDigest(financialConsentReadback(i, classExpiryTerms, "Australia/Sydney")!),
@@ -81,7 +85,7 @@ export async function unlinkedClassExpiryFixture(options: {
     const make = () => ClinikoFinancialUnlinkedClassExpiryOwner.create(config, authority, f.recordsAuthority, f.barrier, native, f.expiryStripePort);
     const owner = value(make());
     return { ...f, classConfig: config, classAuthority: authority, classNative: native, classPolicy, approval, directory, attendee, attendance,
-      cancellations, filters, makeClass: make, expireClass: (signal = stop()) => owner.expireOnce(f.binding, signal),
+      classPolicyPath: path, classDirectoryPath: directory.accountPath, cancellations, filters, makeClass: make, expireClass: (signal = stop()) => owner.expireOnce(f.binding, signal),
       denyReference: () => { reference = false; }, denyFinancial: () => { financial = false; }, denyProvider: () => { provider = false; },
       denyProducer: () => { admitted = false; }, retire: () => { live = false; }, denyClinical: () => { clinical = null; },
       changeApproval: (change: Partial<FinancialUnlinkedClassApproval>) => { clinical = { ...clinical!, ...change }; },
