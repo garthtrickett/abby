@@ -1,22 +1,19 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sql } from "kysely";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresFinancialEffectBarrier } from "../../src/storage/postgres-financial-effect-barrier.ts";
 import { financialRecordOwnerBinding } from "../../src/cliniko/financial-record-retention.ts";
-import { decodeFinancialResendAttempt } from "../../src/cliniko/financial-resend-attempt.ts";
 import type { FinancialMessagePurpose } from "../../src/cliniko/financial-message-attempt.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { financialResendFixture, value, stop, now } from "./financial-resend-owner.ts";
 import { financialClassResendFixture } from "./financial-class-resend.ts";
 import { intentValue } from "./financial-retention.ts";
-import { financialConsumerPeer } from "./financial-consumer-peer.ts";
 import type { FinancialConsumerPeerOptions } from "./financial-consumer-peer.ts";
-import { withSmtpVerificationServer } from "./smtp-verification-server.ts";
 import { secret } from "./financial-webhook-handoff.ts";
 
 export async function setup(db: ReturnType<typeof connectPostgres>, purpose: FinancialMessagePurpose = "linkDelivery", classRequest?: { patientCaseId?: string }) {
