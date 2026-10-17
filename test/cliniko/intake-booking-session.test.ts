@@ -8,6 +8,31 @@ import { intakeBookingSessionFixture } from "../support/intake-booking-session.t
 import { intakeDraft } from "../support/intake-edge.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
 
+for (const withdrawn of ["permission", "contact", "registrationApproval", "membership", "owner"] as const)
+test(`intake menu routing cannot reuse availability after ${withdrawn} is withdrawn`, async () => {
+  const f = await intakeBookingSessionFixture();
+  try {
+    await f.register(); await f.playPending();
+    const query = { scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: f.config.policyVersion,
+      turnId: "first-private-menu", from: "2026-10-08", to: "2026-10-08", now: f.now, signal: new AbortController().signal };
+    const first = await f.owner.readBookingMenu(query);
+    assert.ok(first.ok && first.value.choices.length > 0);
+    const availabilityReads = f.provider.traffic.filter(row => row.includes("/available_times")).length;
+    assert.ok(availabilityReads > 0);
+    if (withdrawn === "permission") f.setPermitted(false);
+    if (withdrawn === "contact") f.provider.changePatient({ email: "changed@example.test" });
+    if (withdrawn === "registrationApproval") await f.replaceApproval({ enabled: false });
+    if (withdrawn === "membership") await f.replaceAccount({ membershipVersion: "changed" });
+    if (withdrawn === "owner") f.owner.dispose();
+    const second = await f.owner.readBookingMenu({ ...query, turnId: "second-private-menu" });
+    assert.equal(second.ok, false);
+    assert.equal(f.provider.traffic.filter(row => row.includes("/available_times")).length, availabilityReads,
+      "a private routing reference cannot authorize another native availability read");
+    assert.equal(f.provider.bookingPosts, 0);
+    assert.equal(f.provider.recalls.length, 0);
+  } finally { await f.close(); }
+});
+
 for (const phase of ["duringContact", "afterProof"] as const) {
   test(`E2E-364 account correction ${phase} invalidates the new-registration booking proof`, async () => {
     const scope = { tenantId: `intake-revision-${crypto.randomUUID()}`, clinicId: "clinic", locationId: "main" };

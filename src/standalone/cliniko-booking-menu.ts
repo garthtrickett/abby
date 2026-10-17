@@ -5,6 +5,7 @@ import type { BookingMenuRead } from "../core/booking-menu.ts";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import { CallerVerificationSession } from "./caller-verification-session.ts";
+import { IntakeBookingProof } from "./intake-booking-proof.ts";
 import { ClinikoBookingOffers } from "./cliniko-booking-offers.ts";
 import type { BookingChoices } from "./cliniko-booking-offers.ts";
 import { clinicDateAt } from "./clinic-clock.ts";
@@ -41,7 +42,8 @@ export class ClinikoBookingMenu implements BookingMenuHost {
     // This is only private routing metadata. The concrete offers reader
     // revalidates native patient authority before and after reading availability.
     const verification = this.#config.verification;
-    const grant = verification instanceof CallerVerificationSession && verification.constructor === CallerVerificationSession
+    const grant = (verification instanceof CallerVerificationSession && verification.constructor === CallerVerificationSession ||
+      verification instanceof IntakeBookingProof && verification.constructor === IntakeBookingProof)
       ? await verification.ownedGrant("appointments.book", signal) : await verification.verified(signal);
     if (!grant || !this.#matches(query) || signal.aborted || epoch !== this.#epoch) return denied();
     const result = await this.#config.offers.list(query.scope, grant.verificationRef, query.from, query.to, query.now, signal, this.#window);
@@ -64,7 +66,8 @@ export class ClinikoBookingMenu implements BookingMenuHost {
     // The proposal guard validates native authority before it can create SAM
     // confirmation speech; later send/inspection validates it independently.
     const verification = this.#config.verification;
-    const grant = verification instanceof CallerVerificationSession && verification.constructor === CallerVerificationSession
+    const grant = (verification instanceof CallerVerificationSession && verification.constructor === CallerVerificationSession ||
+      verification instanceof IntakeBookingProof && verification.constructor === IntakeBookingProof)
       ? await verification.ownedGrant("appointments.book", signal) : await verification.verified(signal);
     if (!choice || !grant || grant.verificationRef !== menu.verificationRef || !this.#matches(query) || signal.aborted ||
         Date.parse(choice.expiresAt) <= Date.parse(query.now)) return denied();
