@@ -357,7 +357,9 @@ export class TwilioConnectedCall {
     try { privateAtArrival = this.privateInputMode(); }
     catch { this.stopCall(); return this.failSession().then(() => err({ kind: "privateInputUnavailable" })); }
     const received = this.stream.receive(raw);
-    const digitArrival = received.ok && received.value.kind === "dtmf" ? this.privateKeypadInput?.captureDigit?.(received.value.digit, this.pendingPlayback !== undefined) : undefined;
+    let digitArrival: object | undefined;
+    try { digitArrival = received.ok && received.value.kind === "dtmf" ? this.privateKeypadInput?.captureDigit?.(received.value.digit, this.pendingPlayback !== undefined) : undefined; }
+    catch { this.stopCall(); return this.failSession().then(() => err({ kind: "privateInputUnavailable" })); }
     if (!received.ok) this.stopCall();
     if (received.ok && received.value.kind === "stopped") this.stopCall();
     if (received.ok && received.value.kind === "media" && !privateAtArrival) this.call.observePendingCorrection(received.value.frame);

@@ -69,7 +69,7 @@ test("actual VoiceSession playback mark supplies the opaque financial receipt wi
     let done = false; const presenting = f.play().then(r => { done = true; return r; });
     const sent = await Promise.race([dispatched.promise, new Promise<never>((_, reject) => { const timer = setTimeout(() => reject(new Error("Private financial playback was not dispatched")), 5_000); timer.unref(); })]); assert.equal(done, false); assert.ok(sent.text.includes("GBP 50.00"));
     const during = await f.state(); assert.ok(!JSON.stringify(during).includes("financial-recipient")); assert.ok(!JSON.stringify(during).includes("GBP 50.00"));
-    const privateNotice = during.presentations[during.pendingPresentationId!]; assert.ok(privateNotice?.kind === "notice");
+    const privateNotice = Object.values(during.presentations).find(p => p.status === "started"); assert.ok(privateNotice?.kind === "notice");
     assert.equal(privateNotice.approvedText, "");
     resultValue(await voice.acceptPlaybackResult(sent.id, "played", verificationNow)); assert.equal(await presenting, "pending");
     assert.equal(f.pending().readySelection, undefined); await f.accept(); assert.ok(f.pending().readySelection);
