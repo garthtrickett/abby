@@ -33,7 +33,7 @@ export type FinancialBookingPolicy = Readonly<{
 export type FinancialBookingPreparationConfig = Readonly<{
   native: FinancialRecordRetentionConfig; sourceAuthorized: ClinikoFinancialReviewPermission["allows"]; authority: FinancialRecordAuthority; barrier: FinancialEffectBarrier;
   privateKey: KeyObject; policy: FinancialBookingPolicy;
-  presentation: Readonly<{ play(text: string, signal: AbortSignal): Promise<Readonly<{ presentationRef: string; playedAt: string }> | undefined> }>;
+  presentation: Readonly<{ play(text: string, signal: AbortSignal, canPresent: () => boolean): Promise<Readonly<{ presentationRef: string; playedAt: string }> | undefined> }>;
   /** Financial retention after an ACK is owned by the service, not the call. */
   financialSignal: AbortSignal; fetchPort?: typeof fetch;
 }>;
@@ -84,7 +84,7 @@ export class ClinikoFinancialBookingPreparation {
   }
   #current(p: Pending, signal: AbortSignal): boolean {
     const at = this.#now();
-    return this.#pending === p && instant(at) && Date.parse(p.selection.expiresAt) > Date.parse(at) && Date.parse(p.assessment.expiresAt) > Date.parse(at) &&
+    return this.#pending === p && instant(at) && (!p.intent || p.intent.createdAt <= at) && (!p.consent || p.consent.acceptedAt <= at) && Date.parse(p.selection.expiresAt) > Date.parse(at) && Date.parse(p.assessment.expiresAt) > Date.parse(at) &&
       !signal.aborted && !this.#lifetime.signal.aborted && this.#config.policy.currentForSend(p.selection, p.assessment, signal) === true;
   }
   async #permit(p: Pending, signal: AbortSignal): Promise<boolean> {
@@ -154,7 +154,7 @@ export class ClinikoFinancialBookingPreparation {
         p.phase = "playing";
         const deadline = new Intl.DateTimeFormat("en-GB", { timeZone: p.selection.timeZone, dateStyle: "full", timeStyle: "short" }).format(new Date(p.intent.payment.deadline));
         const text = `The clinic requires a post-booking deposit of ${p.intent.payment.currency.toUpperCase()} ${(p.intent.payment.amount / 100).toFixed(2)}, payable by ${deadline} in the clinic time zone. With your permission, the clinic will email a secure Stripe payment link to ${p.intent.recipient.address}. ${p.assessment.approvedTerms} This does not pay now or reserve the time. After this finishes, press 1 to agree to these financial terms and this payment email, or 2 to decline. If you agree, then say continue booking. A separate booking confirmation will follow.`;
-        const receipt = await awaitUntilAbort(this.#config.presentation.play(text, signal), signal);
+        const receipt = await awaitUntilAbort(this.#config.presentation.play(text, signal, () => { try { return this.#current(p, signal); } catch { return false; } }), signal);
         if (!receipt || !instant(receipt.playedAt) || receipt.playedAt < p.intent.createdAt || receipt.playedAt > this.#now() || !validRecallMarker(receipt.presentationRef) || !await this.#permit(p, signal)) { p.phase = "declined"; return "verified"; }
         p.consent = freeze({ presentationRef: receipt.presentationRef, presentationDigest: createHash("sha256").update(text).digest("hex"), playedAt: receipt.playedAt, acceptedAt: receipt.playedAt, acceptanceRef: randomUUID() });
         p.phase = "awaiting"; return "pending";

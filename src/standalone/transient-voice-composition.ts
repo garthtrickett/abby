@@ -184,8 +184,8 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
   const resendInput = representativeInput ? new PrivateResendVoiceInput({ input: representativeInput, owner: () => workflow, signal: lifetime.signal,
     present: (text, signal) => voice?.presentPrivateResend(text, signal, now()) ?? Promise.resolve(false) }) : undefined;
   const privateInput = resendInput ? new PrivateFinancialBookingInput(resendInput, () => workflow) : undefined;
-  const financialPresentation = { play: async (text: string, signal: AbortSignal) => {
-    const receipt = await voice?.presentPrivateFinancialBooking(text, signal, now());
+  const financialPresentation = { play: async (text: string, signal: AbortSignal, canPresent: () => boolean) => {
+    const receipt = await voice?.presentPrivateFinancialBooking(text, signal, now(), canPresent);
     return receipt ? { ...receipt, playedAt: now() } : undefined;
   } };
   const resendPresentation = { play: (text: string, signal: AbortSignal, id?: string) => voice?.presentOwnedPrivateResend(text, signal, now(), id) ?? Promise.resolve(false) };

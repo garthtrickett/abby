@@ -51,7 +51,7 @@ export async function financialBookingFixture(options: { scope?: import("../../s
           recipient: { kind: "email", address: "financial-recipient@example.invalid" }, approvedTerms: "The clinic will review late payment; no automatic refund is promised.", reviewDate: "2026-10-05", expiresAt: selection.expiresAt };
         return options.quote ? options.quote(q) : q;
       }, current: async () => { events.push("financial:permission"); return allowed; }, currentForSend: () => live },
-      presentation: { play: async (text, signal) => { texts.push(text); return options.play ? options.play(text, signal) : { presentationRef: randomUUID(), playedAt: verificationNow }; } } };
+      presentation: { play: async (text, signal, canPresent) => { texts.push(text); if (!canPresent()) return undefined; return options.play ? options.play(text, signal, canPresent) : { presentationRef: randomUUID(), playedAt: verificationNow }; } } };
     if (options.barrierFor) config = { ...config, barrier: options.barrierFor(config.native) };
     return config;
   } });

@@ -55,8 +55,8 @@ test("financial playback runs outside the semantic wire queue and an interrupted
 test("actual VoiceSession playback mark supplies the opaque financial receipt with no fee or recipient in SAM", async () => {
   let voice: VoiceSession | undefined;
   const dispatched = deferred<{ id: string; text: string }>();
-  const f = await financialBookingFixture({ activate: false, play: async (text, signal) => {
-    const receipt = await voice!.presentPrivateFinancialBooking(text, signal, verificationNow);
+  const f = await financialBookingFixture({ activate: false, play: async (text, signal, canPresent) => {
+    const receipt = await voice!.presentPrivateFinancialBooking(text, signal, verificationNow, canPresent);
     return receipt ? { ...receipt, playedAt: verificationNow } : undefined;
   } });
   try {
@@ -74,5 +74,25 @@ test("actual VoiceSession playback mark supplies the opaque financial receipt wi
     resultValue(await voice.acceptPlaybackResult(sent.id, "played", verificationNow)); assert.equal(await presenting, "pending");
     assert.equal(f.pending().readySelection, undefined); await f.accept(); assert.ok(f.pending().readySelection);
     assert.equal(f.posts, 0);
+  } finally { voice?.stopTransientWork(); await f.close(); }
+});
+
+test("financial authority withdrawal closes the actual per-chunk private playback gate", async () => {
+  let voice: VoiceSession | undefined, canSend: (() => boolean) | undefined;
+  const dispatched = deferred<string>();
+  const f = await financialBookingFixture({ activate: false, play: async (text, signal, canPresent) => {
+    const receipt = await voice!.presentPrivateFinancialBooking(text, signal, verificationNow, canPresent);
+    return receipt ? { ...receipt, playedAt: verificationNow } : undefined;
+  } });
+  try {
+    const original = await f.state(); assert.ok(original.policy.greeting);
+    voice = new VoiceSession(f.callId, f.sessionId, f.scope, f.ledger, f.reception,
+      { enqueue: async (id, _text, current) => { canSend = current; dispatched.resolve(id); return "queued"; }, clear: async () => true },
+      async () => ok({ kind: "clarify" }), undefined, () => 0, { greeting: original.policy.greeting });
+    resultValue(await voice.attach(verificationNow)); await select(f);
+    const playing = f.play(), id = await dispatched.promise; assert.ok(canSend); assert.equal(canSend(), true);
+    f.withdrawFinancial(); assert.equal(canSend(), false);
+    resultValue(await voice.acceptPlaybackResult(id, "played", verificationNow)); assert.equal(await playing, "verified");
+    assert.equal(f.pending().readySelection, undefined); assert.equal(f.posts, 0);
   } finally { voice?.stopTransientWork(); await f.close(); }
 });

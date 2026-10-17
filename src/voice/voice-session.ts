@@ -98,6 +98,7 @@ export class VoiceSession {
   private readonly monotonicNow: () => number;
   private readonly assembler: TurnAssembler;
   private readonly transientContent: Map<string, string> | undefined;
+  private readonly privatePresentationGuards = new Map<string, () => boolean>();
   private readonly transientGreeting: ApprovedGreeting | undefined;
   /** Restricts automatic handoff only; verified caller-requested work uses its own approval. */
   private readonly staffWorkUnavailable: true | undefined;
@@ -141,7 +142,7 @@ export class VoiceSession {
     this.pendingIntent?.cancel();
     this.reception.cancelPendingModel(this.scope, this.callId);
     for (const resolve of this.privatePlayback.values()) resolve(false);
-    this.privatePlayback.clear();
+    this.privatePlayback.clear(); this.privatePresentationGuards.clear();
   }
 
   constructor(callId: string, sessionId: string, scope: LocationScope, ledger: LedgerStore, reception: TextReception, playback: PlaybackPort, resolveIntent: IntentResolver, transfer?: TransferPort, monotonicNow: () => number = () => performance.now(), transient?: TransientPresentationConfig) {
@@ -541,9 +542,9 @@ export class VoiceSession {
   async presentPrivateResend(text: string, signal: AbortSignal, now: string): Promise<boolean> {
     return this.presentPrivatePatientPrompt(text, signal, now, "confirmationResend");
   }
-  async presentPrivateFinancialBooking(text: string, signal: AbortSignal, now: string): Promise<Readonly<{ presentationRef: string }> | undefined> {
+  async presentPrivateFinancialBooking(text: string, signal: AbortSignal, now: string, canPresent: () => boolean): Promise<Readonly<{ presentationRef: string }> | undefined> {
     let presentationRef: string | undefined;
-    const played = await this.presentPrivatePatientPrompt(text, signal, now, "financialBooking", id => { presentationRef = id; });
+    const played = await this.presentPrivatePatientPrompt(text, signal, now, "financialBooking", id => { presentationRef = id; }, canPresent);
     return played && presentationRef ? { presentationRef } : undefined;
   }
   async presentPrivateRepresentative(text: string, signal: AbortSignal, now: string, operation: "book" | "cancel" | "reschedule" | "appointments.read"): Promise<boolean> {
@@ -573,11 +574,11 @@ export class VoiceSession {
       return played && !signal.aborted;
     } catch { return false; }
     finally {
-      this.privatePlayback.delete(id); this.transientContent.delete(id);
+      this.privatePlayback.delete(id); this.transientContent.delete(id); this.privatePresentationGuards.delete(id);
       if (!played || signal.aborted) await this.clearPrivateIntakePrompt(id, now);
     }
   }
-  private async presentPrivatePatientPrompt(text: string, signal: AbortSignal, now: string, operation: "intake" | "patientUpdate" | "confirmationResend" | "book" | "cancel" | "reschedule" | "appointments.read" | "financialBooking", observed?: (id: string) => void): Promise<boolean> {
+  private async presentPrivatePatientPrompt(text: string, signal: AbortSignal, now: string, operation: "intake" | "patientUpdate" | "confirmationResend" | "book" | "cancel" | "reschedule" | "appointments.read" | "financialBooking", observed?: (id: string) => void, canPresent?: () => boolean): Promise<boolean> {
     if (!this.transientContent || signal.aborted || !this.canSend() || this.speechOpen || this.activePlayback ||
         typeof text !== "string" || !text.trim() || text.length > 2_000) return false;
     const id = randomUUID();
@@ -588,6 +589,7 @@ export class VoiceSession {
           : await this.runtime.privateRepresentativePrompt(this.callId, id, this.sessionId, operation, now);
     if (!queued.ok || signal.aborted) return false;
     this.transientContent.set(id, text);
+    if (canPresent) this.privatePresentationGuards.set(id, canPresent);
     let resolve!: (played: boolean) => void;
     const receipt = new Promise<boolean>(done => { resolve = done; });
     this.privatePlayback.set(id, resolve);
@@ -599,7 +601,7 @@ export class VoiceSession {
       if (played) observed?.(id);
       return played;
     } finally {
-      this.privatePlayback.delete(id); this.transientContent.delete(id);
+      this.privatePlayback.delete(id); this.transientContent.delete(id); this.privatePresentationGuards.delete(id);
       if (!played) await this.clearPrivateIntakePrompt(id, now);
     }
   }
@@ -644,9 +646,11 @@ export class VoiceSession {
     }
     if (!this.canSend()) return this.closeAfterLeaseLoss(now);
     let send: "queued" | "notSent" | "uncertain";
+    const privateGuard = this.privatePresentationGuards.get(presentationId);
+    const privateCurrent = () => { try { return !privateGuard || privateGuard() === true; } catch { return false; } };
     try { send = await this.playback.enqueue(playbackId, approvedText,
       () => this.activePlayback?.id === playbackId && !this.speechOpen &&
-        generation === this.assembler.currentGeneration() && this.canSend()); }
+        generation === this.assembler.currentGeneration() && this.canSend() && privateCurrent()); }
     catch { send = "uncertain"; }
     if (this.activePlayback?.id !== playbackId) {
       const settled = await this.runtime.read(this.callId);

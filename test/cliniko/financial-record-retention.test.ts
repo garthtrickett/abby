@@ -116,15 +116,24 @@ test("withdrawal during exact observation body processing returns no private con
   assert.deepEqual(await f.retainer.readBookingObservation({ recallRef: "cliniko:recall:31", actionRef: uuid(8), intentRecallRef: "cliniko:recall:30" }, f.intent, stop()), { ok: false, error: { kind: "forbidden" } });
 });
 
-for (const phase of ["role", "claim", "quota", "headers", "body"] as const) test(`${phase} stalls are bounded for the whole financial operation`, async () => {
-  const never = <T>() => new Promise<T>(() => {});
+for (const phase of ["role", "claim", "quota", "headers", "body"] as const) test(`${phase} stalls are bounded for the whole financial operation`, async t => {
+  const realNow = performance.now.bind(performance), began = realNow();
+  t.mock.method(performance, "now", () => 0);
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let entered!: () => void; const reached = new Promise<void>(resolve => { entered = resolve; });
+  const never = <T>() => { entered(); return new Promise<T>(() => {}); };
   const f = fixture({ config: { deadlineMs: 15 }, ...(phase === "role" ? { authority: { allows: async () => never<boolean>() } } : {}),
     ...(phase === "claim" ? { claim: async () => never<{ ok: true; value: { claimed: boolean } }>() } : {}),
     ...(phase === "quota" ? { quota: async () => never<null>() } : {}),
     ...(phase === "headers" ? { response: async () => never<Response>() } : {}),
-    ...(phase === "body" ? { response: async () => new Response(new ReadableStream({ start() {} }), { status: 201 }) } : {}) });
-  const began = performance.now(), result = await f.retainer.retainIntentOnce(f.intent, reviewDate, stop());
-  assert.ok(performance.now() - began < 1_000); assert.deepEqual(result, phase === "headers" || phase === "body"
+    ...(phase === "body" ? { response: async () => { entered(); return new Response(new ReadableStream({ start() {} }), { status: 201 }); } } : {}) });
+  let completed = false;
+  const pending = f.retainer.retainIntentOnce(f.intent, reviewDate, stop()).then(result => { completed = true; return result; });
+  await reached; await settled();
+  assert.equal(f.events.includes("POST"), phase === "headers" || phase === "body");
+  t.mock.timers.tick(14); await settled(); assert.equal(completed, false);
+  t.mock.timers.tick(1); const result = await pending;
+  assert.ok(realNow() - began < 1_000); assert.deepEqual(result, phase === "headers" || phase === "body"
     ? { ok: true, value: { kind: "uncertain" } } : { ok: false, error: { kind: "unavailable" } });
 });
 
