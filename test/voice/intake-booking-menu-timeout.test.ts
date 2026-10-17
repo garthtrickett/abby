@@ -38,6 +38,10 @@ test("registered caller keeps a live session and fixed fresh-options refusal aft
       await play("Show times on October 8.");
       const state = await voice.state(); assert.equal(state.lifecycle, "active");
       assert.match(voice.spoken.at(-1)!, /fresh options/); assert.equal(voice.writeRequests.length, 0); assert.equal(f.provider.patientPosts, 1);
+      const refusal = voice.transitionTrace.find(row => row.interpretation === "bookingMenuFailure");
+      assert.ok(refusal); assert.equal(refusal.result, "ok");
+      assert.ok(Date.parse(String(refusal.at)) >= Date.parse(String(refusal.turnAt)));
+      assert.equal(voice.transitionTrace.some(row => row.result !== "ok"), false);
     } finally {
       held = false; release(); await call?.close(); await f.close();
     }
