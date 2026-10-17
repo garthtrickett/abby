@@ -168,7 +168,9 @@ export class ClinikoFinancialBookingPreparation {
     if (!p || this.#busy || !admission || admission.fence !== p.fence || admission.phase !== p.phase || !this.inputActive) return "pending";
     this.#busy = true; const signal = AbortSignal.any([this.#lifetime.signal, this.#quoteLifetime.signal, AbortSignal.timeout(25_000)]);
     try {
-      if (!await this.#permit(p, signal) || p.assessment.kind !== "required" || !p.intent) return "pending";
+      if (!await this.#permit(p, signal) || p.assessment.kind !== "required" || !p.intent) {
+        delete p.consent; p.phase = "declined"; return "verified";
+      }
       if (digit === "2" || digit === "*") { delete p.consent; p.phase = "declined"; return "verified"; }
       if (p.phase === "unplayed") {
         if (digit !== "1" || !p.readback) return "pending";

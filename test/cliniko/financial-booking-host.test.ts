@@ -94,6 +94,14 @@ test("withdrawn financial authority after acceptance refuses before a native boo
     await consented(f); resultValue(await f.confirm()); f.denyFinancial(); resultValue(await f.drain()); assert.equal(f.posts, 0); assert.equal(f.rows.size, 1);
   } finally { await f.close(); }
 });
+for (const awaiting of [false, true]) test(`withdrawn financial readback authority closes private collection without accepting (awaiting=${awaiting})`, async () => {
+  const f = await financialBookingFixture(); try {
+    await selected(f); if (awaiting) await f.play(); f.denyFinancial();
+    assert.equal(await f.accept(), "verified"); assert.equal(f.pending().inputActive, false);
+    assert.equal(f.pending().readySelection, undefined); assert.equal(f.posts, 0);
+    assert.equal(Object.keys((await f.state()).actions).length, 0);
+  } finally { await f.close(); }
+});
 test("selection corrections invalidate the old financial receipt", async () => {
   const f = await financialBookingFixture(); try {
     const ref = await selected(f); await f.play(); await f.accept(); assert.ok(f.pending().readySelection);
