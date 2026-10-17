@@ -26,7 +26,10 @@ type FailureKind = OutboundRecordFailure["kind"];
 type Row = Record<string, unknown>;
 const object = (v: unknown): Row | undefined => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Row : undefined;
 const self = (v: unknown) => object(object(v)?.links)?.self;
-class Failure extends Error { constructor(readonly kind: FailureKind) { super("Pending outbound context unavailable"); } }
+class Failure extends Error {
+  readonly kind: FailureKind;
+  constructor(kind: FailureKind) { super("Pending outbound context unavailable"); this.kind = kind; }
+}
 function discard(response: Response | undefined): void { try { void response?.body?.cancel().catch(() => {}); } catch { /* Owned body only. */ } }
 type Listed = Readonly<{ id: string; patientId: string; notes: string; recallAt: string; createdAt: string; updatedAt: string }>;
 

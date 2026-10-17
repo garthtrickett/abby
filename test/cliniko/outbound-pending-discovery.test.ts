@@ -78,7 +78,7 @@ for (const repeat of [false,true]) test(`one campaign permits distinct recipient
   else { const found=value(result);assert.equal(found.records.length,2);assert.equal(found.records[0]!.request.campaignRef,found.records[1]!.request.campaignRef); }
 });
 test("decoded private context needs renewed permission before any result is disclosed", async () => {
-  const f=await outboundPendingFixture();f.authority.allowsRecordRead=async q=>q.requestDigest===undefined;
+  const f=await outboundPendingFixture();Object.assign(f.authority,{allowsRecordRead:async (q: import("../../src/cliniko/outbound-recipient-records.ts").OutboundRecordQuery)=>q.requestDigest===undefined});
   assert.deepEqual(await f.scan(),{ok:false,error:{kind:"forbidden"}});assert.equal(f.calls.length,2);
 });
 test("account authority withdrawn during exact native read prevents returning previously loaded context", async () => {
@@ -86,17 +86,17 @@ test("account authority withdrawn during exact native read prevents returning pr
   assert.deepEqual(await f.scan(),{ok:false,error:{kind:"forbidden"}});
 });
 test("physical rate refusal prevents collection GET without acquiring another exclusion", async () => {
-  const f=await outboundPendingFixture();f.f.config.rateBudget.claim=async()=>({kind:"rateLimited"});
+  const f=await outboundPendingFixture();Object.assign(f.f.config.rateBudget,{claim:async()=>({kind:"rateLimited"})});
   assert.deepEqual(await f.scan(),{ok:false,error:{kind:"rateLimited"}});assert.equal(f.calls.length,0);assert.equal(f.f.burned.size,1);
 });
 test("native429 is observed by the shared physical budget and yields no partial result", async () => {
-  const f=await outboundPendingFixture();let observed=0;f.f.config.rateBudget.observe429=async()=>{observed++;return {kind:"rateLimited"};};
+  const f=await outboundPendingFixture();let observed=0;Object.assign(f.f.config.rateBudget,{observe429:async()=>{observed++;return {kind:"rateLimited"};}});
   f.controls.page=()=>new Response(null,{status:429,headers:{"X-RateLimit-Reset":"123"}});
   assert.deepEqual(await f.scan(),{ok:false,error:{kind:"rateLimited"}});assert.equal(observed,1);
 });
 for (const stage of ["grant","headers","body"] as const) test(`whole discovery deadline bounds held ${stage} and consumes no action`, {timeout:3000},async()=>{
   const f=await outboundPendingFixture({deadlineMs:100});let cancelled=0;
-  if(stage==="grant")f.authority.allowsPendingRead=()=>new Promise(()=>{});
+  if(stage==="grant")Object.assign(f.authority,{allowsPendingRead:()=>new Promise(()=>{})});
   if(stage==="headers")f.controls.page=()=>new Promise(()=>{});
   if(stage==="body")f.controls.page=()=>new Response(new ReadableStream({cancel(){cancelled++;}}));
   assert.deepEqual(await f.scan(),{ok:false,error:{kind:"unavailable"}});if(stage==="body")assert.equal(cancelled,1);assert.equal(f.f.burned.size,1);
@@ -106,7 +106,7 @@ test("backwards trusted clock during provider completion refuses pending context
   assert.deepEqual(await f.scan(),{ok:false,error:{kind:"unavailable"}});
 });
 test("configuration and bound permission methods cannot be replaced after discovery creation",async()=>{
-  const f=await outboundPendingFixture();f.denyAccount();const discovery=value(f.make());f.authority.allowsPendingRead=async()=>true;
+  const f=await outboundPendingFixture();f.denyAccount();const discovery=value(f.make());Object.assign(f.authority,{allowsPendingRead:async()=>true});
   assert.deepEqual(await discovery.scanPending(new AbortController().signal),{ok:false,error:{kind:"forbidden"}});assert.equal(f.calls.length,0);
   assert.equal(ClinikoOutboundPendingDiscovery.create({...f.f.config,outboundRecallTypeId:""},f.authority,f.port).ok,false);
 });
