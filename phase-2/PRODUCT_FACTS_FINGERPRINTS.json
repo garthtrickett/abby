@@ -5,7 +5,7 @@
   "sources": {
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
     "docs/adr/0003-class-movement-staff-resolution.md": "683bdd10660afc00309bac21e32ceda976573aa5e29aca4106fb1cddcb71b62f",
-    "phase-2/OUTBOUND_SICK_DAY_CONTRACT.md": "81413ceb6e6c57709e7f071b62de12b2fd071f65de83805420e0451c5b7b2734",
+    "phase-2/OUTBOUND_SICK_DAY_CONTRACT.md": "00006e67dd04f0347f72f2588795ed07e8b17c0dad0bb5625e243899c621e1b9",
     "src/cliniko/appointment-write.ts": "6a74769e8d0010c4299386762d7c9ee5a9d97590602f8e7c9f26c0ab9cb33bb6",
     "src/cliniko/booking-write.ts": "1078018be8fe8348a79f2eb92495d5bfb3bdabafd4413183a0567600d3a10273",
     "src/cliniko/class-attendance-read.ts": "fbf5522d1eff396fed18cceac0c5459ef130095dbc65b4312a6555c6e14026ea",
