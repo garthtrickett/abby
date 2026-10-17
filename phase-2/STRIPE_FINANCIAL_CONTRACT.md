@@ -133,3 +133,35 @@ schema-valid edited record remains untrusted context; parsing cannot establish
 immutable history or permission. Separate authenticated observed-acknowledgement
 and attempt records, discovery, lifecycle, current permission and restore
 admission remain to be implemented and qualified through the host.
+
+## Exact financial-review read adapter
+
+The dedicated reader requires current clinic financial-owner permission for its
+configured location, native credential fingerprint, business, dedicated recall
+type, Stripe account/mode and exact recall/action references. The trusted host
+supplies this permission; record notes cannot establish it. Permission is
+checked before quota admission, after quota admission and after reading the
+record. Every native GET claims the host-supplied physical-account budget; this
+adapter creates no separate budget or additional headroom.
+
+One exact native GET validates record/self/patient/type links, financial intent
+family/action and configured ownership. It returns transient private context
+only, including native workflow flags. Recalled, archived and validly edited
+notes remain context, never received money, immutable history, observed booking
+acknowledgement, location authority or an effect permit. A404/unknown read has no
+creation/retry meaning. There is no list/latest fallback, writer, payment route
+or local private table. Current permission/discovery/observed-acknowledgement
+and attempt handoff through the actual financial host remain to be qualified.
+
+The native [recall contract](https://docs.api.cliniko.com/openapi/recall) supplies
+record links, notes, dates and workflow fields; it permits updates and does not
+supply financial/booking acknowledgement evidence. The1,000-character summary
+limit is Abby’s existing writer contract, not a newly asserted provider limit.
+
+The reader shares a bounded body-owning module with the existing Stripe
+readers/webhook verifier. It snapshots bytes, caps storage, yields for endless
+empty chunks, retires its own reader and bounds dependencies that ignore abort.
+It leaves a pre-locked foreign reader untouched. Native HTTP/body/permission
+errors expose only bounded failure kinds. Constructor configuration projects
+approved ownership fields rather than copying arbitrary private properties.
+Local validation for this adapter is pending; no real provider was accessed.

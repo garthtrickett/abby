@@ -2979,3 +2979,23 @@ caps/default4 concurrency/deadlines and all cases. This can collect the missing
 full-load evidence and qualify the later staff/financial schema cohorts; it is
 not an unchanged blind rerun or a claim that a production fix exists. Ordered
 follow-up still requires the main gate. The whole13-gap scope remains active.
+
+##17October: selected-owner exact financial-review reader
+
+Implement the dedicated Cliniko financial-review reader after the owner’s
+selection and context schema. It requires exact financial-role permission
+before/after the protected read and after any quota wait, and explicitly uses
+the existing physical native-account budget. Strict native/context binding
+never yields an effect permit or financial truth. Native workflow flags and
+unsigned edits stay private context. Missing/malformed/foreign records have no
+automatic retry or replacement meaning. No writer, payment/provider route,
+SQL financial table, real sender or clinical mutation is enabled.
+
+The already-qualified Stripe body reader is moved into a shared provider-neutral
+module for this second consumer. Stripe behavior/signatures remain; both
+adapters retain byte caps, abort/cancellation ownership, buffer snapshots and
+cooperative yield. Retirement also survives a synchronously throwing cancel
+port. Focused interface controls cover exact native bindings, current role
+revocation, shared180 quota, unknown/error responses, hostile bodies and private
+configuration projection; validation is pending. The separate frozen complete
+regression36b5285 continues and is not evidence for this later source.

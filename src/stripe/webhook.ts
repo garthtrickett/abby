@@ -1,8 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
-import { StripeBodyError, stripeBodyBytes } from "./internal/body-bytes.ts";
-import type { StripeBodyStream } from "./internal/body-bytes.ts";
+import { OwnedBodyError, ownedBodyBytes } from "../shared/owned-body-bytes.ts";
+import type { OwnedBodyStream } from "../shared/owned-body-bytes.ts";
 
 const checkoutEvents = ["checkout.session.completed", "checkout.session.expired",
   "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed"] as const;
@@ -45,16 +45,16 @@ export class StripeWebhookVerifier {
   /** Authenticates captured transport bytes, without parsing/re-encoding them.
    * Returns the same reference-only result; no HTTP acknowledgement, financial
    * permission or durable handoff is established by this method. */
-  async verifyStream(body: StripeBodyStream | null, header: string | null, external: AbortSignal):
+  async verifyStream(body: OwnedBodyStream | null, header: string | null, external: AbortSignal):
     Promise<Result<StripeCheckoutNotification | null, StripeWebhookFailure>> {
     if (!(external instanceof AbortSignal) || external.aborted) return err({ kind: "unavailable" });
     const deadline = new AbortController(), timer = setTimeout(() => deadline.abort(), this.#config.bodyDeadlineMs ?? 10_000);
     const signal = AbortSignal.any([external, deadline.signal]);
     try {
-      const bytes = await stripeBodyBytes(body, 262_144, signal);
+      const bytes = await ownedBodyBytes(body, 262_144, signal);
       return signal.aborted ? err({ kind: "unavailable" }) : this.verify(bytes, header);
     } catch (error) {
-      return err({ kind: error instanceof StripeBodyError && error.kind === "malformed" ? "invalidWebhook" : "unavailable" });
+      return err({ kind: error instanceof OwnedBodyError && error.kind === "malformed" ? "invalidWebhook" : "unavailable" });
     } finally { clearTimeout(timer); }
   }
 

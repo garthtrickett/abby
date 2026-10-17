@@ -1,6 +1,6 @@
 import { err, ok } from "../../core/model.ts";
 import type { Result } from "../../core/model.ts";
-import { StripeBodyError, stripeBodyBytes } from "./body-bytes.ts";
+import { OwnedBodyError, ownedBodyBytes } from "../../shared/owned-body-bytes.ts";
 
 export type StripeReadFailureKind = "invalidBinding" | "unavailable" | "forbidden" | "malformed" | "mismatched" | "ambiguous";
 export type StripeReadFailure = Readonly<{ kind: StripeReadFailureKind }>;
@@ -51,13 +51,13 @@ export class StripeApiRead {
       }
       if (!response.body) throw new ReadError("malformed");
       try {
-        const bytes = await stripeBodyBytes(response.body, 1_000_000, signal);
+        const bytes = await ownedBodyBytes(response.body, 1_000_000, signal);
         let value: unknown;
         try { value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); }
         catch { throw new ReadError("malformed"); }
         const object = record(value); if (!object) throw new ReadError("malformed"); return object;
       } catch (error) {
-        throw error instanceof StripeBodyError ? new ReadError(error.kind) : error;
+        throw error instanceof OwnedBodyError ? new ReadError(error.kind) : error;
       }
     };
     try {
