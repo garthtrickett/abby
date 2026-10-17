@@ -7,13 +7,13 @@
 | Execution stage | Current evidence and next action |
 | --- | --- |
 | 1 Aeva preservation | Independently retrieved and hash-checked 113 explicit source/test/map references at the audited revision through GitHub. All four original planning documents were published and independently retrieved at Abby `229a3596696d8ebb9bf263e58457f412898c1327`. Local-only material still requires owner selection and preservation before deletion. |
-| 2 Delivery baseline | Initial integrated baseline is draft457; owned reviewable work is stacked through draft491 and the financial-effect-barrier candidate. None is landed. Frozen clinical36b5285c/draft489 passed the complete local PostgreSQL regression:3225main passes/one existing skip, then6/6ordered. Newer financial adapters have separate focused qualification. Authoritative cloud jobs remain unavailable before execution because of billing/spending limits. |
+| 2 Delivery baseline | Initial integrated baseline is draft457; owned reviewable work is stacked through native discovery494 and the one-shot checkout-owner candidate. None is landed. Frozen clinical36b5285c/draft489 passed the complete local PostgreSQL regression:3225main passes/one existing skip, then6/6ordered. Newer financial adapters have separate focused qualification. Authoritative cloud jobs remain unavailable before execution because of billing/spending limits. |
 | 3 Exact receipt foundation | Implemented and locally qualified in `codex/abby-provider-ack-receipt`, stacked on the published plans and integrated candidate. The full interval is captured, sent and validated. The later individual/class changes consume this exact receipt; post-create observations cannot erase an established creation acknowledgement. Independent review and exact-head CI remain outstanding. |
 | 4 Individual booking | Published in draft [PR #460](https://github.com/garthtrickett/abby/pull/460), `codex/abby-provider-ack-individual`, based on receipt correction `92a16e5`. Final online/roster availability follows preparation; exact acknowledgement survives host/review/worker cancellation. Focused, isolated database/process/compiled-location and complete local `npm test` checks passed. Independent review and cloud qualification remain open; cloud jobs have not started because of billing. |
 | 5 Native class creation | Draft [PR #461](https://github.com/garthtrickett/abby/pull/461) supplies exact attendee acknowledgement and final double capacity ordering for ordinary/approved-pass creation. Focused process-loss/privacy and movement/cancellation preservation evidence is retained below. Later staged caller work composes these creation semantics; acknowledgement of replacement creation alone never completes a move. Current whole-graph and authoritative cloud qualification remain open. |
 | 6 Earlier-gap qualification | Combined clinical36b5285c work1792203076121 passed3225main/0fail/1existing skip plus6/6ordered, with source/runtime hashes unchanged. Earlier7ca seven-failure and ff795012 cancelled-choice failure remain historical evidence. Both instrumented E2E-380 content cases passed this full; no production root-cause fix is inferred. Gaps1–9 retain clinic, mail, recovery/operator, acoustic and public-route acceptance limits. |
 | 7 Class/pass completion | Drafts465–473 and487 include staged caller/SAM/private renewal, separate played consent, bounded native/proposal cost admission, cold staff observation, signed uncertainty-to-staff recovery and same/cross-case date/ordinal/pass journeys. Their current composed cohorts also ran in the passing36b5285c complete clinical graph. Broader operator acceptance, original/replacement recovery obligations and separate financial provisioning remain explicit; no blanket cohort or clinic activation follows. |
-| 8 Payments | Stripe and dedicated Cliniko financial reviews are selected. Drafts475/476/482 qualify signed event/money/receipt reading and discovery;488 supplies private intent context,490 the current-owner reader,491 signed booking-observation capture and492 opaque effect barriers/transfer. Draft493 qualifies once-only intent/observation POST and exact authenticated reload through individual/class native writer cohorts. The subsequent bounded native discovery candidate adds account/record-authorized archived-inclusive window scans and exact signed-citation/source pairing; its qualification is recorded below. Financial host/queue/producer admission, serving fee consent, payable creation, webhook/delivery/receipt/expiry and clinic activation remain unfinished. |
+| 8 Payments | Stripe and dedicated Cliniko financial reviews are selected. Drafts475/476/482 qualify signed event/money/receipt reading and discovery;488 supplies private intent context,490 the current-owner reader,491 signed booking-observation capture and492 opaque effect barriers/transfer. Draft493 qualifies once-only intent/observation POST and exact authenticated reload through individual/class native writer cohorts. Draft494 adds account/record-authorized archived-inclusive discovery and exact signed-citation/source pairing. The subsequent one-shot checkout-owner candidate joins current native context, independent collection/producer admission, opaque exclusion, provider-owned attempt retention and one Stripe Session POST; its qualification is recorded below. Actual serving financial/queue/producer admission, fee consent, webhook/delivery/receipt/expiry and clinic activation remain unfinished. Generic one-shot payable creation now has focused fixture/PG qualification, not actual serving acceptance. |
 | 9 Outbound | Pending gap 12, audit R20/R21 and contact-policy decisions. |
 | 10 Writeback | Pending gap 13, exact permissions/content/storage decisions and audit R08/R22. |
 | 11 Combined qualification | Latest complete clinical graph36b5285c naturally passed work1792203076121 at03:07:14.717255UTC:3225main passes/0fail/1existing skip, then6/6ordered. All1197source/455runtime hashes stayed unchanged. Newer reader/capture/barrier graphs have scoped focused+TypeScript evidence, not a replacement full result. Authoritative cloud, independent review, clinic/mail/native provider, acoustic/public-route, deployment and carrier gates remain distinct. |
@@ -3345,3 +3345,107 @@ serving-owner composition, approved fee/played financial consent and independent
 current producer/restore admission, then one-shot Stripe creation and durable
 webhook/link/receipt/expiry workflows. All13 gaps and external acceptance remain
 active; no real provider/mail, deployment, activation, Aeva removal or merge.
+
+
+## One-shot Stripe checkout-owner qualification
+
+The subsequent `codex/abby-stripe-checkout-owner` candidate adds the trusted
+`ClinikoStripeCheckoutOwner.createOnce` command. Exact active intent and retained
+signed booking context, separate source/history reading, collection authorization
+and producer/restore admission precede possible creation. Stripe account inspection
+and complete patient-filtered native history occur before a local effect claim.
+Known provider attempts, including archived ones, refuse recreation even with
+missing local history. A scan or missing claim still does not prove producer
+quiescence or a restored snapshot's completeness; independent admission remains
+mandatory. Caller clinical yes/signatures do not supply financial permission.
+
+A successful opaque checkout claim precedes a separately consumed attempt UUID
+and exact native attempt retention. Context is reread and permissions rechecked
+before one Stripe POST. The new canonical attempt binds source/proof/target,
+financial/effect IDs, request digest and the full possible provider creation
+range under the fixed expiry. No local patient/Stripe/event references, money,
+recipient, notes, pending state or retry payload are added. Native context remains
+provider-owned. Discovery recognizes the new possible-attempt family without
+promoting it to a creation/payment receipt. Patient-filtered discovery retains
+all physical quota/body/row/page/lifetime limits over its selected interval;
+ordinary account-window scans keep the existing one-hour restriction.
+
+The fixed-amount hosted card request pins2025-06-30.basil, exact account/mode,
+opaque correlation/idempotency and explicit clinic-approved generic label/public
+URLs. It disables automatic tax, adaptive pricing and promotion codes and sends
+no email/native patient/booking reference. Nonexact/lost/dispatched failures are
+uncertain and never replayed. An exact creation acknowledgement remains created
+if later access is withdrawn, while `createdWithheld` discloses no checkout URL.
+Creation is not payment or link delivery. Fixed fee deadlines are not extended
+or clamped to fit provider limits. Existing Stripe readonly money/discovery
+adapters share improved owned-response cleanup for late account headers.
+
+Validation on semanticad04a9c (full source SHA in the tracked job),
+work1792211462184, naturally completed exit0 at04:33:11.172942UTC:
+
+```sh
+npm run db:migrate
+ABBY_LEDGER=postgres node --test --test-concurrency=2 \
+  test/contract/cliniko-stripe-checkout.test.ts \
+  test/contract/stripe-checkout-read.test.ts \
+  test/contract/stripe-checkout-discovery.test.ts \
+  test/cliniko/financial-work-discovery.test.ts \
+  test/cliniko/financial-record-retention.test.ts \
+  test/cliniko/financial-review-read.test.ts \
+  test/cliniko/financial-booking-capture.test.ts \
+  test/cliniko/financial-review-intent.test.ts \
+  test/portability/financial-effect-history.test.ts \
+  test/contract/product-facts.test.ts \
+  test/contract/scenario-manifest.test.ts \
+  test/storage/postgres-financial-effect-barrier.test.ts \
+  test/storage/postgres-financial-record-retention.test.ts \
+  test/storage/postgres-cliniko-stripe-checkout.test.ts
+NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck
+git diff --check
+```
+
+All178 checks passed, zero failures/skips/cancellations, followed by successful
+full TypeScript. The cases cover durable ordering, exact amount/currency/account/
+mode/effect/expiry/URL, denied/withdrawn source/collection/history/producer/current
+roles, duplicate/fresh owners, altered context, claim/attempt response loss,
+known/archive attempts after local history loss, strict boolean claims, body and
+late/foreign-reader ownership, configuration mutation, accepted clock margin and
+the full possible creation range. Existing financial barrier transfer/restore,
+actual native booking writer retention and money-reading cohorts also pass.
+
+New real PostgreSQL cases race two owners and verify one payable submission with
+only opaque local claim columns. A separate child financial-owner process uses
+real PostgreSQL claims and provider-port RPC; the fixture receives its checkout
+POST after native attempt retention, then deliberately SIGKILLs only that child.
+Its actual terminal signal is checked. A fresh owner discovers the retained
+provider attempt and sends no replacement POST. SQL all-column canary scans cover
+native subject/intent/proof, Stripe IDs/URLs, recipients and financial note bodies.
+These are actual process-loss/PG tests with synthetic provider ports, not a live
+Stripe/Cliniko mutation, actual phone/serving fee-consent journey or a global
+producer-restore proof. There is no financial pending payload table or migration.
+
+All1598 tracked input hashes and the shared dependency lock stayed unchanged.
+Node peak1,446,916,096B under2GiB/CPU200%/Swap0 with1536MiB heap; aggregate
+Docker181,473,280B under512MiB/CPU100%/Swap0; all memory events0. The smaller
+DB cap follows prior approximately201MB focused peaks plus headroom. Actual
+wrapper883120 absent, scope inactive, own-label Docker empty, paired wait63990
+reaped. Fresh admission included live peers' remaining growth and1.5GiB reserve.
+Final evidence-only edits affect these two Markdown files.
+
+Earlier evidence is retained:7195d15 unit work1792210984756 passed150 checks;
+7ee52b9 work1792211094735 passed153; d17d977 work1792211381540 passed161.
+The first composed90d98ec work1792211203883 passed175 behavior/PG cases, then
+TypeScript exited2 on one test-worker IPC cast. It ended naturally at04:28:49,
+Node1,474,097,152B/Docker200,466,432B, all events0 and cleanup complete. Real
+field checks replaced that cast. Nested config snapshots, clock-margin history
+and the full provider range were added/qualified rather than rerunning an
+unchanged failure. No tests/assertions or existing deadlines were weakened.
+
+The earlier complete clinical36b5285c result remains a separate graph; it does
+not qualify this later financial stack. Next is the actual serving quote/played
+financial consent and independent owner/admission composition, durable webhook
+handling and readonly full-range reconciliation, link/Stripe-hosted receipt
+handoff and separately authorized expiry, followed by gaps12/13 and combined
+acceptance. No real provider/mail, deployment, activation, Aeva removal or merge
+was performed. All13 gaps remain active; exact-head cloud CI and independent
+review remain required.
