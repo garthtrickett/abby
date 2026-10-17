@@ -46,8 +46,8 @@ const passCancellation = cancellationMode as ClassPassCancellationEffect | undef
 const moveMode = process.env.ABBY_SYNTHETIC_CLASS_PASS_MOVE;
 if (moveMode && (!["full", "transfer"].includes(moveMode) || operation !== "reschedule" || passes || passCancellation)) throw new Error("invalid synthetic pass movement mode");
 const coldRecovery = process.env.ABBY_SYNTHETIC_CLASS_COLD_RECOVERY === "1";
-if (process.env.ABBY_SYNTHETIC_CLASS_COLD_RECOVERY && (!coldRecovery || !staging || operation !== "reschedule" || moveMode))
-  throw new Error("isolated ordinary staged cold recovery required");
+if (process.env.ABBY_SYNTHETIC_CLASS_COLD_RECOVERY && (!coldRecovery || !staging || operation !== "reschedule"))
+  throw new Error("isolated staged class cold recovery required");
 const historyText = process.env.ABBY_SYNTHETIC_CLASS_PASS_HISTORY;
 if (historyText !== undefined && (!moveMode || !["201", "301", "501", "999"].includes(historyText))) throw new Error("invalid synthetic pass history");
 const history = historyText === undefined ? undefined : Number(historyText);

@@ -7,4 +7,4 @@ export type ClassMoveColdContext = Readonly<{ scope: LocationScope; proxy: strin
   source: Readonly<{ practitionerId: string; appointmentTypeId: string }>;
   destination: Readonly<{ practitionerId: string; appointmentTypeId: string }>;
   now: string; request: ClassMoveRecoveryRequest;
-  signedFixture?: Readonly<{ resolutionAllowed: boolean }> }>;
+  signedFixture?: Readonly<{ resolutionAllowed: boolean; passMove?: "full" | "transfer" }> }>;

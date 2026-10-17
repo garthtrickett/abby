@@ -15,8 +15,10 @@ let text = "";
 for await (const chunk of process.stdin) { text += String(chunk); if (text.length > 12000) throw new Error("synthetic context too large"); }
 const input = JSON.parse(text) as Input;
 const signed = input.signedFixture !== undefined;
-if (signed && (!input.signedFixture || Object.keys(input.signedFixture).join(",") !== "resolutionAllowed" ||
-    typeof input.signedFixture.resolutionAllowed !== "boolean")) throw new Error("invalid signed cold fixture binding");
+if (signed && (!input.signedFixture || Object.keys(input.signedFixture).sort().join(",") !==
+    (input.signedFixture.passMove === undefined ? "resolutionAllowed" : "passMove,resolutionAllowed") ||
+    typeof input.signedFixture.resolutionAllowed !== "boolean" || input.signedFixture.passMove !== undefined &&
+    !["full", "transfer"].includes(input.signedFixture.passMove))) throw new Error("invalid signed cold fixture binding");
 if (!target.pathname.startsWith(signed ? "/abby_test_voice_" : "/abby_recovery_")) throw new Error("isolated cold recovery database required");
 if (Object.keys(input).sort().join(",") !== ["scope", "proxy", "sourcePath", "destinationPath", "movePath", "accountPath", "actorRef", "policyVersion",
   "businessId", "recallTypeId", "timeZone", "source", "destination", "now", "request", ...(signed ? ["signedFixture"] : [])].sort().join(",") ||
@@ -49,12 +51,18 @@ try {
   }, permitsReviewedResolution: async () => signed ? input.signedFixture!.resolutionAllowed : true };
   const pass = await movement.value.current(input.scope);
   if (!pass.ok) throw new Error("cold recovery movement unavailable");
+  if (signed && (input.signedFixture!.passMove !== undefined) !== (pass.value.membership === "nativeCaseSessions"))
+    throw new Error("signed fixture pass authority mismatched");
+  // Independent synthetic host configuration, not a case/entitlement copied
+  // from the caller's private review or continuation. Native inspection still
+  // matches the complete quoted binding and the current case observations.
+  const destinationCaseId = input.signedFixture?.passMove === "transfer" ? "811222333444555667" : "811222333444555666";
   const recovery = new ClinikoClassMoveRecovery({ scope: input.scope,
     cliniko: { apiKey, contactEmail: signed ? "test@example.test" : "dev@example.test", businessId: input.businessId, rateBudget: nativeBudget },
     sourcePolicy: a.value, destinationPolicy: b.value, movePolicy: movement.value, directory, authority, clock, fetchPort,
     ...(pass.value.membership === "nativeCaseSessions" ? { classPassMoveAuthority: {
       select: async () => ({ source: { patientCaseId: "811222333444555666", entitlementRef: "private-move-source-entitlement" },
-        destination: { patientCaseId: "811222333444555666", entitlementRef: "private-move-destination-entitlement" } }),
+        destination: { patientCaseId: destinationCaseId, entitlementRef: "private-move-destination-entitlement" } }),
       allows: async query => query.patientId === "482746192837465" &&
         query.stagingContractVersion === pass.value.passMovement?.version &&
         ["inspection", "compensation"].includes(query.phase),

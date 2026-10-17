@@ -14,8 +14,8 @@ import { verificationCanaries } from "../support/caller-verification.ts";
 import type { ClassMoveColdContext } from "../support/class-move-cold-context.ts";
 import type { ClassMoveRecoveryStatus } from "../../src/standalone/cliniko-class-move-recovery.ts";
 
-async function cold(context: ClassMoveColdContext, connectionString: string, allowed: boolean) {
-  const input = { ...context, signedFixture: { resolutionAllowed: allowed } };
+async function cold(context: ClassMoveColdContext, connectionString: string, allowed: boolean, passMove?: "transfer") {
+  const input = { ...context, signedFixture: { resolutionAllowed: allowed, ...(passMove ? { passMove } : {}) } };
   const worker = fork(new URL("../support/class-move-recovery-worker.ts", import.meta.url), [], { execArgv: [],
     stdio: ["pipe", "pipe", "pipe", "ipc"], env: { ...process.env, DATABASE_URL: connectionString }, signal: AbortSignal.timeout(30000) });
   const closed = once(worker, "close"); void closed.catch(() => {});
@@ -29,18 +29,35 @@ async function cold(context: ClassMoveColdContext, connectionString: string, all
   } finally { if (worker.exitCode === null && worker.signalCode === null) { worker.kill("SIGKILL"); await closed; } }
 }
 
-test("E2E-419 signed uncertain staged movement stays ended while cold staff separately inspects native truth", {
-  // Two caller quota windows, one fresh cold-account window and60s serving/scans.
-  skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 240000,
+for (const pass of [false, true]) test(pass
+  ? "E2E-419 signed uncertain cross-case pass association stays ended during independent cold staff inspection"
+  : "E2E-419 signed uncertain staged movement stays ended while cold staff separately inspects native truth", {
+  // Preserve ordinary240s. The new pass cohort allows at most five caller
+  // windows, two independent staff windows and60s serving/scans; never raise180.
+  skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: pass ? 480000 : 240000,
 }, async () => {
   await withClinicalRunner("reschedule", async call => {
-    await prepareSignedStagedReplacement(call, { waits: 2 });
+    await prepareSignedStagedReplacement(call, pass ? { pass: "transfer", different: true, waits: 5 } : { waits: 2 });
     await prepareSignedStagedPhase(call, "original"); await call.mark();
-    call.child.send({ kind: "loseOriginal" });
-    await voiceUntil(() => call.messages.some(row => row.kind === "coldOriginalLossArmed"), "synthetic cancellation response loss armed");
+    if (pass) {
+      await call.say("Yes"); await call.mark();
+      assert.match(call.spoken.at(-1)!, /overall class move is not confirmed/);
+      await prepareSignedStagedPhase(call, "association"); await call.mark();
+      const changed = call.messages.filter(row => row.kind === "movePassChanged").length;
+      call.child.send({ kind: "loseAssociation" });
+      await voiceUntil(() => call.messages.filter(row => row.kind === "movePassChanged").length > changed, "synthetic association response loss armed");
+    } else {
+      call.child.send({ kind: "loseOriginal" });
+      await voiceUntil(() => call.messages.some(row => row.kind === "coldOriginalLossArmed"), "synthetic cancellation response loss armed");
+    }
     await call.say("Yes");
     const nativeWrites = () => call.mutations.filter(row => row.path?.startsWith("/v1/attendees"));
-    assert.deepEqual(nativeWrites().map(row => [row.method, row.path]), [["POST", "/v1/attendees"], ["PATCH", "/v1/attendees/101/cancel"]]);
+    assert.deepEqual(nativeWrites().map(row => [row.method, row.path]), pass ?
+      [["POST", "/v1/attendees"], ["PATCH", "/v1/attendees/101/cancel"], ["PATCH", "/v1/attendees/401"]] :
+      [["POST", "/v1/attendees"], ["PATCH", "/v1/attendees/101/cancel"]]);
+    if (pass) assert.equal(nativeWrites().at(-1)!.body?.patient_case_id, "811222333444555667");
+    assert.ok(call.spoken.filter(text => /wait about \d+ seconds/.test(text)).length <= (pass ? 5 : 2),
+      "the qualification cannot hide additional caller quota windows");
     assert.match(call.spoken.at(-1)!, /not confirmed|can't confirm|couldn't confirm|unconfirmed/i);
     assert.notEqual(call.spoken.at(-1), "Your class move is confirmed.");
     await call.mark(); await call.endCallerForColdReview();
@@ -51,23 +68,29 @@ test("E2E-419 signed uncertain staged movement stays ended while cold staff sepa
     const payload = String(reviewRow.body?.notes).split("\n").find(line => line.startsWith("z1:")); assert.ok(payload);
     const privateValues = [...call.messages.filter(row => row.kind === "verificationEmail").flatMap(row => [row.code!, row.email!]),
       ...verificationCanaries.slice(0, 2), envelope.request.operation.attendanceActionId, "staff-class-review:",
+      ...(pass ? ["811222333444555666", "811222333444555667", "private-move-source-entitlement",
+        "private-move-destination-entitlement", "synthetic-private-move-pass-note"] : []),
       ...Array.from({ length: Math.ceil(payload.length / 200) }, (_, i) => payload.slice(Math.min(i * 200, payload.length - 4), (i + 1) * 200))];
     // Release only actual database time. No media, caller renewal or budget-row edits.
-    await new Promise<void>(resolve => setTimeout(resolve, 60500));
-    const clocks = call.messages.filter(row => row.kind === "clockAdvanced").length;
-    for (const milliseconds of [15000, 15000, 15000, 15000, 500]) call.child.send({ kind: "advanceClock", milliseconds });
-    await voiceUntil(() => call.messages.filter(row => row.kind === "clockAdvanced").length >= clocks + 5, "independent staff observation clock");
+    const staffWindow = async () => {
+      await new Promise<void>(resolve => setTimeout(resolve, 60500));
+      const clocks = call.messages.filter(row => row.kind === "clockAdvanced").length;
+      for (const milliseconds of [15000, 15000, 15000, 15000, 500]) call.child.send({ kind: "advanceClock", milliseconds });
+      await voiceUntil(() => call.messages.filter(row => row.kind === "clockAdvanced").length >= clocks + 5, "independent staff observation clock");
+    };
+    await staffWindow();
     const context = await call.coldReviewContext(), serialized = JSON.stringify(context);
     for (const value of [...privateValues, envelope.request.patientId, "+61400111222"]) assert.equal(serialized.includes(value), false);
     const auditBefore = await call.coldProviderAudit();
-    const denied = await cold(context, call.connectionString, false), auditDenied = await call.coldProviderAudit();
+    const denied = await cold(context, call.connectionString, false, pass ? "transfer" : undefined), auditDenied = await call.coldProviderAudit();
     assert.ok(auditDenied.reads > auditBefore.reads, "denied staff still resolves the selected provider review");
     assert.equal(auditDenied.protectedReads, auditBefore.protectedReads, "investigation permission is separate from reading the selected admin review");
-    const pending = await cold(context, call.connectionString, true);
+    const pending = await cold(context, call.connectionString, true, pass ? "transfer" : undefined);
     assert.equal(pending.status?.kind, "needsReview"); assert.equal(pending.status?.reviewAcknowledged, false);
-    assert.deepEqual(pending.status?.progress, { original: "inspectedCancelled", replacement: "inspectedActive", caseAssociation: "notApplicable" });
+    assert.deepEqual(pending.status?.progress, { original: "inspectedCancelled", replacement: "inspectedActive", caseAssociation: pass ? "inspectedLinked" : "notApplicable" });
     await call.acknowledgeColdReview(); // Separate synthetic-provider staff action; never a reader mutation.
-    const acknowledged = await cold(context, call.connectionString, true), auditAfter = await call.coldProviderAudit();
+    if (pass) await staffWindow(); // A new full pass inspection gets its own physical180-request window.
+    const acknowledged = await cold(pass ? await call.coldReviewContext() : context, call.connectionString, true, pass ? "transfer" : undefined), auditAfter = await call.coldProviderAudit();
     assert.equal(acknowledged.status?.kind, "reviewedMoved"); assert.equal(acknowledged.status?.reviewAcknowledged, true);
     assert.equal(auditAfter.nonGet, 0); assert.ok(auditAfter.protectedReads > auditDenied.protectedReads);
     assert.equal(call.mutations.length, mutationCount); assert.deepEqual(call.spoken, spoken);
@@ -86,5 +109,6 @@ test("E2E-419 signed uncertain staged movement stays ended while cold staff sepa
       assert.deepEqual(await scanDisposableBackupCanaries(call.connectionString, values.map((value, i) => ({ label: `cold_${i}`, value }))), []);
       for (const value of values) for (const result of [denied, pending, acknowledged]) assert.equal((result.output + result.error).includes(value), false);
     }
-  }, { classes: true, classQuotaStaging: true, classColdRecovery: true });
+  }, { classes: true, classQuotaStaging: true, classColdRecovery: true,
+    ...(pass ? { classPassMovement: "transfer", differentClass: true, multipleClasses: true } : {}) });
 });

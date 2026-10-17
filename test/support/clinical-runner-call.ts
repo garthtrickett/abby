@@ -54,7 +54,7 @@ export async function withClinicalRunner(operation: ClinicalRunnerOperation,
   }
 }
 async function start(operation: ClinicalRunnerOperation, connectionString: string, db: ReturnType<typeof connectPostgres>, options: { classColdRecovery?: boolean; classQuotaStaging?: boolean; classPassHistory?: 201 | 301 | 501 | 999; classRosterHistory?: 99 | 100 | 101 | 201 | 500; classPassMovement?: "full" | "transfer"; classPasses?: boolean; classPassCancellation?: "releaseOne" | "unchanged" | "consumeOne"; recurringBusy?: "approved" | "legacy"; recurringOpening?: "approved" | "legacy"; classDateCorrection?: boolean; differentClass?: boolean; multipleClasses?: boolean; classes?: boolean; taskSequence?: boolean; resendContent?: "telehealth" | "cancelled"; intakeFields?: boolean; services?: boolean; smtp?: boolean; locations?: boolean; longSearch?: boolean; offlineCalendar?: boolean; missingBusy?: boolean; practitionerMove?: "changedTime" | "sameTime" | "directory" }) {
-  if (options.classColdRecovery && (!options.classQuotaStaging || !options.classes || options.classPassMovement)) throw new Error("ordinary staged cold recovery fixture required");
+  if (options.classColdRecovery && (!options.classQuotaStaging || !options.classes)) throw new Error("staged class cold recovery fixture required");
   if (options.classQuotaStaging && (!options.classes || operation !== "reschedule")) throw new Error("staged class runner requires class rescheduling");
   const accountSid = `AC${"1".repeat(32)}`, authToken = "synthetic-clinical-runner-token", number = "+6125550199", caller = "+61400111222";
   const webhookUrl = "https://clinical-runner.example.test/twilio/inbound", streamUrl = "wss://clinical-runner.example.test/twilio/media/";
