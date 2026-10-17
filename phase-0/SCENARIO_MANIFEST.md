@@ -989,3 +989,7 @@ for exact pins, timing, artifact-inventory reconciliation and measured caps.
 ## Independently approved financial resend component qualification
 
 The419 stable IDs and version1.242 stay unchanged. Optional financial resend processing passes strict TypeScript/build,40 affected controls and47 actual compiled SQL/TLS/process/backup/privacy cases after568 broader financial controls. These are component and compiled financial-host witnesses, not a new full caller journey or promoted full-call scenario. Missing provisioning stays inactive; notes or old delivery grants cannot authorize a resend. Frozen386525b full regression is green but excludes these later changes; current whole-graph, class-specific resend journey, authoritative cloud and real clinic/provider/sender acceptance remain open. See the current execution ledger for exact sources and historical failed type attempts.
+
+## Class-source resend component extension
+
+Version1.242 retains419 stable IDs and planned full-call status. Test-only977a43d passes38 component controls, strict TypeScript/serving build and16 compiled SQL/TLS cases (six class, ten preserved individual). Original signed class sources with/without a requested case support independently approved link/receipt resends without clinical or financial mutation. Wrong attendee/edited occurrence/case or missing current financial approval refuses. All504 serving artifacts match515; the parent full regression remains running. No complete caller class-resend journey or real contact/deployment acceptance is claimed.
