@@ -41,7 +41,7 @@ function peerOptions(f: Awaited<ReturnType<typeof setup>>): FinancialConsumerPee
     directoryPath: f.classDirectoryPath, binding: f.classPolicy.binding(), maximumAuthorityRequests: 0 }, caseClassClinicalApproval: q => f.caseAuthority.clinicalApproval(q, stop()) };
 }
 async function privacy(f: Awaited<ReturnType<typeof setup>>) {
-  const canaries = [f.intent.recipient.address, "cs_test_owner", "cliniko:recall:30", "cliniko:attendee:91", "Abby financial expiry attempt v1",
+  const canaries = ["private-class-case-name", "private-class-case-notes", "case-entitlement-71", "Cancelling releases one counted session.", f.intent.recipient.address, "cs_test_owner", "cliniko:recall:30", "cliniko:attendee:91", "Abby financial expiry attempt v1",
     "Abby financial booking observation v3", "Abby financial intent v1", "If this exact class deposit", "https://pay.stripe.com/receipts/"];
   assert.deepEqual(await scanPatientDataCanaries(db, canaries.map((value, index) => ({ label: `clinical_expiry_${index}`, value }))), { ok: true, value: [] });
   const dump = execFileSync("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 8_000_000 }).toString();

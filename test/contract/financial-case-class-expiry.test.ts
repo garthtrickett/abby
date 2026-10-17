@@ -83,3 +83,29 @@ test("late received money and unverified case effect preserve separately inspect
   try { assert.deepEqual(value(await f.expireCase()), { kind: "cancelled", money: "received", reviewRequired: true }); assert.equal(f.posts.length, 0); }
   finally { await f.close(); }
 });
+
+for (const mode of ["abort", "deadline"] as const)
+  test(`a held case source respects ${mode} before consuming clinical permission`, { timeout: 4_000 }, async t => {
+    let began!: () => void, release!: () => void;
+    const reading = new Promise<void>(resolve => { began = resolve; }), held = new Promise<void>(resolve => { release = resolve; });
+    const controller = new AbortController();
+    const f = await caseClassExpiryFixture({ deadlineMs: 1_500, async caseRead() { began(); await held; } });
+    const timer = setTimeout(release, 3_000); t.after(() => clearTimeout(timer)); t.after(release); t.after(f.close);
+    const started = performance.now(), running = f.expireCase(controller.signal);
+    await reading; if (mode === "abort") controller.abort();
+    const result = await running;
+    assert.ok(performance.now() - started < 2_500); assert.equal(result.ok, false);
+    assert.equal(f.burned.has(f.intent.effects.clinicalExpiry), false); assert.equal(f.cancellations.length, 0);
+    release();
+  });
+test("an overdue held case-effect inspection preserves its separately confirmed native cancellation", { timeout: 4_000 }, async t => {
+  let release!: () => void, blocked = false;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  let f!: Awaited<ReturnType<typeof caseClassExpiryFixture>>;
+  f = await caseClassExpiryFixture({ deadlineMs: 1_500, async caseRead() { if (f.cancellations.length) { blocked = true; await held; } } });
+  const timer = setTimeout(release, 3_000); t.after(() => clearTimeout(timer)); t.after(release); t.after(f.close);
+  const started = performance.now(), result = await f.expireCase();
+  assert.ok(performance.now() - started < 2_500); assert.equal(blocked, true);
+  assert.deepEqual(value(result), { kind: "cancelled", money: "unknown", reviewRequired: true });
+  assert.equal(f.cancellations.length, 1); release();
+});
