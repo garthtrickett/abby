@@ -91,7 +91,7 @@ test("changed native target during final preparation refuses clinical expiry wit
 test("closing the possible native review during the writer's target preparation prevents a late clinical PATCH", async () => {
   let f!: Awaited<ReturnType<typeof clinicalExpiryFixture>>;
   f = await clinicalExpiryFixture({ read: (_row, count) => {
-    if (count === 3) { const record = [...f.rows.values()].find(r => decodeFinancialExpiryAttempt(r.notes).ok)!; record.recalled_at = f.config.cliniko.clock!(); }
+    if (count === 3) { const record = [...f.rows.values()].find(r => decodeFinancialExpiryAttempt(r.notes).ok)!; record.recalled = true; }
   } });
   assert.equal((await f.expireClinical()).ok, false); assert.equal(f.cancellations.length, 0);
 });

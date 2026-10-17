@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { clinicalExpiryFixture, value } from "../support/financial-clinical-expiry.ts";
+import { clinicalExpiryFixture, value, stop } from "../support/financial-clinical-expiry.ts";
 import { ClinikoFinancialConsumer } from "../../src/standalone/cliniko-financial-consumer.ts";
 import type { FinancialConsumerAuthorities, FinancialConsumerCycle } from "../../src/standalone/cliniko-financial-consumer.ts";
 import { secret } from "../support/financial-webhook-handoff.ts";
@@ -28,18 +28,18 @@ async function composed(options: Parameters<typeof clinicalExpiryFixture>[0] = {
   return { ...f, consumer, cycle };
 }
 test("provisioned periodic clinical expiry cancels one exact closed-unpaid individual without another Checkout or message", async t => {
-  const f = await composed(); t.after(() => f.consumer.close()); const pending = f.cycle(); value(f.consumer.start());
+  const f = await composed(); t.after(() => f.consumer.close()); const pending = f.cycle(); value(f.consumer.start(stop()));
   const first = await pending; assert.equal(first.clinicalExpiryCancelled, 1); assert.equal(first.checkoutExpiryAcknowledged, 0);
   assert.equal(f.cancellations.length, 1); assert.equal(f.posts.length, 0); assert.equal(f.messages.length, 0);
   assert.equal((await f.cycle()).reviewRequired, 1); assert.equal(f.cancellations.length, 1);
 });
 test("Checkout expiry provisioning alone cannot supply clinical expiry permission", async t => {
-  const f = await composed({}, false); t.after(() => f.consumer.close()); const pending = f.cycle(); value(f.consumer.start());
+  const f = await composed({}, false); t.after(() => f.consumer.close()); const pending = f.cycle(); value(f.consumer.start(stop()));
   const result = await pending; assert.equal(result.checkoutClosedUnpaid, 1); assert.equal(result.clinicalExpiryCancelled, 0); assert.equal(f.cancellations.length, 0);
 });
 for (const gate of ["financialAuthorized", "producerAdmitted", "clinicalApproval"] as const)
   test(`actual clinical consumer refuses separate current ${gate}`, async t => {
     const f = await composed({ authority: gate === "clinicalApproval" ? { clinicalApproval: async () => null } : { [gate]: async () => false } });
-    t.after(() => f.consumer.close()); const pending = f.cycle(); value(f.consumer.start());
+    t.after(() => f.consumer.close()); const pending = f.cycle(); value(f.consumer.start(stop()));
     const result = await pending; assert.equal(result.reviewRequired, 1); assert.equal(result.clinicalExpiryCancelled, 0); assert.equal(f.cancellations.length, 0);
   });
