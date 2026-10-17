@@ -48,8 +48,17 @@ export type CheckoutOwnerAuthority = Readonly<{
 export type CheckoutOwnerFailure = Readonly<{ kind: "invalidConfig" | "invalidQuery" | "forbidden" | "unavailable" | "alreadyClaimed" | "mismatched" | "attemptUncertain" }>;
 /** Private outcome only. Created is not received money or delivered email.
  * Neither uncertain nor any refusal grants permission to submit again. */
+/** Private actual POST acknowledgement, never reconstructed from editable
+ * Session metadata or a later list/read. It is evidence for the independently
+ * authorized financial owner, not a collection/delivery/clinical grant. */
+export type CheckoutCreationReceipt = Readonly<{
+  intentRecallRef: string; financialActionRef: string; observationRecallRef: string; observationActionRef: string;
+  attemptRecallRef: string; attemptActionRef: string; targetRef: string; intentDigest: string;
+  checkoutRef: string; accountRef: string; livemode: boolean; amount: number; currency: string;
+  created: number; expiresAt: string;
+}>;
 export type CheckoutOwnerResult = Readonly<{ attemptRecallRef: string }> & (
-  Readonly<{ kind: "created"; checkoutRef: string; url: string; expiresAt: string }> | Readonly<{ kind: "createdWithheld" }> | Readonly<{ kind: "uncertain" }>
+  Readonly<{ kind: "created"; checkoutRef: string; url: string; expiresAt: string; receipt: CheckoutCreationReceipt }> | Readonly<{ kind: "createdWithheld" }> | Readonly<{ kind: "uncertain" }>
 );
 class CheckoutFailure extends Error {
   readonly kind: CheckoutOwnerFailure["kind"];
@@ -220,7 +229,12 @@ export class ClinikoStripeCheckoutOwner {
         // receipt. Current read permission still gates disclosure of its URL.
         accepted = true;
         await permit();
-        return ok({ kind: "created", attemptRecallRef, checkoutRef: String(session.id), url: url.toString(), expiresAt: intent.payment.deadline });
+        const receipt: CheckoutCreationReceipt = Object.freeze({ intentRecallRef: wanted.intentRecallRef, financialActionRef: intent.actionRef,
+          observationRecallRef: wanted.observationRecallRef, observationActionRef: wanted.observationActionRef,
+          attemptRecallRef, attemptActionRef: attempt.actionRef, targetRef: query.targetRef, intentDigest: attempt.intentDigest,
+          checkoutRef: String(session.id), accountRef: intent.stripe.accountRef, livemode: intent.stripe.livemode,
+          amount: intent.payment.amount, currency: intent.payment.currency, created: Number(session.created), expiresAt: intent.payment.deadline });
+        return ok({ kind: "created", attemptRecallRef, checkoutRef: receipt.checkoutRef, url: url.toString(), expiresAt: intent.payment.deadline, receipt });
       } finally { clearTimeout(postTimer); postDeadline.abort(); }
     } catch (error) {
       return accepted && attemptRecallRef ? ok({ kind: "createdWithheld", attemptRecallRef }) : dispatched && attemptRecallRef ? ok({ kind: "uncertain", attemptRecallRef }) : err({ kind: error instanceof CheckoutFailure ? error.kind : "unavailable" });
