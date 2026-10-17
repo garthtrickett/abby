@@ -130,8 +130,9 @@ for (const phase of ["role", "claim", "quota", "headers", "body"] as const) test
 
 test("late headers are cancelled by their owner, while a prelocked foreign body is not cancelled", async () => {
   let resolve!: (response: Response) => void, cancelled = 0;
-  const late = fixture({ config: { deadlineMs: 10 }, response: async () => new Promise<Response>(r => { resolve = r; }) });
-  assert.deepEqual(await late.retainer.retainIntentOnce(late.intent, reviewDate, stop()), { ok: true, value: { kind: "uncertain" } });
+  const ended = new AbortController();
+  const late = fixture({ response: async () => new Promise<Response>(r => { resolve = r; setImmediate(() => ended.abort()); }) });
+  assert.deepEqual(await late.retainer.retainIntentOnce(late.intent, reviewDate, ended.signal), { ok: true, value: { kind: "uncertain" } });
   resolve(new Response(new ReadableStream({ cancel() { cancelled++; } }), { status: 201 })); await settled(); assert.equal(cancelled, 1);
   const foreign = new Response(new ReadableStream<Uint8Array>({ cancel() { assert.fail("Foreign owner must not be cancelled"); } }), { status: 201 });
   const owner = foreign.body!.getReader();

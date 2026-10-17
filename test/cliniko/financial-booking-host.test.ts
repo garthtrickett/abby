@@ -79,7 +79,7 @@ test("selection corrections invalidate the old financial receipt", async () => {
   const f = await financialBookingFixture(); try {
     const ref = await selected(f); await f.play(); await f.accept(); assert.ok(f.pending().readySelection);
     // A new provider selection cannot reuse the private financial consent.
-    f.setEvidence({ offer: { ...f.evidence.offer, offerRef: "changed-offer", startsAt: "2026-10-08T05:00:00.000Z" } });
+    f.setEvidence({ offer: { ...f.evidence.offer, offerRef: "changed-offer", startsAt: "2026-10-08T05:00:00.000Z" }, endsAt: "2026-10-08T05:30:00.000Z" });
     resultValue(await f.propose(ref, "changed-selection", "changed-offer"));
     assert.equal(f.pending().readySelection, undefined); assert.equal(f.posts, 0);
   } finally { await f.close(); }

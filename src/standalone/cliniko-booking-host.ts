@@ -71,7 +71,7 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
         return err({ kind: "unavailable", target: "offer" });
       this.#prepared = undefined;
       const selected = await this.#guard.resolve(scope, verificationRef, offerRef, now, "proposal", signal);
-      if (!selected.ok) return selected;
+      if (!selected.ok) { this.financial?.invalidate(); return selected; }
       const after = await awaitUntilAbort(this.#config.ledger.read(this.#config.callId, this.#config.scope), signal);
       if (!after?.ok || after.value.conversationRevision !== before.value.conversationRevision || signal.aborted ||
           selected.value.evidence.timeZone !== this.#config.timeZone) return err({ kind: "unavailable", target: "offer" });

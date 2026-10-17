@@ -18,7 +18,7 @@ import { NoStoredKnowledge } from "./no-stored-knowledge.ts";
 import { OwnerFileBookingPolicy } from "./owner-file-booking-policy.ts";
 
 export type ClinikoIntakeBookingSessionConfig = Omit<ClinikoIntakeSessionConfig, "ledger" | "cliniko" | "policies"> & Readonly<{
-  financial?: ClinikoBookingSessionConfig["financial"];
+  financial?: NonNullable<ClinikoBookingSessionConfig["financial"]>;
   catalogue?: NonNullable<ClinikoBookingSessionConfig["catalogue"]>;
   ledger: LedgerStore; policies: PolicyStore; directory: AdminDirectory; bookingApprovalPath: string; bookingPermission: PatientVerificationPermission;
   cliniko: ClinikoIntakeSessionConfig["cliniko"] & Readonly<{ businessId: string; practitionerId: string; appointmentTypeId: string;
