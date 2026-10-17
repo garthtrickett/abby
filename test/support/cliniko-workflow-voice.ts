@@ -81,16 +81,20 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     };
   // Fixed aggregate diagnostics, never arguments, provider refs or private values.
   const sourceCalls = new Map<string, { count: number; pending: number; totalMs: number; maximumMs: number }>();
-  const observeSource = <Args extends unknown[], Value>(name: string, run: (...args: Args) => Promise<Value>) => async (...args: Args): Promise<Value> => {
+  const observeSource = <Args extends unknown[], Value>(name: string, run: (...args: Args) => Value | Promise<Value>) => async (...args: Args): Promise<Value> => {
     const record = sourceCalls.get(name) ?? { count: 0, pending: 0, totalMs: 0, maximumMs: 0 };
     sourceCalls.set(name, record); record.count++; record.pending++; const start = performance.now();
     try { return await run(...args); }
     finally { const elapsed = performance.now() - start; record.pending--; record.totalMs += elapsed; record.maximumMs = Math.max(record.maximumMs, elapsed); }
   };
-  config.cliniko.rateBudget.claim = observeSource("nativeBudget", config.cliniko.rateBudget.claim.bind(config.cliniko.rateBudget));
-  config.directory.findByRef = observeSource("ownerMembership", config.directory.findByRef.bind(config.directory));
-  const sourceDiagnostic = () => Object.fromEntries([...sourceCalls].map(([name, record]) => [name, { ...record,
-    totalMs: Math.round(record.totalMs), maximumMs: Math.round(record.maximumMs) }]));
+  // Observe only writable synthetic ports; immutable inputs stay untouched.
+  const observedPorts = {
+    nativeBudget: Reflect.set(config.cliniko.rateBudget, "claim", observeSource("nativeBudget", config.cliniko.rateBudget.claim.bind(config.cliniko.rateBudget))),
+    ownerMembership: Reflect.set(config.directory, "findByRef", observeSource("ownerMembership", config.directory.findByRef.bind(config.directory))),
+  };
+  const sourceDiagnostic = () => ({ installed: observedPorts,
+    calls: Object.fromEntries([...sourceCalls].map(([name, record]) => [name, { ...record,
+      totalMs: Math.round(record.totalMs), maximumMs: Math.round(record.maximumMs) }])) });
   let ledger: MemoryLedger | undefined, flow: ClinikoCallFlow | undefined, socket: WebSocket | undefined, closed = false;
   let disposedState: ReturnType<MemoryLedger["read"]> | undefined, closeCode: number | undefined;
   let after: Record<string, unknown> | undefined, sequence = 1, chunk = 0, utterance = 0, transcriptionFrames = 0;
