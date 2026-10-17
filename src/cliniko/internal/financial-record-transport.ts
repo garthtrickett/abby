@@ -1,3 +1,4 @@
+import type { FinancialResendAttempt } from "../financial-resend-attempt.ts";
 import type { FinancialResendRequest } from "../financial-resend-request.ts";
 import { err, ok } from "../../core/model.ts";
 import type { Result } from "../../core/model.ts";
@@ -11,10 +12,10 @@ import { financialRecordInstant, financialSelection } from "./financial-record-c
 import type { ClinikoFinancialReviewConfig, ClinikoFinancialReviewSelection } from "./financial-record-context.ts";
 
 export type FinancialRecordQuery = ClinikoFinancialReviewSelection & Readonly<{
-  ownerBinding: string; operation: "retainIntent" | "retainBookingObservation" | "readBookingObservation" | "retainCheckoutAttempt" | "readCheckoutAttempt" | "retainMessageAttempt" | "readMessageAttempt" | "retainExpiryAttempt" | "readExpiryAttempt" | "retainResendRequest" | "readResendRequest";
+  ownerBinding: string; operation: "retainIntent" | "retainBookingObservation" | "readBookingObservation" | "retainCheckoutAttempt" | "readCheckoutAttempt" | "retainMessageAttempt" | "readMessageAttempt" | "retainExpiryAttempt" | "readExpiryAttempt" | "retainResendRequest" | "readResendRequest" | "retainResendAttempt" | "readResendAttempt";
   actionRef: string; financialActionRef: string; patientId: string; intentDigest: string;
   recallRef?: string; intentRecallRef?: string; recallAt?: string;
-  resendRequest?: FinancialResendRequest;
+  resendRequest?: FinancialResendRequest; resendAttempt?: FinancialResendAttempt;
 }>;
 /** Independently supplied by the trusted clinic financial service. A note, caller
  * proof, local claim, elapsed lease or signature cannot supply either grant.
