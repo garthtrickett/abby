@@ -246,3 +246,63 @@ readiness now share the exact existing minimal storage projection. It is allowed
 only for a verified minimal source, rejects extra capability fields and preserves
 the existing full representation for embedded targets. No clinical/financial
 permission, source approval, stop or cutover authority is weakened.
+
+
+## Native financial-record retention and exact observation read candidate
+
+`ClinikoFinancialRecordRetainer` can retain a strict prospective intent and a
+separate producer-authenticated booking observation in the dedicated financial
+recall type. Each POST claims its independently random record action UUID through
+a matching durable barrier before native quota and dispatch. A duplicate or unknown
+claim never sends. Its non-patient owner binding derives only from configured
+logical scope, business, native credential fingerprint, financial recall type,
+Stripe account/mode and approved producer public-key identity. Private intent,
+patient, recipient, record references and results never enter that binding.
+
+The trusted financial service supplies current `allows`, independent
+`producerAdmitted` and synchronous `current` guards. The final synchronous guard
+must check current grant generation/lifetime immediately before I/O; an ended
+caller's proof is not financial-service permission. POST revalidates permission
+and producer admission after the durable claim/quota wait. Exact observation GET
+requires current financial read authority before, after quota and after body
+processing; it does not admit an effect producer. No default allow/admit path exists.
+
+The explicit clinic-approved review date participates in the permission query.
+A UTC payment deadline is not silently converted to a local due date. Intent
+creation refuses future creation times or an expired fee deadline before native
+dispatch. Retaining an already observed booking fact is not suppressed merely
+because financial terms later expire; it still proves no collection permission.
+
+Only an exact validated201 yields a retained-record receipt: native self/patient/
+type links, action marker, exact canonical notes, review date, active flags and
+ordered timestamps must match. The [native recall API](https://docs.api.cliniko.com/openapi/recall)
+exposes create and exact GET; it supplies no business/location field to substitute
+for independent clinic ownership permission. A signed observation cannot overwrite
+or masquerade as its own source intent record. No update, retry, list/latest fallback,
+financial action or sender is exposed. Read/write share the configured physical
+Cliniko budget and whole-operation15s/1MB owned-response bounds, including
+noncooperative dependencies and late headers. The summary limit remains Abby's
+contract, not an asserted vendor maximum.
+
+A fresh owner can read an exact retained observation and verify the independently
+approved producer key, original intent digest/ref, action UUIDs and exact native
+target. Recalled/archived flags remain context, not payment or completion. Native
+unknown fields and raw notes are not returned by this observation API. A lost
+retention response, caller ending, role withdrawal or quota exhaustion does not
+erase an already acknowledged clinical booking; the prospective native intent
+remains available for independent financial review. Missing-reference discovery
+and automatic reconciliation are not supplied by an exact-ref read.
+
+The shared financial configuration/instant parser was extracted without changing
+the existing intent reader's public imports or bounds. PostgreSQL barriers now
+expose only a pure scope/owner `matches` check in addition to the existing claim.
+The native adapter rejects a mismatched/unscoped barrier and malformed claim
+results. No pending payload, patient/provider reference, email, money, note or
+private key is persisted locally by this adapter.
+
+These are scoped client/cohort results, not an activated financial host. The
+actual serving/fee-consent integration, provider-owned queue discovery, independent
+producer/restore admission, original native versus mapped local owner binding,
+real process-loss composition, Stripe creation/webhook lifecycle, delivery,
+receipt and expiry remain to qualify. Clinic record/field/permission/key approval
+and real provider/sender activation are still separate acceptance gates.

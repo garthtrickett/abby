@@ -13,7 +13,7 @@
 | 5 Native class creation | Draft [PR #461](https://github.com/garthtrickett/abby/pull/461) supplies exact attendee acknowledgement and final double capacity ordering for ordinary/approved-pass creation. Focused process-loss/privacy and movement/cancellation preservation evidence is retained below. Later staged caller work composes these creation semantics; acknowledgement of replacement creation alone never completes a move. Current whole-graph and authoritative cloud qualification remain open. |
 | 6 Earlier-gap qualification | Combined clinical36b5285c work1792203076121 passed3225main/0fail/1existing skip plus6/6ordered, with source/runtime hashes unchanged. Earlier7ca seven-failure and ff795012 cancelled-choice failure remain historical evidence. Both instrumented E2E-380 content cases passed this full; no production root-cause fix is inferred. Gaps1–9 retain clinic, mail, recovery/operator, acoustic and public-route acceptance limits. |
 | 7 Class/pass completion | Drafts465–473 and487 include staged caller/SAM/private renewal, separate played consent, bounded native/proposal cost admission, cold staff observation, signed uncertainty-to-staff recovery and same/cross-case date/ordinal/pass journeys. Their current composed cohorts also ran in the passing36b5285c complete clinical graph. Broader operator acceptance, original/replacement recovery obligations and separate financial provisioning remain explicit; no blanket cohort or clinic activation follows. |
-| 8 Payments | Stripe and dedicated Cliniko financial reviews are selected. Drafts475/476/482 qualify signed event/money/receipt reading and bounded discovery;488 supplies private intent context,490 the current-owner reader and491 producer booking-observation capture. The financial-effect-barrier candidate qualifies opaque consumed-ID storage, actual mapped/cutover transfer and logical restore. No payment host, payable creation, durable native acknowledgement retention, link delivery, webhook handoff or clinical expiry is activated. Actual clinic record/permission/key configuration and composed financial lifecycle remain open. |
+| 8 Payments | Stripe and dedicated Cliniko financial reviews are selected. Drafts475/476/482 qualify signed event/money/receipt reading and discovery;488 supplies private intent context,490 the current-owner reader,491 signed booking-observation capture and492 opaque effect barriers/transfer. The native-record-retention candidate now locally qualifies once-only intent/observation POST and exact authenticated reload through individual/class native writer cohorts. Financial host/queue/producer admission, serving fee consent, payable creation, webhook/delivery/receipt/expiry and clinic activation remain unfinished. |
 | 9 Outbound | Pending gap 12, audit R20/R21 and contact-policy decisions. |
 | 10 Writeback | Pending gap 13, exact permissions/content/storage decisions and audit R08/R22. |
 | 11 Combined qualification | Latest complete clinical graph36b5285c naturally passed work1792203076121 at03:07:14.717255UTC:3225main passes/0fail/1existing skip, then6/6ordered. All1197source/455runtime hashes stayed unchanged. Newer reader/capture/barrier graphs have scoped focused+TypeScript evidence, not a replacement full result. Authoritative cloud, independent review, clinic/mail/native provider, acoustic/public-route, deployment and carrier gates remain distinct. |
@@ -3199,3 +3199,89 @@ receipt and expiry/race/restore composition remain open. No live provider,
 sender, activation, deployment, Aeva removal, dependency addition or merge was
 performed. All13 gaps remain active; exact-head authoritative CI and independent
 review remain required.
+
+
+## Native financial intent/observation retention candidate
+
+`codex/abby-financial-record-retention` is stacked on draft492/c8d865d4. It adds
+provider-owned prospective intent creation, signed native booking-observation
+retention and an exact authenticated observation read. The owner-selected storage
+boundary remains intact: Cliniko owns private pending finance context, Stripe
+owns money/receipts, and Abby's existing barrier stores opaque consumed IDs plus
+approved non-patient ownership metadata only. No payment state table is introduced.
+
+The native client requires the barrier's exact scope/derived owner binding,
+current financial-service permission, independent producer admission for POST,
+and a final synchronous grant/lifetime guard. It does not reuse the caller's OTP
+or treat a claim/signature as permission. The explicit review date is authorized
+independently of the UTC fee deadline. Intent expiry/future creation closes before
+native send; a valid later booking observation is still retention context, not a
+payable grant. Writes validate exact201 record identity, patient/type links,
+canonical family notes, marker, date, flags and timestamps. Readonly exact GET
+rechecks current read permission after body processing and never admits effects.
+Whole15-second/1MB bounds own late headers/body readers; there is no blind POST
+retry, note update, raw upstream error/body exposure or public route.
+
+Native record/query context and producer verification remain private memory;
+only approved owner configuration contributes to the barrier binding. The same
+physical native quota object is required. The client rejects an unbound barrier
+or malformed truthy claim. Financial context/parser extraction preserves the
+existing reader API and its20 checks. No dependencies or migrations are added.
+
+Validation on semanticf0d72104b36645e66999f6cb3c84df8c18ff83be,
+work1792208815953, naturally completed exit0 at03:48:58.674934UTC:
+
+```sh
+npm run db:migrate
+ABBY_LEDGER=postgres node --test --test-concurrency=2 \
+  test/cliniko/financial-record-retention.test.ts \
+  test/cliniko/financial-review-read.test.ts \
+  test/cliniko/financial-booking-capture.test.ts \
+  test/cliniko/financial-review-intent.test.ts \
+  test/portability/financial-effect-history.test.ts \
+  test/contract/product-facts.test.ts \
+  test/contract/scenario-manifest.test.ts \
+  test/storage/postgres-financial-effect-barrier.test.ts \
+  test/storage/postgres-financial-record-retention.test.ts
+NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck
+```
+
+All84 checks passed with zero failures/skips/cancellations, followed by successful
+full TypeScript. The30 new native-retention unit cases cover exact records,
+permissions/admission/binding, malformed claims, altered proof, duplicates, stalls,
+late/foreign body ownership, UTF-8/size/empty-body bounds and explicit review date.
+The4 new PostgreSQL cohorts create the private native intent, capture the actual
+individual/class writer's validated acknowledgement, end the booking caller,
+retain/read the signed observation through a fresh financial owner, and scan
+all SQL columns for recipient/native-reference/note canaries. They also preserve
+native booking success after lost retention response and after exhaustion of the
+same180-request account budget. The existing5 barrier/transfer/backup cases pass.
+These are real PostgreSQL and provider-port fixture cohorts, not actual phone/
+provider deployment, real caller speech or a killed serving-process recovery test.
+
+All1590 tracked input hashes and the shared dependency lock stayed unchanged.
+Node peak1,419,243,520B under2GiB/CPU200%/Swap0 with1536MiB heap; aggregate
+Docker181,567,488B under512MiB/CPU100%/Swap0; all memory events0. The smaller
+DB budget used the prior approximately201MB focused peak plus headroom. Actual
+exit0, PID869727 absent, scope inactive, own-label Docker empty and paired
+wait56623 reaped. Fresh admission accounted for all live peer cap growth and a
+1.5GiB host reserve. Final evidence edits change only these two Markdown files.
+
+Earlier checks remain recorded: initialcf7f106 unit work1792208382888 passed72/72;
+strict-claim/body/date refinement7b19401 unit work1792208533500 passed75/75.
+The first composedabed2cc work1792208660594 passed82/84, then failed both new
+privacy scans because fixture labels used uppercase characters rejected by the
+scanner's existing input contract; TypeScript did not run. Lowercase labels were
+corrected without changing canaries, assertions or scanner behavior. It exited1
+naturally with Node162,275,328B/Docker180,621,312B/events0. The changed-source
+run above supplies the final84/84 result; no unchanged failure was rerun.
+
+The earlier complete clinical graph36b5285c remains3225main passes/one existing
+skip plus6/6ordered. This later adapter is outside that full graph. Next: native
+queue discovery and actual financial/serving owner composition with approved
+fee/consent and independent producer/restore admission, then one-shot Stripe
+creation, durable webhook handoff, link/receipt and separately authorized expiry.
+Mapped producer/native-versus-local scope recovery is not inferred from metadata
+carryover or a fresh same-scope owner. No real provider/mail, billing/workflow
+change, deployment, activation, Aeva removal or merge was performed. All13 gaps
+remain active; independent review and exact-head cloud CI remain required.
