@@ -541,6 +541,11 @@ export class VoiceSession {
   async presentPrivateResend(text: string, signal: AbortSignal, now: string): Promise<boolean> {
     return this.presentPrivatePatientPrompt(text, signal, now, "confirmationResend");
   }
+  async presentPrivateFinancialBooking(text: string, signal: AbortSignal, now: string): Promise<Readonly<{ presentationRef: string }> | undefined> {
+    let presentationRef: string | undefined;
+    const played = await this.presentPrivatePatientPrompt(text, signal, now, "financialBooking", id => { presentationRef = id; });
+    return played && presentationRef ? { presentationRef } : undefined;
+  }
   async presentPrivateRepresentative(text: string, signal: AbortSignal, now: string, operation: "book" | "cancel" | "reschedule" | "appointments.read"): Promise<boolean> {
     return this.presentPrivatePatientPrompt(text, signal, now, operation);
   }
@@ -572,13 +577,14 @@ export class VoiceSession {
       if (!played || signal.aborted) await this.clearPrivateIntakePrompt(id, now);
     }
   }
-  private async presentPrivatePatientPrompt(text: string, signal: AbortSignal, now: string, operation: "intake" | "patientUpdate" | "confirmationResend" | "book" | "cancel" | "reschedule" | "appointments.read"): Promise<boolean> {
+  private async presentPrivatePatientPrompt(text: string, signal: AbortSignal, now: string, operation: "intake" | "patientUpdate" | "confirmationResend" | "book" | "cancel" | "reschedule" | "appointments.read" | "financialBooking", observed?: (id: string) => void): Promise<boolean> {
     if (!this.transientContent || signal.aborted || !this.canSend() || this.speechOpen || this.activePlayback ||
         typeof text !== "string" || !text.trim() || text.length > 2_000) return false;
     const id = randomUUID();
     const queued = operation === "intake" ? await this.runtime.privateIntakePrompt(this.callId, id, this.sessionId, now)
       : operation === "patientUpdate" ? await this.runtime.privateCorrectionPrompt(this.callId, id, this.sessionId, now)
         : operation === "confirmationResend" ? await this.runtime.privateResendPrompt(this.callId, id, this.sessionId, now)
+          : operation === "financialBooking" ? await this.runtime.privateFinancialBookingPrompt(this.callId, id, this.sessionId, now)
           : await this.runtime.privateRepresentativePrompt(this.callId, id, this.sessionId, operation, now);
     if (!queued.ok || signal.aborted) return false;
     this.transientContent.set(id, text);
@@ -590,6 +596,7 @@ export class VoiceSession {
       const dispatched = await this.dispatchPending(now);
       if (!dispatched.ok || !["queued", "played"].includes(dispatched.value.kind)) return false;
       played = await awaitUntilAbort(receipt, AbortSignal.any([signal, AbortSignal.timeout(20_000)])) === true;
+      if (played) observed?.(id);
       return played;
     } finally {
       this.privatePlayback.delete(id); this.transientContent.delete(id);

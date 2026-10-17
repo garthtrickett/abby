@@ -171,6 +171,7 @@ export class ClinikoBookingWriter {
   }
 
   /** Public provider IDs only; the booking host binds its exact offer to this writer. */
+  sharesRequestBudget(budget: ClinikoRequestBudget): boolean { return this.rateBudget === budget; }
   selection(): ClinikoBookingSelection {
     return { scope: structuredClone(this.scope), ...this.config };
   }

@@ -32,6 +32,7 @@ export type CheckoutOwnerBinding = Readonly<{
 }>;
 export type CheckoutOwnerQuery = CheckoutOwnerBinding & Readonly<{
   ownerBinding: string; intent: ClinikoFinancialIntent; targetRef: string;
+  bookingObservation: import("../cliniko/financial-booking-observation.ts").ClinikoFinancialBookingObservation;
   productLabel: string; successUrl: string; cancelUrl: string; paymentMethod: "card";
 }>;
 /** Independent current financial owner, exact fee/recipient/contact-purpose and
@@ -129,7 +130,7 @@ export class ClinikoStripeCheckoutOwner {
       const observed = await wait(this.#records.readBookingObservation({ recallRef: wanted.observationRecallRef, actionRef: wanted.observationActionRef,
         intentRecallRef: wanted.intentRecallRef }, intent, signal));
       if (!observed.ok || observed.value.recalled || observed.value.archivedAt !== null) throw new CheckoutFailure(observed.ok ? "forbidden" : observed.error.kind === "forbidden" ? "forbidden" : "unavailable");
-      const query = freeze({ ...wanted, ownerBinding: this.#binding, intent, targetRef: observed.value.observation.targetRef,
+      const query = freeze({ ...wanted, ownerBinding: this.#binding, intent, targetRef: observed.value.observation.targetRef, bookingObservation: structuredClone(observed.value.observation),
         productLabel: this.#config.productLabel, successUrl: this.#config.successUrl, cancelUrl: this.#config.cancelUrl, paymentMethod: this.#config.paymentMethod });
       const expiresAt = Date.parse(intent.payment.deadline) / 1_000;
       const checkCurrent = () => {

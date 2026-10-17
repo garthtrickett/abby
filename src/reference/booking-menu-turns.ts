@@ -72,6 +72,7 @@ export class BookingMenuTurns {
             if (selected?.ok && !signal.aborted) {
               const evidence = await untilAbort(this.host.resolveBooking(scope, selected.value.verificationRef, selected.value.offerRef, now, signal), signal);
               if (evidence?.ok && !signal.aborted) interpretation = { kind: "requestAction", request: structuredClone(evidence.value) };
+              else if (evidence && !evidence.ok && evidence.error.kind === "financialConsentRequired" && !signal.aborted) interpretation = { kind: "financialConsentRequired" };
             }
           }
         }

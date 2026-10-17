@@ -411,6 +411,8 @@ export class TextReception {
       if (!evidence) return err({ kind: "effectFailure" as const });
       if (evidence.ok) {
         interpretation = { kind: "requestAction", request: evidence.value };
+      } else if (evidence.error.kind === "financialConsentRequired") {
+        interpretation = { kind: "financialConsentRequired" };
       } else if (evidence.error.kind === "ambiguous" || evidence.error.kind === "expired") {
         interpretation = { kind: "ambiguousTarget" };
       } else {

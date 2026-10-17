@@ -5,7 +5,7 @@ import type { ActionRequest, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGre
 import type { ReadinessFailure } from "./readiness.ts";
 import type { CallState, FinalCallerTurn } from "./model.ts";
 
-export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable"; target: "patient" | "offer" | "appointment" }> |
+export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable" | "financialConsentRequired"; target: "patient" | "offer" | "appointment" }> |
   Readonly<{ kind: "outsideHorizon"; target: "offer"; snapshot: import("./booking-horizon.ts").BookingHorizonRead }>;
 export type ClassMovementPreparationQuery = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
   actionKey: string; now: string; signal: AbortSignal }>;

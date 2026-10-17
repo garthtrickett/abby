@@ -247,6 +247,8 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     if (isPresenceQuestion(turn.text)) return ok({ kind: "presence" });
     if (isMissedCallQuestion(turn.text)) return ok({ kind: "missedCall" });
     if (/\bmy card number is\b/i.test(turn.text)) return ok({ kind: "clarify", reason: "paymentEvidenceUnavailable" });
+    const financialBooking = config.owner.financialBookingResume(turn.text);
+    if (financialBooking) return ok({ kind: "book", ...financialBooking });
     const financial = financialEvidenceLanguage(turn.text);
     // Active private message questions use the existing draft question fence;
     // explicit card-number disclosure must never become message content.

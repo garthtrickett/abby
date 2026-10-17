@@ -120,6 +120,9 @@ export class CallRuntime {
   privateCorrectionPrompt(callId: string, presentationId: string, sessionId: string, now: string) {
     return this.update(callId, { kind: "privateCorrectionPrompt", presentationId, sessionId, now });
   }
+  privateFinancialBookingPrompt(callId: string, presentationId: string, sessionId: string, now: string) {
+    return this.update(callId, { kind: "privateFinancialBookingPrompt", presentationId, sessionId, now });
+  }
   privateResendPrompt(callId: string, presentationId: string, sessionId: string, now: string) {
     return this.update(callId, { kind: "privateResendPrompt", presentationId, sessionId, now });
   }

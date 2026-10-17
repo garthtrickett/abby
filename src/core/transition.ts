@@ -630,6 +630,9 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       state.callerMessages.push(turn.quality === "clear" && menu.ok ? menu.value : "I can't check booking options right now. Please contact the clinic directly.");
       break;
     }
+    case "financialConsentRequired":
+      state.callerMessages.push("Before confirming the appointment, press 1 to hear the clinic financial terms privately. You have not agreed to payment terms or booked an appointment.");
+      break;
     case "bookingMenuFailure":
       state.callerMessages.push("I can't check or select those booking options right now. Please request fresh options or contact the clinic directly.");
       break;
@@ -737,7 +740,7 @@ function recordHostResult(state: CallState, effectId: string, receipt: import(".
 export function transition(current: CallState, action: TransitionAction): Result<CallState, TransitionFailure> {
   if ("now" in action && action.now !== undefined && !Number.isFinite(Date.parse(action.now))) return err({ kind: "invalidTransition" });
   if (current.callerIdentityDenied && ["markHostPossiblySent", "markStaffPossiblySent", "markStaffChangePossiblySent",
-    "markNotificationPossiblySent", "markOperatorAlertPossiblySent", "transferPossiblySent", "privateIntakePrompt", "privateCorrectionPrompt", "privateResendPrompt", "privateRepresentativePrompt"].includes(action.kind))
+    "markNotificationPossiblySent", "markOperatorAlertPossiblySent", "transferPossiblySent", "privateIntakePrompt", "privateCorrectionPrompt", "privateResendPrompt", "privateFinancialBookingPrompt", "privateRepresentativePrompt"].includes(action.kind))
     return err({ kind: "invalidTransition" });
   const state = structuredClone(current);
   const now = "now" in action && action.now !== undefined ? action.now : new Date(0).toISOString();
@@ -851,12 +854,14 @@ export function transition(current: CallState, action: TransitionAction): Result
     }
     case "privateIntakePrompt":
     case "privateCorrectionPrompt":
-    case "privateResendPrompt": {
+    case "privateResendPrompt":
+    case "privateFinancialBookingPrompt": {
       const lease = state.sessionLease;
       if (state.lifecycle !== "active" || !state.admission || !lease || lease.sessionId !== action.sessionId ||
           Date.parse(action.now) >= Date.parse(lease.expiresAt) || !state.policy.automationEnabled ||
           (action.kind === "privateIntakePrompt"
             ? state.policy.capabilities.intake !== "execute" || state.policy.firstTimeIntakeEnabled !== true
+            : action.kind === "privateFinancialBookingPrompt" ? state.policy.capabilities.book !== "execute" || !state.policy.bookingEnabled || state.policy.staffWorkEnabled !== true
             : action.kind === "privateCorrectionPrompt" ? state.policy.capabilities.patientUpdate !== "execute" || state.policy.patientCorrectionsEnabled !== true
               : state.policy.capabilities.confirmationResend !== "execute" || !/^[a-f0-9]{64}$/.test(state.policy.confirmationResendVersion ?? ""))) return err({ kind: "leaseLost" });
       if (!/^[a-f0-9-]{36}$/.test(action.presentationId) || state.pendingPresentationId || state.presentations[action.presentationId] ||

@@ -42,6 +42,7 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
     this.#preference = config.initialPreference && Object.freeze({ ...config.initialPreference });
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }), members: Object.freeze(config.members.map(member => Object.freeze({ ...member }))) });
   }
+  get financial() { return this.#selection?.member.host.financial ?? this.#prepared?.member.host.financial; }
   bookingMenuAvailable(): boolean { return !this.#lifetime.signal.aborted && !this.#attempted; }
   async searchProfile() { return this.#lifetime.signal.aborted ? undefined : this.#profile(); }
   currentSearchPreference(): BookingSearchPreference | undefined { return this.#preference && { ...this.#preference }; }
@@ -59,6 +60,7 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
     if (query.window !== undefined) this.#window = query.window === null ? undefined : copyBookingSearchWindow(query.window);
     const bound = { ...query, window: this.#window ?? null, signal: AbortSignal.any([incoming.signal, this.#lifetime.signal]) };
     if (!this.#matches(bound) || this.#attempted || this.#busy || query.preference !== undefined && !validBookingSearchPreference(query.preference)) return denied();
+    for (const member of this.#config.members) member.host.financial?.invalidate();
     const epoch = ++this.#epoch; this.#menu = undefined; this.#selection = undefined;
     if (query.preference !== undefined) this.#preference = Object.freeze({ ...this.#preference, ...query.preference });
     const profile = await this.#profile();
@@ -122,6 +124,8 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
       if (!state?.ok || this.#prepared && !preparationMayBeDiscarded(state.value, this.#prepared.request, this.#prepared.revision) || !await this.#profile()) return denied();
       const resolved = await selected.member.host.resolveBooking(scope, verificationRef, offerRef, now, signal);
       const after = await awaitUntilAbort(c.ledger.read(c.callId, c.scope), signal);
+      if (!resolved.ok && resolved.error.kind === "financialConsentRequired" && after?.ok && after.value.conversationRevision === state.value.conversationRevision &&
+          !signal.aborted && this.#selection === selected && !this.#lifetime.signal.aborted) return resolved;
       if (!resolved.ok || !after?.ok || after.value.conversationRevision !== state.value.conversationRevision || signal.aborted ||
           this.#lifetime.signal.aborted || !await this.#profile()) return denied();
       if (signal.aborted || this.#lifetime.signal.aborted || this.#selection !== selected) return denied();

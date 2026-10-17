@@ -18,6 +18,7 @@ import { NoStoredKnowledge } from "./no-stored-knowledge.ts";
 import { OwnerFileBookingPolicy } from "./owner-file-booking-policy.ts";
 
 export type ClinikoIntakeBookingSessionConfig = Omit<ClinikoIntakeSessionConfig, "ledger" | "cliniko" | "policies"> & Readonly<{
+  financial?: ClinikoBookingSessionConfig["financial"];
   catalogue?: NonNullable<ClinikoBookingSessionConfig["catalogue"]>;
   ledger: LedgerStore; policies: PolicyStore; directory: AdminDirectory; bookingApprovalPath: string; bookingPermission: PatientVerificationPermission;
   cliniko: ClinikoIntakeSessionConfig["cliniko"] & Readonly<{ businessId: string; practitionerId: string; appointmentTypeId: string;
@@ -95,6 +96,7 @@ export class ClinikoIntakeBookingSession extends NoStoredKnowledge implements In
     } catch { return denied(); }
     finally { if (timer) clearTimeout(timer); if (!completed) { controller?.abort(); dispose(); } }
   }
+  get financial() { return this.#composition.host.financial; }
   get effects() { return this.#composition.host; }
   maxBookingSearchDays() { return this.#composition.offers.maxBookingSearchDays(); }
   resolveIntake(query: IntakeEvidenceQuery) { return this.intake.resolveIntake(query); }

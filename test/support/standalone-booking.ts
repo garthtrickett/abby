@@ -20,6 +20,7 @@ import { callerVerificationFixture, verificationCanaries, verificationNow } from
 import { resultValue } from "./agent-appointment-proposals.ts";
 
 export async function standaloneBookingFixture(options: { scope?: LocationScope; verificationBudget?: PatientVerificationBudget; rateBudget?: ClinikoRequestBudget;
+  financialFor?: (config: import("../../src/cliniko/booking-write.ts").ClinikoBookingConfig & { scope: LocationScope; rateBudget: ClinikoRequestBudget }, port: typeof fetch) => import("../../src/standalone/cliniko-financial-booking-preparation.ts").FinancialBookingPreparationConfig;
   fetchPort?: typeof fetch; fetchAround?: (port: typeof fetch) => typeof fetch;
   authorityFor?: (config: Omit<ClinikoBookingOffersConfig, "policy">, port: typeof fetch) => Promise<ClinikoBookingAuthority>; operation?: PatientOperation; staffWorkEnabled?: boolean; lostRecall?: boolean; lostBooking?: boolean; appointmentChanges?: true } = {}) {
   const f = await callerVerificationFixture({ operation: options.operation ?? "appointments.book", bookingExecute: true,
@@ -96,6 +97,7 @@ export async function standaloneBookingFixture(options: { scope?: LocationScope;
       callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion, clock: f.sessionConfig.clock }, fetchPort) : { resolve, resolveForSend: resolve };
     host = new ClinikoBookingHost({ scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion,
       ledger: f.ledger, policy: f.policies, proof: session.proof, authority, writer,
+      ...(options.financialFor ? { financial: options.financialFor(writerConfig, fetchPort) } : {}),
       recallWriter: resultValue(ClinikoRecallWriter.create(writerConfig, fetchPort)), recallTypeId: "7", timeZone: "Australia/Sydney", clock: f.sessionConfig.clock });
     const reception = new TextReception(f.ledger, f.policies, host);
     const agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope: f.scope }, f.policies, reception, undefined, undefined, undefined, f.ledger);

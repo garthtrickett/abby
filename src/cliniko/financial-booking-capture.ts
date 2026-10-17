@@ -15,7 +15,7 @@ import { financialIntentDigest, financialBookingObservationPayload, financialBoo
 type Failure = Readonly<{ kind: "financialCaptureUnavailable" }>;
 type Observation = Readonly<{ kind: "captured"; notes: string }> | Readonly<{ kind: "missing" }>;
 export type FinancialBookingCaptureResult<W, F> = Readonly<{ native: Result<W, F>; observation: Observation }>;
-type Config = Readonly<{ reader: ClinikoFinancialReviewReader; privateKey: KeyObject; producerKeyRef: string; clock?: () => string }>;
+type Config = Readonly<{ financialConsent?: import("./financial-booking-observation.ts").FinancialBookingConsent; reader: ClinikoFinancialReviewReader; privateKey: KeyObject; producerKeyRef: string; clock?: () => string }>;
 const unavailable = (): Result<never, Failure> => err({ kind: "financialCaptureUnavailable" });
 
 /** Private financial-owner preparation, before the native writer's last quota/
@@ -28,9 +28,10 @@ export class ClinikoFinancialBookingCapture {
   readonly #key: KeyObject;
   readonly #keyRef: string;
   readonly #clock: () => string;
+  readonly #consent: import("./financial-booking-observation.ts").FinancialBookingConsent | undefined;
   #consumed = false;
   private constructor(config: Config, binding: ClinikoFinancialReviewBinding, intent: ClinikoFinancialIntent) {
-    this.#intent = intent; this.#binding = Object.freeze({ ...binding });
+    this.#consent = config.financialConsent && Object.freeze({ ...config.financialConsent }); this.#intent = intent; this.#binding = Object.freeze({ ...binding });
     this.#key = config.privateKey; this.#keyRef = config.producerKeyRef;
     this.#clock = config.clock ?? (() => new Date().toISOString());
   }
@@ -41,7 +42,7 @@ export class ClinikoFinancialBookingCapture {
           config.privateKey.type !== "private" || config.privateKey.asymmetricKeyType !== "ed25519" ||
           typeof config.producerKeyRef !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(config.producerKeyRef) ||
           config.clock !== undefined && typeof config.clock !== "function") return unavailable();
-      const owned = Object.freeze({ reader: config.reader, privateKey: config.privateKey, producerKeyRef: config.producerKeyRef, ...(config.clock === undefined ? {} : { clock: config.clock }) });
+      const owned = Object.freeze({ reader: config.reader, privateKey: config.privateKey, producerKeyRef: config.producerKeyRef, ...(config.clock === undefined ? {} : { clock: config.clock }), ...(config.financialConsent ? { financialConsent: Object.freeze({ ...config.financialConsent }) } : {}) });
       // Capture expected terms before any asynchronous private read or caller mutation.
       const encoded = encodeClinikoFinancialIntent(expected);
       if (!encoded.ok) return unavailable();
@@ -65,16 +66,16 @@ export class ClinikoFinancialBookingCapture {
     try {
       const value = { actionRef: randomUUID(), financialActionRef: this.#intent.actionRef, intentRecallRef: this.#binding.recallRef,
         intentDigest: financialIntentDigest(this.#intent)!, bookingActionRef: this.#intent.booking.actionRef,
-        targetRef, observedAt: this.#clock(), producerKeyRef: this.#keyRef };
+        targetRef, observedAt: this.#clock(), producerKeyRef: this.#keyRef, ...(this.#consent ? { financialConsent: this.#consent } : {}) };
       const payload = financialBookingObservationPayload(value);
       if (!payload || value.observedAt < this.#intent.createdAt) return { kind: "missing" };
-      const signature = sign(null, financialBookingObservationMessage(payload), this.#key).toString("base64url");
+      const signature = sign(null, financialBookingObservationMessage(payload, this.#consent ? 2 : 1), this.#key).toString("base64url");
       const notes = formatFinancialBookingObservation(value, signature);
       return notes ? Object.freeze({ kind: "captured", notes }) : { kind: "missing" };
     } catch { return { kind: "missing" }; }
   }
   async book(writer: ClinikoBookingWriter, input: ClinikoBookingRequest, signal: AbortSignal,
-             checks: Pick<ClinikoClassBookingChecks, "beforeSend" | "current">):
+             checks: Pick<ClinikoClassBookingChecks, "beforeSend" | "current"> & Readonly<{ acknowledged?: (receipt: Extract<ClinikoBookingWrite, { kind: "accepted" }>) => void }>):
     Promise<Result<FinancialBookingCaptureResult<ClinikoBookingWrite, ClinikoBookingFailure>, Failure>> {
     if (this.#consumed) return unavailable();
     this.#consumed = true;
@@ -86,6 +87,7 @@ export class ClinikoFinancialBookingCapture {
     try {
       const native = await writer.writeOnce(request, signal, checks.beforeSend, receipt => {
         accepted = receipt; observation = this.#observe(receipt.appointmentRef);
+        try { checks.acknowledged?.(receipt); } catch { /* Clinical receipt is irrevocable. */ }
       }, checks.current);
       return ok({ native: accepted ? ok(accepted) : native, observation });
     } catch { return accepted ? ok({ native: ok(accepted), observation }) : unavailable(); }

@@ -299,6 +299,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "appointments"; from: string; to: string; snapshot: AppointmentRead; declareRange?: true }>
   | Readonly<{ kind: "appointmentsFailure"; reason: AppointmentReadFailure["kind"] | "notConfigured" | "unclear" }>
   | Readonly<{ kind: "bookingMenu"; snapshot: import("./booking-menu.ts").BookingMenuRead }>
+  | Readonly<{ kind: "financialConsentRequired" }>
   | Readonly<{ kind: "bookingMenuFailure" }>
   | Readonly<{ kind: "reschedulingMenu"; snapshot: import("./rescheduling-menu.ts").ReschedulingMenuRead }>
   | Readonly<{ kind: "reschedulingMenuFailure" }>
@@ -525,6 +526,7 @@ export type TransitionAction =
   | Readonly<{ kind: "silenceTimeout"; sessionId: string; stage: "retry" | "final"; now: string }>
   | Readonly<{ kind: "privateIntakePrompt"; sessionId: string; presentationId: string; now: string }>
   | Readonly<{ kind: "privateCorrectionPrompt"; sessionId: string; presentationId: string; now: string }>
+  | Readonly<{ kind: "privateFinancialBookingPrompt"; presentationId: string; sessionId: string; now: string }>
   | Readonly<{ kind: "privateResendPrompt"; sessionId: string; presentationId: string; now: string }>
   | Readonly<{ kind: "privateRepresentativePrompt"; operation: "book" | "cancel" | "reschedule" | "appointments.read"; sessionId: string; presentationId: string; now: string }>
   | Readonly<{ kind: "callerTurn"; turn: FinalCallerTurn; interpretation: TurnInterpretation; now: string; expectedConversationRevision?: number }>
