@@ -48,12 +48,14 @@ async function prepared(kind: "book" | "classBook", options: { lostObservation?:
       practitioner: { links: { self: `${base}/practitioners/12` } }, appointment_type: { links: { self: `${base}/appointment_types/13` } },
       starts_at: body.starts_at, ends_at: body.ends_at, archived_at: null, deleted_at: null, cancelled_at: null }, { status: 201 });
   };
+  const caller = new AbortController();
   const config = { ...f.config, practitionerId: "12", appointmentTypeId: "13" }, checks = { beforeSend: async () => true, current: () => true };
   const captured = kind === "book" ? value(await capture.book(value(ClinikoBookingWriter.create(config, native)),
-    { scope, patientId: "21", marker: intent.booking.actionRef, startsAt: intent.booking.startsAt, endsAt: intent.booking.endsAt }, stop(), checks)) :
+    { scope, patientId: "21", marker: intent.booking.actionRef, startsAt: intent.booking.startsAt, endsAt: intent.booking.endsAt }, caller.signal, checks)) :
     value(await capture.classBook(value(ClinikoClassAttendanceWriter.create(config, native)),
-      { kind: "book", scope, patientId: "21", sessionId: "15", actionId: intent.booking.actionRef }, stop(), checks));
+      { kind: "book", scope, patientId: "21", sessionId: "15", actionId: intent.booking.actionRef }, caller.signal, checks));
   assert.ok(captured.native.ok); assert.equal(captured.native.value.kind, "accepted"); assert.equal(writes.length, 1);
+  caller.abort(); // Subsequent retention belongs to the independent financial service.
   assert.equal(captured.observation.kind, "captured"); if (captured.observation.kind !== "captured") throw new Error("Native observation not captured");
   return { f, intent, binding, notes: captured.observation.notes, captured, writes, budget };
 }
