@@ -1,14 +1,9 @@
-import { randomUUID } from "node:crypto";
-import { isDeepStrictEqual } from "node:util";
 import { err, ok } from "../core/model.ts";
-import type { LocationScope, Result } from "../core/model.ts";
-import type { PatientProofHost } from "../core/host.ts";
-import { ClinikoClassAttendanceReader } from "../cliniko/class-attendance-read.ts";
+import type { Result } from "../core/model.ts";
 import { ClinikoClassAttendanceWriter } from "../cliniko/class-attendance-write.ts";
 import type { ClinikoAttendanceRequest } from "../cliniko/class-attendance-write.ts";
 import type { FinancialRecordAuthority } from "../cliniko/financial-record-retention.ts";
 import { OwnerFileClassPolicy } from "./owner-file-class-policy.ts";
-import type { ClassApproval } from "./owner-file-class-policy.ts";
 import { sameScope } from "./appointment-change-authority.ts";
 import type { FinancialEffectBarrier } from "./financial-effect-barrier.ts";
 import type { FinancialLifecycleBinding } from "./financial-lifecycle-sources.ts";
@@ -16,11 +11,10 @@ import { FinancialClinicalExpiryProtocol, FinancialClinicalExpiryRefusal } from 
 import type { FinancialExpiryQuery, FinancialExpiryAuthority, FinancialExpiryApproval,
   FinancialClinicalExpiryConfig, FinancialClinicalExpiryOutcome, FinancialClinicalExpiryFailure } from "./financial-clinical-expiry-protocol.ts";
 
+import { readFinancialClinicalClassTarget, currentFinancialClassPolicy } from "./financial-clinical-class-target.ts";
+import type { FinancialClinicalClassTarget } from "./financial-clinical-class-target.ts";
 type Cancellation = Extract<ClinikoAttendanceRequest, { kind: "cancel" }>;
-export type FinancialUnlinkedClassTarget = Readonly<{
-  scope: LocationScope; patientId: string; sessionId: string; attendeeId: string; creationActionId: string;
-  cancellationActionId: string; startsAt: string; endsAt: string; policy: ClassApproval;
-}>;
+export type FinancialUnlinkedClassTarget = FinancialClinicalClassTarget;
 export type FinancialUnlinkedClassApproval = FinancialExpiryApproval & Readonly<{
   kind: "cancelUnpaidUnlinkedClass"; classPolicyVersion: string; cancellationReason: Cancellation["cancellationReason"];
 }>;
@@ -47,42 +41,13 @@ export class ClinikoFinancialUnlinkedClassExpiryOwner {
       const clock = config.cliniko.clock ?? (() => new Date().toISOString());
       const writer = ClinikoClassAttendanceWriter.create(nativeConfig, native);
       if (!writer.ok) return err({ kind: "invalidConfig" });
-      const currentPolicy = async (target: FinancialUnlinkedClassTarget, signal: AbortSignal) => {
-        const current = await config.classPolicy.current(target.scope);
-        return !signal.aborted && current.ok && isDeepStrictEqual(current.value, target.policy);
-      };
+      const currentPolicy = (target: FinancialUnlinkedClassTarget, signal: AbortSignal) => currentFinancialClassPolicy(config.classPolicy, target, signal);
       const protocol = FinancialClinicalExpiryProtocol.create<FinancialUnlinkedClassTarget, FinancialUnlinkedClassApproval, Request>(config, authority, records, barrier, native, stripe, {
         async read(sources, op, permit) {
-          const i = sources.intent.intent, origin = sources.booking.observation.classCreationRequest;
-          const attendeeId = /^cliniko:attendee:([1-9][0-9]{0,18})$/.exec(sources.booking.observation.targetRef)?.[1];
-          if (i.booking.kind !== "classBook" || !attendeeId || !origin || origin.sessionId !== i.booking.sessionId ||
-              Object.hasOwn(origin, "patientCaseId")) return refuse();
-          const approved = await op.wait(config.classPolicy.current(i.scope)); await permit();
-          if (!approved.ok || approved.value.membership !== "independentHost" || approved.value.businessId !== i.businessId ||
-              approved.value.credentialFingerprint !== i.credentialFingerprint || approved.value.practitionerId !== i.booking.practitionerId ||
-              approved.value.appointmentTypeId !== i.booking.appointmentTypeId) return refuse();
-          const target: FinancialUnlinkedClassTarget = { scope: i.scope, patientId: i.patientId, sessionId: i.booking.sessionId,
-            attendeeId, creationActionId: i.booking.actionRef, cancellationActionId: i.effects.clinicalExpiry,
-            startsAt: i.booking.startsAt, endsAt: i.booking.endsAt, policy: approved.value };
-          const began = Date.parse(clock()), reference = `financial-unlinked-class-read:${randomUUID()}`;
-          // Private read capability derived from fresh financial-owner read
-          // admission. It never represents caller verification or write consent.
-          const proof: PatientProofHost = { verifyPatient: async (scope, ref, now, signal) => {
-            const at = Date.parse(clock());
-            if (op.signal.aborted || signal?.aborted || !sameScope(scope, i.scope) || ref !== reference || !Number.isFinite(at) ||
-                at < began || at >= began + 30_000 || Math.abs(Date.parse(now) - at) > 30_000 || !await currentPolicy(target, op.signal))
-              return err({ kind: "unavailable", target: "patient" });
-            await permit();
-            return ok({ scope: { ...i.scope }, patientRef: i.patientId, verificationRef: reference, expiresAt: new Date(began + 180_000).toISOString() });
-          } };
-          const reader = ClinikoClassAttendanceReader.create({ ...nativeConfig, className: approved.value.className }, proof, native, clock);
-          if (!reader.ok) return refuse();
-          const read = await op.wait(reader.value.inspect(i.scope, reference, target.sessionId, target.startsAt, target.endsAt, clock(), op.signal));
-          await permit();
-          if (!read.ok || read.value.timeZone !== approved.value.timeZone || read.value.sessions.length !== 1) return refuse("mismatched");
-          const session = read.value.sessions[0]!;
-          if (session.sessionRef !== target.sessionId || session.startsAt !== target.startsAt || session.endsAt !== target.endsAt ||
-              session.attendance.kind !== "one" || session.attendance.attendeeRef !== target.attendeeId) return refuse("mismatched");
+          const origin = sources.booking.observation.classCreationRequest;
+          if (!origin || Object.hasOwn(origin, "patientCaseId")) return refuse();
+          const target = await readFinancialClinicalClassTarget({ cliniko: nativeConfig, classPolicy: config.classPolicy, clock, native },
+            sources, op, permit, "independentHost");
           const unlinked = await op.wait(writer.value.inspectUnlinked({ kind: "book", scope: target.scope, patientId: target.patientId,
             sessionId: target.sessionId, actionId: target.creationActionId }, sources.booking.observation.targetRef, op.signal,
           async () => { await permit(); return currentPolicy(target, op.signal); }));

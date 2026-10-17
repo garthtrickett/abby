@@ -51,10 +51,11 @@ type Prepared<Target, Approval, Request> = Readonly<{ query: FinancialExpiryQuer
 /** Internal native strategy. Concrete owners construct it; callers and notes
  * cannot supply native truth or turn read authority into cancellation authority. */
 export type FinancialClinicalTarget<Target, Approval extends FinancialExpiryApproval, Request> = Readonly<{
+  beforeClaim?(target: Target, op: FinancialLifecycleOperation): Promise<boolean>;
   read(sources: FinancialLifecycleSources, op: FinancialLifecycleOperation, permit: () => Promise<void>): Promise<Target>;
   request(target: Target, approval: Approval): Request | undefined;
   cancelOnce(request: Request, signal: AbortSignal, beforeSend: (signal: AbortSignal) => Promise<boolean>, afterSendRead: (signal: AbortSignal) => Promise<boolean>):
-    Promise<Result<Readonly<{ kind: "cancelled" | "uncertain" }>, unknown>>;
+    Promise<Result<Readonly<{ kind: "cancelled" | "uncertain"; reviewRequired?: boolean }>, unknown>>;
 }>;
 function data<Target>(q: FinancialExpiryQuery<Target>) {
   const { observedAt: _correlationTime, ...correlation } = q.correlation;
@@ -83,7 +84,7 @@ export class FinancialClinicalExpiryProtocol<Target, Approval extends FinancialE
     this.#barrier = Object.freeze({ matches: barrier.matches.bind(barrier), claimOnce: barrier.claimOnce.bind(barrier) }); this.#binding = binding;
     this.#sources = new FinancialLifecycleSourceReader(config.cliniko, authority.sources, records, barrier, native);
     this.#correlation = new StripeCheckoutCorrelationReader(config.stripe, stripe); this.#money = new StripeCheckoutReader(config.stripe, stripe);
-    this.#nativeTarget = Object.freeze({ read: nativeTarget.read.bind(nativeTarget), request: nativeTarget.request.bind(nativeTarget), cancelOnce: nativeTarget.cancelOnce.bind(nativeTarget) });
+    this.#nativeTarget = Object.freeze({ ...(nativeTarget.beforeClaim ? { beforeClaim: nativeTarget.beforeClaim.bind(nativeTarget) } : {}), read: nativeTarget.read.bind(nativeTarget), request: nativeTarget.request.bind(nativeTarget), cancelOnce: nativeTarget.cancelOnce.bind(nativeTarget) });
   }
   static create<Target, Approval extends FinancialExpiryApproval, Request>(config: FinancialClinicalExpiryConfig, authority: FinancialExpiryAuthority<Target, Approval>, records: FinancialRecordAuthority,
     barrier: FinancialEffectBarrier, native: typeof fetch, stripe: typeof fetch, nativeTarget: FinancialClinicalTarget<Target, Approval, Request>): Result<FinancialClinicalExpiryProtocol<Target, Approval, Request>, FinancialClinicalExpiryFailure> {
@@ -166,6 +167,7 @@ export class FinancialClinicalExpiryProtocol<Target, Approval extends FinancialE
       if (history.expiryAttempts?.some(a => a.attempt.effectRef === effect || a.attempt.financialActionRef === b.financialActionRef && a.attempt.purpose === "clinicalExpiry")) throw new FinancialClinicalExpiryRefusal("alreadyClaimed");
       const renewed = await this.#prepare(q, op);
       if (!isDeepStrictEqual(prepared, renewed)) throw new FinancialClinicalExpiryRefusal("mismatched");
+      if (this.#nativeTarget.beforeClaim && await op.wait(this.#nativeTarget.beforeClaim(q.target, op)) !== true) throw new FinancialClinicalExpiryRefusal("unavailable");
       const attempt: FinancialExpiryAttempt = freezeFinancialContext({ actionRef: randomUUID(), financialActionRef: b.financialActionRef, effectRef: effect, purpose: "clinicalExpiry",
         intentRecallRef: b.intentRecallRef, intentDigest: financialIntentDigest(q.sources.intent.intent)!, observationRecallRef: b.observationRecallRef,
         observationActionRef: b.observationActionRef, targetRef: q.sources.booking.observation.targetRef, checkoutRef: b.checkoutRef,
@@ -214,7 +216,8 @@ export class FinancialClinicalExpiryProtocol<Target, Approval extends FinancialE
         amount: q.sources.intent.intent.payment.amount, currency: q.sources.intent.intent.payment.currency }, signal));
       await this.#referencePermit(reference, op);
       const unpaid = money.ok && money.value.kind === "unpaid" && money.value.paymentClosed;
-      return ok({ kind: cancelled ? "cancelled" : "uncertain", money: money.ok ? money.value.kind : "unknown", reviewRequired: !cancelled || !unpaid });
+      const nativeReview = outcome.ok && outcome.value.reviewRequired === true;
+      return ok({ kind: cancelled ? "cancelled" : "uncertain", money: money.ok ? money.value.kind : "unknown", reviewRequired: !cancelled || nativeReview || !unpaid });
     } catch (error) {
       return dispatched ? ok({ kind: cancelled ? "cancelled" : "uncertain", money: "unknown", reviewRequired: true })
         : err({ kind: error instanceof FinancialClinicalExpiryRefusal ? error.kind : "unavailable" });
