@@ -7,6 +7,7 @@ import { financialRecordOwnerBinding } from "../../src/cliniko/financial-record-
 import { decodeClinikoFinancialIntent } from "../../src/cliniko/financial-review-intent.ts";
 import { verifyFinancialBookingObservation } from "../../src/cliniko/financial-booking-observation.ts";
 import type { FinancialBookingAssessment, FinancialBookingPreparationConfig, FinancialBookingSelection } from "../../src/standalone/cliniko-financial-booking-preparation.ts";
+import type { ClinikoCallFlowConfig } from "../../src/standalone/cliniko-call-flow.ts";
 
 export async function financialClassBookingFixture(options: { passes?: boolean; required?: boolean; budgetLimit?: 180 | 200; scope?: import("../../src/core/model.ts").LocationScope;
   quote?: (selection: FinancialBookingSelection, ordinary: FinancialBookingAssessment) => FinancialBookingAssessment | undefined;
@@ -61,6 +62,12 @@ export async function financialClassBookingFixture(options: { passes?: boolean; 
       return config;
     } });
   clock = f.classSessionConfig.clock;
+  const c = f.classSessionConfig;
+  const flowConfig: ClinikoCallFlowConfig = { ...c,
+    approvals: { bookCaller: c.callerApprovalPath, cancelCaller: c.callerApprovalPath, rescheduleCaller: c.callerApprovalPath,
+      booking: f.path, cancellation: f.path, rescheduling: f.path },
+    classAttendance: { approvalPath: c.classApprovalPath, practitionerId: c.cliniko.practitionerId, appointmentTypeId: c.cliniko.appointmentTypeId,
+      bookPermission: c.classPermission, cancelPermission: c.classPermission, ...(c.classPassAuthority ? { passAuthority: c.classPassAuthority } : {}) } };
   const pending = () => { assert.ok(f.host.financial); return f.host.financial; };
   const readback = async () => { for (let i = 0; i < 16 && pending().inputAdmission()?.phase === "unplayed"; i++) await pending().acceptDigit("1", pending().inputAdmission()); };
   const accept = () => pending().acceptDigit("1", pending().inputAdmission());
@@ -79,6 +86,6 @@ export async function financialClassBookingFixture(options: { passes?: boolean; 
     const observed = [...funding.rows.values()].find(r => String(r.notes).includes("financial booking observation"))!;
     return value(verifyFinancialBookingObservation(observed.notes, { intent, intentRecallRef: `cliniko:recall:${source.id}`, producerKeyRef: keyRef, publicKey: keys.publicKey }));
   };
-  return { ...f, funding, config, financialLife, events, texts, selections, pending, readback, accept, confirm, proof,
+  return { ...f, flowConfig, funding, config, financialLife, events, texts, selections, pending, readback, accept, confirm, proof,
     denyFinancial: () => { allowed = false; funding.deny(); }, close: async () => { financialLife.abort(); await f.close(); } };
 }

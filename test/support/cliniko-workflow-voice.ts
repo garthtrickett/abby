@@ -168,12 +168,14 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       clinicalWorkflow: { policies: policy,
         ...(config.publicKnowledge ? { publicKnowledge: config.publicKnowledge } : {}),
         create(context) { ledger = context.ledger;
+          if (config.financial) assert.ok(context.financialPresentation, "actual private financial playback port required");
           // Test-only observation before actual transient disposal; nothing is
           // persisted and the production ledger still releases every call.
           const callLedger = ledger, dispose = callLedger.dispose.bind(callLedger);
           callLedger.dispose = () => { disposedState ??= callLedger.read(callId, scope); dispose(); };
           flow = resultValue(ClinikoCallFlow.create({ ...config, ...context,
           policyVersion: config.policyVersion, fetchPort: provider,
+          ...(config.financial && context.financialPresentation ? { financial: { ...config.financial, fetchPort: provider, presentation: context.financialPresentation } } : {}),
           ...(config.intake ? { intake: { ...config.intake, presentation: context.privatePresentation } } : {}) }));
           flow.readBookingMenu = observe("bookingMenuRead", flow.readBookingMenu.bind(flow), bookingMenuDeadlineMs, query => query.signal);
           flow.selectBookingMenu = observe("bookingMenuSelect", flow.selectBookingMenu.bind(flow), bookingMenuDeadlineMs, query => query.signal);
@@ -263,8 +265,12 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       assert.equal(playback.acknowledgeLatest(), true);
       await voiceUntil(() => processedSequence >= markSequence, "processed playback receipt");
     };
+    const privateQuiet = async () => {
+      for (let frame = 0; frame < 25; frame++) media(false);
+      const resumeChunk = chunk; await voiceUntil(() => processedChunk >= resumeChunk, "fresh private-audio quiet interval");
+    };
     await mark();
-    return { callId, sent, spoken, transcripts, privateTranscripts, modelTurns, writes, writeRequests, close, mark, media, sendEvent,
+    return { callId, sent, spoken, transcripts, privateTranscripts, modelTurns, writes, writeRequests, close, mark, media, sendEvent, privateQuiet,
       get workflowStarted() { return flow !== undefined; },
       get flow() { assert.ok(flow); return flow; }, get transcriptionFrames() { return transcriptionFrames; },
       get closed() { return closed; }, get closeCode() { return closeCode; },
@@ -362,8 +368,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         await voiceUntil(() => processedChunk >= finalChunk, "completed caller media turn"); },
       async verify(code: string) { for (const digit of `${code}#`) sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
         await voiceUntil(() => !flow!.verificationRequired, "private code verification");
-        for (let frame = 0; frame < 25; frame++) media(false);
-        const resumeChunk = chunk; await voiceUntil(() => processedChunk >= resumeChunk, "fresh private-audio quiet interval"); },
+        await privateQuiet(); },
     };
   } catch (error) { await close(); throw error; }
 }

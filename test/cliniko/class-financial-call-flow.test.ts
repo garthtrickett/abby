@@ -11,16 +11,14 @@ import { resultValue } from "../support/agent-appointment-proposals.ts";
 for (const passes of [false, true]) test(`actual class call flow carries private financial consent into a separate clinical action (pass=${passes})`, async () => {
   const f = await financialClassBookingFixture({ passes }); f.host.dispose(); f.session.dispose();
   const c = f.classSessionConfig;
-  const flow = resultValue(ClinikoCallFlow.create({ ...c,
-    approvals: { bookCaller: c.callerApprovalPath, cancelCaller: c.callerApprovalPath, rescheduleCaller: c.callerApprovalPath,
-      booking: f.path, cancellation: f.path, rescheduling: f.path },
-    classAttendance: { approvalPath: c.classApprovalPath, practitionerId: c.cliniko.practitionerId, appointmentTypeId: c.cliniko.appointmentTypeId,
-      bookPermission: c.classPermission, cancelPermission: c.classPermission, ...(c.classPassAuthority ? { passAuthority: c.classPassAuthority } : {}) } }));
+  const flow = resultValue(ClinikoCallFlow.create(f.flowConfig));
   const reception = new TextReception(f.ledger, f.policies, flow, undefined, undefined, undefined, undefined, c.clock);
   const ordinary = new PrivateWorkflowKeypad({ callId: f.callId, sessionId: f.sessionId, owner: () => flow });
   const input = new PrivateFinancialBookingInput(ordinary, () => flow);
   try {
-    await f.play(); resultValue(await flow.choose("book")); assert.equal(input.claim(f.callId, f.sessionId), true); assert.equal(input.start(), true);
+    await f.play(); resultValue(await flow.startWorkflow({ scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: c.policyVersion,
+      operation: "book", classAttendance: true, signal: new AbortController().signal }));
+    assert.equal(input.claim(f.callId, f.sessionId), true); assert.equal(input.start(), true); assert.equal(flow.beginVerification(), true);
     await f.verificationDelivered;
     for (const key of f.mail[0]!.code) assert.equal(await input.accept(key), "pending");
     assert.equal(await input.accept("#"), "verified"); assert.equal(input.blocked(), false);
