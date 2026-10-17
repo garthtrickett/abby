@@ -68,6 +68,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   const writtenActions = new Set<string>(), nativeRows = new Map<string, Record<string, unknown>>();
   const failures: string[] = [];
   const transitionTrace: Record<string, unknown>[] = [];
+  const traceEnabled = options.transitionTrace === true;
   const playback = new SyntheticPlaybackReceipts(name => sendEvent({ event: "mark", mark: { name } }));
   // Fixed stage names and timings only; diagnostics never retain caller text,
   // provider paths, patient refs or verification material.
@@ -182,13 +183,20 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
           if (config.financial) assert.ok(context.financialPresentation, "actual private financial playback port required");
           // Test-only observation before actual transient disposal; nothing is
           // persisted and the production ledger still releases every call.
-          if (options.transitionTrace) {
+          if (traceEnabled) {
             const apply = ledger.apply.bind(ledger);
             ledger.apply = async (...args: Parameters<MemoryLedger["apply"]>) => {
               const action = args[3];
+              const before = await ledger!.read(args[0], args[1]);
               const detail = { kind: action.kind, ...("now" in action ? { at: action.now } : {}),
+                ...(before.ok ? { beforeLifecycle: before.value.lifecycle, beforeRevision: before.value.conversationRevision,
+                  beforeLeaseExpires: before.value.sessionLease?.expiresAt,
+                  transferStarted: Object.values(before.value.presentations).some(p => p.kind === "transfer" && ["started", "possiblySent"].includes(p.status)) } : {}),
                 ...(action.kind === "callerTurn" ? { interpretation: action.interpretation.kind,
-                  textPresent: !!action.turn.text, turnAt: action.turn.at } : {}) };
+                  textPresent: !!action.turn.text, turnAt: action.turn.at,
+                  callMatches: before.ok && action.turn.callId === before.value.callId,
+                  sessionMatches: before.ok && action.turn.sessionId === before.value.sessionLease?.sessionId,
+                  turnIdPresent: !!action.turn.turnId } : {}) };
               const result = await apply(...args);
               if (transitionTrace.length >= 64) transitionTrace.shift();
               transitionTrace.push({ ...detail, result: result.ok ? "ok" : result.error.kind,
@@ -385,7 +393,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         const failureState = failures.length && !options.expectedFailure ? await diagnosticState() : undefined;
         assert.deepEqual(failures, options.expectedFailure ? [options.expectedFailure] : [], `wire failure after ${modelTurns.length} model turns and ${transcriptionFrames} transcribed frames ${failureState ? JSON.stringify({
           workflow: flow?.workflow, lifecycle: failureState.lifecycle, terminalReason: failureState.terminal?.reason, now: now(),
-          sourceCalls: sourceDiagnostic(), ...(options.transitionTrace ? { transitionTrace } : {}), processedChunk, finalChunk, pendingPresentation: failureState.pendingPresentationId !== undefined,
+          sourceCalls: sourceDiagnostic(), ...(traceEnabled ? { transitionTrace } : {}), processedChunk, finalChunk, pendingPresentation: failureState.pendingPresentationId !== undefined,
           actions: Object.values(failureState.actions).map(action => ({ kind: action.kind, status: action.status })),
           presentations: Object.values(failureState.presentations).map(p => ({ kind: p.kind, status: p.status })),
           effects: Object.values(failureState.effects).map(e => ({ kind: e.kind, status: e.status })),
