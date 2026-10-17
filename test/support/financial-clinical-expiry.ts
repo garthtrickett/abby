@@ -21,7 +21,7 @@ export async function clinicalExpiryFixture(options: {
       ...(options.legacyConsent ? {} : { financialConsent: { presentationRef: uuid(40), presentationDigest: financialConsentDigest(financialConsentReadback(i, approvedTerms, "Etc/UTC")!),
         playedAt: now, acceptedAt: now, acceptanceRef: uuid(41) } }) };
     const payload = financialBookingObservationPayload(row)!;
-    return formatFinancialBookingObservation(row, sign(null, financialBookingObservationMessage(payload), keys.privateKey).toString("base64url"))!;
+    return formatFinancialBookingObservation(row, sign(null, financialBookingObservationMessage(payload, options.legacyConsent ? 1 : 2), keys.privateKey).toString("base64url"))!;
   } }, retained: options.retained });
   f.naturallyExpired();
   let reference = true, provider = true, financial = true, admitted = true, live = true, reads = 0;
