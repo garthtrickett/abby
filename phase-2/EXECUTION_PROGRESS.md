@@ -3764,3 +3764,47 @@ native180 financial-class change. Its exactf30f9bb HEAD's PR run39010028036 and
 push39010025250 failed before jobs could start; primary annotations report failed
 account payments/spending limits. No billing/configuration change, rerun or merge
 was attempted. Synthetic engineering continues independently of cloud admission.
+
+## Complete possible Stripe creation range primitive — 17 October 2026
+
+A provider-owned possible attempt can span nearly24hours; its retained bound is
+not the client's initial10-second response timeout. Ordinary Stripe discovery
+accepted at most one hour, so it could not cover that whole context. A separate
+`findPossibleCreation` now partitions the full inclusive bound (up to86,400s)
+into at most24 disjoint windows, each at most3,600s apart, without changing the
+ordinary `find` contract. One current account validation, one abort/clock context
+and the existing single10-second maximum deadline govern all windows together.
+Each retains ten100-row pages, so the absolute bound is240 list GETs/24,000 rows
+plus one account GET. IDs/candidates are checked across windows, while pagination
+cursors reset per window. No partial candidate survives a later conflict, native
+range mismatch, incomplete history, account/amount/mode mismatch, abort or timeout.
+There is no new provider effect or local financial payload.
+
+Source12708e7 passed work1792219122745 at06:38:46.326026UTC:37/37 contracts,
+no failures/skips/cancellations, preserving existing ordinary discovery, money
+inspection and webhook contracts. It covers a final-second candidate, complete
+24-window/24,000-row bound, competing distant candidates, late malformed/error/
+truncated windows, cumulative time, held/cancelled requests and invalid bounds.
+Peak153,993,216B/512MiB/CPU200%/Swap0, all memory events0; source/lock pins
+unchanged and paired wait reaped. Its earlier launcher1792219042365 refused
+before tests on a measured live headroom shortfall while a peer4GiB scope was
+active. After that peer's actual terminal and fresh admission, the exact same
+runner/cap passed; no floor/reserve/cap/deadline or tests were changed.
+
+Sourcee50bd1c passed work1792219216738 at06:40:20.820094UTC:41/41 actual
+native-memory checkout-owner and new retained-attempt composition contracts,
+no failures/skips/cancellations. After one native retained attempt and a lost
+Stripe ACK, a simulated later provider creation is found outside the first hour
+using that exact retained range. A complete miss likewise yields only observation.
+Neither result permits a fresh owner to create again, including after the local
+claim is missing; native attempt history still rejects it. Peak133,136,384B/
+512MiB/CPU200%/Swap0, all memory events0, pins unchanged/wait reaped.
+
+This is the complete range read primitive, not a completed cold reconciler or
+payment lifecycle. Independent current source/read permission, exact Session
+inspection, all-producer quiescence and restore admission remain necessary.
+Configured service discovery, durable webhook handoff, link/receipt delivery,
+financial/clinical expiry and races remain open. Native-memory fixtures and
+synthetic Stripe do not establish SQL producer-loss/restore or external acceptance.
+The separate full6bdf350 regression continues on its frozen earlier source and
+does not qualify this later component. All13 gaps remain active.

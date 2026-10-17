@@ -562,3 +562,37 @@ activation, all catalogue/intake combinations, financial producer SIGKILL/restor
 quiescence or the complete payment lifecycle. The four legacy class process-loss
 stages qualify a separate verification-fixture correction; they are not killed
 financial-producer coverage. All thirteen gaps remain active.
+
+## Complete possible-creation range read candidate
+
+The retained checkout attempt's possible-creation range can extend well beyond
+the initial client's transport timeout. The ordinary Stripe discovery method
+keeps its one-hour range contract. A separate `findPossibleCreation` primitive
+covers the complete inclusive range, up to24hours, in at most24 disjoint windows
+of at most3,600seconds each. Inclusive integer-second boundaries have neither
+gaps nor overlap; a candidate in the final possible second is included.
+
+One account validation and the existing single10-second maximum read deadline
+cover the entire operation. Each window retains its ten100-row-page cap; the
+whole bound is at most240 list GETs/24,000 rows, plus one account GET. Pagination
+restarts per window, but IDs and candidates are checked across the complete scan.
+A later competing candidate, invalid row, wrong scope/amount/mode, incomplete
+page chain, denied/failed read, abort or cumulative deadline discards any earlier
+candidate. Status filters never hide paid or expired Sessions.
+
+`observed` is only a candidate reference; `notObserved` is a bounded observation,
+never proof of no possible future creation, creation/payment acknowledgement or
+permission to retry. The scan is not an atomic provider snapshot. Current exact
+source/read permission, independently established producer quiescence, trust and
+restore admission, fresh exact Session inspection and separate effect authority
+remain required in the eventual cold financial reconciler. No list result grants
+collection, delivery, receipt, clinical expiry, refund or new Checkout creation.
+
+The read-only fixture cohorts pass37/37 and the actual native retained-attempt/
+no-replay owner cohort41/41. The latter exercises a provider creation after the
+original lost client response, reads the native attempt's whole retained range
+and confirms both found/missing observations cannot replay, even with a missing
+local claim. These synthetic leaves and native-memory record fixtures do not
+qualify the configured cold financial service, producer/restore quiescence, SQL
+recovery or the complete payment lifecycle. The concurrently frozen6bdf350 full
+regression excludes this subsequent source.
