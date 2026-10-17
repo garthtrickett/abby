@@ -1,12 +1,13 @@
 # Proposed Stripe payment lifecycle contract
 
-Status: engineering proposal,16October2026. Stripe was selected by the owner.
-The pending-work owner below is a recommendation awaiting selection, not an
-accepted clinic record schema or permission to enable real payment workflows.
+Status: financial-work ownership selected by the owner,17October2026. Stripe
+and dedicated Cliniko financial reviews are selected. The concrete clinic
+record schema, permissions and lifecycle remain engineering/acceptance work;
+this decision does not enable real payment workflows.
 The protocol/read adapter in draft475 is qualified separately; the full payment
 lifecycle remains unfinished.
 
-## Recommended ownership
+## Selected ownership
 
 Use a dedicated clinic-approved Cliniko financial review/recall type for private
 pending payment work. Stripe owns payable Sessions, received money, refunds,
@@ -15,10 +16,10 @@ operational effect IDs and approved non-patient ownership metadata in PostgreSQL
 No patient, appointment, Stripe/event reference, amount, currency, recipient,
 intent body or retry payload belongs in that local claim storage.
 
-The alternative is a clinic financial system that already offers a durable
-pending-work contract. That would need a concrete adapter and acceptance of its
-record fields and permissions. No such system has been identified in Abby.
-Avoid assuming a private local deposit database or a hypothetical backend.
+The owner selected dedicated Cliniko reviews from the proposed choices. A
+second financial system is not a prerequisite. Actual dedicated recall type IDs,
+field/content approval, current access permissions and activation remain clinic
+configuration/acceptance gates; engineering uses patient-free fixtures.
 
 ## Private provider records
 
@@ -75,7 +76,7 @@ prove an old sender stopped. Missing evidence denies automatic replay.
 
 ## Acceptance still needed
 
-Select the pending-work owner, then qualify its concrete schema/permissions,
+Qualify the selected Cliniko owner’s concrete schema/permissions,
 pre-booking terms, observed acknowledgement handoff, one-shot creation/discovery,
 signed/reordered/duplicate events, exact recipient delivery/receipt, payment versus
 expiry/manual-paid races, process loss, restore/quiescence and SQL/backup/public
@@ -110,3 +111,24 @@ sender activation and authoritative CI are separate gates. All13 gaps remain act
 - Native financial-record/proof/recipient reads and writes must be included in
   the same physical Cliniko account's cost and allocation admission. Stripe's
   separate quota does not add Cliniko headroom; the180-request ceiling remains.
+
+## First financial-intent schema
+
+The prospective `financial-review-intent.ts` codec uses a separate versioned
+financial envelope and the action UUID as its recall marker. It binds clinic,
+location, native account credential fingerprint, patient, intended individual
+or class booking action/selection/interval, Stripe account/mode, approved minor
+unit amount/currency, policy/terms versions/deadline, email recipient and four
+independent effect IDs. Email is the initial encoding; real delivery is still
+deferred. No new local private table, sender or provider effect is introduced.
+
+The deterministic uncompressed payload must fit the existing1,000-character
+summary contract. Only explicit fields, canonical UTC millisecond timestamps,
+positive bounded minor-unit amounts and distinct UUIDv4 effect/action IDs are
+accepted. Malformed, noncanonical, extra-field or oversized envelopes refuse.
+This is prospective context only: no native target acknowledgement, paid flag,
+receipt, replay permission or clinical expiry authority can be encoded. A
+schema-valid edited record remains untrusted context; parsing cannot establish
+immutable history or permission. Separate authenticated observed-acknowledgement
+and attempt records, discovery, lifecycle, current permission and restore
+admission remain to be implemented and qualified through the host.

@@ -2823,3 +2823,21 @@ with1536MiB heap, all memory-limit/OOM events zero. The sole TypeScript change
 since the four-case serving run is the registry-version assertion; cohort and
 production source are identical. The final evidence commit changes Markdown
 only. No whole-suite, cloud or operator acceptance is inferred.
+
+##17October: selected financial-work owner and prospective intent schema
+
+The owner selected dedicated clinic-approved Cliniko financial reviews for
+pending payment work. Stripe remains the selected money/receipt owner. This
+settles the ownership choice; no further owner selection is required to build
+the financial adapter with patient-free fixtures. Concrete native record type
+configuration, field/content approval, permissions and real activation remain
+separate acceptance requirements. Abby’s local journal retains opaque one-use
+effect IDs and approved non-patient metadata only.
+
+The first schema patch is a strict prospective financial-intent codec, separate
+from existing booking reviews. It preserves exact subject/booking selection,
+account/mode, money/terms, recipient and separate effects within the existing
+recall summary limit. It performs no provider effect and creates no local table.
+Parsed notes are untrusted context, never acknowledgement, money or permission.
+Focused validation is pending. The frozen parent regression continues; it has
+reported a cancelled-email E2E-380 private-choice timeout and is not green.

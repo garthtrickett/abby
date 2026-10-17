@@ -88,7 +88,8 @@ Finish the staged caller/SAM presentation, receipt and renewed-consent route, op
 
 Use the roadmap's [gap 11 requirements](THIRTEEN_GAP_IMPLEMENTATION.md#requirements-and-evidence-needed) with audit [R18](AEVA_TO_ABBY_REUSE_AUDIT.md#r18-separate-payment-truth-from-appointment-and-delivery-truth) and [R19](AEVA_TO_ABBY_REUSE_AUDIT.md#r19-use-aeva-payment-races-as-adversarial-requirements).
 
-Agree payment-provider and clinic contracts first, then implement exact action/account/amount/currency binding, authenticated and idempotent events, link delivery, receipts and independently authorized expiry. Keep payment, appointment, delivery and receipt outcomes distinct. Cover duplicate/out-of-order events and payment-versus-expiry races. No invented reservation, automatic restoration, refund or financial coverage promise.
+Stripe and dedicated Cliniko financial reviews are owner-selected. Qualify the
+concrete clinic record and permission contracts first, then implement exact action/account/amount/currency binding, authenticated and idempotent events, link delivery, receipts and independently authorized expiry. Keep payment, appointment, delivery and receipt outcomes distinct. Cover duplicate/out-of-order events and payment-versus-expiry races. No invented reservation, automatic restoration, refund or financial coverage promise.
 
 If a required receipt needs native attachment support, bring forward only that approved [R22](AEVA_TO_ABBY_REUSE_AUDIT.md#r22-give-notes-and-attachments-distinct-permissions-and-receipts) dependency here, under its own exact-target/storage contract. Do not wait for all gap 13 work or quietly add general clinical writeback.
 

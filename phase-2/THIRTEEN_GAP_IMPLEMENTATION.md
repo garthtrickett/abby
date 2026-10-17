@@ -23,8 +23,9 @@ and one existing skip; its ordered follow-up did not run. Exact-head draft485
 cloud runs never executed a job step because of the account payment/spending
 restriction. All thirteen gaps retain their recorded engineering and acceptance
 limits. No merge, clinic/provider acceptance, activation, real mail/payment,
-carrier work or Aeva deletion is inferred. The pending financial-work owner
-choice remains required before its dependent lifecycle adapter can be built.
+carrier work or Aeva deletion is inferred. The owner selected dedicated Cliniko financial-review records for pending
+payment work on17October; Stripe owns money and receipts. Concrete record,
+permission and lifecycle engineering and clinic acceptance remain open.
 
 The separate source81d10254 staff cohort now passes four native/signed tests,
 including cross-case/cross-service pass association-response loss followed by
