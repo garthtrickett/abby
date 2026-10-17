@@ -7,13 +7,13 @@ import type { FinancialBookingAssessment, FinancialBookingPreparationConfig } fr
 import { decodeClinikoFinancialIntent } from "../../src/cliniko/financial-review-intent.ts";
 import { verifyFinancialBookingObservation } from "../../src/cliniko/financial-booking-observation.ts";
 
-export async function financialBookingFixture(options: { required?: boolean; play?: FinancialBookingPreparationConfig["presentation"]["play"];
+export async function financialBookingFixture(options: { activate?: boolean; required?: boolean; play?: FinancialBookingPreparationConfig["presentation"]["play"];
   lostObservation?: boolean; lostIntent?: boolean; observationResponse?: (row: Record<string, unknown>) => Response;
   quote?: (q: FinancialBookingAssessment) => FinancialBookingAssessment | undefined } = {}) {
   const rows = new Map<string, Record<string, unknown>>(), texts: string[] = [], events: string[] = [], burned = new Set<string>();
   const financialLife = new AbortController(); let allowed = true, live = true, next = 100;
   let config: FinancialBookingPreparationConfig;
-  const f = await standaloneBookingFixture({ fetchAround: port => async (input, init) => {
+  const f = await standaloneBookingFixture({ ...(options.activate === undefined ? {} : { activate: options.activate }), fetchAround: port => async (input, init) => {
     const url = new URL(String(input));
     const body = init?.method === "POST" ? JSON.parse(String(init.body)) : undefined;
     if (url.pathname === "/v1/recalls" && body?.recall_type_id === "40") {
