@@ -6,10 +6,11 @@ import { fixture, observation, value, now, reviewDate, stop, base, uuid } from "
 type Row = Record<string, unknown>;
 export async function checkoutFixture(options: {
   native?: Parameters<typeof fixture>[0]; authority?: Partial<CheckoutOwnerAuthority>; config?: Partial<CheckoutOwnerConfig>;
+  bookingObservation?: (intent: ReturnType<typeof fixture>["intent"]) => string;
   stripe?: (row: Row, method: string) => Response | Promise<Response>;
 } = {}) {
   const f = fixture(options.native); f.seedIntent();
-  const captured = value(await f.retainer.retainBookingObservationOnce(observation(f.intent), { intent: f.intent, intentRecallRef: "cliniko:recall:30" }, reviewDate, stop()));
+  const captured = value(await f.retainer.retainBookingObservationOnce(options.bookingObservation?.(f.intent) ?? observation(f.intent), { intent: f.intent, intentRecallRef: "cliniko:recall:30" }, reviewDate, stop()));
   assert.equal(captured.kind, "accepted");
   let allowed = true, admitted = true, current = true;
   const requests: { url: string; method: string; body: string; headers: Headers }[] = [], queries: unknown[] = [], sessions: Row[] = [];

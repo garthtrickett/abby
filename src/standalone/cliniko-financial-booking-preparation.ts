@@ -1,4 +1,5 @@
-import { createHash, createPublicKey, KeyObject, randomUUID } from "node:crypto";
+import { createPublicKey, KeyObject, randomUUID } from "node:crypto";
+import { financialConsentReadback, financialConsentDigest } from "./financial-consent-readback.ts";
 import { digestActionRequest } from "../core/digest.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import type { ActionRequest, LocationScope } from "../core/model.ts";
@@ -58,23 +59,6 @@ type Pending = { fence: object; selection: FinancialBookingSelection; assessment
 function freeze<T>(v: T): T { if (v !== null && typeof v === "object") { for (const child of Object.values(v)) freeze(child); Object.freeze(v); } return v; }
 const instant = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v) && Number.isFinite(Date.parse(v)) && new Date(v).toISOString() === v;
 
-/** Each clip keeps the existing private-prompt deadline. A new, post-play digit
- * requests the next clip; only the digit after the final clip can consent. */
-function financialReadback(intent: ClinikoFinancialIntent, assessment: Extract<FinancialBookingAssessment, { kind: "required" }>, timeZone: string): readonly string[] | undefined {
-  const deadline = new Intl.DateTimeFormat("en-GB", { timeZone, dateStyle: "full", timeStyle: "short" }).format(new Date(intent.payment.deadline));
-  const text = `The clinic requires a post-booking deposit of ${intent.payment.currency.toUpperCase()} ${(intent.payment.amount / 100).toFixed(2)}, payable by ${deadline} in the clinic time zone. With your permission, the clinic will email a secure Stripe payment link to ${intent.recipient.address}. ${assessment.approvedTerms} This does not pay now or reserve the time.`;
-  const parts: string[] = []; let part = "", count = 0;
-  for (const word of text.split(/\s+/)) {
-    // An unusually long address/word needs a separately qualified readback.
-    if (word.length > 160) return undefined;
-    if (part && (part.length + word.length + 1 > 160 || count >= 24)) { parts.push(part); part = ""; count = 0; }
-    part += `${part ? " " : ""}${word}`; count++;
-  }
-  if (part) parts.push(part);
-  if (!parts.length || parts.length > 14) return undefined;
-  return Object.freeze([...parts.map(p => `${p} Press 1 to hear the next part, or 2 to decline.`),
-    "The financial terms are complete. Press 1 to agree to these terms and the payment email, or 2 to decline. If you agree, say continue booking. A separate booking confirmation follows."]);
-}
 
 /** Call-private quote/consent owner. Money, recipient, text and receipt never enter
  * SAM/action/local storage. Only the real producer later signs the receipt into
@@ -164,7 +148,7 @@ export class ClinikoFinancialBookingPreparation {
         stripe: { ...selected.stripe }, payment: assessment.payment, recipient: assessment.recipient, createdAt: now,
         effects: { checkout: randomUUID(), linkDelivery: randomUUID(), receiptDelivery: randomUUID(), checkoutExpiry: randomUUID(), clinicalExpiry: randomUUID() } });
       if (!encodeClinikoFinancialIntent(intent).ok) return undefined;
-      const segments = financialReadback(intent, assessment, selection.timeZone); if (!segments) return undefined;
+      const segments = financialConsentReadback(intent, assessment.approvedTerms, selection.timeZone); if (!segments) return undefined;
       const pending: Pending = { fence: Object.freeze({}), selection, assessment, marker, intent, readback: { segments, receipts: [] }, phase: "unplayed" }; this.#pending = pending;
       if (!await this.#permit(pending, signal)) return undefined;
       const retained = await awaitUntilAbort(this.#records.retainIntentOnce(intent, assessment.reviewDate, signal), signal);
@@ -221,7 +205,7 @@ export class ClinikoFinancialBookingPreparation {
             p.readback.receipts.some(r => r.presentationRef === receipt.presentationRef) || !await this.#permit(p, signal)) { p.phase = "declined"; return "verified"; }
         p.readback.receipts.push(Object.freeze({ ...receipt })); p.fence = Object.freeze({});
         if (p.readback.receipts.length < p.readback.segments.length) { p.phase = "unplayed"; return "pending"; }
-        p.consent = freeze({ presentationRef: receipt.presentationRef, presentationDigest: createHash("sha256").update(JSON.stringify(p.readback.segments)).digest("hex"), playedAt: receipt.playedAt, acceptedAt: receipt.playedAt, acceptanceRef: randomUUID() });
+        p.consent = freeze({ presentationRef: receipt.presentationRef, presentationDigest: financialConsentDigest(p.readback.segments), playedAt: receipt.playedAt, acceptedAt: receipt.playedAt, acceptanceRef: randomUUID() });
         p.phase = "awaiting"; return "pending";
       }
       if (p.phase !== "awaiting") return "pending";
