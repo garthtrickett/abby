@@ -91,18 +91,19 @@ test("untrusted native notes reject alternate envelopes, payload shapes and nonc
 
 test("the full 1000-character summary boundary refuses oversized context without truncation", () => {
   let boundary: string | undefined;
+  const largeScope = { tenantId: "t".repeat(128), clinicId: "c".repeat(128), locationId: "l".repeat(128) };
   for (let size = 1; size <= 128; size++) {
-    const value = { ...intent, scope: { tenantId: "t".repeat(size), clinicId: "c".repeat(size), locationId: "l".repeat(size) } };
+    const value = { ...intent, scope: largeScope, payment: { ...intent.payment, termsVersion: "v".repeat(size) } };
     const result = encodeClinikoFinancialIntent(value);
     if (result.ok) {
       assert.deepEqual(decodeClinikoFinancialIntent(result.value), { ok: true, value });
       boundary = result.value;
     } else {
-      assert.ok(boundary); assert.ok(boundary.split("\n").slice(1).join("\n").length > 990); break;
+      assert.ok(boundary); assert.equal(boundary.split("\n").slice(1).join("\n").length, 1000); break;
     }
   }
-  assert.equal(encodeClinikoFinancialIntent({ ...intent, scope: {
-    tenantId: "t".repeat(128), clinicId: "c".repeat(128), locationId: "l".repeat(128),
-  } }).ok, false);
+  assert.ok(boundary);
+  assert.equal(encodeClinikoFinancialIntent({ ...intent, scope: largeScope,
+    payment: { ...intent.payment, termsVersion: "v".repeat(128) } }).ok, false);
   assert.equal(decodeClinikoFinancialIntent(formatRecallNote(id(1), "x".repeat(1001))).ok, false);
 });
