@@ -127,17 +127,21 @@ export class ClinikoOutboundPendingDiscovery {
         if (scanned === total) break;
         if (page === 5) throw new Failure("malformed");
       }
-      const ids = new Set<string>(), records: OutboundRecipientRecord[] = [];
+      const ids = new Set<string>(), campaigns = new Set<string>(), records: OutboundRecipientRecord[] = [];
       const reader = ClinikoOutboundRecipientRecords.createReadOnly(this.#config, {
-        allows: async q => { await accountPermit(); await recordPermit(q); return true; },
+        allows: async q => {
+          try { await accountPermit(); await recordPermit(q); return true; }
+          catch (error) { if (error instanceof Failure && error.kind === "forbidden") return false; throw error; }
+        },
         current: q => { try { current(account); current(q); return true; } catch { return false; } },
       }, this.#fetch);
       if (!reader.ok) return reader;
       for (const listed of selected) {
         const parsed = decodeOutboundRecipientRequest(listed.notes); if (!parsed.ok) throw new Failure("malformed");
         const request = parsed.value;
+        if (ids.has(request.campaignRef)) throw new Failure("mismatched"); campaigns.add(request.campaignRef);
         for (const ref of [request.actionRef,request.approvalRef,request.effectRef]) {
-          if (ids.has(ref)) throw new Failure("mismatched"); ids.add(ref);
+          if (ids.has(ref) || campaigns.has(ref)) throw new Failure("mismatched"); ids.add(ref);
         }
         const found = await wait(reader.value.readRequest({ recallRef: `cliniko:recall:${listed.id}`, actionRef: request.actionRef, patientId: listed.patientId }, signal));
         if (!found.ok) return found;

@@ -110,3 +110,23 @@ test("configuration and bound permission methods cannot be replaced after discov
   assert.deepEqual(await discovery.scanPending(new AbortController().signal),{ok:false,error:{kind:"forbidden"}});assert.equal(f.calls.length,0);
   assert.equal(ClinikoOutboundPendingDiscovery.create({...f.f.config,outboundRecallTypeId:""},f.authority,f.port).ok,false);
 });
+
+for (const count of [50,51]) test(`selected outbound recipient bound ${count} never returns a partial batch`,async()=>{
+  const f=await outboundPendingFixture(),original=row(f);f.controls.rows=[];
+  for(let i=0;i<count;i++) {
+    const request={...f.f.request,actionRef:randomUUID(),approvalRef:randomUUID(),effectRef:randomUUID()};
+    const next={...structuredClone(original),id:String(30+i),links:{self:`https://api.au5.cliniko.com/v1/recalls/${30+i}`},notes:value(encodeOutboundRecipientRequest(request))};
+    f.controls.rows.push(next);f.f.rows.set(String(30+i),next);
+  }
+  const result=await f.scan();if(count===50){assert.equal(value(result).records.length,50);assert.equal(f.calls.length,51);}
+  else {assert.deepEqual(result,{ok:false,error:{kind:"malformed"}});assert.equal(f.calls.length,1);}
+  assert.equal(f.f.burned.size,1);
+});
+test("external cancellation bounds a pending page and discards its late owned response",{timeout:3000},async()=>{
+  const f=await outboundPendingFixture();let complete!: (r:Response)=>void,started!:()=>void,cancelled=0;
+  const ready=new Promise<void>(resolve=>{started=resolve;});f.controls.page=()=>{started();return new Promise(resolve=>{complete=resolve;});};
+  const controller=new AbortController(),pending=f.scan(controller.signal);await ready;controller.abort();
+  assert.deepEqual(await pending,{ok:false,error:{kind:"unavailable"}});
+  complete(new Response(new ReadableStream({cancel(){cancelled++;}})));await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(cancelled,1);assert.equal(f.f.burned.size,1);
+});
