@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { outboundContactTime } from "../../src/standalone/outbound-contact-time.ts";
-import type { OutboundContactSchedule } from "../../src/standalone/outbound-contact-time.ts";
+import { outboundContactTime } from "../../src/core/outbound-contact-time.ts";
+import type { OutboundContactSchedule } from "../../src/core/outbound-contact-time.ts";
 const policy: OutboundContactSchedule = { notBefore: "2026-01-01T00:00:00.000Z", expiresAt: "2027-01-01T00:00:00.000Z",
   timeZone: "UTC", weekdays: [1, 2, 3, 4, 5], opensAt: "09:00", closesAt: "17:00" };
 const check = (now: string, kind: string, patch: Partial<OutboundContactSchedule> = {}) => assert.deepEqual(outboundContactTime({ ...policy, ...patch }, now), { kind });
