@@ -2937,3 +2937,18 @@ This changes only a parent test report/assertion; the serving artifacts remain
 unchanged. Observe the two content cases again before changing production code
 or running a full suite. Source aggregates are since fixture startup, not
 counts attributed solely to selection; the wrapped choice timer is separate.
+
+The completed-report observation work1792202391706 passed the original two
+content cases, zero skips/failures/cancellations,01:59:52.233647–02:00:58.368813UTC.
+Node188,448,768B/Docker121,241,600B under the same1.5GiB/1GiB caps,CPU200%
+each/Swap0, with all memory events zero. All1197 source and455 artifact/terminal
+pins matched; exit0, PID/scope/container absence and paired wait verified.
+
+Telehealth selection completion took9,265ms; cancelled6,005ms. Whole-call
+policy observations were292/4,884ms and288/2,347ms; native HTTP52/112ms and
+48/79ms. These source totals overlap and do not attribute all time to selection.
+Completion also includes played private readback, so neither duration directly
+measures the failing first-reply wait. Add a parent first-reply timer around the
+unchanged digit wait. No production authority/performance fix is inferred.
+The reviewed product-facts checkpoint now records the actual full failure; none
+of the three changed diagnostic files is a directly fingerprinted citation.

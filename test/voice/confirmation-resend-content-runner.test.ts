@@ -13,11 +13,14 @@ for (const variant of ["telehealth", "cancelled"] as const) test(`E2E-380 signed
       await voiceUntil(() => call.spoken.some(s => s.includes("Choose the appointment")), "private content menu"); await call.mark();
       if (variant === "cancelled") assert.match(call.spoken.at(-1)!, /cancelled/);
       const ordinary = call.messages.filter(m => m.kind === "ordinaryFrame").length;
-      await call.digit("1"); await call.mark();
+      const choiceStarted = performance.now();
+      await call.digit("1");
+      const firstReplyMs = Math.round(performance.now() - choiceStarted);
+      await call.mark();
       await voiceUntil(() => call.spoken.at(-1)?.includes("Press pound to return") === true, "private readback complete"); await call.mark();
       const choice = call.messages.filter(row => row.kind === "privateChoiceResult").at(-1);
       assert.ok(choice?.diagnostic, "completed selection supplies aggregate source observations");
-      t.diagnostic(JSON.stringify({ phase: "privateChoiceComplete", scope: "wholeCallSources", sources: choice.diagnostic }));
+      t.diagnostic(JSON.stringify({ phase: "privateChoiceComplete", scope: "wholeCallSources", firstReplyMs, sources: choice.diagnostic }));
       assert.equal(call.messages.filter(m => m.kind === "ordinaryFrame").length, ordinary);
       assert.equal(call.mutations.length, 0);
       await call.keypad("#"); await call.quietAfterPrivateInput(); await call.say("Send my appointment email."); await call.mark();
