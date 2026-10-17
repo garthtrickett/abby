@@ -138,9 +138,14 @@ export class ClinikoConfirmationEvidenceReader {
     if (!row || row.id !== appointmentId || row.archived_at !== null || row.deleted_at !== null ||
         this.#linkedId(row.patient, "patients") !== before.patientRef || this.#linkedId(row.business, "businesses") !== c.cliniko.businessId ||
         !startsAt || !endsAt || (cancelledAt ? Date.parse(cancelledAt) > Date.parse(this.#now()) || Math.abs(Date.parse(startsAt) - Date.parse(this.#now())) > 90 * 86_400_000 : Date.parse(startsAt) <= Date.parse(this.#now())) || Date.parse(endsAt) <= Date.parse(startsAt) || !practitionerId || !appointmentTypeId) return undefined;
-    const business = await this.#get(`/businesses/${c.cliniko.businessId}`, signal);
-    const practitioner = await this.#get(`/practitioners/${practitionerId}`, signal);
-    const type = await this.#get(`/appointment_types/${appointmentTypeId}`, signal);
+    // These exact metadata GETs depend only on the validated target above.
+    // Each keeps its own live authority/quota gate. Overlap their independent
+    // reads; exact target/type and subject checks still bracket disclosure.
+    const [business, practitioner, type] = await Promise.all([
+      this.#get(`/businesses/${c.cliniko.businessId}`, signal),
+      this.#get(`/practitioners/${practitionerId}`, signal),
+      this.#get(`/appointment_types/${appointmentTypeId}`, signal),
+    ]);
     if (!business || business.id !== c.cliniko.businessId || business.archived_at !== null || business.time_zone_identifier !== c.cliniko.timeZone ||
         !practitioner || practitioner.id !== practitionerId || !type || type.id !== appointmentTypeId || type.archived_at !== null || !label(type.name) ||
         !label(business.business_name) || ![true, false, null].includes(type.telehealth_enabled as boolean | null)) return undefined;
