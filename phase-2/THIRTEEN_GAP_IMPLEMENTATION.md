@@ -4335,3 +4335,67 @@ qualify the unpublished financial-expiry combination. All thirteen gaps,
 cloud execution, clinic/provider/acoustic/deployment acceptance remain open.
 Stripe and dedicated clinic-approved Cliniko financial reviews remain selected;
 no deployment, live payment, expiry cancellation, refund or Aeva deletion follows.
+
+
+### Separately provisioned Checkout expiry, 17 October 2026
+
+Stripe and dedicated clinic-approved Cliniko financial reviews remain the owner
+choice. The configured consumer now has an optional independent Checkout-expiry
+owner. It retains exact native intent/signed-booking/possible-creation citations,
+requires fresh reference/provider-binding/financial-expiry and producer/restore
+authority, and observes fresh money before an effect. Current clinic expiry
+authority must independently address captured deadline/fees/manual payment and
+waiver; ordinary notes, metadata or an unpaid Stripe observation do not grant it.
+
+Closed-inclusive patient history, one permanently burned opaque SQL effect ID
+and one native possible-expiry record precede a single exact Stripe Session
+expire POST. Sources, native attempt, money and grants are checked again before
+send. Never cancel the PaymentIntent, appointment or attendee here. Paid,
+processing, authorized, adjusted, changed and unknown states refuse. A natural
+closed-unpaid observation is readonly. Expiry ACK and later money are distinct;
+a payment race or lost permission cannot erase received money, replay uncertainty,
+refund, restore availability or imply financial coverage. Missing explicit
+provisioning keeps this route inactive. The private shared lifecycle source seam
+provides context/history only and grants no clinical action.
+
+Qualification and failure history:
+
+- Initial220-unit run1792226509966 had218 passes/two new fixture failures:
+  the wrong native-fault header selector and an archive timestamp preceding the
+  deliberately advanced record creation time. Corrected fixtures then passed
+  34/34 in1792226658024 and224/224 in1792226938553.
+- Strict provider status now requires an actual string, with no coercion.
+  The231 financial controls passed1792227451452. Public-policy/deadline plus
+  financial controls passed269/269 in1792227861708. Their product/unit inputs
+  remain byte-identical after the clock-only rebase; no unchanged rerun was used
+  as new evidence. All24 original deadline boundaries separately pass on506.
+- Two prior actual compiled expiry/consumer SQL runs1792227272918 and
+  1792227690887 passed9/9. The older7f combined1792228110452 finished13/14:
+  all financial cases passed, but the now-diagnosed frozen voice clock caused
+  E353's backwards-time refusal at the real15-second boundary. It is preserved
+  as a failed qualification, not replaced by an isolated-pass claim.
+- Current d62bf235 full TypeScript/serving build1792229349846 DONE0 at
+  09:32:11.597846UTC, peak1,447,235,584B/2GiB, heap1536MiB;492 artifacts pinned.
+- Current combined1792229553709 DONE0 at09:34:11.406141UTC:15/15, comprising
+  nine compiled financial PostgreSQL/TLS/HTTP cases, five original E353/E354/
+  E349/E346 signed cases and the actual15-second registered-caller refusal.
+  Default4-file concurrency, all16 E353 variants/3 internal workers, deadlines
+  and assertions remain.39 ordinary menus/max8,973ms/no abort; one deliberately
+  held source aborts at15seconds and yields only a safe refusal. Node/Docker
+  peaks557,989,888/375,717,888B under1.5GiB/1GiB, CPU200%/Swap0/events0.
+  Source/492 artifacts remained unchanged; own DB/scope cleaned, wait50198 reaped.
+
+Current compiled cases cover native/local missing-claim process loss, a closed
+possible expiry preventing replay, real backup/privacy scans, independent
+concurrent consumers, incomplete producer/restore refusal, manual-paid/waiver
+expiry authority refusal, and payment-winning expiry followed by separate
+Stripe-hosted receipt delivery. The exact expiry POST ACK alone is never money
+or permission for a clinical cancellation.
+
+Latest complete regression is still older d4173562/1/1; fresh complete current
+qualification remains open. Separately authorized clinical expiry and approved
+resend remain engineering work, alongside gaps12/13 and the recorded acceptance
+limits of earlier gaps. All thirteen gaps remain in scope. No actual clinic
+configuration, live payment/email, deployment, automatic refund/restoration,
+merge, or Aeva deletion is claimed. Required cloud checks remain unavailable
+before execution due account billing on the preceding exact-head drafts.
