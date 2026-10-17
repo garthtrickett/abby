@@ -1001,3 +1001,7 @@ Version1.242 retains419 stable IDs and planned full-call status.28 pure finite c
 ## Prospective outbound recipient context
 
 Version1.242 retains419 stable IDs and planned full-call status.2fc107a passes71 bounded native-context/time checks and strict TypeScript/serving build. The canonical private note requires an exact original individual appointment for sick-day context but supplies no patient/contact/DNC or launch authority. All504 artifacts match517: no native writer, discovery, scheduler or launcher imports it yet. No new caller or outbound campaign journey is promoted.
+
+## Native outbound recipient record components
+
+Version1.242 retains419 stable IDs and planned full-call status. Current5d4e8e8 passes101 time/context/native/history controls and strict TypeScript. Its runtime matches a8c89db, whose serving build pins513 artifacts and whose nine-file actual PostgreSQL/process/archive/backup/privacy cohort passes46/46. Retention and genuine read-only context reload use separate current record grants; SQL consumes only the record action before one native POST. Mapped imports preserve permanent exclusion history across all three families. This adds no native pending discovery, approved audience/DNC, scheduler, launch, callback clinical action or complete outbound campaign/full-call evidence. Current combined regression and real acceptance remain open.
