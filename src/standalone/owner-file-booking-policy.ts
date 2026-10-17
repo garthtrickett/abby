@@ -68,14 +68,18 @@ export class OwnerFileBookingPolicy {
     return { scope: { ...scope }, policyVersion, businessId, practitionerId, appointmentTypeId, credentialFingerprint, recallTypeId, timeZone };
   }
   async current(scope: LocationScope): Promise<Result<BookingApproval, Failure>> {
-    const found = await this.#source.current(scope), binding = this.binding();
+    const parent = this.#config.serviceBinding;
+    if (parent && !(parent.catalogue instanceof OwnerFileServiceCatalogue)) return err({ kind: "bookingPolicyUnavailable" });
+    // These are independent public approval sources. Keep each source's exact
+    // before/after file and current-membership checks; overlap only their reads.
+    // Operation-bound patient verifier and member searches remain serialized.
+    const [found, current] = await Promise.all([this.#source.current(scope), parent?.catalogue.current(scope)]);
+    const binding = this.binding();
     if (!found.ok || !found.value || Object.entries(binding).some(([key, value]) => key !== "scope" && found.value![key as keyof BookingApproval] !== value))
       return err({ kind: "bookingPolicyUnavailable" });
-    if (this.#config.serviceBinding) {
-      const parent = this.#config.serviceBinding;
-      if (!(parent.catalogue instanceof OwnerFileServiceCatalogue)) return err({ kind: "bookingPolicyUnavailable" });
-      const current = await parent.catalogue.current(scope), row = current.ok && current.value.services.find(service => service.serviceRef === parent.serviceRef);
-      if (!current.ok || !row || current.value.policyVersion !== found.value.policyVersion || current.value.businessId !== found.value.businessId ||
+    if (parent) {
+      const row = current?.ok && current.value.services.find(service => service.serviceRef === parent.serviceRef);
+      if (!current?.ok || !row || current.value.policyVersion !== found.value.policyVersion || current.value.businessId !== found.value.businessId ||
           current.value.credentialFingerprint !== found.value.credentialFingerprint || current.value.timeZone !== found.value.timeZone ||
           row.serviceRef !== found.value.serviceRef || row.appointmentTypeId !== found.value.appointmentTypeId || row.durationMinutes !== found.value.durationMinutes ||
           row.searchDays > (found.value.availabilityPlan?.maxSearchDays ?? 7) ||
