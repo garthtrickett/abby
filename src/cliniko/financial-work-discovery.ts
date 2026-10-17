@@ -113,14 +113,14 @@ export class ClinikoFinancialWorkDiscovery {
         let body: unknown;
         try {
           current(account);
-          response = await wait(this.#port(`${this.#base}/recalls?${query}`, { method: "GET", redirect: "error", signal,
+          const received = await wait(this.#port(`${this.#base}/recalls?${query}`, { method: "GET", redirect: "error", signal,
             headers: { Accept: "application/json", Authorization: `Basic ${Buffer.from(`${this.#config.apiKey}:`).toString("base64")}`,
               "User-Agent": `Abby (${this.#config.contactEmail})` } }).then(r => { response = r; if (signal.aborted) discard(r); return r; }));
-          if (response.status === 429) return err(await wait(observeCliniko429(this.#config.rateBudget, response.headers.get("X-RateLimit-Reset"))));
-          if (response.status === 401 || response.status === 403) throw new ScanFailure("forbidden");
-          if (response.status !== 200) throw new ScanFailure("unavailable");
+          if (received.status === 429) return err(await wait(observeCliniko429(this.#config.rateBudget, received.headers.get("X-RateLimit-Reset"))));
+          if (received.status === 401 || received.status === 403) throw new ScanFailure("forbidden");
+          if (received.status !== 200) throw new ScanFailure("unavailable");
           bodyOwned = true;
-          const bytes = await ownedBodyBytes(response.body, 1_000_000, signal);
+          const bytes = await ownedBodyBytes(received.body, 1_000_000, signal);
           try { body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); } catch { throw new ScanFailure("malformed"); }
         } finally { if (!bodyOwned) discard(response); }
         await accountPermit();
