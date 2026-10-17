@@ -16,6 +16,8 @@ import { decodeTenantConfigArchive } from "../../src/portability/config-archive.
 import { validStaffWorkHistoryManifest } from "../../src/portability/staff-work-history.ts";
 import { down } from "../../src/storage/migrations/049_financial_effect_barriers.ts";
 import { withDisposablePostgres } from "../support/disposable-postgres.ts";
+import { targetReady } from "../../src/storage/postgres-cutover-target.ts";
+import type { TargetImportRow } from "../../src/storage/postgres-cutover-target.ts";
 
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL required");
 const db = connectPostgres(process.env.DATABASE_URL);
@@ -26,6 +28,14 @@ function value<T>(r: { ok: true; value: T } | { ok: false; error: unknown }): T 
 const exportAuthority = { authorizeAndRecord: async () => ok({ requestRef: `financial-export-${randomUUID()}` }) };
 const importAuthority = { authorizeAndRecord: async () => ok({ auditRef: `financial-import-${randomUUID()}` }) };
 const mapper = { mapRef: () => "disabled" };
+async function cutoverReady(tenantId: string): Promise<boolean> {
+  return db.transaction().execute(async trx => {
+    await sql`select pg_advisory_xact_lock(172934501, hashtext(${tenantId}))`.execute(trx);
+    const row = (await sql<TargetImportRow>`select archive_id, manifest_digest, receipt, source_history
+      from tenant_config_imports where target_tenant_id = ${tenantId}`.execute(trx)).rows[0];
+    return row !== undefined && targetReady(trx, row.source_history, row);
+  });
+}
 
 test("financial effect races and fresh owners consume exactly one permanently retained opaque ID", async () => {
   const owner = scope(), ref = randomUUID();
@@ -71,8 +81,11 @@ test("mixed financial and resend barriers survive durable import, repeated stagi
   assert.equal(decoded.locations[0]?.confirmationResends?.[0]?.requestRef, mailRef);
   const importer = new PostgresTenantConfigArchiveImporter(db);
   assert.equal(value(await importer.preflight(archive, target.tenantId, "fixture-owner", importAuthority, mapper)).status, "ready");
-  assert.equal(value(await importer.stage(archive, target.tenantId, "fixture-owner", importAuthority, mapper)).status, "staged");
-  assert.equal(value(await importer.stage(archive, target.tenantId, "fixture-owner", importAuthority, mapper)).status, "alreadyStaged");
+  const receipt = value(await importer.stage(archive, target.tenantId, "fixture-owner", importAuthority, mapper));
+  assert.equal(receipt.status, "staged");
+  assert.deepEqual(value(await importer.stage(archive, target.tenantId, "fixture-owner", importAuthority, mapper)), receipt);
+  assert.equal(value(await importer.preflight(archive, target.tenantId, "fixture-owner", importAuthority, mapper)).status, "alreadyStaged");
+  assert.equal(await cutoverReady(target.tenantId), true);
   assert.deepEqual(await new PostgresFinancialEffectBarrier(db, target, binding).claimOnce(ref), ok({ claimed: false }));
   assert.equal(value(await new PostgresConfirmationResendJournal(db, target, binding).claim(mailRef)).send, false);
   const second = value(await buildPostgresTenantConfigArchive(db, { sourceTenantId: target.tenantId,
@@ -83,11 +96,22 @@ test("mixed financial and resend barriers survive durable import, repeated stagi
   assert.equal(validStaffWorkHistoryManifest(secondData), true);
   assert.equal(value(await importer.stage(second, next.tenantId, "fixture-owner", importAuthority, mapper)).status, "staged");
   assert.deepEqual(await new PostgresFinancialEffectBarrier(db, next, binding).claimOnce(ref), ok({ claimed: false }));
+  assert.equal(await cutoverReady(next.tenantId), true);
+  value(await new PostgresFinancialEffectBarrier(db, { ...next, locationId: "unexpected" }, binding).claimOnce(randomUUID()));
+  assert.equal(await cutoverReady(next.tenantId), false);
   // Actual retained-row loss must invalidate a cached receipt and re-export;
   // neither path may repair it or grant a replacement effect ID.
   await sql`delete from financial_effect_barriers where tenant_id = ${target.tenantId} and effect_ref = ${ref}::uuid`.execute(db);
+  assert.equal(await cutoverReady(target.tenantId), false);
   assert.deepEqual(await importer.preflight(archive, target.tenantId, "fixture-owner", importAuthority, mapper), { ok: false, error: { kind: "storageFailure" } });
   assert.deepEqual(await importer.stage(archive, target.tenantId, "fixture-owner", importAuthority, mapper), { ok: false, error: { kind: "storageFailure" } });
+  // Removing both the barrier and its retained projection must still fail the
+  // original mixed-section digest; a cached receipt cannot sanitize history loss.
+  const edited = { ...decoded, locations: decoded.locations.map(location => ({ ...location, financialEffects: [] })) };
+  assert.equal(validStaffWorkHistoryManifest(edited), false);
+  await sql`update tenant_config_imports set source_history = ${JSON.stringify(edited)}::jsonb where target_tenant_id = ${target.tenantId}`.execute(db);
+  assert.equal(await cutoverReady(target.tenantId), false);
+  assert.deepEqual(await importer.preflight(archive, target.tenantId, "fixture-owner", importAuthority, mapper), { ok: false, error: { kind: "storageFailure" } });
   const lost = await buildPostgresTenantConfigArchive(db, { sourceTenantId: target.tenantId,
     archiveId: `financial-lost-${randomUUID()}`, actorRef: "fixture-owner", createdAt: now(),
     locations: [{ sourceScope: target, targetScope: scope(), timeZone: "UTC", mappingProvenance: "fixture-review" }] }, exportAuthority);

@@ -31,6 +31,7 @@ export async function writeFinancialEffectCarryover(trx: Transaction<Database>, 
 }
 /** Full target comparison, including unmapped/foreign extra rows. Never repairs. */
 export async function reconcileFinancialEffectCarryover(db: Db, data: TenantConfigArchiveData): Promise<boolean> {
+  if (!validStaffWorkHistoryManifest(data)) return false;
   const expected: ScopedFinancialEffectHistory[] = [];
   for (const location of data.locations) {
     if (!validFinancialEffectHistory(location.financialEffects)) return false;
