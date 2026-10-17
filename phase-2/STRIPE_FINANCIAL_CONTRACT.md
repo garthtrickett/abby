@@ -164,4 +164,6 @@ empty chunks, retires its own reader and bounds dependencies that ignore abort.
 It leaves a pre-locked foreign reader untouched. Native HTTP/body/permission
 errors expose only bounded failure kinds. Constructor configuration projects
 approved ownership fields rather than copying arbitrary private properties.
-Local validation for this adapter is pending; no real provider was accessed.
+Local interface validation passes61 focused checks and full TypeScript on
+sourcef71f863d. This does not qualify actual financial-host permissions or
+lifecycle/privacy/recovery. No real provider was accessed.

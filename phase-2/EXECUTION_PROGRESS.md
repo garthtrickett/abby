@@ -3017,3 +3017,24 @@ Review additionally guards rejected/late body cancellation so a broken cancel
 port cannot escape the bounded failure result. An additional hostile-interface
 control covers rejected-response cleanup. Peak1,440,681,984B, all memory events
 zero, source inputs unchanged and paired wait completed.
+
+Final reader source `f71f863dfd9af7d449d5774f266ecbb62f0aaa84` passed61/61
+focused controls (20 exact-read/hostile-interface cases, five intent-codec cases,
+34 existing Stripe cases and two metadata contracts), zero skips/failures/
+cancellations, followed by full `npm run typecheck`. Work1792204160971 naturally
+ended exit0 at02:31:27.482141UTC after starting02:29:21UTC. Peak1,441,677,312B
+under2GiB/CPU200%/Swap0,heap1536, all memory-limit/OOM events zero. All1199
+typed/config inputs and the dependency lock remained unchanged; authoritative
+exit0, PID/scope absence and paired wait completion were verified. No database
+or provider/sender/financial action ran in these tests.
+
+Command: `node --test --test-concurrency=2 test/contract/product-facts.test.ts
+test/contract/scenario-manifest.test.ts test/cliniko/financial-review-intent.test.ts
+test/cliniko/financial-review-read.test.ts test/contract/stripe-webhook-stream.test.ts
+test/contract/stripe-checkout-read.test.ts test/contract/stripe-checkout-discovery.test.ts
+test/contract/stripe-webhook.test.ts`, then `npm run typecheck`. Later evidence-only
+Markdown edits retain the tested1199 source/config hashes. The frozen complete
+regression36b5285 covers its earlier graph, not this new adapter/shared reader.
+Current financial-host identity, producer-observed booking acknowledgement,
+durable attempts/discovery, payable creation, receipt/delivery, expiry and
+process/restore/SQL privacy remain explicit future gates. All13 gaps stay active.
