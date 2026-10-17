@@ -45,7 +45,7 @@ test("native possible-expiry retention and exact read use independent native gra
   f.deny(); assert.equal((await f.retainer.readExpiryAttempt({ recallRef: read.recallRef, actionRef: a.actionRef, intentRecallRef: a.intentRecallRef }, f.intent, stop())).ok, false);
 });
 test("unknown native attempt acknowledgement retains possible evidence and cannot be replayed", async () => {
-  const f = fixture({ response: (row, method) => { if (method === "POST" && String(row.notes).includes("financial message attempt")) throw new Error("Synthetic lost ACK"); return Response.json(row, { status: method === "POST" ? 201 : 200 }); } });
+  const f = fixture({ response: (row, method) => { if (method === "POST" && String(row.notes).includes("financial expiry attempt")) throw new Error("Synthetic lost ACK"); return Response.json(row, { status: method === "POST" ? 201 : 200 }); } });
   const source = await retained(f), a = attempt();
   assert.equal(value(await f.retainer.retainExpiryAttemptOnce(a, source, reviewDate, stop())).kind, "uncertain");
   assert.equal(value(decodeFinancialExpiryAttempt(f.rows.get("32")!.notes)).effectRef, a.effectRef);

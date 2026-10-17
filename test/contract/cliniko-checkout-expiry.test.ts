@@ -54,7 +54,7 @@ test("payment/native/current changes during retained handoff burn the attempt bu
 test("lost expiry ACK is freshly inspected and never blindly replayed after restored missing claims", async () => {
   const f = await expiryFixture({ post: () => { throw new Error("Private uncertain Stripe expiry"); } });
   assert.deepEqual(value(await f.expireOnce()), { kind: "uncertain", money: "unpaid" }); assert.equal(f.posts.length, 1);
-  f.burned.delete(f.intent.effects.checkoutExpiry); const row = f.rows.get("33")!; row.recalled = true; row.recalled_at = now; row.archived_at = now;
+  f.burned.delete(f.intent.effects.checkoutExpiry); const row = f.rows.get("33")!; row.recalled = true; row.recalled_at = f.config.cliniko.clock(); row.archived_at = f.config.cliniko.clock();
   assert.deepEqual(await value(f.makeExpiry()).expireOnce(f.binding, stop()), { ok: false, error: { kind: "alreadyClaimed" } }); assert.equal(f.posts.length, 1);
 });
 
