@@ -1,6 +1,6 @@
 # Execution progress and evidence
 
-**Updated:** 16 October 2026. **Objective:** Work through [EXECUTION_ORDER.md](EXECUTION_ORDER.md), preserving its full thirteen-gap scope. This ledger records partial delivery; the integration is not complete or activated.
+**Updated:** 17 October 2026. **Objective:** Work through [EXECUTION_ORDER.md](EXECUTION_ORDER.md), preserving its full thirteen-gap scope. This ledger records partial delivery; the integration is not complete or activated.
 
 ## Current position
 
@@ -2621,3 +2621,15 @@ No deadline was shortened or relaxed. Nodepeak202,084,352B/1GiB/CPU200%, own
 Docker151,781,376B/512MiB/CPU200%,Swap0,no memory limit/OOM events,1185 inputs
 unchanged. Additional preservation and full TypeScript are next. The running7ca
 full remains frozen and failing; this follow-up is in a separate worktree.
+
+Played-reply source9928365 full TypeScript passed (`work1792195632408`),
+00:07:12.688141–00:08:44.871152UTC,1185 inputs unchanged,
+peak1,400,705,024B/2GiB/CPU200%/Swap0/1536MiB heap,no memory limit/OOM events.
+Five original signed workflow files also pass6/6,0skips
+(`work1792195538823`,00:05:39–00:06:58.182279UTC),including the complete16-mode
+intake catalogue, private intake, played selection, corrections and guided
+service dialogue. Nodepeak422,498,304B and ownDocker313,225,216B,1GiB/CPU200%
+each,Swap0,no memory limit/OOM events;1185 input hashes unchanged. Production
+source is unchanged from7ca; only synthetic observation and tests changed.
+The separate7ca full still runs frozen with its known E2E-329 failure; no new
+full graph has passed and no authoritative cloud/clinic acceptance is inferred.
