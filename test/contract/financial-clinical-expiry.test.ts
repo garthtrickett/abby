@@ -75,3 +75,43 @@ test("shared financial readback preserves the previous producer's signed clip by
   // Captured from c562363's original private formatter, before extraction.
   assert.equal(financialConsentDigest(clips), "ba02658b58fb6f561b59b3ad7796edd4cf00c60d1b6d5a61dffb0299d0de1664");
 });
+
+for (const gate of ["denySource", "denyReference", "denyProvider", "denyFinancial", "denyClinical", "denyProducer", "retire"] as const)
+  test(`authority loss after native possible-expiry review stops clinical send: ${gate}`, async () => {
+    let f!: Awaited<ReturnType<typeof clinicalExpiryFixture>>;
+    f = await clinicalExpiryFixture({ retained: () => { f[gate](); } });
+    assert.equal((await f.expireClinical()).ok, false); assert.equal(attempts(f).length, 1);
+    assert.equal(f.cancellations.length, 0); assert.equal(f.burned.has(f.intent.effects.clinicalExpiry), true);
+  });
+test("changed native target during final preparation refuses clinical expiry without a PATCH", async () => {
+  let retained = false;
+  const f = await clinicalExpiryFixture({ retained: () => { retained = true; }, read: row => { if (retained) row.ends_at = "2026-11-03T09:45:00.000Z"; } });
+  assert.equal((await f.expireClinical()).ok, false); assert.equal(f.cancellations.length, 0); assert.equal(attempts(f).length, 1);
+});
+test("closing the possible native review during the writer's target preparation prevents a late clinical PATCH", async () => {
+  let f!: Awaited<ReturnType<typeof clinicalExpiryFixture>>;
+  f = await clinicalExpiryFixture({ read: (_row, count) => {
+    if (count === 3) { const record = [...f.rows.values()].find(r => decodeFinancialExpiryAttempt(r.notes).ok)!; record.recalled_at = f.config.cliniko.clock!(); }
+  } });
+  assert.equal((await f.expireClinical()).ok, false); assert.equal(f.cancellations.length, 0);
+});
+for (const boundary of ["abort", "deadline"] as const)
+  test(`a held native clinical read respects ${boundary} and cannot dispatch its late result`, { timeout: 5_000 }, async () => {
+    let entered!: () => void, release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; }), started = new Promise<void>(resolve => { entered = resolve; });
+    const controller = new AbortController();
+    const f = await clinicalExpiryFixture({ ...(boundary === "deadline" ? { deadlineMs: 250 } : {}), read: async () => { entered(); await held; } });
+    try {
+      const pending = f.expireClinical(controller.signal);
+      assert.equal(await Promise.race([started.then(() => true), pending.then(() => false)]), true, "native read entered before abort boundary");
+      if (boundary === "abort") controller.abort();
+      assert.equal((await pending).ok, false); assert.equal(f.cancellations.length, 0);
+      release(); await new Promise<void>(resolve => setImmediate(resolve)); assert.equal(f.cancellations.length, 0);
+    } finally { release(); controller.abort(); }
+  });
+test("loss of later financial reference permission cannot erase an inspected native cancellation", async () => {
+  let f!: Awaited<ReturnType<typeof clinicalExpiryFixture>>;
+  f = await clinicalExpiryFixture({ cancel: row => { row.cancelled_at = f.config.cliniko.clock!(); row.cancellation_reason = 50; f.denyReference(); return new Response(null, { status: 204 }); } });
+  assert.deepEqual(value(await f.expireClinical()), { kind: "cancelled", money: "unknown", reviewRequired: true });
+  assert.equal(f.cancellations.length, 1);
+});

@@ -58,7 +58,7 @@ export async function clinicalExpiryFixture(options: {
   const config = { ...f.config, ...(options.deadlineMs === undefined ? {} : { deadlineMs: options.deadlineMs }) };
   const make = () => ClinikoFinancialClinicalExpiryOwner.create(config, authority, f.recordsAuthority, f.barrier, native, f.expiryStripePort);
   const owner = value(make());
-  return { ...f, clinicalConfig: config, clinicalAuthority: authority, appointment, cancellations, makeClinical: make,
+  return { ...f, clinicalNativePort: native, clinicalConfig: config, clinicalAuthority: authority, appointment, cancellations, makeClinical: make,
     expireClinical: (signal = stop()) => owner.expireOnce(f.binding, signal),
     denyClinical: () => { approval = null; }, changeApproval: (change: Partial<FinancialClinicalApproval>) => { approval = { ...approval!, ...change }; },
     denyFinancial: () => { financial = false; }, denyReference: () => { reference = false; }, denyProvider: () => { provider = false; },

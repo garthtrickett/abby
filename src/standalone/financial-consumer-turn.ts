@@ -5,6 +5,7 @@ import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { StripeCheckoutDiscovery } from "../stripe/checkout-discovery.ts";
 import type { StripeCheckoutReader } from "../stripe/checkout-read.ts";
 import type { ClinikoStripeCheckoutOwner, CheckoutCreationReceipt } from "./cliniko-stripe-checkout.ts";
+import type { ClinikoFinancialClinicalExpiryOwner } from "./cliniko-financial-clinical-expiry.ts";
 import type { ClinikoCheckoutExpiryOwner } from "./cliniko-checkout-expiry-owner.ts";
 import type { ClinikoFinancialMessageOwner, FinancialMessageBinding } from "./cliniko-financial-message-owner.ts";
 
@@ -27,10 +28,10 @@ export type FinancialConsumerAuthority = Readonly<{
    * permit a replacement. This must not persist private data in Abby SQL. */
   onCheckoutAcknowledged(receipt: CheckoutCreationReceipt, signal: AbortSignal): Promise<void>;
 }>;
-export type FinancialConsumerTurnResult = "creationAcknowledged" | "checkoutExpiryAcknowledged" | "checkoutClosedUnpaid" | "messageAccepted" | "alreadyAttempted" | "reviewRequired";
+export type FinancialConsumerTurnResult = "clinicalExpiryCancelled" | "creationAcknowledged" | "checkoutExpiryAcknowledged" | "checkoutClosedUnpaid" | "messageAccepted" | "alreadyAttempted" | "reviewRequired";
 type Ports = Readonly<{
   ownerBinding: string; authority: FinancialConsumerAuthority; checkout: ClinikoStripeCheckoutOwner;
-  discovery: StripeCheckoutDiscovery; money: StripeCheckoutReader; messages: ClinikoFinancialMessageOwner; expiry?: ClinikoCheckoutExpiryOwner;
+  discovery: StripeCheckoutDiscovery; money: StripeCheckoutReader; messages: ClinikoFinancialMessageOwner; expiry?: ClinikoCheckoutExpiryOwner; clinicalExpiry?: ClinikoFinancialClinicalExpiryOwner;
 }>;
 function frozen<T>(value: T): T {
   if (value !== null && typeof value === "object") { for (const child of Object.values(value)) frozen(child); Object.freeze(value); }
@@ -99,6 +100,11 @@ export async function consumeFinancialPair(pair: FinancialConsumerPair, attempts
     const binding: FinancialMessageBinding = { intentRecallRef: pair.intent.recallRef, financialActionRef: intent.actionRef, observationRecallRef: pair.observationRecallRef,
       observationActionRef: pair.observation.actionRef, checkoutAttemptRecallRef: attempt.recallRef,
       checkoutAttemptActionRef: attempt.attempt.actionRef, checkoutRef: found.value.checkoutRef };
+    if (ports.clinicalExpiry && money.value.kind === "unpaid" && money.value.paymentClosed && Date.parse(money.value.observedAt) >= Date.parse(intent.payment.deadline)) {
+      await permit();
+      const expired = await ports.clinicalExpiry.expireOnce(binding, signal);
+      return expired.ok && expired.value.kind === "cancelled" && !expired.value.reviewRequired ? "clinicalExpiryCancelled" : "reviewRequired";
+    }
     if (ports.expiry && money.value.kind === "unpaid" && Date.parse(money.value.observedAt) >= Date.parse(intent.payment.deadline)) {
       await permit();
       const expired = await ports.expiry.expireOnce(binding, signal);
