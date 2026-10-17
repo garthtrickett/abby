@@ -72,12 +72,19 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   const observe = <Args extends unknown[], Value>(name: string, run: (...args: Args) => Promise<Value>, deadlineMs?: number,
     signalFor?: (...args: Args) => AbortSignal | undefined) =>
     async (...args: Args): Promise<Value> => {
+      const sourceBefore = name === "bookingMenuRead" && process.env.ABBY_TEST_MENU_TIMINGS === "1"
+        ? new Map([...sourceCalls].map(([key, value]) => [key, { count: value.count, totalMs: value.totalMs }])) : undefined;
       const signal = signalFor?.(...args);
       const stage: typeof stages[number] = { name, started: performance.now(), ...(deadlineMs === undefined ? {} : { deadlineMs }),
         ...(signal ? { signal } : {}) };
       if (stages.length >= 64) stages.shift();
       stages.push(stage);
-      try { return await run(...args); } finally { stage.settled = performance.now(); }
+      try { return await run(...args); } finally {
+        stage.settled = performance.now();
+        if (sourceBefore) console.log(JSON.stringify({ kind: "bookingMenuTiming", elapsedMs: Math.round(stage.settled - stage.started),
+          aborted: signal?.aborted === true, sources: Object.fromEntries([...sourceCalls].map(([key, value]) => [key,
+            { count: value.count - (sourceBefore.get(key)?.count ?? 0), totalMs: Math.round(value.totalMs - (sourceBefore.get(key)?.totalMs ?? 0)) }])) }));
+      }
     };
   // Fixed aggregate diagnostics, never arguments, provider refs or private values.
   const sourceCalls = new Map<string, { count: number; pending: number; totalMs: number; maximumMs: number }>();
