@@ -2855,3 +2855,10 @@ Subsequent review split Checkout expiry and clinical expiry into separate
 opaque effect IDs: these operations have different permissions, receipts and
 recovery truth. Five effect IDs plus financial/booking action IDs must all be
 distinct. The refined schema still needs its own exact-source validation.
+
+The first five-effect validation1792201399057 failed46/47 at the boundary
+fixture before TypeScript: the additional UUID made its starting maximal-scope
+fixture exceed the limit. The codec correctly refused. Reduced fixture scope
+references to100 characters so increasing the terms reference crosses the exact
+1,000/1,001 boundary again; the limit and all assertions remain unchanged.
+Peak145,035,264B, all memory events zero; the paired wait completed.

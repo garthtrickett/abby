@@ -92,7 +92,7 @@ test("untrusted native notes reject alternate envelopes, payload shapes and nonc
 
 test("the full 1000-character summary boundary refuses oversized context without truncation", () => {
   let boundary: string | undefined;
-  const largeScope = { tenantId: "t".repeat(128), clinicId: "c".repeat(128), locationId: "l".repeat(128) };
+  const largeScope = { tenantId: "t".repeat(100), clinicId: "c".repeat(100), locationId: "l".repeat(100) };
   for (let size = 1; size <= 128; size++) {
     const value = { ...intent, scope: largeScope, payment: { ...intent.payment, termsVersion: "v".repeat(size) } };
     const result = encodeClinikoFinancialIntent(value);
