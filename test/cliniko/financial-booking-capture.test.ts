@@ -79,6 +79,7 @@ for (const kind of ["book", "classBook"] as const) {
     if (result.observation.kind !== "captured") return;
     const observed = value(verified(result.observation.notes, f.intent));
     assert.equal(observed.bookingActionRef, f.intent.booking.actionRef);
+    assert.deepEqual(observed.classCreationRequest, kind === "classBook" ? { sessionId: "15" } : undefined);
     assert.equal(observed.targetRef, kind === "book" ? "cliniko:appointment:91" : "cliniko:attendee:92");
     assert.deepEqual(f.events, ["quota", "GET", "quota", "POST"]);
     assert.equal(JSON.stringify(prepared), "{}"); assert.equal(Object.isFrozen(observed), true);

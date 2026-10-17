@@ -11,6 +11,7 @@ import { decodeClinikoFinancialIntent, encodeClinikoFinancialIntent } from "./fi
 import type { ClinikoFinancialIntent } from "./financial-review-intent.ts";
 import { financialIntentDigest, financialBookingObservationPayload, financialBookingObservationMessage,
   formatFinancialBookingObservation } from "./financial-booking-observation.ts";
+import type { FinancialClassCreationRequest } from "./financial-booking-observation.ts";
 
 type Failure = Readonly<{ kind: "financialCaptureUnavailable" }>;
 type Observation = Readonly<{ kind: "captured"; notes: string }> | Readonly<{ kind: "missing" }>;
@@ -62,14 +63,15 @@ export class ClinikoFinancialBookingCapture {
       s.appointmentTypeId === i.booking.appointmentTypeId && s.scope.tenantId === i.scope.tenantId &&
       s.scope.clinicId === i.scope.clinicId && s.scope.locationId === i.scope.locationId;
   }
-  #observe(targetRef: string): Observation {
+  #observe(targetRef: string, classCreationRequest?: FinancialClassCreationRequest): Observation {
     try {
       const value = { actionRef: randomUUID(), financialActionRef: this.#intent.actionRef, intentRecallRef: this.#binding.recallRef,
         intentDigest: financialIntentDigest(this.#intent)!, bookingActionRef: this.#intent.booking.actionRef,
-        targetRef, observedAt: this.#clock(), producerKeyRef: this.#keyRef, ...(this.#consent ? { financialConsent: this.#consent } : {}) };
+        targetRef, observedAt: this.#clock(), producerKeyRef: this.#keyRef, ...(this.#consent ? { financialConsent: this.#consent } : {}),
+        ...(classCreationRequest ? { classCreationRequest } : {}) };
       const payload = financialBookingObservationPayload(value);
       if (!payload || value.observedAt < this.#intent.createdAt) return { kind: "missing" };
-      const signature = sign(null, financialBookingObservationMessage(payload, this.#consent ? 2 : 1), this.#key).toString("base64url");
+      const signature = sign(null, financialBookingObservationMessage(payload, classCreationRequest ? 3 : this.#consent ? 2 : 1), this.#key).toString("base64url");
       const notes = formatFinancialBookingObservation(value, signature);
       return notes ? Object.freeze({ kind: "captured", notes }) : { kind: "missing" };
     } catch { return { kind: "missing" }; }
@@ -104,7 +106,8 @@ export class ClinikoFinancialBookingCapture {
     let accepted: Extract<ClinikoAttendanceWrite, { kind: "accepted" }> | undefined, observation: Observation = { kind: "missing" };
     try {
       const native = await writer.executeBookingOnce(request, signal, { beforeSend: checks.beforeSend, current: checks.current, acknowledged: receipt => {
-        accepted = receipt; observation = this.#observe(receipt.attendeeRef);
+        accepted = receipt; observation = this.#observe(receipt.attendeeRef, Object.freeze({ sessionId: request.sessionId,
+          ...(request.patientCaseId === undefined ? {} : { patientCaseId: request.patientCaseId }) }));
         try { checks.acknowledged?.(receipt); } catch { /* Clinical receipt is irrevocable. */ }
       } });
       return ok({ native: accepted ? ok(accepted) : native, observation });
