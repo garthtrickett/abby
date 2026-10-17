@@ -110,6 +110,25 @@ test("financial preparation finishes before the final exact native class capacit
     assert.ok(final > 0 && post > final); assert.deepEqual(f.events.slice(final + 1, post), []); assert.equal(f.writes.length, 1);
   } finally { await f.close(); }
 });
+test("an edited provider financial intent cannot use a prior private acceptance to send attendance", async () => {
+  const f = await financialClassBookingFixture(); try {
+    await consented(f); resultValue(await f.confirm());
+    const intent = [...f.funding.rows.values()].find(r => String(r.notes).includes("financial intent")); assert.ok(intent);
+    intent.notes = "Staff changed the private financial instruction.";
+    resultValue(await f.drain()); assert.equal(f.writes.length, 0); assert.equal(f.recalls.length, 0); assert.equal(f.funding.rows.size, 1);
+  } finally { await f.close(); }
+});
+test("financial authority withdrawn at the last capacity response prevents the native POST", async t => {
+  const f = await financialClassBookingFixture(); try {
+    await consented(f); resultValue(await f.confirm()); const original = ClinikoClassAttendanceReader.prototype.inspectForSend;
+    let finalRead = false;
+    t.mock.method(ClinikoClassAttendanceReader.prototype, "inspectForSend", async function(this: ClinikoClassAttendanceReader, ...args: Parameters<typeof original>) {
+      const r = await original.apply(this, args); finalRead = true; f.denyFinancial(); return r;
+    });
+    resultValue(await f.drain()); assert.equal(finalRead, true); assert.equal(f.writes.length, 0); assert.equal(f.funding.rows.size, 1);
+    assert.notEqual(Object.values((await f.state()).actions)[0]?.status, "committed");
+  } finally { await f.close(); }
+});
 test("ending the class call owner at the native ACK preserves independent financial retention", async t => {
   let observed!: () => void; const retained = new Promise<void>(resolve => { observed = resolve; });
   const f = await financialClassBookingFixture({ onObservation: observed }); try {
