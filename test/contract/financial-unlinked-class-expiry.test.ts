@@ -88,7 +88,8 @@ for (const phase of ["afterNativeAbsence", "afterNativeCancellation"] as const)
   test(`a held clinic policy read ${phase} respects the operation deadline`, { timeout: 4_000 }, async t => {
     const f = await unlinkedClassExpiryFixture({ deadlineMs: 1_500 });
     let release!: () => void; const held = new Promise<void>(done => { release = done; });
-    t.after(release); t.after(f.close);
+    const releaseTimer = setTimeout(release, 3_000);
+    t.after(() => clearTimeout(releaseTimer)); t.after(release); t.after(f.close);
     const original = f.classPolicy.current.bind(f.classPolicy); let afterAbsence = 0, blocked = false;
     f.classPolicy.current = async scope => {
       const current = await original(scope);
@@ -97,7 +98,8 @@ for (const phase of ["afterNativeAbsence", "afterNativeCancellation"] as const)
       if (block) { blocked = true; await held; }
       return current;
     };
-    const result = await f.expireClass();
+    const started = performance.now(), result = await f.expireClass();
+    assert.ok(performance.now() - started < 2_500, "the operation settles before the deliberately late policy reply");
     assert.equal(blocked, true, "the actual clinic-policy read reached the held boundary");
     if (phase === "afterNativeCancellation") {
       assert.ok(result.ok); assert.equal(result.value.kind, "uncertain"); assert.equal(result.value.reviewRequired, true);
