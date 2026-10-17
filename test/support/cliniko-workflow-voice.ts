@@ -48,9 +48,9 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   const webhookUrl = "https://workflow.example.test/twilio/inbound", streamUrl = "wss://workflow.example.test/twilio/media/";
   let mediaElapsedMs = 0;
   const sourceClock = config.clock ?? (() => verificationNow);
-  // Shared-number admission checks capture times against its host clock. This
-  // accelerated synthetic stream advances that clock with its media timestamps.
-  const now = () => options.routingHost ? new Date(Date.parse(sourceClock()) + mediaElapsedMs).toISOString() : sourceClock();
+  // The accelerated stream timestamps every caller turn after its start time.
+  // All trusted reads, including deadline refusals, must share that media clock.
+  const now = () => new Date(Date.parse(sourceClock()) + mediaElapsedMs).toISOString();
   const authToken = "synthetic-workflow-voice-token", scope = config.receipt.scope;
   const ingress = new TwilioSignedIngress({ accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
     fallbackNumbers: { [config.inbound.dialedNumber]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x38), now: () => new Date(now()) });
