@@ -18,17 +18,21 @@ export async function caseClassExpiryFixture(options: Omit<BaseOptions, "authori
   caseRead?(path: string, count: number, signal: AbortSignal): void | Promise<void>;
 } = {}) {
   let clock = Date.parse(now), claims = 0, caseReads = 0;
+  let claimsAtClinicalClaim: number | undefined;
+  const headrooms: { required: number; atClaims: number; admitted: boolean }[] = [];
   const budget = new ClinikoReadBudget(180, () => clock), burned = new Set<string>();
   let f!: Awaited<ReturnType<typeof unlinkedClassExpiryFixture>>;
   const { authority: _authority, caseRead: _caseRead, originalCase: _originalCase, includeCancelled: _cancelled,
     includeDna: _dna, arrivedFalse: _arrived, ...baseOptions } = options;
   f = await unlinkedClassExpiryFixture({ ...baseOptions, requestedCase: options.originalCase ?? "71", barrierFor(config) {
     Object.assign(config.rateBudget, { claim: () => { claims++; return budget.claim(); }, observe429: budget.observe429.bind(budget),
-      checkHeadroom: budget.checkHeadroom.bind(budget) });
+      checkHeadroom: (required: number) => {
+        const result = budget.checkHeadroom(required); headrooms.push({ required, atClaims: claims, admitted: result === null }); return result;
+      } });
     if (options.barrierFor) return options.barrierFor(config);
     const binding = value(financialRecordOwnerBinding(config));
     return { matches: (scope, owner) => JSON.stringify(scope) === JSON.stringify(config.scope) && owner === binding,
-      claimOnce: async effect => { const claimed = !burned.has(effect); burned.add(effect); return { ok: true, value: { claimed } }; } };
+      claimOnce: async effect => { if (f && effect === f.intent.effects.clinicalExpiry) claimsAtClinicalClaim = claims; const claimed = !burned.has(effect); burned.add(effect); return { ok: true, value: { claimed } }; } };
   }, beforeCancel: options.beforeCancel ?? (() => { assert.ok(burned.has(f.intent.effects.clinicalExpiry)); }) });
   try {
     clock = Date.parse(f.config.cliniko.clock!()); claims = 0;
@@ -72,7 +76,7 @@ export async function caseClassExpiryFixture(options: Omit<BaseOptions, "authori
     const make = () => ClinikoFinancialCaseClassExpiryOwner.create(config, authority, f.recordsAuthority, f.barrier, native, f.expiryStripePort);
     const owner = value(make());
     return { ...f, caseConfig: config, caseAuthority: authority, caseNative: native, classPolicy, casePolicyValue: policyValue, caseRows: rows, caseRecord: record,
-      burned, budget, get claims() { return claims; }, get caseReads() { return caseReads; }, caseEffect: effect, makeCase: make,
+      burned, budget, headrooms, get claimsAtClinicalClaim() { return claimsAtClinicalClaim; }, get claims() { return claims; }, get caseReads() { return caseReads; }, caseEffect: effect, makeCase: make,
       expireCase: (signal = stop()) => owner.expireOnce(f.binding, signal), denyClinical: () => { approval = null; },
       changeCaseApproval: (change: Partial<FinancialCaseClassApproval>) => { approval = { ...approval!, ...change }; },
       changeCasePolicy: async (change: Partial<typeof policyValue>) => writeFile(f.classPolicyPath, JSON.stringify({ ...policyValue, ...change }), { mode: 0o600 }) };

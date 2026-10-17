@@ -44,3 +44,42 @@ test("failed later case inspection cannot erase an already inspected native canc
     assert.equal(f.cancellations.length, 1); assert.equal(f.posts.length, 0);
   } finally { await f.close(); }
 });
+
+for (const race of ["paid", "caseLink", "counter", "clinical", "entitlement", "closedReview"] as const)
+  test(`case expiry rechecks ${race} after retaining the possible native attempt`, async () => {
+    let f!: Awaited<ReturnType<typeof caseClassExpiryFixture>>;
+    f = await caseClassExpiryFixture({ retained(row) {
+      if (race === "paid") f.paid();
+      if (race === "caseLink") f.attendee.patient_case = { links: { self: "https://api.au5.cliniko.com/v1/patient_cases/72" } };
+      if (race === "counter") f.caseRecord.max_sessions = 299;
+      if (race === "clinical") f.denyClinical();
+      if (race === "entitlement") f.changeCaseApproval({ entitlementRef: "other-entitlement" });
+      if (race === "closedReview") row.recalled = true;
+    } });
+    try { assert.equal((await f.expireCase()).ok, false); assert.equal(f.cancellations.length, 0); }
+    finally { await f.close(); }
+  });
+for (const change of ["closed", "expired", "archived"] as const) test(`cancelling a ${change} case does not restore its eligibility`, async () => {
+  const f = await caseClassExpiryFixture(); try {
+    if (change === "closed") f.caseRecord.closed_at = "2026-11-01T10:00:00.000Z";
+    if (change === "expired") f.caseRecord.expiry_date = "2026-11-01";
+    if (change === "archived") f.caseRecord.archived_at = "2026-11-01T10:00:00.000Z";
+    assert.deepEqual(value(await f.expireCase()), { kind: "cancelled", money: "unpaid", reviewRequired: false });
+    assert.equal(f.caseRecord.closed_at, change === "closed" ? "2026-11-01T10:00:00.000Z" : null);
+    assert.equal(f.caseRecord.archived_at, change === "archived" ? "2026-11-01T10:00:00.000Z" : null);
+    assert.equal(f.caseRecord.expiry_date, change === "expired" ? "2026-11-01" : "2026-11-30");
+  } finally { await f.close(); }
+});
+test("missing physical quota headroom port cannot admit case expiry", async () => {
+  const f = await caseClassExpiryFixture(); try {
+    Reflect.deleteProperty(f.config.cliniko.rateBudget, "checkHeadroom");
+    assert.equal((await f.expireCase()).ok, false); assert.equal(f.cancellations.length, 0);
+    assert.equal(f.burned.has(f.intent.effects.clinicalExpiry), false);
+  } finally { await f.close(); }
+});
+test("late received money and unverified case effect preserve separately inspected cancellation", async () => {
+  let f!: Awaited<ReturnType<typeof caseClassExpiryFixture>>;
+  f = await caseClassExpiryFixture({ caseRead() { if (f.cancellations.length) { f.paid(); f.caseRecord.max_sessions = 299; } } });
+  try { assert.deepEqual(value(await f.expireCase()), { kind: "cancelled", money: "received", reviewRequired: true }); assert.equal(f.posts.length, 0); }
+  finally { await f.close(); }
+});

@@ -1,3 +1,4 @@
+import type { FinancialCaseClassApproval } from "../../src/standalone/cliniko-financial-case-class-expiry.ts";
 /** Compiled synthetic host. Private provider/approval traffic uses IPC; only a
  * loopback raw webhook listener and fixed cycle counts are exposed. No retry
  * file or private local queue exists. The provider/financial owner outlives us. */
@@ -19,7 +20,7 @@ import type { SmtpMailConfig } from "../../src/standalone/smtp-text-mail-transpo
 import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 
 export type FinancialConsumerClassExpirySetup = Readonly<{ path: string; directoryPath: string; binding: ClassPolicyBinding }>;
-export type FinancialConsumerProcessSetup = Readonly<{ kind: "start"; now: string; enableCheckoutExpiry?: boolean; enableClinicalExpiry?: boolean; classClinicalExpiry?: FinancialConsumerClassExpirySetup; smtp: SmtpMailConfig;
+export type FinancialConsumerProcessSetup = Readonly<{ kind: "start"; now: string; supportsHeadroom?: boolean; enableCheckoutExpiry?: boolean; enableClinicalExpiry?: boolean; classClinicalExpiry?: FinancialConsumerClassExpirySetup; caseClassClinicalExpiry?: FinancialConsumerClassExpirySetup & Readonly<{ maximumAuthorityRequests: number }>; smtp: SmtpMailConfig;
   config: Omit<FinancialConsumerConfig, "checkout" | "webhook"> & {
     checkout: Omit<FinancialConsumerConfig["checkout"], "cliniko" | "stripe"> & {
       cliniko: Omit<FinancialConsumerConfig["checkout"]["cliniko"], "producer" | "rateBudget" | "clock"> & { producer: { keyRef: string; pem: string } };
@@ -48,7 +49,7 @@ process.on("message", async (raw: unknown) => {
     const config: FinancialConsumerConfig = { ...setup.config, checkout: { ...setup.config.checkout,
       cliniko: { ...setup.config.checkout.cliniko, clock: () => setup.now,
         producer: { keyRef: setup.config.checkout.cliniko.producer.keyRef, publicKey: createPublicKey(setup.config.checkout.cliniko.producer.pem) },
-        rateBudget: { claim: () => rpc("claim", null) as ReturnType<ClinikoRequestBudget["claim"]>,
+        rateBudget: { ...(setup.supportsHeadroom ? { checkHeadroom: (requests: number) => rpc("headroom", requests) as ReturnType<NonNullable<ClinikoRequestBudget["checkHeadroom"]>> } : {}), claim: () => rpc("claim", null) as ReturnType<ClinikoRequestBudget["claim"]>,
           observe429: reset => rpc("observe429", reset) as ReturnType<ClinikoRequestBudget["observe429"]> } },
       stripe: { ...setup.config.checkout.stripe, clock: () => Date.parse(setup.now) } },
       webhook: { ...setup.config.webhook, clock: () => Date.parse(setup.now) } };
@@ -59,6 +60,10 @@ process.on("message", async (raw: unknown) => {
       path: setup.classClinicalExpiry.path, directory: new OwnerFileAdminDirectory(setup.classClinicalExpiry.directoryPath, setup.classClinicalExpiry.binding.scope),
       clock: () => setup.now }) : undefined;
     if (capturedClass && !capturedClass.ok) throw new Error("Invalid synthetic class policy");
+    const capturedCase = setup.caseClassClinicalExpiry ? await OwnerFileClassPolicy.capture({ ...setup.caseClassClinicalExpiry.binding,
+      path: setup.caseClassClinicalExpiry.path, directory: new OwnerFileAdminDirectory(setup.caseClassClinicalExpiry.directoryPath, setup.caseClassClinicalExpiry.binding.scope),
+      clock: () => setup.now }) : undefined;
+    if (capturedCase && !capturedCase.ok) throw new Error("Invalid synthetic case policy");
     const consumer = ClinikoFinancialConsumer.create(config, {
       run: { allows: q => grant("run", q), current },
       pending: { allowsPendingRead: q => grant("pending", q), allowsRecordRead: q => grant("record", q), current },
@@ -73,6 +78,13 @@ process.on("message", async (raw: unknown) => {
         referenceAuthorized: q => grant("expiryReference", q), providerBindingAuthorized: q => grant("providerBinding", q),
         expiryAuthorized: q => grant("checkoutExpiry", q), producerAdmitted: q => grant("producer", q), current,
       } } : {}),
+      ...(capturedCase?.ok ? { caseClassClinicalExpiry: { classPolicy: capturedCase.value,
+        maximumAuthorityRequests: setup.caseClassClinicalExpiry!.maximumAuthorityRequests, authority: {
+          sources: { allows: q => grant("caseClassClinicalSource", q), allowsHistory: q => grant("caseClassClinicalHistory", q), current },
+          referenceAuthorized: q => grant("caseClassClinicalReference", q), providerBindingAuthorized: q => grant("caseClassClinicalBinding", q),
+          financialAuthorized: q => grant("caseClassClinicalFinancial", q), clinicalApproval: q => rpc("caseClassClinicalApproval", q) as Promise<FinancialCaseClassApproval | null>,
+          producerAdmitted: q => grant("producer", q), current,
+        } } } : {}),
       ...(capturedClass?.ok ? { classClinicalExpiry: { classPolicy: capturedClass.value, authority: {
         sources: { allows: q => grant("classClinicalSource", q), allowsHistory: q => grant("classClinicalHistory", q), current },
         referenceAuthorized: q => grant("classClinicalReference", q), providerBindingAuthorized: q => grant("classClinicalBinding", q),
