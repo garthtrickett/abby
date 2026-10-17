@@ -122,7 +122,7 @@ export class FinancialClinicalExpiryProtocol<Target, Approval extends FinancialE
     const money = await op.wait(this.#money.inspect({ checkoutRef: b.checkoutRef, actionRef: i.actionRef, amount: i.payment.amount, currency: i.payment.currency }, op.signal));
     await this.#referencePermit(reference, op);
     if (!money.ok || money.value.kind !== "unpaid" || !money.value.paymentClosed || money.value.status !== "expired") throw new FinancialClinicalExpiryRefusal("forbidden");
-    const target = await this.#nativeTarget.read(sources, op, () => this.#referencePermit(reference, op));
+    const target = await op.wait(this.#nativeTarget.read(sources, op, () => this.#referencePermit(reference, op)));
     await this.#referencePermit(reference, op);
     return freezeFinancialContext({ purpose: "cancelUnpaidFinancialBooking", ownerBinding: this.#binding, binding: b, sources, correlation: c, money: money.value, target });
   }
