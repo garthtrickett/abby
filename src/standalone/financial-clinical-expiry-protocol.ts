@@ -53,7 +53,7 @@ type Prepared<Target, Approval, Request> = Readonly<{ query: FinancialExpiryQuer
 export type FinancialClinicalTarget<Target, Approval extends FinancialExpiryApproval, Request> = Readonly<{
   read(sources: FinancialLifecycleSources, op: FinancialLifecycleOperation, permit: () => Promise<void>): Promise<Target>;
   request(target: Target, approval: Approval): Request | undefined;
-  cancelOnce(request: Request, signal: AbortSignal, beforeSend: (signal: AbortSignal) => Promise<boolean>):
+  cancelOnce(request: Request, signal: AbortSignal, beforeSend: (signal: AbortSignal) => Promise<boolean>, afterSendRead: (signal: AbortSignal) => Promise<boolean>):
     Promise<Result<Readonly<{ kind: "cancelled" | "uncertain" }>, unknown>>;
 }>;
 function data<Target>(q: FinancialExpiryQuery<Target>) {
@@ -196,6 +196,15 @@ export class FinancialClinicalExpiryProtocol<Target, Approval extends FinancialE
         if (approvedAgain.payloadDigest !== prepared.payloadDigest) return false;
         this.#current(ready.query, edgeSignal); if (performance.now() - began > deadline) return false;
         dispatched = true; return true;
+      }, async readSignal => {
+        const read: FinancialLifecycleOperation = { signal: readSignal, wait: async <T>(task: Promise<T>) => {
+          const value = await awaitUntilAbort(task, readSignal);
+          if (value === undefined || readSignal.aborted || performance.now() - began > deadline) throw new FinancialClinicalExpiryRefusal("unavailable");
+          return value;
+        } };
+        await this.#referencePermit(freezeFinancialContext({ purpose: "inspectFinancialClinicalExpiry" as const,
+          ownerBinding: this.#binding, binding: b, sources: final.query.sources }), read);
+        return true;
       });
       if (!dispatched) throw new FinancialClinicalExpiryRefusal("forbidden");
       cancelled = outcome.ok && outcome.value.kind === "cancelled";

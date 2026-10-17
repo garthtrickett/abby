@@ -1,3 +1,4 @@
+import type { ClinikoFinancialUnlinkedClassExpiryOwner } from "./cliniko-financial-unlinked-class-expiry.ts";
 import { financialIntentDigest } from "../cliniko/financial-booking-observation.ts";
 import type { FinancialDiscoveredWork, FinancialDiscoveredAttempt } from "../cliniko/financial-work-discovery.ts";
 import { validRecallDate } from "../cliniko/recall-note.ts";
@@ -31,7 +32,7 @@ export type FinancialConsumerAuthority = Readonly<{
 export type FinancialConsumerTurnResult = "clinicalExpiryCancelled" | "creationAcknowledged" | "checkoutExpiryAcknowledged" | "checkoutClosedUnpaid" | "messageAccepted" | "alreadyAttempted" | "reviewRequired";
 type Ports = Readonly<{
   ownerBinding: string; authority: FinancialConsumerAuthority; checkout: ClinikoStripeCheckoutOwner;
-  discovery: StripeCheckoutDiscovery; money: StripeCheckoutReader; messages: ClinikoFinancialMessageOwner; expiry?: ClinikoCheckoutExpiryOwner; clinicalExpiry?: ClinikoFinancialClinicalExpiryOwner;
+  discovery: StripeCheckoutDiscovery; money: StripeCheckoutReader; messages: ClinikoFinancialMessageOwner; expiry?: ClinikoCheckoutExpiryOwner; clinicalExpiry?: ClinikoFinancialClinicalExpiryOwner; classClinicalExpiry?: ClinikoFinancialUnlinkedClassExpiryOwner;
 }>;
 function frozen<T>(value: T): T {
   if (value !== null && typeof value === "object") { for (const child of Object.values(value)) frozen(child); Object.freeze(value); }
@@ -100,9 +101,10 @@ export async function consumeFinancialPair(pair: FinancialConsumerPair, attempts
     const binding: FinancialMessageBinding = { intentRecallRef: pair.intent.recallRef, financialActionRef: intent.actionRef, observationRecallRef: pair.observationRecallRef,
       observationActionRef: pair.observation.actionRef, checkoutAttemptRecallRef: attempt.recallRef,
       checkoutAttemptActionRef: attempt.attempt.actionRef, checkoutRef: found.value.checkoutRef };
-    if (ports.clinicalExpiry && money.value.kind === "unpaid" && money.value.paymentClosed && Date.parse(money.value.observedAt) >= Date.parse(intent.payment.deadline)) {
+    const clinicalExpiry = intent.booking.kind === "classBook" ? ports.classClinicalExpiry : ports.clinicalExpiry;
+    if (clinicalExpiry && money.value.kind === "unpaid" && money.value.paymentClosed && Date.parse(money.value.observedAt) >= Date.parse(intent.payment.deadline)) {
       await permit();
-      const expired = await ports.clinicalExpiry.expireOnce(binding, signal);
+      const expired = await clinicalExpiry.expireOnce(binding, signal);
       return expired.ok && expired.value.kind === "cancelled" && !expired.value.reviewRequired ? "clinicalExpiryCancelled" : "reviewRequired";
     }
     if (ports.expiry && money.value.kind === "unpaid" && Date.parse(money.value.observedAt) >= Date.parse(intent.payment.deadline)) {

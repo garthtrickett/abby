@@ -18,6 +18,9 @@ import type { FinancialWebhookHandoffConfig, FinancialWebhookHandoffAuthority } 
 import { stripeFinancialWebhookHandler } from "./stripe-financial-webhook-handler.ts";
 import { ClinikoFinancialClinicalExpiryOwner } from "./cliniko-financial-clinical-expiry.ts";
 import type { FinancialClinicalExpiryAuthority } from "./cliniko-financial-clinical-expiry.ts";
+import { ClinikoFinancialUnlinkedClassExpiryOwner } from "./cliniko-financial-unlinked-class-expiry.ts";
+import type { FinancialUnlinkedClassExpiryAuthority } from "./cliniko-financial-unlinked-class-expiry.ts";
+import type { OwnerFileClassPolicy } from "./owner-file-class-policy.ts";
 import { ClinikoCheckoutExpiryOwner } from "./cliniko-checkout-expiry-owner.ts";
 import type { CheckoutExpiryAuthority } from "./cliniko-checkout-expiry-owner.ts";
 import { consumeFinancialPair } from "./financial-consumer-turn.ts";
@@ -40,6 +43,8 @@ export type FinancialConsumerAuthorities = Readonly<{
   checkoutExpiry?: CheckoutExpiryAuthority;
   /** Independent native/manual financial and captured clinical consent authority. */
   clinicalExpiry?: FinancialClinicalExpiryAuthority;
+  /** Explicit native unlinked-class contract, independent of individual expiry. */
+  classClinicalExpiry?: Readonly<{ authority: FinancialUnlinkedClassExpiryAuthority; classPolicy: OwnerFileClassPolicy }>;
   records: FinancialRecordAuthority; work: FinancialConsumerAuthority; webhook: FinancialWebhookHandoffAuthority;
 }>;
 type Failure = Readonly<{ kind: "invalidConfig" | "unavailable" | "alreadyStarted" }>;
@@ -70,6 +75,7 @@ export class ClinikoFinancialConsumer {
   readonly #messages: ClinikoFinancialMessageOwner;
   readonly #expiry: ClinikoCheckoutExpiryOwner | undefined;
   readonly #clinicalExpiry: ClinikoFinancialClinicalExpiryOwner | undefined;
+  readonly #classClinicalExpiry: ClinikoFinancialUnlinkedClassExpiryOwner | undefined;
   readonly #discovery: StripeCheckoutDiscovery;
   readonly #money: StripeCheckoutReader;
   readonly #onCycle: Dependencies["onCycle"];
@@ -79,7 +85,7 @@ export class ClinikoFinancialConsumer {
   #running = false;
   #route: ReturnType<typeof stripeFinancialWebhookHandler> | undefined;
   private constructor(config: FinancialConsumerConfig, authority: FinancialConsumerAuthorities, dependencies: Dependencies,
-    ownerBinding: string, pending: ClinikoFinancialPendingDiscovery, checkout: ClinikoStripeCheckoutOwner, messages: ClinikoFinancialMessageOwner, expiry: ClinikoCheckoutExpiryOwner | undefined, clinicalExpiry: ClinikoFinancialClinicalExpiryOwner | undefined) {
+    ownerBinding: string, pending: ClinikoFinancialPendingDiscovery, checkout: ClinikoStripeCheckoutOwner, messages: ClinikoFinancialMessageOwner, expiry: ClinikoCheckoutExpiryOwner | undefined, clinicalExpiry: ClinikoFinancialClinicalExpiryOwner | undefined, classClinicalExpiry: ClinikoFinancialUnlinkedClassExpiryOwner | undefined) {
     this.#config = Object.freeze({ ...config });
     this.#authority = Object.freeze({ ...authority,
       run: Object.freeze({ allows: authority.run.allows.bind(authority.run), current: authority.run.current.bind(authority.run) }),
@@ -87,7 +93,7 @@ export class ClinikoFinancialConsumer {
         providerBindingAuthorized: authority.work.providerBindingAuthorized.bind(authority.work),
         onCheckoutAcknowledged: authority.work.onCheckoutAcknowledged.bind(authority.work), current: authority.work.current.bind(authority.work) }) });
     this.#query = Object.freeze({ purpose: "runFinancialConsumer", ownerBinding });
-    this.#clinicalExpiry = clinicalExpiry; this.#expiry = expiry; this.#pending = pending; this.#checkout = checkout; this.#messages = messages; this.#onCycle = dependencies.onCycle;
+    this.#classClinicalExpiry = classClinicalExpiry; this.#clinicalExpiry = clinicalExpiry; this.#expiry = expiry; this.#pending = pending; this.#checkout = checkout; this.#messages = messages; this.#onCycle = dependencies.onCycle;
     this.#discovery = new StripeCheckoutDiscovery(config.checkout.stripe, dependencies.stripe);
     this.#money = new StripeCheckoutReader(config.checkout.stripe, dependencies.stripe);
   }
@@ -111,7 +117,11 @@ export class ClinikoFinancialConsumer {
       const clinicalExpiry = authority.clinicalExpiry === undefined ? undefined : ClinikoFinancialClinicalExpiryOwner.create({ cliniko: config.checkout.cliniko, stripe: config.checkout.stripe },
         authority.clinicalExpiry, authority.records, dependencies.barrier, dependencies.native, dependencies.stripe);
       if (clinicalExpiry && !clinicalExpiry.ok) return err({ kind: "invalidConfig" });
-      const consumer = new ClinikoFinancialConsumer(config, authority, dependencies, binding.value, pending.value, checkout.value, messages.value, expiry?.ok ? expiry.value : undefined, clinicalExpiry?.ok ? clinicalExpiry.value : undefined);
+      const classClinicalExpiry = authority.classClinicalExpiry === undefined ? undefined : ClinikoFinancialUnlinkedClassExpiryOwner.create({
+        cliniko: config.checkout.cliniko, stripe: config.checkout.stripe, classPolicy: authority.classClinicalExpiry.classPolicy },
+        authority.classClinicalExpiry.authority, authority.records, dependencies.barrier, dependencies.native, dependencies.stripe);
+      if (classClinicalExpiry && !classClinicalExpiry.ok) return err({ kind: "invalidConfig" });
+      const consumer = new ClinikoFinancialConsumer(config, authority, dependencies, binding.value, pending.value, checkout.value, messages.value, expiry?.ok ? expiry.value : undefined, clinicalExpiry?.ok ? clinicalExpiry.value : undefined, classClinicalExpiry?.ok ? classClinicalExpiry.value : undefined);
       const webhook = Object.freeze({ allowsReferenceRead: authority.webhook.allowsReferenceRead.bind(authority.webhook),
         acceptsExistingPending: authority.webhook.acceptsExistingPending.bind(authority.webhook), current: authority.webhook.current.bind(authority.webhook) });
       const handoff = ClinikoStripeWebhookHandoff.create({ cliniko: config.checkout.cliniko, stripe: config.checkout.stripe, webhook: config.webhook }, {
@@ -159,7 +169,7 @@ export class ClinikoFinancialConsumer {
         if (!await this.#admitted(signal)) return Object.freeze({ kind: "unavailable", ...counts });
         const authority = this.#authority.work;
         const result = await consumeFinancialPair(work, pending.value.attempts, {
-          ...(this.#clinicalExpiry ? { clinicalExpiry: this.#clinicalExpiry } : {}), ...(this.#expiry ? { expiry: this.#expiry } : {}), ownerBinding: this.#query.ownerBinding, checkout: this.#checkout, messages: this.#messages, discovery: this.#discovery, money: this.#money,
+          ...(this.#clinicalExpiry ? { clinicalExpiry: this.#clinicalExpiry } : {}), ...(this.#classClinicalExpiry ? { classClinicalExpiry: this.#classClinicalExpiry } : {}), ...(this.#expiry ? { expiry: this.#expiry } : {}), ownerBinding: this.#query.ownerBinding, checkout: this.#checkout, messages: this.#messages, discovery: this.#discovery, money: this.#money,
           authority: { ...authority, authorizeWork: (q, stop) => authority.authorizeWork(q, stop),
             providerBindingAuthorized: (q, stop) => authority.providerBindingAuthorized(q, stop),
             onCheckoutAcknowledged: (receipt, stop) => authority.onCheckoutAcknowledged(receipt, stop),
