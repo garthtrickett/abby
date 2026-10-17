@@ -4299,3 +4299,39 @@ margin, so this is focused evidence, not a green complete graph or failure closu
 See [exact progress and evidence](EXECUTION_PROGRESS.md). The separately qualified
 financial consumer and pending Checkout/clinical expiry work do not close the
 remaining earlier-gap, cloud or clinic acceptance gates.
+
+
+### Clinical voice fixture media clock, 17 October 2026
+
+The E2E-353 timeout diagnosis reproduced the real 15-second boundary after
+private registration had committed, without any booking write. The original
+fixture kept trusted time at 12:00:00 while caller turns advanced with media
+(e.g. 12:00:01.600). The production deadline path correctly rejected this
+backwards current time before SAM acceptance; the transport then closed.
+Bounded synthetic transition diagnostics retain only operation/result codes,
+timestamps, booleans and revisions. They contain no caller text or identifiers.
+All clinical fixture calls now share source time plus emitted media time.
+Production logic, deadlines, quotas, assertions and concurrency are unchanged.
+
+The initial diagnostic work1792228587138 and traced work1792228827045 failed
+as expected on that mismatch. Frozen executable98ad4e8 then qualified:
+
+- work1792228929985 DONE0 at09:22:48.955167UTC:25/25, the actual15-second
+  registered-caller refusal plus24 existing text boundaries, including invalid
+  and backwards time, external cancellation, revision/lease loss and late data.
+  The refusal keeps the call active and cannot create a booking write.
+  Node/Docker peaks127,242,240/144,457,728B under1GiB/512MiB.
+- work1792228939528 DONE0 at09:25:04.420136UTC:full TypeScript and serving
+  build, peak1,482,489,856B/2GiB with1536MiB heap;488 artifacts pinned.
+- work1792229136387 DONE0 at09:27:02.871696UTC:5/5 original E353/E354/E349/
+  E346 signed PostgreSQL cases, all16 E353 variants, default4 concurrent files,
+  original3 internal workers/deadlines and no title filter.39 menus, max9,191ms,
+  no aborts; Node/Docker peaks560,496,640/375,570,432B under1.5GiB/1GiB.
+
+Every job retained CPU200%/Swap0 per scope, reported no OOM events and unchanged
+source/artifacts, cleaned its own DB/scope and had its paired wait reaped.
+This focused result does not replace the latest full d417 result3562/1/1 or
+qualify the unpublished financial-expiry combination. All thirteen gaps,
+cloud execution, clinic/provider/acoustic/deployment acceptance remain open.
+Stripe and dedicated clinic-approved Cliniko financial reviews remain selected;
+no deployment, live payment, expiry cancellation, refund or Aeva deletion follows.
