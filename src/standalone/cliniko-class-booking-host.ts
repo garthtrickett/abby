@@ -29,6 +29,8 @@ import { ClinikoClassPassBooking } from "./cliniko-class-pass-booking.ts";
 import type { ClassPassAuthority, ClassPassBookingBinding } from "./cliniko-class-pass-booking.ts";
 import { ClinikoFinancialBookingPreparation } from "./cliniko-financial-booking-preparation.ts";
 import type { FinancialBookingPreparationConfig } from "./cliniko-financial-booking-preparation.ts";
+import { classFinancialBookingRequestPlan } from "../cliniko/class-booking-workload.ts";
+import { clinikoRequestCeiling } from "../cliniko/request-cost.ts";
 /** Channel verification cannot establish a membership, pass, fee or booking entitlement. */
 export type ClassAttendancePermission = Readonly<{
   allows(query: Readonly<{
@@ -100,6 +102,7 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
   #attempted = false;
   #epoch = 0;
   #dispatchLeaseExpiry: number | undefined;
+  #sendCostSignature: string | undefined;
   private constructor(config: ClinikoClassBookingConfig, approval: ClassApproval) {
     super();
     this.#config = config;
@@ -142,6 +145,19 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
     }
   }
   #now() { return this.#config.clock(); }
+  #requestPlan(): Readonly<{ write: number; confirmation: number; signature: string }> | undefined {
+    try {
+      if (!this.financial) return { write: 180, confirmation: 180, signature: "legacy" };
+      const c = this.#config, binding = { scope: c.scope, credentialFingerprint: clinikoCredentialFingerprint(c.cliniko.apiKey), budget: c.cliniko.rateBudget };
+      const proof = c.verification.nativeRequestCostCeilings(binding), permit = clinikoRequestCeiling(c.permission.allows, binding),
+        passSelect = this.#passes ? this.#passes.nativeRequestCostCeiling(binding) : 0,
+        financial = this.financial.nativeRequestCostCeilings(binding);
+      if (!proof || permit === undefined || passSelect === undefined || !financial) return undefined;
+      const costs = { ...proof, permit, passSelect, ...financial }, plan = classFinancialBookingRequestPlan(costs, !!this.#passes);
+      return plan ? { ...plan, signature: JSON.stringify(costs) } : undefined;
+    } catch { return undefined; }
+  }
+  #sendCostsCurrent(): boolean { return !this.financial || this.#sendCostSignature !== undefined && this.#requestPlan()?.signature === this.#sendCostSignature; }
   #signal(external?: AbortSignal, deadlineMs = 15000) { return AbortSignal.any([this.#lifetime.signal, this.#config.signal, AbortSignal.timeout(deadlineMs), ...(external ? [external] : [])]); }
   #time(now: string): number | undefined {
     try {
@@ -336,7 +352,7 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
             endsAt: choice.session.endsAt, timeZone: a.timeZone },
           booking: { kind: "classBook", sessionId: choice.session.sessionRef, ...(choice.pass ? { pass: choice.pass } : {}) } }, signal);
         const fresh = await this.#ready(this.#now(), signal);
-        if (!financial || !fresh || fresh.conversationRevision !== state.conversationRevision) { this.financial.invalidate(); return denied(); }
+        if (!financial || !fresh || fresh.conversationRevision !== state.conversationRevision || !this.#requestPlan()) { this.financial.invalidate(); return denied(); }
         this.#financialMarker = financial.marker;
         if (financial.kind === "pending") return err({ kind: "financialConsentRequired", target: "offer" });
       }
@@ -351,16 +367,16 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
   }
   async #authorize(prepared: Prepared, mutation: HostMutation, phase: "commit" | "inspection", signal: AbortSignal, readNative = true): Promise<boolean> {
     const now = this.#now();
-    if (!await this.#ready(now, signal, mutation) || mutation.payloadDigest !== digestActionRequest(prepared.request))
+    if (!this.#sendCostsCurrent() || !await this.#ready(now, signal, mutation) || mutation.payloadDigest !== digestActionRequest(prepared.request))
       return false;
     const patient = await this.#inspectChoice(prepared.choice, now, phase, signal, readNative);
-    return !!patient && patient.patientRef === prepared.request.patient.patientRef && patient.verificationRef === prepared.request.patient.verificationRef && !!await this.#ready(this.#now(), signal, mutation);
+    return !!patient && patient.patientRef === prepared.request.patient.patientRef && patient.verificationRef === prepared.request.patient.verificationRef && !!await this.#ready(this.#now(), signal, mutation) && this.#sendCostsCurrent();
   }
   /** All pass/history, policy, permission and SAM work precedes final capacity. */
   async #authorizeForSend(prepared: Prepared, mutation: HostMutation, signal: AbortSignal): Promise<boolean> {
     const c = this.#config, choice = prepared.choice, now = this.#now();
     this.#dispatchLeaseExpiry = undefined;
-    if (!await this.#ready(now, signal, mutation) || mutation.payloadDigest !== digestActionRequest(prepared.request)) return false;
+    if (!this.#sendCostsCurrent() || !await this.#ready(now, signal, mutation) || mutation.payloadDigest !== digestActionRequest(prepared.request)) return false;
     const patient = await this.#inspectChoice(choice, now, "commit", signal, false);
     const approval = await c.classPolicy.current(c.scope);
     if (!patient || !approval.ok || patient.patientRef !== prepared.request.patient.patientRef ||
@@ -387,13 +403,14 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
       this.#prepared === prepared && !this.#lifetime.signal.aborted && !signal.aborted &&
       this.#config.verification.proof.ownsLiveReference(choice.verificationRef, "appointments.book", now) &&
       Date.parse(prepared.request.patient.expiresAt) > at && Date.parse(choice.offer.expiresAt) > at && Date.parse(choice.session.startsAt) > at &&
-      (!this.financial || this.financial.currentForSend(signal));
+      (!this.financial || this.financial.currentForSend(signal)) && this.#sendCostsCurrent();
   }
   async checkConfirmationCapacity(query: BookingMenuQuery & Readonly<{ actionKey: string; digest: string }>): Promise<Result<Readonly<{ kind: "ready" }> | Readonly<{ kind: "wait"; seconds: number }>, HostReadFailure>> {
-    if (!this.#passes) return ok({ kind: "ready" });
+    if (!this.#passes && !this.financial) return ok({ kind: "ready" });
     const p = this.#prepared;
-    if (!p?.choice.pass || this.#busy || this.#attempted || !this.#matches(query) || digestActionRequest(p.request) !== query.digest) return denied();
+    if (!p || this.#passes && !p.choice.pass || this.#busy || this.#attempted || !this.#matches(query) || digestActionRequest(p.request) !== query.digest) return denied();
     const signal = this.#signal(query.signal);
+    const plan = this.#requestPlan(); if (!plan) return denied();
     // This non-disclosing admission check does not read protected native data
     // or spend quota. All native proof/case/capacity checks still run at write.
     const current = async () => {
@@ -403,16 +420,12 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
         action.digest !== query.digest || state.presentations[action.presentationId]?.status !== "played" || this.#prepared !== p ||
         Date.parse(p.choice.offer.expiresAt) <= Date.parse(this.#now()) || !isDeepStrictEqual(p.choice.offer.terms, { ...a.value.bookingTerms, expiresAt: p.choice.offer.expiresAt }) ||
         !await this.#permission(p.request.patient, p.choice.session, a.value, "commit", signal) ||
-        !await this.#passes!.authorized(p.choice.pass!, p.request.patient, p.choice.session, a.value, "commit", signal)) return undefined;
+        this.#passes && !await this.#passes.authorized(p.choice.pass!, p.request.patient, p.choice.session, a.value, "commit", signal)) return undefined;
       return state;
     };
     const before = await current(); if (!before) return denied();
-    // The exact financial source read precedes the ordinary bounded class send.
-    // Observation retention follows ACK and cannot be a clinical success gate.
-    const financialCost = this.financial ? this.financial.captureRequestCost : 0;
-    if (financialCost === undefined) return denied();
-    const capacity = await checkClinikoHeadroom(this.#config.cliniko.rateBudget, 180 + financialCost), after = await current();
-    if (!after || after.conversationRevision !== before.conversationRevision || signal.aborted || this.#prepared !== p) return denied();
+    const capacity = await checkClinikoHeadroom(this.#config.cliniko.rateBudget, plan.confirmation), after = await current();
+    if (!after || after.conversationRevision !== before.conversationRevision || signal.aborted || this.#prepared !== p || this.#requestPlan()?.signature !== plan.signature) return denied();
     if (capacity === null) return ok({ kind: "ready" });
     if (capacity.kind !== "rateLimited" || !Number.isSafeInteger(capacity.retryAfterMs) || capacity.retryAfterMs! < 1 || capacity.retryAfterMs! > 60000) return denied();
     const seconds = Math.ceil(capacity.retryAfterMs! / 1000);
@@ -430,9 +443,10 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
     const signal = this.#signal(external, 30000), choice = prepared.choice, actionId = this.#financialMarker ?? randomUUID();
     const uncertain = (): HostWriteReceipt => ({ kind: "uncertain", actionKey: mutation.actionKey, reconcileAfter: now, deadline: new Date(Date.parse(now) + 300000).toISOString() });
     const a = await c.classPolicy.current(c.scope);
-    const financialCost = this.financial ? this.financial.captureRequestCost : 0;
-    if (!a.ok || financialCost === undefined || choice.pass && await checkClinikoHeadroom(c.cliniko.rateBudget, 180 + financialCost) !== null)
+    const plan = this.#requestPlan();
+    if (!a.ok || !plan || (choice.pass || this.financial) && await checkClinikoHeadroom(c.cliniko.rateBudget, plan.write) !== null)
       return reject();
+    this.#sendCostSignature = plan.signature;
     const financialCapture = this.financial ? await this.financial.capture(signal) : undefined;
     if (this.financial && !financialCapture) return reject();
     const provider: Extract<ClinikoAttendanceRequest, { kind: "book" }> = { kind: "book", scope: c.scope, patientId: choice.patientRef, sessionId: choice.session.sessionRef, actionId,
@@ -443,8 +457,12 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
         ...(choice.pass ? { pass: { ...choice.pass.selection, usageFingerprint: choice.pass.usageFingerprint, maximum: choice.pass.maximum, used: choice.pass.used } } : {}) } };
     let acknowledged: Extract<ClinikoAttendanceWrite, { kind: "accepted" }> | undefined;
     let committed: Extract<HostWriteReceipt, { kind: "committed" }> | undefined;
+    let reviewChecks = 0;
     const result = await this.#review.run(review, {
-      authorize: (_request, stop) => this.#authorize(prepared, mutation, "commit", stop),
+      // Preserve the full pre-review occurrence check. The post-review check
+      // repeats proof/permission/pass checks; final dispatch still observes
+      // both fresh capacity snapshots before POST.
+      authorize: (_request, stop) => this.#authorize(prepared, mutation, "commit", stop, !this.financial || reviewChecks++ === 0),
       acknowledgedBooking: () => acknowledged ? ok(acknowledged) : undefined,
       send: async (_request, stop) => {
         if (this.financial && !await this.financial.beforeSend(stop)) return err({ kind: "forbidden" });

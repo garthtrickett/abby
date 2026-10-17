@@ -18,6 +18,7 @@ import type { LocationScope } from "../../src/core/model.ts";
 import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 import type { PatientVerificationBudget } from "../../src/standalone/email-patient-authority.ts";
 import type { FinancialBookingPreparationConfig } from "../../src/standalone/cliniko-financial-booking-preparation.ts";
+import { declareClinikoRequestCost } from "../../src/cliniko/request-cost.ts";
 export async function classBookingFixture(options: { passes?: boolean; fetchAround?: (port: typeof fetch) => typeof fetch;
   scope?: LocationScope; folder?: string; budget?: ClinikoRequestBudget; budgetLimit?: 180 | 200; verificationBudget?: PatientVerificationBudget;
   financialFor?: (native: import("../../src/cliniko/class-attendance-write.ts").ClinikoAttendanceConfig, port: typeof fetch) => FinancialBookingPreparationConfig } = {}) {
@@ -29,12 +30,16 @@ export async function classBookingFixture(options: { passes?: boolean; fetchArou
   const mail: { email: string; code: string }[] = [];
   let delivered!: () => void; const delivery = new Promise<void>(resolve => { delivered = resolve; });
   const f = await callerVerificationFixture({ apiKey: "synthetic-class-au5", bookingExecute: true, operation: "appointments.book", rateBudget: budget,
+    nativeRequestCosts: options.financialFor !== undefined,
     delivery: { send: async (email, code) => { mail.push({ email, code }); delivered(); return true; } },
     ...(options.scope ? { scope: options.scope } : {}), ...(options.folder ? { folder: options.folder } : {}),
     ...(options.verificationBudget ? { budget: options.verificationBudget } : {}) });
   let callState = () => f.state();
   const native = classAttendanceFixture({ scope: f.scope, now: verificationNow, patientId: verificationCanaries[2]!, rateBudget: budget });
   let permitted = true, lostReview = false, lostWrite = false, onRecall = async () => { }, onWrite = async () => { };
+  const costBinding = { scope: f.scope, credentialFingerprint: clinikoCredentialFingerprint(native.config.apiKey), budget };
+  const permit = async () => permitted;
+  const classPermission = { allows: options.financialFor ? declareClinikoRequestCost(permit, costBinding, 0) : permit };
   const recalls: Record<string, unknown>[] = [], writes: Record<string, unknown>[] = [];
   const lifetime = new AbortController(), path = join(f.folder, "class.json");
   const caseId = "811222333444555666", entitlementRef = "synthetic-private-pass-entitlement";
@@ -44,12 +49,13 @@ export async function classBookingFixture(options: { passes?: boolean; fetchArou
     closed_at: null, archived_at: null, name: "private-pass-name-canary", notes: "private-pass-notes-canary", referral: "private-pass-referral-canary" };
   let passAllowed = true, passSelection: ClassPassSelection = { patientCaseId: caseId, entitlementRef }, onCaseRead = (_path: string) => {};
   const passQueries: ClassPassAuthorityQuery[] = [];
-  const passAuthority: ClassPassAuthority = { select: async query => {
+  const selectPass: ClassPassAuthority["select"] = async query => {
     passQueries.push(query);
     return passAllowed && query.patientId === verificationCanaries[2] && query.classSessionId === "94" && query.serviceRef === "mat-pilates" &&
       query.businessId === "11" && query.practitionerId === "22" && query.appointmentTypeId === "33" && query.termsVersion === "class-pass-terms-1" &&
       query.startsAt === "2026-10-08T10:00:00.000Z" && query.endsAt === "2026-10-08T11:00:00.000Z" && !query.signal.aborted ? structuredClone(passSelection) : undefined;
-  } };
+  };
+  const passAuthority: ClassPassAuthority = { select: options.financialFor ? declareClinikoRequestCost(selectPass, costBinding, 0) : selectPass };
   let approval: ClassApproval = { scope: f.scope, revision: "class-1", approverRef: f.account.actor.actorRef, approvedAt: "2026-10-04T05:59:00.000Z",
     effectiveFrom: "2026-10-04T06:00:00.000Z", effectiveUntil: "2026-10-05T06:00:00.000Z", approved: true, enabled: true,
     policyVersion: f.sessionConfig.policyVersion, businessId: "11", practitionerId: "22", appointmentTypeId: "33", credentialFingerprint: clinikoCredentialFingerprint(native.config.apiKey), recallTypeId: "7",
@@ -114,7 +120,7 @@ export async function classBookingFixture(options: { passes?: boolean; fetchArou
   const fetchPort = options.fetchAround ? options.fetchAround(baseFetchPort) : baseFetchPort;
   const financial = options.financialFor?.(native.config, fetchPort);
   const host = resultValue(await ClinikoClassBookingHost.create({ scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion,
-    ledger: f.ledger, policies: f.policies, verification: f.session, classPolicy: policy, permission: { allows: async () => permitted },
+    ledger: f.ledger, policies: f.policies, verification: f.session, classPolicy: policy, permission: classPermission,
     ...(options.passes ? { classPassAuthority: passAuthority } : {}), ...(financial ? { financial } : {}), cliniko: native.config, clock: () => sourceTime, signal: lifetime.signal, fetchPort }));
   const reception = new TextReception(f.ledger, f.policies, host, undefined, undefined, undefined, undefined, () => sourceTime), agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope: f.scope }, f.policies, reception, undefined, undefined, undefined, f.ledger);
   let turns = 0;
@@ -151,7 +157,7 @@ export async function classBookingFixture(options: { passes?: boolean; fetchArou
     ledger: f.ledger, policies: f.policies, lookup: f.sessionConfig.lookup, permission: f.sessionConfig.permission,
     verificationBudget: f.sessionConfig.budget, delivery: f.sessionConfig.delivery, directory: f.config.directory,
     callerApprovalPath: f.config.path, classApprovalPath: path, operation: "book" as const,
-    classPermission: { allows: async () => permitted }, ...(options.passes ? { classPassAuthority: passAuthority } : {}), cliniko: { ...native.config, timeZone: approval.timeZone, countryCallingCode: "61", recallTypeId: "7" },
+    classPermission, ...(options.passes ? { classPassAuthority: passAuthority } : {}), cliniko: { ...native.config, timeZone: approval.timeZone, countryCallingCode: "61", recallTypeId: "7" },
     signal: lifetime.signal, fetchPort, clock: () => sourceTime };
   return { ...f, mail, verificationDelivered: delivery, classSessionConfig: { ...classSessionConfig, ...(financial ? { financial } : {}) }, bindNativeCall: (read: typeof callState) => { callState = read; }, native, host, reception, agent, recalls, writes, policy, path, turn, play, verify, propose, confirm,
     pause: async (seconds: number) => {

@@ -10,6 +10,8 @@ import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { approvalRef } from "./owner-file-clinic-approval.ts";
 import type { ClassApproval } from "./owner-file-class-policy.ts";
 import { OwnerFileClassPolicy } from "./owner-file-class-policy.ts";
+import { clinikoRequestCeiling } from "../cliniko/request-cost.ts";
+import type { ClinikoCostBinding } from "../cliniko/request-cost.ts";
 
 export type ClassPassSelection = Readonly<{ patientCaseId: string; entitlementRef: string }>;
 export type ClassPassAuthorityQuery = Readonly<{
@@ -45,6 +47,9 @@ const validSelection = (value: unknown): value is ClassPassSelection => {
 export class ClinikoClassPassBooking {
   readonly #config: Config;
   constructor(config: Config) { this.#config = config; }
+  nativeRequestCostCeiling(binding: ClinikoCostBinding): number | undefined {
+    return clinikoRequestCeiling(this.#config.authority.select, binding);
+  }
   #query(patient: VerifiedPatient, session: ClinikoClassSession, approval: ClassApproval,
     phase: ClassPassAuthorityQuery["phase"], signal: AbortSignal): ClassPassAuthorityQuery {
     const c = this.#config;

@@ -77,10 +77,10 @@ test("financial acceptance cannot override withdrawn approved-pass authority", a
     assert.equal(f.writes.length, 0); assert.equal(f.funding.rows.size, 1);
   } finally { await f.close(); }
 });
-test("a required financial source read cannot bypass the configured 180-request class-pass ceiling", async () => {
+test("a complete declared financial class-pass plan executes inside the configured 180-request ceiling", async () => {
   const f = await financialClassBookingFixture({ passes: true, budgetLimit: 180 }); try {
     await consented(f); assert.equal(f.pending().captureRequestCost, 1); resultValue(await f.confirm()); resultValue(await f.drain());
-    assert.equal(f.writes.length, 0); assert.equal(f.recalls.length, 0);
+    assert.equal(f.writes.length, 1); assert.equal(f.recalls.length, 1); assert.ok(f.proof().financialConsent);
   } finally { await f.close(); }
 });
 test("an explicit no-deposit pass assessment needs no additional request in the existing 180 profile", async () => {

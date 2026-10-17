@@ -8,16 +8,21 @@ import { decodeClinikoFinancialIntent } from "../../src/cliniko/financial-review
 import { verifyFinancialBookingObservation } from "../../src/cliniko/financial-booking-observation.ts";
 import type { FinancialBookingAssessment, FinancialBookingPreparationConfig, FinancialBookingSelection } from "../../src/standalone/cliniko-financial-booking-preparation.ts";
 import type { ClinikoCallFlowConfig } from "../../src/standalone/cliniko-call-flow.ts";
+import { declareClinikoRequestCost } from "../../src/cliniko/request-cost.ts";
+import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 
-export async function financialClassBookingFixture(options: { passes?: boolean; required?: boolean; budgetLimit?: 180 | 200; scope?: import("../../src/core/model.ts").LocationScope;
+export async function financialClassBookingFixture(options: { passes?: boolean; required?: boolean; budgetLimit?: 180 | 200; budget?: import("../../src/cliniko/read-budget.ts").ClinikoRequestBudget; scope?: import("../../src/core/model.ts").LocationScope;
+  fetchAround?: (port: typeof fetch) => typeof fetch;
   quote?: (selection: FinancialBookingSelection, ordinary: FinancialBookingAssessment) => FinancialBookingAssessment | undefined;
   barrierFor?: (native: FinancialBookingPreparationConfig["native"]) => FinancialBookingPreparationConfig["barrier"];
   lostIntent?: boolean; lostObservation?: boolean; onObservation?: () => void; play?: FinancialBookingPreparationConfig["presentation"]["play"] } = {}) {
   let funding!: ReturnType<typeof fixture>, config!: FinancialBookingPreparationConfig, allowed = true;
   let clock = () => verificationNow;
   const financialLife = new AbortController(), events: string[] = [], texts: string[] = [], selections: FinancialBookingSelection[] = [];
-  const f = await classBookingFixture({ ...(options.passes ? { passes: true } : {}), ...(options.scope ? { scope: options.scope } : {}), ...(options.budgetLimit ? { budgetLimit: options.budgetLimit } : {}),
-    fetchAround: port => async (input, init) => {
+  const f = await classBookingFixture({ ...(options.passes ? { passes: true } : {}), ...(options.scope ? { scope: options.scope } : {}), ...(options.budgetLimit ? { budgetLimit: options.budgetLimit } : {}), ...(options.budget ? { budget: options.budget } : {}),
+    fetchAround: port => {
+      const clinicalPort = options.fetchAround ? options.fetchAround(port) : port;
+      return async (input, init) => {
       const url = new URL(String(input)), body = init?.method === "POST" ? JSON.parse(String(init.body)) : undefined;
       if (url.pathname === "/v1/recalls" && init?.method === "GET" && url.searchParams.getAll("q[]").some(q => q.startsWith("patient_id:="))) {
         const all: Record<string, unknown>[] = [...funding.rows.values(), ...f.recalls.map(r => ({ ...r,
@@ -28,8 +33,8 @@ export async function financialClassBookingFixture(options: { passes?: boolean; 
       if (url.pathname === "/v1/recalls" && body?.recall_type_id === "40" || url.pathname.startsWith("/v1/recalls/") && funding?.rows.has(url.pathname.split("/").at(-1)!)) {
         events.push(`financial:${init?.method ?? "GET"}`); return funding.port(input, init);
       }
-      events.push(`clinical:${init?.method ?? "GET"}:${url.pathname}`); return port(input, init);
-    }, financialFor: (native, fetchPort) => {
+      events.push(`clinical:${init?.method ?? "GET"}:${url.pathname}`); return clinicalPort(input, init);
+    }; }, financialFor: (native, fetchPort) => {
       funding = fixture({ intent: { ...intentValue(), scope: native.scope }, config: { scope: native.scope, apiKey: native.apiKey,
         businessId: native.businessId, contactEmail: native.contactEmail, rateBudget: native.rateBudget, clock: () => clock() },
         barrierFactory: native => {
@@ -47,8 +52,11 @@ export async function financialClassBookingFixture(options: { passes?: boolean; 
           }
           return Response.json(row, { status: method === "POST" ? 201 : 200 });
         } });
-      config = { native: funding.config, privateKey: keys.privateKey, sourceAuthorized: async () => allowed,
-        authority: funding.authority, barrier: funding.barrier, financialSignal: financialLife.signal, fetchPort,
+      const binding = { scope: native.scope, credentialFingerprint: clinikoCredentialFingerprint(native.apiKey), budget: native.rateBudget };
+      config = { native: funding.config, privateKey: keys.privateKey, sourceAuthorized: declareClinikoRequestCost(async () => allowed, binding, 0),
+        authority: { ...funding.authority, allows: declareClinikoRequestCost(funding.authority.allows.bind(funding.authority), binding, 0),
+          producerAdmitted: declareClinikoRequestCost(funding.authority.producerAdmitted.bind(funding.authority), binding, 0) },
+        barrier: funding.barrier, financialSignal: financialLife.signal, fetchPort,
         policy: { quote: async selection => {
           selections.push(structuredClone(selection));
           const q: FinancialBookingAssessment = options.required === false ? { kind: "notRequired", version: "class-no-deposit-1", expiresAt: selection.expiresAt } : {
@@ -56,7 +64,7 @@ export async function financialClassBookingFixture(options: { passes?: boolean; 
             recipient: { kind: "email", address: "class-financial-recipient@example.invalid" }, approvedTerms: "The clinic will review late payment. A pass count does not prove payment.",
             reviewDate: "2026-10-05", expiresAt: selection.expiresAt };
           return options.quote ? options.quote(selection, q) : q;
-        }, current: async () => allowed, currentForSend: () => allowed },
+        }, current: declareClinikoRequestCost(async () => allowed, binding, 0), currentForSend: () => allowed },
         presentation: { play: async (text, signal, canPresent) => { texts.push(text); return options.play ? options.play(text, signal, canPresent) :
           canPresent() ? { presentationRef: randomUUID(), playedAt: clock() } : undefined; } } };
       return config;

@@ -15,6 +15,8 @@ import type { FinancialBookingConsent } from "../cliniko/financial-booking-obser
 import type { FinancialEffectBarrier } from "./financial-effect-barrier.ts";
 import type { ClassPassBookingBinding } from "./cliniko-class-pass-booking.ts";
 import { sameScope } from "./appointment-change-authority.ts";
+import { clinikoRequestCeiling, inheritClinikoRequestCost } from "../cliniko/request-cost.ts";
+import type { ClinikoCostBinding } from "../cliniko/request-cost.ts";
 
 export type FinancialBookingSelection = Readonly<{
   scope: LocationScope; callId: string; sessionId: string; policyVersion: string; verificationRef: string; offerRef: string;
@@ -91,14 +93,16 @@ export class ClinikoFinancialBookingPreparation {
         createPublicKey(config.privateKey).export({ type: "spki", format: "der" }).toString("hex") !== config.native.producer.publicKey.export({ type: "spki", format: "der" }).toString("hex") ||
         !(config.financialSignal instanceof AbortSignal) || config.financialSignal.aborted || typeof config.sourceAuthorized !== "function" || !sameScope(config.native.scope, call.scope) ||
         typeof config.policy?.quote !== "function" || typeof config.policy.current !== "function" || typeof config.policy.currentForSend !== "function" || typeof config.presentation?.play !== "function") throw new TypeError("Invalid financial booking preparation");
-    const records = ClinikoFinancialRecordRetainer.create(config.native, config.authority, config.barrier, config.fetchPort);
+    const authority = Object.freeze({ allows: inheritClinikoRequestCost(config.authority.allows.bind(config.authority), config.authority.allows),
+      producerAdmitted: inheritClinikoRequestCost(config.authority.producerAdmitted.bind(config.authority), config.authority.producerAdmitted), current: config.authority.current.bind(config.authority) });
+    const records = ClinikoFinancialRecordRetainer.create(config.native, authority, config.barrier, config.fetchPort);
     const reader = ClinikoFinancialReviewReader.create(config.native, { allows: config.sourceAuthorized.bind(config) }, config.fetchPort);
     if (!records.ok || !reader.ok) throw new TypeError("Invalid financial booking preparation");
     this.#records = records.value; this.#reader = reader.value;
     this.#call = Object.freeze({ ...call, scope: Object.freeze({ ...call.scope }) });
-    this.#config = Object.freeze({ ...config, native: Object.freeze({ ...config.native, scope: Object.freeze({ ...config.native.scope }),
+    this.#config = Object.freeze({ ...config, authority, native: Object.freeze({ ...config.native, scope: Object.freeze({ ...config.native.scope }),
       stripe: Object.freeze({ ...config.native.stripe }), producer: Object.freeze({ ...config.native.producer }) }),
-      policy: Object.freeze({ quote: config.policy.quote.bind(config.policy), current: config.policy.current.bind(config.policy), currentForSend: config.policy.currentForSend.bind(config.policy) }),
+      policy: Object.freeze({ quote: config.policy.quote.bind(config.policy), current: inheritClinikoRequestCost(config.policy.current.bind(config.policy), config.policy.current), currentForSend: config.policy.currentForSend.bind(config.policy) }),
       presentation: Object.freeze({ play: config.presentation.play.bind(config.presentation) }) });
   }
   #now() { return this.#config.native.clock?.() ?? new Date().toISOString(); }
@@ -180,6 +184,20 @@ export class ClinikoFinancialBookingPreparation {
     const p = this.#pending;
     try { return p && this.#current(p, this.#lifetime.signal) ? p.phase === "notRequired" ? 0 : p.phase === "accepted" ? 1 : undefined : undefined; }
     catch { return undefined; }
+  }
+  nativeRequestCostCeilings(binding: ClinikoCostBinding): Readonly<{ capture: 0 | 1; financialCurrent: number; source: number; recordPermit: number; recordProducer: number }> | undefined {
+    // Planning is allowed before financial acceptance; it grants no capture,
+    // disclosure or send authority. Unknown/expired context still has no plan.
+    const p = this.#pending;
+    let capture: 0 | 1 | undefined;
+    try { capture = p && p.phase !== "declined" && this.#current(p, this.#lifetime.signal) ? p.assessment.kind === "required" ? 1 : 0 : undefined; }
+    catch { return undefined; }
+    const current = clinikoRequestCeiling(this.#config.policy.current, binding);
+    if (capture === undefined || current === undefined) return undefined;
+    if (capture === 0) return Object.freeze({ capture, financialCurrent: current, source: 0, recordPermit: 0, recordProducer: 0 });
+    const source = clinikoRequestCeiling(this.#config.sourceAuthorized, binding), recordPermit = clinikoRequestCeiling(this.#config.authority.allows, binding),
+      recordProducer = clinikoRequestCeiling(this.#config.authority.producerAdmitted, binding);
+    return source === undefined || recordPermit === undefined || recordProducer === undefined ? undefined : Object.freeze({ capture, financialCurrent: current, source, recordPermit, recordProducer });
   }
   inputAdmission(): Readonly<{ fence: object; phase: "unplayed" | "awaiting" }> | undefined {
     const p = this.#pending; return p && (p.phase === "unplayed" || p.phase === "awaiting") ? { fence: p.fence, phase: p.phase } : undefined;

@@ -8,10 +8,12 @@ import { financialClassBookingFixture } from "../support/financial-class-booking
 import { clinikoWorkflowVoiceFixture, voiceUntil } from "../support/cliniko-workflow-voice.ts";
 import { withDisposablePostgres } from "../support/disposable-postgres.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
+import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 
 for (const passes of [false, true]) test(`signed HTTP/WS class financial readback needs every real played mark and separate clinical yes (pass=${passes})`, { timeout: 120_000 }, async () => {
   await withDisposablePostgres(async db => {
-    const f = await financialClassBookingFixture({ passes, barrierFor: native => new PostgresFinancialEffectBarrier(db, native.scope, resultValue(financialRecordOwnerBinding(native))) });
+    const budget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-class-au5", maxPerMinute: 180 });
+    const f = await financialClassBookingFixture({ passes, budget, barrierFor: native => new PostgresFinancialEffectBarrier(db, native.scope, resultValue(financialRecordOwnerBinding(native))) });
     f.host.dispose(); f.session.dispose();
     let call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined;
     const modelInputs: string[] = [];
@@ -57,6 +59,9 @@ for (const passes of [false, true]) test(`signed HTTP/WS class financial readbac
       }
       assert.deepEqual(call.writes, ["POST /v1/attendees"]); assert.equal(Object.values((await call.state()).actions).at(-1)?.status, "committed");
       assert.equal(f.proof().targetRef, "cliniko:attendee:401"); assert.ok(f.proof().financialConsent);
+      const nativeBudgets = await db.selectFrom("cliniko_request_budgets").selectAll().execute();
+      assert.equal(nativeBudgets.length, 1); assert.equal(nativeBudgets[0]!.max_per_minute, 180);
+      assert.ok(Array.isArray(nativeBudgets[0]!.sent_at_ms) && nativeBudgets[0]!.sent_at_ms.length <= 180);
       const privateText = call.spoken.find(text => text.includes("GBP 12.00")); assert.ok(privateText);
       for (const secret of ["class-financial-recipient@example.invalid", "GBP 12.00", f.pass.caseId, f.pass.entitlementRef]) {
         assert.equal(JSON.stringify([call.modelTurns, call.transcripts, modelInputs, await call.state()]).includes(secret), false);

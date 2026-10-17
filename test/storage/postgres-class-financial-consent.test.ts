@@ -11,12 +11,14 @@ import { financialClassBookingFixture } from "../support/financial-class-booking
 import { resultValue } from "../support/agent-appointment-proposals.ts";
 import { value, stop } from "../support/financial-retention.ts";
 import { decodeClinikoFinancialIntent } from "../../src/cliniko/financial-review-intent.ts";
+import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL required");
 const db = connectPostgres(process.env.DATABASE_URL); after(async () => { await db.destroy(); });
 for (const [passes, consentAllowed] of [[false, true], [true, true], [true, false]] as const) test(`actual private class/pass consent to Stripe with real SQL exclusion (pass=${passes}, collection=${consentAllowed})`, async () => {
   const scope = { tenantId: `fc-${randomUUID()}`, clinicId: "clinic", locationId: "loc" };
-  const f = await financialClassBookingFixture({ scope, passes, barrierFor: config => new PostgresFinancialEffectBarrier(db, scope, value(financialRecordOwnerBinding(config))) });
+  const budget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-class-au5", sharedUserRef: `financial-class-${scope.tenantId}`, maxPerMinute: 180 });
+  const f = await financialClassBookingFixture({ scope, passes, budget, barrierFor: config => new PostgresFinancialEffectBarrier(db, scope, value(financialRecordOwnerBinding(config))) });
   try {
     await f.verify();
     resultValue(await f.reception.readBookingMenu(f.scope, f.turn("financial-menu"), "2026-10-08", "2026-10-08", f.classSessionConfig.clock())); await f.play();
@@ -24,7 +26,19 @@ for (const [passes, consentAllowed] of [[false, true], [true, true], [true, fals
     await f.readback(); assert.equal(await f.accept(), "verified");
     const selected = f.pending().readySelection; assert.ok(selected);
     resultValue(await f.reception.proposeBooking(f.scope, f.turn("clinical-proposal"), selected.verificationRef, selected.offerRef, f.classSessionConfig.clock()));
-    resultValue(await f.confirm()); resultValue(await f.drain()); assert.equal(f.writes.length, 1);
+    await f.play();
+    const action = Object.values((await f.state()).actions)[0]!;
+    let state = resultValue(await f.reception.affirm(f.scope, f.turn("clinical-yes", "Yes"), action.key, action.digest, f.classSessionConfig.clock()));
+    const notice = state.pendingPresentationId && state.presentations[state.pendingPresentationId];
+    if (notice && notice.kind === "notice" && notice.confirmationWaitSeconds) {
+      assert.equal(f.writes.length, 0); assert.equal(f.recalls.length, 0); await f.play();
+      // The real PostgreSQL clock releases quota. No budget rows/timestamps
+      // are edited and the clinical action needs a renewed caller yes.
+      await new Promise<void>(resolve => setTimeout(resolve, notice.confirmationWaitSeconds! * 1_000 + 500));
+      await f.pause(notice.confirmationWaitSeconds + 1);
+      state = resultValue(await f.reception.affirm(f.scope, f.turn("clinical-yes-after-wait", "Yes"), action.key, action.digest, f.classSessionConfig.clock()));
+    }
+    resultValue(await f.drain()); assert.equal(f.writes.length, 1);
     const proof = f.proof(); assert.ok(proof.financialConsent);
     const intentRow = [...f.funding.rows.values()].find(r => String(r.notes).includes("financial intent"))!, observationRow = [...f.funding.rows.values()].find(r => String(r.notes).includes("financial booking observation"))!;
     const intent = value(decodeClinikoFinancialIntent(intentRow.notes)), stripePosts: string[] = [];
