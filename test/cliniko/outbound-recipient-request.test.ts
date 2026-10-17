@@ -52,8 +52,16 @@ test("all private subject contact target schedule and policy changes alter the c
 });
 test("noncanonical native spelling, wrong families, extra context and oversize notes refuse without partial decoding", () => {
   const notes = value(encodeOutboundRecipientRequest({ ...outboundRequestValue(), appointment }));
-  for (const altered of [notes.replace('[[', '[ ['), notes.replace('v1\n', 'v2\n'), notes+'\n', notes+'private',
+  for (const altered of [notes.replace('["', '[ "'), notes.replace('v1\n', 'v2\n'), notes+'\n', notes+'private',
     notes.replace('outbound recipient request', 'financial resend request'), "x".repeat(1051), "", null, {}])
     assert.equal(decodeOutboundRecipientRequest(altered).ok, false);
   const r = outboundRequestValue(); assert.equal(encodeOutboundRecipientRequest({ ...r, scope: { ...r.scope, tenantId: "x".repeat(1000) } }).ok, false);
+});
+
+test("a context with individually bounded fields still refuses an oversized native summary", () => {
+  const r = outboundRequestValue();
+  assert.equal(encodeOutboundRecipientRequest({ ...r, appointment,
+    scope: { tenantId: "t".repeat(96), clinicId: "c".repeat(96), locationId: "l".repeat(96) },
+    businessId: "9".repeat(19), patientId: "9".repeat(19), recipient: { kind: "voice", number: "+"+"9".repeat(15) },
+    policy: { version: "v".repeat(64), digest: r.policy.digest } }).ok, false);
 });
