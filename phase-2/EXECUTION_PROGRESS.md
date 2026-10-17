@@ -2814,3 +2814,12 @@ refresh precisely its three changed fixture/test citations and remove the stale
 public-scan-pending note. Current registry/facts and exact-head TypeScript
 validation follow; no clinic/operator/cloud acceptance or thirteen-gap completion
 is inferred. Financial-work ownership remains awaiting the operator's choice.
+
+Registered source2fe2c94 then passed the full TypeScript check and both current
+product-facts/scenario-manifest controls (`work1792200393099`),
+01:26:33.471623–01:28:09.813209UTC, zero skips. All1,195 current source and455
+artifact hashes stayed unchanged, peak1,431,371,776B under2GiB/CPU200%/Swap0
+with1536MiB heap, all memory-limit/OOM events zero. The sole TypeScript change
+since the four-case serving run is the registry-version assertion; cohort and
+production source are identical. The final evidence commit changes Markdown
+only. No whole-suite, cloud or operator acceptance is inferred.
