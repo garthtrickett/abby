@@ -3285,3 +3285,63 @@ Mapped producer/native-versus-local scope recovery is not inferred from metadata
 carryover or a fresh same-scope owner. No real provider/mail, billing/workflow
 change, deployment, activation, Aeva removal or merge was performed. All13 gaps
 remain active; independent review and exact-head cloud CI remain required.
+
+
+## Bounded native financial discovery qualification
+
+The subsequent `codex/abby-financial-work-discovery` candidate adds readonly
+`ClinikoFinancialWorkDiscovery`: a complete bounded created-time window with
+explicit account-wide reading and independently current exact-record grants,
+including archived records. Selected intents are reread; authenticated producer
+citations resolve to the exact independently authorized source even outside the
+window. Full proof/patient/scope/account binding remains required. Unknown
+schemas, incomplete/changing pagination, malformed native context, duplicate
+markers/obligations and shared effect IDs refuse the whole window. Returned
+private intent/pair contexts establish no absence, payment, retry, global queue
+completion, immutable history or effect permission. No SQL, mutation, sender,
+public route, scheduler, fee consent or actual financial worker is added.
+
+Validation on semantic078cf64e4330cc5478cc311e3a7a7c45896d5598,
+work1792210491174, naturally completed exit0 at04:16:24.794160UTC:
+
+```sh
+node --test --test-concurrency=2 \
+  test/cliniko/financial-work-discovery.test.ts \
+  test/cliniko/financial-record-retention.test.ts \
+  test/cliniko/financial-review-read.test.ts \
+  test/cliniko/financial-booking-capture.test.ts \
+  test/cliniko/financial-review-intent.test.ts
+NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck
+git diff --check
+```
+
+All107 tests passed, zero fail/skip/cancel, followed by successful full TypeScript.
+The37 new cases cover broad versus exact authority, withdrawn access, archived
+out-of-window source lookup, unsigned/altered/wrong-source proof, financial
+selection/patient mismatch, exact reread changes, complete/empty/multiple pages,
+count/ID/record/byte/window bounds, duplicate obligation/effect markers, malformed
+JSON, shared quota/429, stalled body and deterministic late-header cancellation.
+Provider-port fixture results do not establish a live provider or killed-process
+recovery test. All1592 tracked hashes and the dependency lock stayed unchanged.
+Whole Node scope peak1,418,964,992B under2GiB/CPU200%/Swap0, heap1536MiB;
+all memory events0. PID877450 absent, scope inactive, paired wait31682 reaped.
+No PostgreSQL job was needed for this readonly, no-storage adapter.
+
+Earlier changed-source evidence is retained: initial runner1792210195786 failed
+Python syntax before Node;1792210207235 and1792210227529 failed test/strip-only
+syntax with70 other passes;1792210241338 passed98 then exposed a denied-source
+permission classified unavailable;1792210263810 passed103 then exposed a20ms
+late-header fixture that could expire before dispatch. Syntax, denial translation
+and a deterministic post-dispatch abort fixture were corrected. Work1792210282310
+passed104/104; added ambiguity cases passed107/107 in1792210314929. First full
+TSC1792210385084 exited2 on six related optional-response diagnostics, with no
+OOM; separating the validated response from its cleanup handle fixed them. The
+final changed-source run above passed both units and full TypeScript. No test,
+assertion, deadline, billing or workflow policy was weakened to obtain a pass.
+
+The clinical36b5285c full result remains separate. This discovery adapter and
+newer financial work are outside that complete graph. Next is actual financial/
+serving-owner composition, approved fee/played financial consent and independently
+current producer/restore admission, then one-shot Stripe creation and durable
+webhook/link/receipt/expiry workflows. All13 gaps and external acceptance remain
+active; no real provider/mail, deployment, activation, Aeva removal or merge.
