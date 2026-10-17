@@ -1,3 +1,5 @@
+import { ClinikoFinancialResendOwner } from "./cliniko-financial-resend-owner.ts";
+import type { FinancialResendAuthority } from "./cliniko-financial-resend-owner.ts";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
@@ -48,6 +50,7 @@ export type FinancialConsumerAuthorities = Readonly<{
   /** Explicit native unlinked-class contract, independent of individual expiry. */
   classClinicalExpiry?: Readonly<{ authority: FinancialUnlinkedClassExpiryAuthority; classPolicy: OwnerFileClassPolicy }>;
   caseClassClinicalExpiry?: Readonly<{ authority: FinancialCaseClassExpiryAuthority; classPolicy: OwnerFileClassPolicy; maximumAuthorityRequests: number }>;
+  resend?: Readonly<{ authority: FinancialResendAuthority; maximumAuthorityRequests: number }>;
   records: FinancialRecordAuthority; work: FinancialConsumerAuthority; webhook: FinancialWebhookHandoffAuthority;
 }>;
 type Failure = Readonly<{ kind: "invalidConfig" | "unavailable" | "alreadyStarted" }>;
@@ -80,6 +83,7 @@ export class ClinikoFinancialConsumer {
   readonly #clinicalExpiry: ClinikoFinancialClinicalExpiryOwner | undefined;
   readonly #classClinicalExpiry: ClinikoFinancialUnlinkedClassExpiryOwner | undefined;
   readonly #caseClassClinicalExpiry: ClinikoFinancialCaseClassExpiryOwner | undefined;
+  readonly #resends: ClinikoFinancialResendOwner | undefined;
   readonly #discovery: StripeCheckoutDiscovery;
   readonly #money: StripeCheckoutReader;
   readonly #onCycle: Dependencies["onCycle"];
@@ -89,7 +93,7 @@ export class ClinikoFinancialConsumer {
   #running = false;
   #route: ReturnType<typeof stripeFinancialWebhookHandler> | undefined;
   private constructor(config: FinancialConsumerConfig, authority: FinancialConsumerAuthorities, dependencies: Dependencies,
-    ownerBinding: string, pending: ClinikoFinancialPendingDiscovery, checkout: ClinikoStripeCheckoutOwner, messages: ClinikoFinancialMessageOwner, expiry: ClinikoCheckoutExpiryOwner | undefined, clinicalExpiry: ClinikoFinancialClinicalExpiryOwner | undefined, classClinicalExpiry: ClinikoFinancialUnlinkedClassExpiryOwner | undefined, caseClassClinicalExpiry: ClinikoFinancialCaseClassExpiryOwner | undefined) {
+    ownerBinding: string, pending: ClinikoFinancialPendingDiscovery, checkout: ClinikoStripeCheckoutOwner, messages: ClinikoFinancialMessageOwner, expiry: ClinikoCheckoutExpiryOwner | undefined, clinicalExpiry: ClinikoFinancialClinicalExpiryOwner | undefined, classClinicalExpiry: ClinikoFinancialUnlinkedClassExpiryOwner | undefined, caseClassClinicalExpiry: ClinikoFinancialCaseClassExpiryOwner | undefined, resends: ClinikoFinancialResendOwner | undefined) {
     this.#config = Object.freeze({ ...config });
     this.#authority = Object.freeze({ ...authority,
       run: Object.freeze({ allows: authority.run.allows.bind(authority.run), current: authority.run.current.bind(authority.run) }),
@@ -97,7 +101,7 @@ export class ClinikoFinancialConsumer {
         providerBindingAuthorized: authority.work.providerBindingAuthorized.bind(authority.work),
         onCheckoutAcknowledged: authority.work.onCheckoutAcknowledged.bind(authority.work), current: authority.work.current.bind(authority.work) }) });
     this.#query = Object.freeze({ purpose: "runFinancialConsumer", ownerBinding });
-    this.#caseClassClinicalExpiry = caseClassClinicalExpiry; this.#classClinicalExpiry = classClinicalExpiry; this.#clinicalExpiry = clinicalExpiry; this.#expiry = expiry; this.#pending = pending; this.#checkout = checkout; this.#messages = messages; this.#onCycle = dependencies.onCycle;
+    this.#resends = resends; this.#caseClassClinicalExpiry = caseClassClinicalExpiry; this.#classClinicalExpiry = classClinicalExpiry; this.#clinicalExpiry = clinicalExpiry; this.#expiry = expiry; this.#pending = pending; this.#checkout = checkout; this.#messages = messages; this.#onCycle = dependencies.onCycle;
     this.#discovery = new StripeCheckoutDiscovery(config.checkout.stripe, dependencies.stripe);
     this.#money = new StripeCheckoutReader(config.checkout.stripe, dependencies.stripe);
   }
@@ -130,7 +134,26 @@ export class ClinikoFinancialConsumer {
         maximumAuthorityRequests: authority.caseClassClinicalExpiry.maximumAuthorityRequests }, authority.caseClassClinicalExpiry.authority,
         authority.records, dependencies.barrier, dependencies.native, dependencies.stripe);
       if (caseClassClinicalExpiry && !caseClassClinicalExpiry.ok) return err({ kind: "invalidConfig" });
-      const consumer = new ClinikoFinancialConsumer(config, authority, dependencies, binding.value, pending.value, checkout.value, messages.value, expiry?.ok ? expiry.value : undefined, clinicalExpiry?.ok ? clinicalExpiry.value : undefined, classClinicalExpiry?.ok ? classClinicalExpiry.value : undefined, caseClassClinicalExpiry?.ok ? caseClassClinicalExpiry.value : undefined);
+      let activeResend: (signal: AbortSignal) => boolean = () => false;
+      const message = authority.message, financialRecords = authority.records, resendGrant = authority.resend?.authority;
+      if (authority.resend !== undefined && (!resendGrant || [resendGrant.allows, resendGrant.financialAuthorized, resendGrant.current].some(f => typeof f !== "function"))) return err({ kind: "invalidConfig" });
+      const messageCurrent = message.current.bind(message), recordsCurrent = financialRecords.current.bind(financialRecords);
+      const resendAllows = resendGrant?.allows.bind(resendGrant), resendFinancial = resendGrant?.financialAuthorized.bind(resendGrant), resendCurrent = resendGrant?.current.bind(resendGrant);
+      const resends = authority.resend === undefined ? undefined : ClinikoFinancialResendOwner.create({
+        cliniko: config.checkout.cliniko, stripe: config.checkout.stripe, maximumAuthorityRequests: authority.resend.maximumAuthorityRequests }, {
+        sourceAuthorized: message.sourceAuthorized.bind(message), attemptScanAuthorized: message.attemptScanAuthorized.bind(message),
+        providerBindingAuthorized: message.providerBindingAuthorized.bind(message), messageAuthorized: message.messageAuthorized.bind(message),
+        producerAdmitted: message.producerAdmitted.bind(message), current: (q, stop) => activeResend(stop) && messageCurrent(q, stop) === true,
+      }, {
+        allows: (q, stop) => resendAllows!(q, stop), financialAuthorized: (q, stop) => resendFinancial!(q, stop),
+        current: (q, stop) => activeResend(stop) && resendCurrent!(q, stop) === true,
+      }, {
+        allows: financialRecords.allows.bind(financialRecords), producerAdmitted: financialRecords.producerAdmitted.bind(financialRecords),
+        current: (q, stop) => activeResend(stop) && recordsCurrent(q, stop) === true,
+      }, dependencies.barrier, dependencies.delivery, dependencies.native, dependencies.stripe);
+      if (resends && !resends.ok) return err({ kind: "invalidConfig" });
+      const consumer = new ClinikoFinancialConsumer(config, authority, dependencies, binding.value, pending.value, checkout.value, messages.value, expiry?.ok ? expiry.value : undefined, clinicalExpiry?.ok ? clinicalExpiry.value : undefined, classClinicalExpiry?.ok ? classClinicalExpiry.value : undefined, caseClassClinicalExpiry?.ok ? caseClassClinicalExpiry.value : undefined, resends?.ok ? resends.value : undefined);
+      activeResend = stop => consumer.#current(stop);
       const webhook = Object.freeze({ allowsReferenceRead: authority.webhook.allowsReferenceRead.bind(authority.webhook),
         acceptsExistingPending: authority.webhook.acceptsExistingPending.bind(authority.webhook), current: authority.webhook.current.bind(authority.webhook) });
       const handoff = ClinikoStripeWebhookHandoff.create({ cliniko: config.checkout.cliniko, stripe: config.checkout.stripe, webhook: config.webhook }, {
@@ -185,6 +208,19 @@ export class ClinikoFinancialConsumer {
             current: (q, stop) => this.#current(stop) && authority.current(q, stop) === true },
         }, signal);
         counts[result]++;
+      }
+      if (this.#resends) for (const context of pending.value.resendRequests ?? []) {
+        if (!await this.#admitted(signal)) return Object.freeze({ kind: "unavailable", ...counts });
+        const request = context.request;
+        if (context.recalled || context.archivedAt !== null || pending.value.resendAttempts?.some(a =>
+          a.attempt.effectRef === request.effectRef || a.attempt.requestActionRef === request.actionRef || a.attempt.approvalRef === request.approvalRef)) {
+          counts.reviewRequired++; continue;
+        }
+        const result = await this.#resends.sendOnce({ intentRecallRef: request.intentRecallRef, financialActionRef: request.financialActionRef,
+          observationRecallRef: request.observationRecallRef, observationActionRef: request.observationActionRef,
+          checkoutAttemptRecallRef: request.checkoutAttemptRecallRef, checkoutAttemptActionRef: request.checkoutAttemptActionRef,
+          checkoutRef: request.checkoutRef }, request.purpose, { recallRef: context.recallRef, actionRef: request.actionRef }, signal);
+        if (result.ok && result.value.kind === "accepted") counts.messageAccepted++; else counts.reviewRequired++;
       }
       return Object.freeze({ kind: "observed", ...counts });
     } catch { return Object.freeze({ kind: "unavailable", ...counts }); }
