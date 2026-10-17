@@ -33,7 +33,7 @@ for (const passes of [false, true]) test(`signed HTTP/WS class financial readbac
       const financial = call.flow.financialBookingInput; assert.ok(financial);
       let parts = 0;
       while (financial.inputAdmission()?.phase === "unplayed" && parts++ < 16) {
-        const frames = call.transcriptionFrames;
+        const frames: number = call.transcriptionFrames;
         await call.privateDigit("1");
         call.media(true); for (let i = 0; i < 5; i++) call.media(false);
         await call.privateKey("1"); assert.equal(financial.readySelection, undefined); assert.equal(call.transcriptionFrames, frames);
