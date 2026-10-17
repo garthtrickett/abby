@@ -25,7 +25,7 @@ export function pendingFinancialFixture(options: { native?: Parameters<typeof fi
   const scanner = value(ClinikoFinancialPendingDiscovery.create(f.config, authority, port));
   const row = (id: number, financial = false): Row => ({ ...structuredClone(f.rows.get("30")!), id: String(id), links: { self: `${base}/recalls/${id}` },
     ...(financial ? {} : { recall_type: { links: { self: `${base}/recall_types/55` } }, notes: "unrelated-private-note-canary" }) });
-  return { ...f, calls, grants, authority, port, scanner, row,
+  return { ...f, calls, grants, pendingAuthority: authority, port, scanner, row,
     scan: (signal = new AbortController().signal) => scanner.scanPending(signal),
     denyAccount: () => { account = false; }, denyRecord: () => { record = false; }, expirePending: () => { live = false; } };
 }
