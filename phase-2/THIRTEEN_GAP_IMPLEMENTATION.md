@@ -4399,3 +4399,38 @@ limits of earlier gaps. All thirteen gaps remain in scope. No actual clinic
 configuration, live payment/email, deployment, automatic refund/restoration,
 merge, or Aeva deletion is claimed. Required cloud checks remain unavailable
 before execution due account billing on the preceding exact-head drafts.
+
+
+### One coherent synthetic voice clock, 17 October 2026
+
+The frozen c562 complete PostgreSQL regression remains running and red. Cases
+2767/2768 rejected private class financial readbacks: playback used advanced media
+time while the nested financial native owner kept the original frozen clock.
+Its future-receipt guard correctly refused. Four subsequent E402/E403 corrected
+same/cross-service moves through real silence also failed: the fixture added
+explicit source-clock ticks to quiet-media elapsed time, counting each wait twice.
+No production permission, expiry, receipt, lease or financial guard was weakened.
+
+The intermediate nested-clock-only3c970f9 run1792231510079 finished7/8 at
+10:06:53.751628UTC. It repaired the played receipt but the pass variant still
+stopped after the real quota wait. This failure is retained; it was not a fully
+qualified result. Source3a7c8a5 uses max(current source, anchored media elapsed)
+and supplies that same clock to the nested financial owner. Both represent one
+simulated elapsed interval. Source pauses and quiet media cannot extend it twice.
+
+Initial fresh admission was below the required live job-cap growth plus reserve;
+no test or DB started. Work1792231814731 was a guard failure before START,
+not a test failure. Once the actual peer scope ended and fresh admission passed,
+work1792232312461 started10:18:33.219027UTC and naturally DONE0 at
+10:24:06.429836UTC:8/8. Original default4-file concurrency, all16 E353 variants/
+3 internal workers, played marks, renewed affirmations, real silence,15-second
+menu boundary, application quotas and assertions remain. Two class financial,
+four E402/E403 real-silence move cases, original E353 and the real timeout passed.
+Source pins unchanged; Node456,769,536B/1.5GiB and Docker372,076,544B/1GiB,
+CPU200% each/Swap0/OOM0; own DB/scope cleaned and wait3812 reaped.
+
+The earlier complete d4173562/1/1 remains the latest completed graph. The six
+observed c562 failures now have focused passing witnesses, not a new full result.
+Individual clinical expiry and the compiled204-response fixture correction are
+separate unfinished qualification. All thirteen gaps and actual clinic/provider/
+acoustic/cloud/deployment gates remain; no activation, merge or Aeva deletion.
