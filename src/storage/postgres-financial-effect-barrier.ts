@@ -21,6 +21,10 @@ export class PostgresFinancialEffectBarrier implements FinancialEffectBarrier {
     }
     this.#db = db; this.#scope = Object.freeze({ ...scope }); this.#binding = ownerBinding;
   }
+  matches(scope: LocationScope, ownerBinding: string): boolean {
+    return scope?.tenantId === this.#scope.tenantId && scope.clinicId === this.#scope.clinicId &&
+      scope.locationId === this.#scope.locationId && ownerBinding === this.#binding;
+  }
   async claimOnce(effectRef: string): ReturnType<FinancialEffectBarrier["claimOnce"]> {
     if (!validFinancialEffectRef(effectRef)) return err({ kind: "invalidInput" });
     try {
