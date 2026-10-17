@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { encodeClinikoFinancialIntent } from "../../src/cliniko/financial-review-intent.ts";
 import { ClinikoFinancialWorkDiscovery } from "../../src/cliniko/financial-work-discovery.ts";
 import type { FinancialDiscoveryAuthority } from "../../src/cliniko/financial-work-discovery.ts";
 import { fixture, value, observation, now, base, stop, uuid } from "../support/financial-retention.ts";
@@ -159,4 +160,34 @@ test("provider 429 observes the shared account budget", async () => {
 test("selected record cap refuses before exact lookups", async () => {
   const f = setup({ rows: s => Array.from({ length: 51 }, (_, i) => ({ ...s, id: String(i + 1), links: { self: `${base}/recalls/${i + 1}` } })) });
   assert.equal((await f.scanner.scan(window, stop())).ok, false); assert.equal(f.requests.length, 1);
+});
+
+
+test("different obligations cannot reuse effect IDs even when action markers differ", async () => {
+  const f = setup({ rows: s => [s] });
+  const second = { ...f.intent, actionRef: uuid(20), booking: { ...f.intent.booking, actionRef: uuid(21) } };
+  const secondRow = { ...f.source, id: "32", links: { self: `${base}/recalls/32` }, notes: value(encodeClinikoFinancialIntent(second)) };
+  // Exact GET uses the provider-owned map, not the scan's list.
+  const originalPort = f.port;
+  const port: typeof fetch = async (input, init) => String(input).includes("/recalls/32?") ? Response.json(secondRow) : originalPort(input, init);
+  const scanner = value(ClinikoFinancialWorkDiscovery.create(f.config, {
+    allowsAccountRead: async () => true, allowsRecordRead: async () => true, current: () => true,
+  }, async (input, init) => {
+    if (new URL(String(input)).pathname === "/v1/recalls") return Response.json({ total_entries: 2, recalls: [f.source, secondRow] });
+    return port(input, init);
+  }));
+  assert.equal((await scanner.scan(window, stop())).ok, false);
+});
+test("foreign financial selection in an otherwise valid native intent refuses", async () => {
+  const f = setup({ rows: s => [s] });
+  const notes = value(encodeClinikoFinancialIntent({ ...f.intent, businessId: "99" }));
+  f.source.notes = notes;
+  const r = await f.scanner.scan(window, stop()); assert.equal(r.ok, false); if (!r.ok) assert.equal(r.error.kind, "mismatched");
+});
+test("native class booking citation remains bound to an attendee target", async () => {
+  const f = setup({ rows: s => [{ ...s, id: "31", links: { self: `${base}/recalls/31` }, notes: observation() }] });
+  const changed = { ...f.intent, booking: { ...f.intent.booking, kind: "classBook" as const, sessionId: "61" } };
+  f.source.notes = value(encodeClinikoFinancialIntent(changed));
+  // The unchanged individual citation must not be promoted to class context.
+  assert.equal((await f.scanner.scan(window, stop())).ok, false);
 });
