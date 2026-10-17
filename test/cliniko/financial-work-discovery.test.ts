@@ -128,3 +128,34 @@ test("invalid oversized window and ended lifetime perform no I/O", async () => {
   const f = setup(); assert.equal((await f.scanner.scan({ ...window, createdFrom: "2026-10-31T00:00:00.000Z" }, stop())).ok, false);
   const ended = new AbortController(); ended.abort(); assert.equal((await f.scanner.scan(window, ended.signal)).ok, false); assert.equal(f.requests.length, 0);
 });
+
+test("late headers after deadline are cancelled without returning a context", async () => {
+  let release!: (r: Response) => void, cancelled = false;
+  const f = fixture({ config: { deadlineMs: 20 } });
+  const scanner = value(ClinikoFinancialWorkDiscovery.create(f.config, {
+    allowsAccountRead: async () => true, allowsRecordRead: async () => true, current: () => true,
+  }, () => new Promise(resolve => { release = resolve; })));
+  assert.equal((await scanner.scan(window, stop())).ok, false);
+  release(new Response(new ReadableStream({ cancel() { cancelled = true; } })));
+  await new Promise(resolve => setImmediate(resolve)); assert.equal(cancelled, true);
+});
+test("stalled owned body is cancelled at whole scan deadline", async () => {
+  let cancelled = false;
+  const f = setup({ config: { config: { deadlineMs: 20 } }, response: () => new Response(new ReadableStream({ cancel() { cancelled = true; } })) });
+  assert.equal((await f.scanner.scan(window, stop())).ok, false); assert.equal(cancelled, true);
+});
+test("malformed JSON and body byte overflow return no partial results", async () => {
+  for (const data of ["{bad", "x".repeat(1_000_001)]) {
+    const f = setup({ response: () => new Response(data) }); assert.equal((await f.scanner.scan(window, stop())).ok, false);
+  }
+});
+test("provider 429 observes the shared account budget", async () => {
+  let observed = false;
+  const f = setup({ config: { config: { rateBudget: { claim: async () => null, observe429: async () => { observed = true; return { kind: "rateLimited" }; } } } },
+    response: () => new Response(null, { status: 429 }) });
+  const result = await f.scanner.scan(window, stop()); assert.equal(result.ok, false); if (!result.ok) assert.equal(result.error.kind, "rateLimited"); assert.equal(observed, true);
+});
+test("selected record cap refuses before exact lookups", async () => {
+  const f = setup({ rows: s => Array.from({ length: 51 }, (_, i) => ({ ...s, id: String(i + 1), links: { self: `${base}/recalls/${i + 1}` } })) });
+  assert.equal((await f.scanner.scan(window, stop())).ok, false); assert.equal(f.requests.length, 1);
+});

@@ -156,7 +156,8 @@ export class ClinikoFinancialWorkDiscovery {
       const readIntent = async (recallRef: string, actionRef: string, purpose: FinancialDiscoveryRecordQuery["purpose"]) => {
         if (++lookups > 50) throw new ScanFailure("unavailable");
         const reader = ClinikoFinancialReviewReader.create(this.#config, { allows: async q => {
-          await accountPermit(); await recordPermit(queryFor(q.recallRef, q.actionRef, purpose)); return true;
+          try { await accountPermit(); await recordPermit(queryFor(q.recallRef, q.actionRef, purpose)); return true; }
+          catch (error) { if (error instanceof ScanFailure && error.kind === "forbidden") return false; throw error; }
         } }, this.#port);
         if (!reader.ok) throw new ScanFailure("invalidConfig");
         const result = await wait(reader.value.read({ recallRef, actionRef }, signal, { includeArchived: true }));
