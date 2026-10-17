@@ -93,7 +93,7 @@ test("refuses incomplete page rather than returning found pair", async () => {
   const f = setup({ page: rows => ({ total_entries: 3, recalls: rows }) }); assert.equal((await f.scanner.scan(window, stop())).ok, false);
 });
 function foreignRows(source: Row, count: number) {
-  return Array.from({ length: count }, (_, i) => ({ ...source, id: String(i + 1), links: { self: `${base}/recalls/${i + 1}` }, recall_type: { links: { self: `${base}/recall_types/41` } }));
+  return Array.from({ length: count }, (_, i) => ({ ...source, id: String(i + 1), links: { self: `${base}/recalls/${i + 1}` }, recall_type: { links: { self: `${base}/recall_types/41` } } }));
 }
 test("two complete stable pages use count and sorted IDs, never foreign links", async () => {
   const f = setup({ rows: s => foreignRows(s, 101), page: (rows, page) => ({ total_entries: rows.length, recalls: rows.slice((page-1)*100, page*100), links: { next: "https://evil.invalid" } }) });

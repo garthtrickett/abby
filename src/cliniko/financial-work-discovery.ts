@@ -189,8 +189,17 @@ export class ClinikoFinancialWorkDiscovery {
           recalled: native.recalled, archivedAt: native.archivedAt });
       }
       for (const [ref, intent] of intents) if (!paired.has(ref)) work.push({ kind: "intentContext", intent });
-      const intentActions = new Set<string>();
-      for (const item of work) { if (intentActions.has(item.intent.intent.actionRef)) throw new ScanFailure("mismatched"); intentActions.add(item.intent.intent.actionRef); }
+      // One-use IDs and clinical markers cannot be shared by separate obligations.
+      // A note signature alone cannot make duplicate payment intents unique.
+      const obligationIds = new Set<string>();
+      for (const item of work) {
+        const intent = item.intent.intent;
+        for (const id of [intent.actionRef, intent.booking.actionRef, ...Object.values(intent.effects),
+          ...(item.kind === "pairedContext" ? [item.observation.actionRef] : [])]) {
+          if (obligationIds.has(id)) throw new ScanFailure("mismatched");
+          obligationIds.add(id);
+        }
+      }
       await accountPermit();
       for (const q of grants.values()) await recordPermit(q);
       current(account); for (const q of grants.values()) current(q);
