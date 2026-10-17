@@ -17,8 +17,8 @@ const now = "2026-11-01T10:00:00.000Z", binding = { recallRef: "cliniko:recall:3
 const keys = generateKeyPairSync("ed25519"), keyRef = "booking-owner-fixture-1";
 const permit = { beforeSend: async () => true, current: () => true };
 const signal = () => new AbortController().signal;
-function value<T>(result: { ok: true; value: T } | { ok: false; error: unknown }): T {
-  assert.ok(result.ok); return result.value;
+function value<T extends { ok: true; value: unknown } | { ok: false; error: unknown }>(result: T): Extract<T, { ok: true }>["value"] {
+  assert.ok(result.ok); return result.value as Extract<T, { ok: true }>["value"];
 }
 function fixture(kind: "book" | "classBook" = "book") {
   const intent: ClinikoFinancialIntent = {

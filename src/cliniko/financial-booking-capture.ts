@@ -41,7 +41,7 @@ export class ClinikoFinancialBookingCapture {
           config.privateKey.type !== "private" || config.privateKey.asymmetricKeyType !== "ed25519" ||
           typeof config.producerKeyRef !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(config.producerKeyRef) ||
           config.clock !== undefined && typeof config.clock !== "function") return unavailable();
-      const owned = Object.freeze({ reader: config.reader, privateKey: config.privateKey, producerKeyRef: config.producerKeyRef, clock: config.clock });
+      const owned = Object.freeze({ reader: config.reader, privateKey: config.privateKey, producerKeyRef: config.producerKeyRef, ...(config.clock === undefined ? {} : { clock: config.clock }) });
       // Capture expected terms before any asynchronous private read or caller mutation.
       const encoded = encodeClinikoFinancialIntent(expected);
       if (!encoded.ok) return unavailable();
