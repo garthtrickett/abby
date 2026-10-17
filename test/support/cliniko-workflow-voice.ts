@@ -209,7 +209,8 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
           callLedger.dispose = () => { disposedState ??= callLedger.read(callId, scope); dispose(); };
           flow = resultValue(ClinikoCallFlow.create({ ...config, ...context,
           policyVersion: config.policyVersion, fetchPort: provider,
-          ...(config.financial && context.financialPresentation ? { financial: { ...config.financial, fetchPort: provider, presentation: context.financialPresentation } } : {}),
+          ...(config.financial && context.financialPresentation ? { financial: { ...config.financial,
+            native: { ...config.financial.native, clock: now }, fetchPort: provider, presentation: context.financialPresentation } } : {}),
           ...(config.intake ? { intake: { ...config.intake, presentation: context.privatePresentation } } : {}) }));
           flow.readBookingMenu = observe("bookingMenuRead", flow.readBookingMenu.bind(flow), bookingMenuDeadlineMs, query => query.signal);
           flow.selectBookingMenu = observe("bookingMenuSelect", flow.selectBookingMenu.bind(flow), bookingMenuDeadlineMs, query => query.signal);
