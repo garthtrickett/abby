@@ -8,16 +8,22 @@ import { decodeClinikoFinancialIntent } from "../../src/cliniko/financial-review
 import { verifyFinancialBookingObservation } from "../../src/cliniko/financial-booking-observation.ts";
 import type { FinancialBookingAssessment, FinancialBookingPreparationConfig, FinancialBookingSelection } from "../../src/standalone/cliniko-financial-booking-preparation.ts";
 
-export async function financialClassBookingFixture(options: { passes?: boolean; required?: boolean; scope?: import("../../src/core/model.ts").LocationScope;
+export async function financialClassBookingFixture(options: { passes?: boolean; required?: boolean; budgetLimit?: 180 | 200; scope?: import("../../src/core/model.ts").LocationScope;
   quote?: (selection: FinancialBookingSelection, ordinary: FinancialBookingAssessment) => FinancialBookingAssessment | undefined;
   barrierFor?: (native: FinancialBookingPreparationConfig["native"]) => FinancialBookingPreparationConfig["barrier"];
   lostIntent?: boolean; lostObservation?: boolean; onObservation?: () => void; play?: FinancialBookingPreparationConfig["presentation"]["play"] } = {}) {
   let funding!: ReturnType<typeof fixture>, config!: FinancialBookingPreparationConfig, allowed = true;
   let clock = () => verificationNow;
   const financialLife = new AbortController(), events: string[] = [], texts: string[] = [], selections: FinancialBookingSelection[] = [];
-  const f = await classBookingFixture({ ...(options.passes ? { passes: true } : {}), ...(options.scope ? { scope: options.scope } : {}),
+  const f = await classBookingFixture({ ...(options.passes ? { passes: true } : {}), ...(options.scope ? { scope: options.scope } : {}), ...(options.budgetLimit ? { budgetLimit: options.budgetLimit } : {}),
     fetchAround: port => async (input, init) => {
       const url = new URL(String(input)), body = init?.method === "POST" ? JSON.parse(String(init.body)) : undefined;
+      if (url.pathname === "/v1/recalls" && init?.method === "GET" && url.searchParams.getAll("q[]").some(q => q.startsWith("patient_id:="))) {
+        const all: Record<string, unknown>[] = [...funding.rows.values(), ...f.recalls.map(r => ({ ...r,
+          links: { self: `${url.origin}/v1/recalls/${r.id}` }, created_at: verificationNow, updated_at: verificationNow }))];
+        all.sort((a, b) => Number(a.id) - Number(b.id)); const page = Number(url.searchParams.get("page") ?? "1");
+        return Response.json({ total_entries: all.length, recalls: all.slice((page - 1) * 100, page * 100) });
+      }
       if (url.pathname === "/v1/recalls" && body?.recall_type_id === "40" || url.pathname.startsWith("/v1/recalls/") && funding?.rows.has(url.pathname.split("/").at(-1)!)) {
         events.push(`financial:${init?.method ?? "GET"}`); return funding.port(input, init);
       }

@@ -174,6 +174,13 @@ export class ClinikoFinancialBookingPreparation {
   get readySelection(): Readonly<{ verificationRef: string; offerRef: string }> | undefined {
     const p = this.#pending; return p?.phase === "accepted" && this.#current(p, this.#lifetime.signal) ? { verificationRef: p.selection.verificationRef, offerRef: p.selection.offerRef } : undefined;
   }
+  /** The exact intent GET in capture; external authority I/O remains its own
+   * contract. An explicit no-requirement assessment performs no native read. */
+  get captureRequestCost(): 0 | 1 | undefined {
+    const p = this.#pending;
+    try { return p && this.#current(p, this.#lifetime.signal) ? p.phase === "notRequired" ? 0 : p.phase === "accepted" ? 1 : undefined : undefined; }
+    catch { return undefined; }
+  }
   inputAdmission(): Readonly<{ fence: object; phase: "unplayed" | "awaiting" }> | undefined {
     const p = this.#pending; return p && (p.phase === "unplayed" || p.phase === "awaiting") ? { fence: p.fence, phase: p.phase } : undefined;
   }

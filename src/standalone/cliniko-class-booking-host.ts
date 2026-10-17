@@ -409,7 +409,9 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
     const before = await current(); if (!before) return denied();
     // The exact financial source read precedes the ordinary bounded class send.
     // Observation retention follows ACK and cannot be a clinical success gate.
-    const capacity = await checkClinikoHeadroom(this.#config.cliniko.rateBudget, 180 + (this.financial ? 1 : 0)), after = await current();
+    const financialCost = this.financial ? this.financial.captureRequestCost : 0;
+    if (financialCost === undefined) return denied();
+    const capacity = await checkClinikoHeadroom(this.#config.cliniko.rateBudget, 180 + financialCost), after = await current();
     if (!after || after.conversationRevision !== before.conversationRevision || signal.aborted || this.#prepared !== p) return denied();
     if (capacity === null) return ok({ kind: "ready" });
     if (capacity.kind !== "rateLimited" || !Number.isSafeInteger(capacity.retryAfterMs) || capacity.retryAfterMs! < 1 || capacity.retryAfterMs! > 60000) return denied();
@@ -428,7 +430,8 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
     const signal = this.#signal(external, 30000), choice = prepared.choice, actionId = this.#financialMarker ?? randomUUID();
     const uncertain = (): HostWriteReceipt => ({ kind: "uncertain", actionKey: mutation.actionKey, reconcileAfter: now, deadline: new Date(Date.parse(now) + 300000).toISOString() });
     const a = await c.classPolicy.current(c.scope);
-    if (!a.ok || choice.pass && await checkClinikoHeadroom(c.cliniko.rateBudget, 180 + (this.financial ? 1 : 0)) !== null)
+    const financialCost = this.financial ? this.financial.captureRequestCost : 0;
+    if (!a.ok || financialCost === undefined || choice.pass && await checkClinikoHeadroom(c.cliniko.rateBudget, 180 + financialCost) !== null)
       return reject();
     const financialCapture = this.financial ? await this.financial.capture(signal) : undefined;
     if (this.financial && !financialCapture) return reject();

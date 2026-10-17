@@ -19,10 +19,10 @@ import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 import type { PatientVerificationBudget } from "../../src/standalone/email-patient-authority.ts";
 import type { FinancialBookingPreparationConfig } from "../../src/standalone/cliniko-financial-booking-preparation.ts";
 export async function classBookingFixture(options: { passes?: boolean; fetchAround?: (port: typeof fetch) => typeof fetch;
-  scope?: LocationScope; folder?: string; budget?: ClinikoRequestBudget; verificationBudget?: PatientVerificationBudget;
+  scope?: LocationScope; folder?: string; budget?: ClinikoRequestBudget; budgetLimit?: 180 | 200; verificationBudget?: PatientVerificationBudget;
   financialFor?: (native: import("../../src/cliniko/class-attendance-write.ts").ClinikoAttendanceConfig, port: typeof fetch) => FinancialBookingPreparationConfig } = {}) {
   let sourceTime = verificationNow;
-  const nativeBudget = options.budget ?? new ClinikoReadBudget(200, () => Date.parse(sourceTime));
+  const nativeBudget = options.budget ?? new ClinikoReadBudget(options.budgetLimit ?? 200, () => Date.parse(sourceTime));
   let claims = 0;
   const budget = { claim: () => { claims++; return nativeBudget.claim(); }, observe429: nativeBudget.observe429.bind(nativeBudget),
     ...(nativeBudget.checkHeadroom ? { checkHeadroom: nativeBudget.checkHeadroom.bind(nativeBudget) } : {}) };
@@ -153,7 +153,7 @@ export async function classBookingFixture(options: { passes?: boolean; fetchArou
     callerApprovalPath: f.config.path, classApprovalPath: path, operation: "book" as const,
     classPermission: { allows: async () => permitted }, ...(options.passes ? { classPassAuthority: passAuthority } : {}), cliniko: { ...native.config, timeZone: approval.timeZone, countryCallingCode: "61", recallTypeId: "7" },
     signal: lifetime.signal, fetchPort, clock: () => sourceTime };
-  return { ...f, mail, classSessionConfig: { ...classSessionConfig, ...(financial ? { financial } : {}) }, bindNativeCall: (read: typeof callState) => { callState = read; }, native, host, reception, agent, recalls, writes, policy, path, turn, play, verify, propose, confirm,
+  return { ...f, mail, verificationDelivered: delivery, classSessionConfig: { ...classSessionConfig, ...(financial ? { financial } : {}) }, bindNativeCall: (read: typeof callState) => { callState = read; }, native, host, reception, agent, recalls, writes, policy, path, turn, play, verify, propose, confirm,
     pause: async (seconds: number) => {
       while (seconds > 0) { const step = Math.min(15, seconds); sourceTime = new Date(Date.parse(sourceTime) + step * 1000).toISOString(); f.setTime(sourceTime);
         resultValue(await f.runtime.renewSession(f.callId, f.sessionId, (await f.state()).sessionLease!.version, sourceTime)); seconds -= step; }
