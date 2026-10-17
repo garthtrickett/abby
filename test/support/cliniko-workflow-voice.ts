@@ -256,13 +256,13 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       async privateField(text: string) {
         const marks = sent.filter(item => item.event === "mark").length; privateInputs.push(text);
         for (let frame = 0; frame < 7; frame++) media(frame < 2);
-        await voiceUntil(() => playback.hasPendingAfter(marks) || failures.length > 0, "next private field prompt");
+        await voiceUntil(() => playback.hasReplyAfter(marks) || failures.length > 0, "next private field prompt");
         assert.deepEqual(failures, []);
       },
       async privateDigit(digit: string) {
         const marks = sent.filter(item => item.event === "mark").length;
         sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
-        await voiceUntil(() => playback.hasPendingAfter(marks) || failures.length > 0, "private registration prompt");
+        await voiceUntil(() => playback.hasReplyAfter(marks) || failures.length > 0, "private registration prompt");
         assert.deepEqual(failures, []);
       },
       async privateKey(digit: string) {
@@ -289,7 +289,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         for (let frame = 0; frame < 5; frame++) media(false);
         const finalChunk = chunk;
         try {
-          const hasReply = () => playback.hasPendingAfter(replyAfterMarks);
+          const hasReply = () => playback.hasReplyAfter(replyAfterMarks);
           // Observe invocation before starting each declared business deadline.
           // A generic speech wait is not the preparation or effect contract.
           await voiceUntil(() => hostWritesStarted > beforeWrites || staffPreparationsStarted > beforePreparations ||

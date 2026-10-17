@@ -58,3 +58,21 @@ test("clear echoes only outstanding receipts when an older prompt was already pl
   assert.equal(new Set(f.echoed).size, f.echoed.length);
   assert.equal(f.peer.hasPendingAfter(), false);
 });
+
+test("a newly played reply remains observable after its pending receipt is consumed", async () => {
+  const f = fixture();
+  await f.queue("first"); assert.equal(f.peer.acknowledgeLatest(), true);
+  const before = f.peer.count;
+  await f.queue("new"); assert.equal(f.peer.acknowledgeLatest(), true);
+  assert.equal(f.peer.hasPendingAfter(before), false);
+  assert.equal(f.peer.hasReplyAfter(before), true);
+  assert.equal(await f.stream.clear("new"), true);
+  assert.equal(f.peer.hasReplyAfter(before), true, "a later clear cannot erase an already played reply");
+});
+
+test("clear-returned completion and fence marks never become a fresh reply", async () => {
+  const f = fixture(), before = f.peer.count;
+  await f.queue("unplayed"); assert.equal(await f.stream.clear("unplayed"), true);
+  assert.equal(f.peer.hasReplyAfter(before), false);
+  await f.queue("fresh"); assert.equal(f.peer.hasReplyAfter(before), true);
+});

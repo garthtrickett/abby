@@ -2594,3 +2594,30 @@ recovered117 retained own-labelled lifecycle events;22 complete observed
 create-to-die lifetimes were0.67–1.16s. The daemon event buffer is partial,
 so this does not describe every backup or replace the failed full-run evidence.
 No source assertion, timeout or privacy scan was bypassed.
+
+### Follow-up: retain actually played replies in the synthetic observer
+
+The frozen7ca full regression (`work1792194028312`) reports a new E2E-329 failure
+while still running; it is not green. A concurrently observed presence reply can
+be genuinely played by the test before its pending `turn()` wait polls again.
+Using only `hasPendingAfter` then loses that response and eventually produces an
+unhandled rejected turn. Clear-returned marks must remain excluded, but a consumed
+real played receipt must remain observable. The failure was already logged before
+the separate Stripe full TypeScript job started; no RAM/CPU cause is inferred.
+
+Track marks returned by clear separately from ordinary acknowledgement. Add a
+reply-observation predicate that includes pending or genuinely played replies,
+while keeping mark selection restricted to outstanding receipts. Use it for the
+in-process turn/private-prompt waits; no production playback authority, timer,
+permission or native operation changes. Existing clear echoes still never prove
+speech played. The new distinction controls fail before the predicate exists
+(3pass/2fail,`work1792195263782`) and pass5/5 afterward (`work1792195301212`).
+
+The original unchanged E2E-329 signed waiting/silence test, unplayed-clear
+reproduction and receipt controls pass7/7,0skips (`work1792195344108`),
+00:02:24.868229–00:03:07.425698UTC. The held read closes at15,071ms/1008;
+presence repair follows both real silence notices and closes at30,280ms/1000.
+No deadline was shortened or relaxed. Nodepeak202,084,352B/1GiB/CPU200%, own
+Docker151,781,376B/512MiB/CPU200%,Swap0,no memory limit/OOM events,1185 inputs
+unchanged. Additional preservation and full TypeScript are next. The running7ca
+full remains frozen and failing; this follow-up is in a separate worktree.
