@@ -993,3 +993,7 @@ The419 stable IDs and version1.242 stay unchanged. Optional financial resend pro
 ## Class-source resend component extension
 
 Version1.242 retains419 stable IDs and planned full-call status. Test-only977a43d passes38 component controls, strict TypeScript/serving build and16 compiled SQL/TLS cases (six class, ten preserved individual). Original signed class sources with/without a requested case support independently approved link/receipt resends without clinical or financial mutation. Wrong attendee/edited occurrence/case or missing current financial approval refuses. All504 serving artifacts match515; the parent full regression remains running. No complete caller class-resend journey or real contact/deployment acceptance is claimed.
+
+## Outbound contact-time foundation
+
+Version1.242 retains419 stable IDs and planned full-call status.28 pure finite civil-time/DST boundary contracts plus strict TypeScript/serving build pass on99d2855. All504 serving artifacts match516 because no launcher imports the new component. This is time eligibility only: no campaign audience, DNC authority, scheduler, outbound launch, callback clinical action or new full-call scenario is implemented. See the refined outbound/sick-day contract and execution ledger.
