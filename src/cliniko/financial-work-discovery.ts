@@ -44,7 +44,8 @@ type Row = Record<string, unknown>;
 function row(v: unknown): Row | undefined { return v !== null && typeof v === "object" && !Array.isArray(v) ? v as Row : undefined; }
 const nativeId = (v: unknown): v is string => typeof v === "string" && /^[1-9][0-9]{0,18}$/.test(v);
 class ScanFailure extends Error {
-  constructor(readonly kind: Failure["kind"]) { super("Financial discovery unavailable"); }
+  readonly kind: Failure["kind"];
+  constructor(kind: Failure["kind"]) { super("Financial discovery unavailable"); this.kind = kind; }
 }
 function discard(response: Response | undefined): void { try { void response?.body?.cancel().catch(() => {}); } catch { /* No private diagnostics. */ } }
 type Listed = { recallRef: string; patientId: string; notes: string; recalled: boolean; archivedAt: string | null };
