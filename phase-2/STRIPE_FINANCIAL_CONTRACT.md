@@ -496,3 +496,51 @@ readback and before final acceptance. Frozen e97e1a9 passed 235 focused/database
 checks and full TypeScript in separate measured phases. See the execution ledger
 for exact jobs, limits and commands. Complete current-graph regression remains
 required; the historical clinical full is not substituted for it.
+
+## Native class financial-consent candidate
+
+Ordinary and approved-pass native class creation now use the same private
+financial preparation owner as individual booking. Its private proposal carries
+the exact occurrence and, when present, the selected pass snapshot. An
+independent versioned no-deposit assessment is required to omit payment terms;
+a native counter or pass association does not establish paid financial coverage.
+The class session and call-flow owner forward the configured financial port.
+There is no new public activation setting or class cancellation/movement grant.
+
+The prospective financial intent precedes the clinical proposal. All private
+financial parts and the final instruction must actually play before a separate
+financial answer. The caller then resumes booking and separately confirms class
+terms. The native attendance marker binds the same private intent. Exact attendee
+acknowledgement is the financial producer's source, including the existing exact
+case/pass match; financial retention failure or caller shutdown cannot erase it.
+Unknown/lost native acknowledgements leave prospective review work without a
+financial booking observation. Financial preparation finishes before the last
+class capacity read, and the synchronous financial gate still applies at dispatch.
+
+Quote expiry is bounded by the original offer, patient proof and independent
+financial assessment. The current live lease is checked on every private part;
+normal authorized lease renewal can continue unchanged terms beyond the initial
+lease expiry. This does not extend the offer, proof, financial assessment or
+payment deadline, and the real voice path retains its per-chunk lease guard.
+
+The pass admission retains the existing conservative 180-request clinical bound,
+plus one exact native intent GET for a required financial capture. A current
+explicit no-deposit assessment needs zero extra capture requests. Required-payment
+pass execution therefore refuses a configured 180 profile under this bound;
+the positive financial pass cohort uses the existing fixture's 200-request budget.
+No production/native quota was increased. The inherited allowance is not a
+measured minimum or a newly derived complete bound for arbitrary callbacks.
+Completing this financial route within 180 requires a genuine complete cost model
+or staged preparation and remains unfinished.
+
+Qualification includes ordinary/pass actual call-flow ownership, local financial
+resume without a model request, signed HTTP/WebSocket private playback with real
+played marks, early-digit/private-media refusal, separate clinical yes, real
+PostgreSQL one-use exclusion/privacy and class booking-to-fixture Stripe creation.
+The signed pass case preserves the real quota wait, continuous live call and
+renewed clinical affirmation. Native, speech, classifier, Stripe and delivery
+ports are synthetic. These cohorts do not establish production compilation/
+activation, all catalogue/intake combinations, financial producer SIGKILL/restore
+quiescence or the complete payment lifecycle. The four legacy class process-loss
+stages qualify a separate verification-fixture correction; they are not killed
+financial-producer coverage. All thirteen gaps remain active.
