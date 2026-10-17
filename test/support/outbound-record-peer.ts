@@ -1,3 +1,4 @@
+import type { OutboundPendingResult, OutboundPendingAuthority, OutboundPendingAccountQuery } from "../../src/cliniko/outbound-pending-discovery.ts";
 import assert from "node:assert/strict";
 import { fork } from "node:child_process";
 import type { Result } from "../../src/core/model.ts";
@@ -6,8 +7,8 @@ import { outboundRecipientRequestDigest } from "../../src/cliniko/outbound-recip
 import { outboundRecordsFixture, outboundReviewDate, outboundNow } from "./outbound-records.ts";
 import type { OutboundRecorderSetup } from "./outbound-record-process.ts";
 type Fixture = Awaited<ReturnType<typeof outboundRecordsFixture>>;
-type Outcome = Result<OutboundRecordRetention | OutboundRecipientRecord, OutboundRecordFailure>;
-export async function outboundRecordPeer(f: Fixture, directory: string, options: { mode?: "retain" | "read"; recallRef?: string;
+type Outcome = Result<OutboundRecordRetention | OutboundRecipientRecord | OutboundPendingResult, OutboundRecordFailure>;
+export async function outboundRecordPeer(f: Fixture, directory: string, options: { mode?: "retain" | "read" | "pending"; pendingAuthority?: OutboundPendingAuthority; recallRef?: string;
   denied?: "record" | "producer"; holdPostReply?: boolean; onSubmitted?(): void } = {}) {
   const child = fork(new URL("../../dist/runtime/test/support/outbound-record-process.js", import.meta.url), [], {
     cwd: directory, stdio: ["ignore", "pipe", "pipe", "ipc"], env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=256" } });
@@ -32,11 +33,18 @@ export async function outboundRecordPeer(f: Fixture, directory: string, options:
           ...(request.body === undefined ? {} : { body: request.body }) });
         if (request.method === "POST" && options.holdPostReply) { options.onSubmitted?.(); return; }
         data = { status: response.status, body: await response.text() };
+      } else if (m.kind === "pendingGrant") {
+        const q = m.data as OutboundPendingAccountQuery, authority = options.pendingAuthority;
+        data = q.ownerBinding === f.binding && !!authority && authority.current(q, new AbortController().signal) === true &&
+          await authority.allowsPendingRead(q, new AbortController().signal) === true && authority.current(q, new AbortController().signal) === true;
       } else if (m.kind === "grant") {
         const grant = m.data as { purpose: "record" | "producer"; query: OutboundRecordQuery }, q = grant.query;
         const bound = q.ownerBinding === f.binding && q.patientId === f.request.patientId && q.actionRef === f.request.actionRef &&
           (q.request === undefined || q.requestDigest === expected);
-        data = bound && options.denied !== grant.purpose && current(q) && await (grant.purpose === "record" ? f.authority.allows(q, new AbortController().signal) : f.authority.producerAdmitted(q, new AbortController().signal)) === true && current(q);
+        data = bound && options.denied !== grant.purpose && current(q) && (options.mode === "pending"
+          ? !!options.pendingAuthority && options.pendingAuthority.current(q, new AbortController().signal) === true &&
+            await options.pendingAuthority.allowsRecordRead(q, new AbortController().signal) === true && options.pendingAuthority.current(q, new AbortController().signal) === true
+          : await (grant.purpose === "record" ? f.authority.allows(q, new AbortController().signal) : f.authority.producerAdmitted(q, new AbortController().signal)) === true) && current(q);
       } else if (m.kind === "claim") data = await f.config.rateBudget.claim();
       else if (m.kind === "observe429") data = await f.config.rateBudget.observe429(null);
       else throw new Error("Synthetic operation unavailable");
@@ -44,8 +52,8 @@ export async function outboundRecordPeer(f: Fixture, directory: string, options:
     if (child.connected) child.send({ kind: "reply", id: m.id, data });
   });
   const { rateBudget: _budget, clock: _clock, ...config } = f.config;
-  const setup: OutboundRecorderSetup = { kind: "start", config, request: f.request, now: f.config.clock?.() ?? outboundNow,
-    ...(options.mode === "read" ? { mode: "read", recallRef: options.recallRef! } : { mode: "retain", recallAt: outboundReviewDate }) };
+  const setup: OutboundRecorderSetup = { kind: "start", config, now: f.config.clock?.() ?? outboundNow,
+    ...(options.mode === "pending" ? { mode: "pending" } : options.mode === "read" ? { mode: "read", request: f.request, recallRef: options.recallRef! } : { mode: "retain", request: f.request, recallAt: outboundReviewDate }) };
   child.send(setup);
   const kill = async () => { if (child.exitCode === null && child.signalCode === null) { assert.equal(child.kill("SIGKILL"), true); assert.equal(await terminal, "SIGKILL"); } };
   let timer: ReturnType<typeof setTimeout> | undefined;

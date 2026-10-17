@@ -1,5 +1,7 @@
 /** Compiled one-operation synthetic recorder. Private IPC only; no launcher,
  * listener or retry file. Provider fixtures and current grants outlive us. */
+import { ClinikoOutboundPendingDiscovery } from "../../src/cliniko/outbound-pending-discovery.ts";
+import type { OutboundPendingAccountQuery } from "../../src/cliniko/outbound-pending-discovery.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresOutboundEffectBarrier } from "../../src/storage/postgres-outbound-effect-barrier.ts";
 import { ClinikoOutboundRecipientRecords, outboundRecordOwnerBinding } from "../../src/cliniko/outbound-recipient-records.ts";
@@ -7,7 +9,8 @@ import type { OutboundRecordConfig, OutboundRecordQuery } from "../../src/clinik
 import type { OutboundRecipientRequest } from "../../src/cliniko/outbound-recipient-request.ts";
 import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 export type OutboundRecorderSetup = Readonly<{ kind: "start"; now: string; config: Omit<OutboundRecordConfig, "clock" | "rateBudget">;
-  request: OutboundRecipientRequest }> & (Readonly<{ mode: "retain"; recallAt: string }> | Readonly<{ mode: "read"; recallRef: string }>);
+}> & (Readonly<{ mode: "retain"; request: OutboundRecipientRequest; recallAt: string }> |
+  Readonly<{ mode: "read"; request: OutboundRecipientRequest; recallRef: string }> | Readonly<{ mode: "pending" }>);
 let id = 0, started = false;
 const replies = new Map<number, (data: unknown) => void>();
 const rpc = (kind: string, data: unknown): Promise<unknown> => new Promise(resolve => { const requestId = ++id; replies.set(requestId, resolve); process.send?.({ kind, id: requestId, data }); });
@@ -29,6 +32,14 @@ process.on("message", async (raw: unknown) => {
       current: () => process.connected };
     const signal = new AbortController().signal;
     process.send?.({ kind: "ready" });
+    if (setup.mode === "pending") {
+      const reader = ClinikoOutboundPendingDiscovery.create(config, {
+        allowsPendingRead: async (query: OutboundPendingAccountQuery) => await rpc("pendingGrant", query) === true,
+        allowsRecordRead: read.allows, current: () => process.connected,
+      }, port);
+      if (!reader.ok) throw new Error("Synthetic pending reader unavailable");
+      process.send?.({ kind: "result", data: await reader.value.scanPending(signal) }); return;
+    }
     if (setup.mode === "read") {
       const reader = ClinikoOutboundRecipientRecords.createReadOnly(config, read, port);
       if (!reader.ok) throw new Error("Synthetic reader unavailable");
