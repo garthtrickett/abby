@@ -5,6 +5,7 @@ import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { StripeCheckoutDiscovery } from "../stripe/checkout-discovery.ts";
 import type { StripeCheckoutReader } from "../stripe/checkout-read.ts";
 import type { ClinikoStripeCheckoutOwner, CheckoutCreationReceipt } from "./cliniko-stripe-checkout.ts";
+import type { ClinikoCheckoutExpiryOwner } from "./cliniko-checkout-expiry-owner.ts";
 import type { ClinikoFinancialMessageOwner, FinancialMessageBinding } from "./cliniko-financial-message-owner.ts";
 
 export type FinancialConsumerPair = Extract<FinancialDiscoveredWork, { kind: "pairedContext" }>;
@@ -26,10 +27,10 @@ export type FinancialConsumerAuthority = Readonly<{
    * permit a replacement. This must not persist private data in Abby SQL. */
   onCheckoutAcknowledged(receipt: CheckoutCreationReceipt, signal: AbortSignal): Promise<void>;
 }>;
-export type FinancialConsumerTurnResult = "creationAcknowledged" | "messageAccepted" | "alreadyAttempted" | "reviewRequired";
+export type FinancialConsumerTurnResult = "creationAcknowledged" | "checkoutExpiryAcknowledged" | "checkoutClosedUnpaid" | "messageAccepted" | "alreadyAttempted" | "reviewRequired";
 type Ports = Readonly<{
   ownerBinding: string; authority: FinancialConsumerAuthority; checkout: ClinikoStripeCheckoutOwner;
-  discovery: StripeCheckoutDiscovery; money: StripeCheckoutReader; messages: ClinikoFinancialMessageOwner;
+  discovery: StripeCheckoutDiscovery; money: StripeCheckoutReader; messages: ClinikoFinancialMessageOwner; expiry?: ClinikoCheckoutExpiryOwner;
 }>;
 function frozen<T>(value: T): T {
   if (value !== null && typeof value === "object") { for (const child of Object.values(value)) frozen(child); Object.freeze(value); }
@@ -95,15 +96,22 @@ export async function consumeFinancialPair(pair: FinancialConsumerPair, attempts
     const money = await wait(ports.money.inspect({ checkoutRef: found.value.checkoutRef, actionRef: intent.actionRef,
       amount: intent.payment.amount, currency: intent.payment.currency }, signal));
     if (!money.ok || ports.authority.current(providerQuery, signal) !== true) return "reviewRequired";
+    const binding: FinancialMessageBinding = { intentRecallRef: pair.intent.recallRef, financialActionRef: intent.actionRef, observationRecallRef: pair.observationRecallRef,
+      observationActionRef: pair.observation.actionRef, checkoutAttemptRecallRef: attempt.recallRef,
+      checkoutAttemptActionRef: attempt.attempt.actionRef, checkoutRef: found.value.checkoutRef };
+    if (ports.expiry && money.value.kind === "unpaid" && Date.parse(money.value.observedAt) >= Date.parse(intent.payment.deadline)) {
+      await permit();
+      const expired = await ports.expiry.expireOnce(binding, signal);
+      return expired.ok && expired.value.kind === "expiryAcknowledged" ? "checkoutExpiryAcknowledged"
+        : expired.ok && expired.value.kind === "observedClosed" ? "checkoutClosedUnpaid" : "reviewRequired";
+    }
     const purpose = money.value.kind === "received" && money.value.receiptUrl !== null ? "receiptDelivery"
       : money.value.kind === "unpaid" && money.value.status === "open" && !money.value.paymentClosed ? "linkDelivery" : null;
     if (!purpose) return "reviewRequired";
     await permit();
     if (await wait(Promise.resolve().then(() => ports.authority.providerBindingAuthorized(providerQuery, signal))) !== true ||
         ports.authority.current(providerQuery, signal) !== true) return "reviewRequired";
-    const binding: FinancialMessageBinding = { intentRecallRef: pair.intent.recallRef, financialActionRef: intent.actionRef, observationRecallRef: pair.observationRecallRef,
-      observationActionRef: pair.observation.actionRef, checkoutAttemptRecallRef: attempt.recallRef,
-      checkoutAttemptActionRef: attempt.attempt.actionRef, checkoutRef: found.value.checkoutRef };
+
     // Do not let a later lifecycle/observer failure erase an acknowledged SMTP
     // acceptance. The message owner itself performs the final fresh gates.
     const sent = await ports.messages.sendOnce(binding, purpose, signal);

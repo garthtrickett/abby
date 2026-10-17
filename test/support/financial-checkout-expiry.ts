@@ -10,8 +10,9 @@ export async function expiryFixture(options: {
 } = {}) {
   let clock = Date.parse(now);
   const f = await financialMessageFixture({ checkout: { native: { response: async (row, method) => {
-    if (method === "POST" && String(row.notes).includes("financial expiry attempt")) {
-      row.created_at = new Date(clock).toISOString(); row.updated_at = row.created_at; await options.retained?.(row);
+    if (method === "POST" && /financial (?:expiry|message) attempt/.test(String(row.notes))) {
+      row.created_at = new Date(clock).toISOString(); row.updated_at = row.created_at;
+      if (String(row.notes).includes("financial expiry attempt")) await options.retained?.(row);
     }
     return Response.json(row, { status: method === "POST" ? 201 : 200 });
   } } } });
@@ -24,7 +25,16 @@ export async function expiryFixture(options: {
   const config = { cliniko: { ...f.config.cliniko, clock: () => new Date(clock).toISOString() }, stripe: { ...f.config.stripe, clock: () => clock },
     ...(options.deadlineMs === undefined ? {} : { deadlineMs: options.deadlineMs }) };
   const stripePort: typeof fetch = async (input, init) => {
-    if (init?.method !== "POST") return f.stripePort(input, init);
+    if (init?.method !== "POST") {
+      const url = new URL(String(input));
+      if (url.pathname === "/v1/checkout/sessions") {
+        assert.equal(init?.method, "GET"); assert.equal(new Headers(init.headers).get("Stripe-Account"), f.intent.stripe.accountRef);
+        const from = Number(url.searchParams.get("created[gte]")), to = Number(url.searchParams.get("created[lte]"));
+        return Response.json({ object: "list", url: "/v1/checkout/sessions", has_more: false,
+          data: f.sessions.filter(s => Number(s.created) >= from && Number(s.created) <= to) });
+      }
+      return f.stripePort(input, init);
+    }
     assert.equal(String(input), "https://api.stripe.com/v1/checkout/sessions/cs_test_owner/expire");
     assert.equal(init.redirect, "error"); assert.equal(init.body, "");
     const headers = new Headers(init.headers); assert.equal(headers.get("Stripe-Account"), f.intent.stripe.accountRef);

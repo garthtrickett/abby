@@ -63,7 +63,7 @@ export async function financialMessageFixture(options: { checkout?: Parameters<t
         status: "succeeded", paid: true, captured: true, amount_refunded: 0, disputed: false, refunded: false,
         receipt_url: "https://pay.stripe.com/receipts/private-message-receipt" } };
   };
-  return { ...f, recordsAuthority: f.authority, config, binding: messageBinding, owner, make, messages, queries, nativeCalls, stripeReads, nativePort, stripePort, delivery, authority,
+  return { ...f, checkoutConfig: f.config, recordsAuthority: f.authority, config, binding: messageBinding, owner, make, messages, queries, nativeCalls, stripeReads, nativePort, stripePort, delivery, authority,
     send: (purpose: FinancialMessagePurpose = "linkDelivery", signal = stop()) => owner.sendOnce(messageBinding, purpose, signal), paid,
     denySource: () => { source = false; }, denyHistory: () => { history = false; }, denyMessage: () => { allowed = false; },
     unadmit: () => { admitted = false; }, expireMessageOwner: () => { live = false; }, denyBinding: () => { approvedCheckout = undefined; },

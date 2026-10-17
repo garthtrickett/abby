@@ -16,6 +16,8 @@ import type { FinancialEffectBarrier } from "./financial-effect-barrier.ts";
 import { ClinikoStripeWebhookHandoff } from "./cliniko-stripe-webhook-handoff.ts";
 import type { FinancialWebhookHandoffConfig, FinancialWebhookHandoffAuthority } from "./cliniko-stripe-webhook-handoff.ts";
 import { stripeFinancialWebhookHandler } from "./stripe-financial-webhook-handler.ts";
+import { ClinikoCheckoutExpiryOwner } from "./cliniko-checkout-expiry-owner.ts";
+import type { CheckoutExpiryAuthority } from "./cliniko-checkout-expiry-owner.ts";
 import { consumeFinancialPair } from "./financial-consumer-turn.ts";
 import type { FinancialConsumerAuthority } from "./financial-consumer-turn.ts";
 
@@ -26,12 +28,14 @@ export type FinancialConsumerConfig = Readonly<{
 export type FinancialConsumerRunQuery = Readonly<{ purpose: "runFinancialConsumer"; ownerBinding: string }>;
 export type FinancialConsumerCycle = Readonly<{
   kind: "observed" | "unavailable"; paired: number; creationAcknowledged: number;
-  messageAccepted: number; alreadyAttempted: number; reviewRequired: number;
+  messageAccepted: number; checkoutExpiryAcknowledged: number; checkoutClosedUnpaid: number; alreadyAttempted: number; reviewRequired: number;
 }>;
 export type FinancialConsumerAuthorities = Readonly<{
   run: Readonly<{ allows(query: FinancialConsumerRunQuery, signal: AbortSignal): Promise<boolean>;
     current(query: FinancialConsumerRunQuery, signal: AbortSignal): boolean }>;
   pending: FinancialPendingAuthority; checkout: CheckoutOwnerAuthority; message: FinancialMessageAuthority;
+  /** Absent means this host is not provisioned to expire Checkout Sessions. */
+  checkoutExpiry?: CheckoutExpiryAuthority;
   records: FinancialRecordAuthority; work: FinancialConsumerAuthority; webhook: FinancialWebhookHandoffAuthority;
 }>;
 type Failure = Readonly<{ kind: "invalidConfig" | "unavailable" | "alreadyStarted" }>;
@@ -60,6 +64,7 @@ export class ClinikoFinancialConsumer {
   readonly #pending: ClinikoFinancialPendingDiscovery;
   readonly #checkout: ClinikoStripeCheckoutOwner;
   readonly #messages: ClinikoFinancialMessageOwner;
+  readonly #expiry: ClinikoCheckoutExpiryOwner | undefined;
   readonly #discovery: StripeCheckoutDiscovery;
   readonly #money: StripeCheckoutReader;
   readonly #onCycle: Dependencies["onCycle"];
@@ -69,7 +74,7 @@ export class ClinikoFinancialConsumer {
   #running = false;
   #route: ReturnType<typeof stripeFinancialWebhookHandler> | undefined;
   private constructor(config: FinancialConsumerConfig, authority: FinancialConsumerAuthorities, dependencies: Dependencies,
-    ownerBinding: string, pending: ClinikoFinancialPendingDiscovery, checkout: ClinikoStripeCheckoutOwner, messages: ClinikoFinancialMessageOwner) {
+    ownerBinding: string, pending: ClinikoFinancialPendingDiscovery, checkout: ClinikoStripeCheckoutOwner, messages: ClinikoFinancialMessageOwner, expiry: ClinikoCheckoutExpiryOwner | undefined) {
     this.#config = Object.freeze({ ...config });
     this.#authority = Object.freeze({ ...authority,
       run: Object.freeze({ allows: authority.run.allows.bind(authority.run), current: authority.run.current.bind(authority.run) }),
@@ -77,7 +82,7 @@ export class ClinikoFinancialConsumer {
         providerBindingAuthorized: authority.work.providerBindingAuthorized.bind(authority.work),
         onCheckoutAcknowledged: authority.work.onCheckoutAcknowledged.bind(authority.work), current: authority.work.current.bind(authority.work) }) });
     this.#query = Object.freeze({ purpose: "runFinancialConsumer", ownerBinding });
-    this.#pending = pending; this.#checkout = checkout; this.#messages = messages; this.#onCycle = dependencies.onCycle;
+    this.#expiry = expiry; this.#pending = pending; this.#checkout = checkout; this.#messages = messages; this.#onCycle = dependencies.onCycle;
     this.#discovery = new StripeCheckoutDiscovery(config.checkout.stripe, dependencies.stripe);
     this.#money = new StripeCheckoutReader(config.checkout.stripe, dependencies.stripe);
   }
@@ -95,7 +100,10 @@ export class ClinikoFinancialConsumer {
       const messages = ClinikoFinancialMessageOwner.create({ cliniko: config.checkout.cliniko, stripe: config.checkout.stripe }, authority.message,
         authority.records, dependencies.barrier, dependencies.delivery, dependencies.native, dependencies.stripe);
       if (!pending.ok || !checkout.ok || !messages.ok) return err({ kind: "invalidConfig" });
-      const consumer = new ClinikoFinancialConsumer(config, authority, dependencies, binding.value, pending.value, checkout.value, messages.value);
+      const expiry = authority.checkoutExpiry === undefined ? undefined : ClinikoCheckoutExpiryOwner.create({ cliniko: config.checkout.cliniko, stripe: config.checkout.stripe },
+        authority.checkoutExpiry, authority.records, dependencies.barrier, dependencies.native, dependencies.stripe);
+      if (expiry && !expiry.ok) return err({ kind: "invalidConfig" });
+      const consumer = new ClinikoFinancialConsumer(config, authority, dependencies, binding.value, pending.value, checkout.value, messages.value, expiry?.ok ? expiry.value : undefined);
       const webhook = Object.freeze({ allowsReferenceRead: authority.webhook.allowsReferenceRead.bind(authority.webhook),
         acceptsExistingPending: authority.webhook.acceptsExistingPending.bind(authority.webhook), current: authority.webhook.current.bind(authority.webhook) });
       const handoff = ClinikoStripeWebhookHandoff.create({ cliniko: config.checkout.cliniko, stripe: config.checkout.stripe, webhook: config.webhook }, {
@@ -132,7 +140,7 @@ export class ClinikoFinancialConsumer {
   async #cycle(parent: AbortSignal): Promise<FinancialConsumerCycle> {
     const deadline = new AbortController(), timer = setTimeout(() => deadline.abort(), this.#config.cycleDeadlineMs);
     const signal = AbortSignal.any([parent, deadline.signal]);
-    const counts = { paired: 0, creationAcknowledged: 0, messageAccepted: 0, alreadyAttempted: 0, reviewRequired: 0 };
+    const counts = { paired: 0, creationAcknowledged: 0, messageAccepted: 0, checkoutExpiryAcknowledged: 0, checkoutClosedUnpaid: 0, alreadyAttempted: 0, reviewRequired: 0 };
     try {
       if (!await this.#admitted(signal)) return Object.freeze({ kind: "unavailable", ...counts });
       const pending = await this.#pending.scanPending(signal);
@@ -143,7 +151,7 @@ export class ClinikoFinancialConsumer {
         if (!await this.#admitted(signal)) return Object.freeze({ kind: "unavailable", ...counts });
         const authority = this.#authority.work;
         const result = await consumeFinancialPair(work, pending.value.attempts, {
-          ownerBinding: this.#query.ownerBinding, checkout: this.#checkout, messages: this.#messages, discovery: this.#discovery, money: this.#money,
+          ...(this.#expiry ? { expiry: this.#expiry } : {}), ownerBinding: this.#query.ownerBinding, checkout: this.#checkout, messages: this.#messages, discovery: this.#discovery, money: this.#money,
           authority: { ...authority, authorizeWork: (q, stop) => authority.authorizeWork(q, stop),
             providerBindingAuthorized: (q, stop) => authority.providerBindingAuthorized(q, stop),
             onCheckoutAcknowledged: (receipt, stop) => authority.onCheckoutAcknowledged(receipt, stop),

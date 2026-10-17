@@ -13,7 +13,7 @@ import { SmtpFinancialMessageDelivery } from "../../src/standalone/smtp-financia
 import type { SmtpMailConfig } from "../../src/standalone/smtp-text-mail-transport.ts";
 import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 
-export type FinancialConsumerProcessSetup = Readonly<{ kind: "start"; now: string; smtp: SmtpMailConfig;
+export type FinancialConsumerProcessSetup = Readonly<{ kind: "start"; now: string; enableCheckoutExpiry?: boolean; smtp: SmtpMailConfig;
   config: Omit<FinancialConsumerConfig, "checkout" | "webhook"> & {
     checkout: Omit<FinancialConsumerConfig["checkout"], "cliniko" | "stripe"> & {
       cliniko: Omit<FinancialConsumerConfig["checkout"]["cliniko"], "producer" | "rateBudget" | "clock"> & { producer: { keyRef: string; pem: string } };
@@ -58,6 +58,11 @@ process.on("message", async (raw: unknown) => {
       message: { sourceAuthorized: q => grant("record", q), attemptScanAuthorized: q => grant("history", q),
         providerBindingAuthorized: q => grant("messageBinding", q), messageAuthorized: q => grant("message", q),
         producerAdmitted: q => grant("producer", q), current },
+      ...(setup.enableCheckoutExpiry ? { checkoutExpiry: {
+        sources: { allows: q => grant("record", q), allowsHistory: q => grant("history", q), current },
+        referenceAuthorized: q => grant("expiryReference", q), providerBindingAuthorized: q => grant("providerBinding", q),
+        expiryAuthorized: q => grant("checkoutExpiry", q), producerAdmitted: q => grant("producer", q), current,
+      } } : {}),
       work: { authorizeWork: async q => await grant("work", q) ? { reviewDate: "2026-11-02" } : null,
         providerBindingAuthorized: q => grant("providerBinding", q), current,
         onCheckoutAcknowledged: async receipt => { await rpc("acknowledged", receipt); } },
