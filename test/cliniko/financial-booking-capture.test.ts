@@ -20,7 +20,7 @@ const signal = () => new AbortController().signal;
 function value<T extends { ok: true; value: unknown } | { ok: false; error: unknown }>(result: T): Extract<T, { ok: true }>["value"] {
   assert.ok(result.ok); return result.value as Extract<T, { ok: true }>["value"];
 }
-function fixture(kind: "book" | "classBook" = "book") {
+function fixture(kind: "book" | "classBook" = "book", patientCaseId?: string) {
   const intent: ClinikoFinancialIntent = {
     actionRef: uuid(1), scope, patientId: "21", businessId: "11", credentialFingerprint: clinikoCredentialFingerprint(apiKey),
     booking: { actionRef: uuid(2), practitionerId: "12", appointmentTypeId: "13",
@@ -46,7 +46,8 @@ function fixture(kind: "book" | "classBook" = "book") {
     practitioner: { links: { self: `${base}/practitioners/12` } }, appointment_type: { links: { self: `${base}/appointment_types/13` } },
   } : { id: "92", links: { self: `${base}/attendees/92` }, patient: { links: { self: `${base}/patients/${malformed ? "999" : "21"}` } },
     booking: { links: { self: `${base}/bookings/15` } }, notes: `Abby attendance ${intent.booking.actionRef}`,
-    cancelled_at: null, archived_at: null, deleted_at: null };
+    cancelled_at: null, archived_at: null, deleted_at: null,
+    ...(patientCaseId === undefined ? {} : { patient_case: { links: { self: `${base}/patient_cases/${patientCaseId}` } } }) };
   const port: typeof fetch = async (_url, init) => {
     events.push(init?.method ?? "GET");
     if (lost) throw new Error("private upstream canary");
@@ -61,7 +62,7 @@ function fixture(kind: "book" | "classBook" = "book") {
   const prepare = (clock = () => now, expected = intent) => ClinikoFinancialBookingCapture.prepare({ reader, privateKey: keys.privateKey, producerKeyRef: keyRef, clock }, binding, expected, signal());
   const run = (capture: ClinikoFinancialBookingCapture, checks = permit) => kind === "book"
     ? capture.book(writer, { scope, patientId: "21", startsAt: intent.booking.startsAt, endsAt: intent.booking.endsAt, marker: intent.booking.actionRef }, signal(), checks)
-    : capture.classBook(classWriter, { kind: "book", scope, patientId: "21", sessionId: "15", actionId: intent.booking.actionRef }, signal(), checks);
+    : capture.classBook(classWriter, { kind: "book", scope, patientId: "21", sessionId: "15", actionId: intent.booking.actionRef, ...(patientCaseId === undefined ? {} : { patientCaseId }) }, signal(), checks);
   return { intent, reader, writer, classWriter, config, events, prepare, run,
     deny: () => { allowed = false; }, archive: () => { archived = true; }, recall: () => { recalled = true; },
     lose: () => { lost = true; }, malformed: () => { malformed = true; }, nominal: () => { nominal = true; }, afterAck: () => { afterAck = true; } };
@@ -146,4 +147,12 @@ test("verification refuses edited fields, replay across intents/records, wrong t
     notes.replace("Abby request ", "Abby request wrong"), notes.replace("2026-11-01T10", "2026-11-01T11"), notes.replace(keyRef, "other-owner"),
     value(encodeClinikoFinancialIntent(f.intent)), "x".repeat(1051)]) assert.equal(verified(edited, f.intent).ok, false);
   assert.equal(verifyFinancialBookingObservation(notes, { intent: f.intent, intentRecallRef: "cliniko:recall:31", producerKeyRef: keyRef, publicKey: keys.publicKey }).ok, false);
+});
+
+for (const patientCaseId of ["71", "72"]) test(`actual native case ${patientCaseId} acknowledgement produces the authenticated original request`, async () => {
+  const f = fixture("classBook", patientCaseId), result = value(await f.run(value(await f.prepare())));
+  assert.equal(result.observation.kind, "captured"); if (result.observation.kind !== "captured") return;
+  const observed = value(verified(result.observation.notes, f.intent));
+  assert.deepEqual(observed.classCreationRequest, { sessionId: "15", patientCaseId });
+  assert.deepEqual(f.events, ["quota", "GET", "quota", "POST"]);
 });
