@@ -32,9 +32,11 @@ for (const scenario of ["last", "drift"] as const) {
       try { await call.digit("1"); }
       catch (error) {
         // Fixed phase results only; no speech, native IDs, recipient or caller verification data.
-        const stages = Object.fromEntries(["privateMenuResult", "privatePageResult", "privateChoiceResult"].map(kind =>
+        const stages = Object.fromEntries(["privateMenuResult", "privatePageResult", "privateChoiceStarted", "privateChoiceResult"].map(kind =>
           [kind, call.messages.filter(message => message.kind === kind).map(message => message.accepted)]));
-        throw new Error(`private resend selection failed: ${JSON.stringify(stages)}`, { cause: error });
+        const wire = error instanceof Error && error.message.startsWith("Private response unavailable: {")
+          ? error.message : "fixed wire diagnostic unavailable";
+        throw new Error(`private resend selection failed: ${JSON.stringify(stages)}; ${wire}`, { cause: error });
       }
       await call.mark();
       await voiceUntil(() => call.spoken.at(-1)?.includes("Press pound to return") === true, "private selected recipient complete"); await call.mark();
