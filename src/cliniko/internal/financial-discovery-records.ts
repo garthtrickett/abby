@@ -1,11 +1,13 @@
 import type { KeyObject } from "node:crypto";
 import { decodeFinancialCheckoutAttempt, checkoutAttemptMatchesIntent } from "../financial-checkout-attempt.ts";
 import type { FinancialCheckoutAttempt } from "../financial-checkout-attempt.ts";
+import { decodeFinancialMessageAttempt, messageAttemptMatchesIntent } from "../financial-message-attempt.ts";
+import type { FinancialMessageAttempt } from "../financial-message-attempt.ts";
 import { financialIntentDigest, authenticateFinancialBookingCitation, verifyFinancialBookingObservation } from "../financial-booking-observation.ts";
 import type { ClinikoFinancialBookingObservation } from "../financial-booking-observation.ts";
 import { decodeClinikoFinancialIntent } from "../financial-review-intent.ts";
 import type { ClinikoFinancialReviewContext, ClinikoFinancialReviewFailure } from "../financial-review-read.ts";
-import type { FinancialDiscoveredWork, FinancialDiscoveredAttempt, FinancialDiscoveryRecordQuery } from "../financial-work-discovery.ts";
+import type { FinancialDiscoveredWork, FinancialDiscoveredAttempt, FinancialDiscoveredMessageAttempt, FinancialDiscoveryRecordQuery } from "../financial-work-discovery.ts";
 
 export class FinancialDiscoveryError extends Error {
   readonly kind: ClinikoFinancialReviewFailure["kind"];
@@ -23,17 +25,20 @@ type Ports = Readonly<{
  * Notes/attempts remain context; only the actual producer signature binds ACK. */
 export async function assembleFinancialRecords(selected: readonly FinancialListedRecord[], ports: Ports): Promise<Readonly<{
   work: readonly FinancialDiscoveredWork[]; attempts: readonly FinancialDiscoveredAttempt[];
+  messageAttempts?: readonly FinancialDiscoveredMessageAttempt[];
 }>> {
   const { trust, beganAt, readIntent, permitRecord } = ports;
   if (selected.length > 50) throw new FinancialDiscoveryError("unavailable");
   const intents = new Map<string, ClinikoFinancialReviewContext>(), actions = new Set<string>();
   const observations: { native: FinancialListedRecord; proof: ClinikoFinancialBookingObservation }[] = [];
   const pendingAttempts: { native: FinancialListedRecord; attempt: FinancialCheckoutAttempt }[] = [];
+  const pendingMessages: { native: FinancialListedRecord; attempt: FinancialMessageAttempt }[] = [];
   for (const native of selected) {
     const decoded = decodeClinikoFinancialIntent(native.notes);
     const attempt = decoded.ok ? undefined : decodeFinancialCheckoutAttempt(native.notes);
-    const citation = decoded.ok || attempt?.ok ? undefined : authenticateFinancialBookingCitation(native.notes, trust);
-    const actionRef = decoded.ok ? decoded.value.actionRef : attempt?.ok ? attempt.value.actionRef : citation?.ok ? citation.value.actionRef : undefined;
+    const message = decoded.ok || attempt?.ok ? undefined : decodeFinancialMessageAttempt(native.notes);
+    const citation = decoded.ok || attempt?.ok || message?.ok ? undefined : authenticateFinancialBookingCitation(native.notes, trust);
+    const actionRef = decoded.ok ? decoded.value.actionRef : attempt?.ok ? attempt.value.actionRef : message?.ok ? message.value.actionRef : citation?.ok ? citation.value.actionRef : undefined;
     if (!actionRef || actions.has(actionRef)) throw new FinancialDiscoveryError("mismatched");
     actions.add(actionRef);
     await permitRecord(native.recallRef, actionRef);
@@ -44,6 +49,7 @@ export async function assembleFinancialRecords(selected: readonly FinancialListe
           context.recalled !== native.recalled || context.archivedAt !== native.archivedAt) throw new FinancialDiscoveryError("mismatched");
       intents.set(native.recallRef, context);
     } else if (attempt?.ok) pendingAttempts.push({ native, attempt: attempt.value });
+    else if (message?.ok) pendingMessages.push({ native, attempt: message.value });
     else if (citation?.ok) observations.push({ native, proof: citation.value });
     else throw new FinancialDiscoveryError("malformed");
   }
@@ -70,18 +76,31 @@ export async function assembleFinancialRecords(selected: readonly FinancialListe
     attempted.add(attempt.effectRef);
     attempts.push({ kind: "attemptContext", intent, attempt, recallRef: native.recallRef, recalled: native.recalled, archivedAt: native.archivedAt });
   }
+  const messageAttempts: FinancialDiscoveredMessageAttempt[] = [];
+  for (const { native, attempt } of pendingMessages) {
+    if (native.recallRef === attempt.intentRecallRef || native.recallRef === attempt.observationRecallRef || attempted.has(attempt.effectRef) ||
+        Date.parse(attempt.attemptedAt) > Date.parse(beganAt) + 30_000) throw new FinancialDiscoveryError("mismatched");
+    const intent = intents.get(attempt.intentRecallRef) ?? await readIntent(attempt.intentRecallRef, attempt.financialActionRef, "sourceIntent");
+    if (!messageAttemptMatchesIntent(attempt, intent.intent, intent.recallRef) || intent.intent.patientId !== native.patientId) throw new FinancialDiscoveryError("mismatched");
+    const pair = work.find(w => w.kind === "pairedContext" && w.intent.recallRef === intent.recallRef);
+    if (pair?.kind === "pairedContext" && (pair.observationRecallRef !== attempt.observationRecallRef || pair.observation.actionRef !== attempt.observationActionRef ||
+        pair.observation.targetRef !== attempt.targetRef || financialIntentDigest(pair.intent.intent) !== attempt.intentDigest)) throw new FinancialDiscoveryError("mismatched");
+    attempted.add(attempt.effectRef);
+    messageAttempts.push({ kind: "messageAttemptContext", intent, attempt, recallRef: native.recallRef,
+      recalled: native.recalled, archivedAt: native.archivedAt });
+  }
   // Attempts are unsigned possible-dispatch context, never creation receipts.
   // A source outside this window still requires independent exact authority.
   const obligations = new Map([...work.map(w => [w.intent.recallRef, w.intent.intent] as const),
-    ...attempts.map(a => [a.intent.recallRef, a.intent.intent] as const)]);
+    ...attempts.map(a => [a.intent.recallRef, a.intent.intent] as const), ...messageAttempts.map(a => [a.intent.recallRef, a.intent.intent] as const)]);
   const obligationIds = new Set<string>();
   for (const intent of obligations.values()) {
     for (const id of [intent.actionRef, intent.booking.actionRef, ...Object.values(intent.effects)]) {
       if (obligationIds.has(id)) throw new FinancialDiscoveryError("mismatched"); obligationIds.add(id);
     }
   }
-  for (const id of [...work.flatMap(w => w.kind === "pairedContext" ? [w.observation.actionRef] : []), ...attempts.map(a => a.attempt.actionRef)]) {
+  for (const id of [...work.flatMap(w => w.kind === "pairedContext" ? [w.observation.actionRef] : []), ...attempts.map(a => a.attempt.actionRef), ...messageAttempts.map(a => a.attempt.actionRef)]) {
     if (obligationIds.has(id)) throw new FinancialDiscoveryError("mismatched"); obligationIds.add(id);
   }
-  return { work, attempts };
+  return { work, attempts, ...(messageAttempts.length ? { messageAttempts } : {}) };
 }

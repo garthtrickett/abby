@@ -4,6 +4,8 @@ import type { Result } from "../core/model.ts";
 import type { FinancialEffectBarrier } from "../standalone/financial-effect-barrier.ts";
 import { encodeFinancialCheckoutAttempt, decodeFinancialCheckoutAttempt, checkoutAttemptMatchesIntent } from "./financial-checkout-attempt.ts";
 import type { FinancialCheckoutAttempt } from "./financial-checkout-attempt.ts";
+import { encodeFinancialMessageAttempt, decodeFinancialMessageAttempt, messageAttemptMatchesIntent } from "./financial-message-attempt.ts";
+import type { FinancialMessageAttempt } from "./financial-message-attempt.ts";
 import { decodeClinikoFinancialIntent, encodeClinikoFinancialIntent } from "./financial-review-intent.ts";
 import type { ClinikoFinancialIntent } from "./financial-review-intent.ts";
 import { financialIntentDigest, verifyFinancialBookingObservation } from "./financial-booking-observation.ts";
@@ -153,6 +155,41 @@ export class ClinikoFinancialRecordRetainer {
     if (!attempt.ok || !checkoutAttemptMatchesIntent(attempt.value, intent, binding.intentRecallRef) ||
         attempt.value.observationRecallRef === binding.recallRef) return err({ kind: "mismatched" });
     return ok({ kind: "attemptContext", recallRef: result.value.recallRef, recalled: result.value.recalled,
+      archivedAt: result.value.archivedAt, attempt: attempt.value });
+  }
+
+  /** The independent message owner must retain this before possible SMTP send.
+   * Retention is possible-send context, never delivery, money or send permission. */
+  async retainMessageAttemptOnce(attempt: FinancialMessageAttempt, expected: Readonly<{
+    intent: ClinikoFinancialIntent; intentRecallRef: string; observationRecallRef: string; observation: ClinikoFinancialBookingObservation;
+  }>, recallAt: string, signal: AbortSignal): Promise<Result<FinancialRecordRetention, FinancialRecordFailure>> {
+    const intent = this.#intent(expected?.intent), encoded = encodeFinancialMessageAttempt(attempt);
+    if (!intent || !encoded.ok || !validRecallDate(recallAt) || !messageAttemptMatchesIntent(attempt, intent, expected.intentRecallRef) ||
+        attempt.observationRecallRef !== expected.observationRecallRef || attempt.observationActionRef !== expected.observation.actionRef ||
+        attempt.targetRef !== expected.observation.targetRef || expected.observation.financialActionRef !== intent.actionRef ||
+        expected.observation.intentDigest !== financialIntentDigest(intent)) return invalid();
+    const at = Date.parse(attempt.attemptedAt);
+    const result = await this.#native.request({ method: "POST", notes: encoded.value, recallAt,
+      notBefore: new Date(at - 30_000).toISOString(), notAfter: new Date(at + 60_000).toISOString(),
+      query: this.#query(intent, attempt.actionRef, "retainMessageAttempt", { intentRecallRef: expected.intentRecallRef, recallAt }) }, signal);
+    if (!result.ok) return result;
+    if (result.value.kind === "record" && [attempt.intentRecallRef, attempt.observationRecallRef].includes(result.value.recallRef)) return ok({ kind: "uncertain" });
+    return ok(result.value.kind === "uncertain" ? result.value : { kind: "accepted", recallRef: result.value.recallRef, actionRef: attempt.actionRef });
+  }
+  async readMessageAttempt(binding: Readonly<{ recallRef: string; actionRef: string; intentRecallRef: string }>,
+                           expected: ClinikoFinancialIntent, signal: AbortSignal): Promise<Result<Readonly<{
+    kind: "messageAttemptContext"; recallRef: string; recalled: boolean; archivedAt: string | null; attempt: FinancialMessageAttempt;
+  }>, FinancialRecordFailure>> {
+    const intent = this.#intent(expected), id = typeof binding?.recallRef === "string" ? /^cliniko:recall:([1-9][0-9]{0,18})$/.exec(binding.recallRef)?.[1] : undefined;
+    if (!intent || !id || !validRecallMarker(binding.actionRef) || binding.recallRef === binding.intentRecallRef) return invalid();
+    const result = await this.#native.request({ method: "GET", recallId: id,
+      query: this.#query(intent, binding.actionRef, "readMessageAttempt", { recallRef: binding.recallRef, intentRecallRef: binding.intentRecallRef }) }, signal);
+    if (!result.ok) return result;
+    if (result.value.kind !== "record") return err({ kind: "unavailable" });
+    const attempt = decodeFinancialMessageAttempt(result.value.notes);
+    if (!attempt.ok || attempt.value.actionRef !== binding.actionRef || !messageAttemptMatchesIntent(attempt.value, intent, binding.intentRecallRef) ||
+        attempt.value.observationRecallRef === binding.recallRef) return err({ kind: "mismatched" });
+    return ok({ kind: "messageAttemptContext", recallRef: result.value.recallRef, recalled: result.value.recalled,
       archivedAt: result.value.archivedAt, attempt: attempt.value });
   }
 
