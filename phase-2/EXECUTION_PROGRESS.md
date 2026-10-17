@@ -3927,3 +3927,70 @@ Reviewed fact/fingerprint and scenario manifest work1792221723081 passed2/2
 at07:22:04.778592UTC, exit0, on845a34a. Peak66,064,384B/512MiB/
 CPU200%/Swap0, all memory events0 and pins unchanged; paired wait reaped.
 This evidence-only update changes no executable or directly fingerprinted input.
+
+## Fresh policy and exact resend evidence latency — candidate
+
+Complete frozen6bdf350 work1792218846210 naturally terminated at
+07:35:05.607382UTC on17October2026,exit1:3470passed/4failed/1existing
+skip(3475tests), no cancellations. The ordered follow-up did not run. The four
+failures were staged date-corrected same-case pass association checkpoint2578
+(native writes2/expected3), cancelled email2626 after successful private selection
+but later ordinary Yes had no response, and private-selection stalls in the
+permission/stop resend cases2629 nested3/5. Source/dependency pins and473
+artifacts were unchanged; Node peak966,467,584B/1.5GiB and external PostgreSQL
+564,543,488B/1GiB, all memory events0. Processes/scopes and own disposable DBs
+ended/cleaned, paired wait11432 reaped; actual terminal recorded on drafts498-502.
+This is the latest completed full verdict, not a green release.
+
+The missing write did not reproduce in one isolated unchanged-production case:
+parent-only fixed-state diagnostic source1e35a9c passed1/1 in work1792221696543
+at07:26:20.170468UTC. The failed checkpoint retains its original captured count;
+waiting for safe diagnostic state cannot turn a late write into a pass. No text,
+patient/native IDs, codes or payloads enter that failure snapshot. Node peak
+188,452,864B/1.5GiB, Docker108,158,976B/512MiB, CPU200%/Swap0/events0,
+source/artifact pins unchanged and paired wait23265 reaped. This isolated pass
+is not a fix or a concurrency/full-suite qualification.
+
+The diagnostics showed expensive repeated policy reads on the protected path.
+`PostgresPolicyStore.capture` now overlaps four independent read-only setting
+reads, retaining every fresh scope/version decoder and failure gate; transaction
+reads still use their existing connection/isolation. `ClinikoConfirmationEvidenceReader`
+now also overlaps only the exact business/practitioner/type GETs after target
+validation. Each GET keeps its own live authority/quota gate; final exact target/
+type/current subject/recipient and repeated evidence/played-consent checks remain.
+There is no cached authority, omitted native claim, new permission, quota/deadline
+increase, reduced file concurrency or altered success assertion.
+
+- Policy-only executable source492712b passed27/27 existing setting PostgreSQL
+  controls in work1792222130794 at07:29:16.183140UTC. Node peak273,981,440B/
+  1GiB; Docker236,888,064B/512MiB, CPU200%/Swap0/events0. Full TypeScript and
+  serving build work1792222129241 passed at07:32:22.199909UTC, peak
+  1,460,027,392B/2GiB/heap1536/CPU200%/Swap0/events0. Pins unchanged/waits reaped.
+- Its signed cohort1792222362483 still failed at07:37:38.927046UTC:
+  9 reported passes/1failure, the source-case private completion prompt timeout.
+  Same-case pass, paging and the other general resend cases passed. The title
+  filter accidentally excluded both E2E380 content-email cases, leaving an empty
+  file reported as a pass. Neither content email is claimed qualified by this
+  run. Node peak547,512,320B/1.5GiB and Docker205,271,040B/512MiB, events0;
+  pins unchanged, own DBs cleaned and wait46832 reaped. This failure is retained.
+- Revised executable sourcec2ca6e9f6d2b7e559ec633915bdc3aed604b1f93 passed
+  all25 original native resend controls in work1792222710861 at
+  07:39:58.644641UTC. Node peak287,244,288B/1GiB, Docker299,782,144B/512MiB,
+  CPU200%/Swap0/events0, pins unchanged and wait73978 reaped.
+- The same frozen source passed full TypeScript plus `npm run build:voice-tests`
+  in work1792222709395 at07:41:11.947359UTC, peak1,441,566,720B/2GiB/
+  heap1536/CPU200%/Swap0/events0, pins unchanged and wait74893 reaped.
+- Corrected content-inclusive signed cohort1792222919493 naturally passed at
+  07:46:46.269366UTC:11/11 actual cases, no failures/skips/cancellations. Both
+  E2E380 telehealth/cancelled emails,6 general resend outcomes,2 paging cases and
+  1 same-case pass move executed. First private replies measured5,240ms and
+  5,648ms; both later consent/send journeys completed. Node peak674,889,728B/
+  1.5GiB, Docker260,517,888B/512MiB, CPU200%/Swap0/events0.1245 source inputs
+  and470 current serving artifacts were unchanged; own processes/DBs ended,
+  wait93418 reaped. Default4 file concurrency and original deadlines remained.
+
+The final focused result supports this latency candidate, not the claim that the
+four failures are resolved across the whole current graph. A fresh combined
+regression remains required. Financial primitives in draft500-502 remain partial;
+periodic consumer, producer/restore/quiescence, delivery/receipts/independent
+expiry and all13/external acceptance requirements remain active.

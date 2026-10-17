@@ -679,3 +679,18 @@ Checkout/clinical expiry or the complete financial lifecycle through the host.
 The earlier frozen6bdf350 full regression excludes this subsequent source and
 has an observed staged same-case pass failure still under diagnosis. All13 gaps
 and required authoritative CI/clinic/provider acceptance remain open.
+
+## Latest combined qualification boundary
+
+The earlier frozen6bdf350 full regression has now naturally terminated at
+07:35:05.607382UTC on17October2026:3470passed/4failed/1existing skip,
+3475tests, exit1. The ordered follow-up did not run. Its failures were a staged
+same-case pass association write checkpoint and three signed resend cases.
+It excludes draft500-502 source. Subsequent c2ca6e9 overlaps independent fresh
+policy-setting reads and individually protected exact confirmation metadata GETs;
+27 policy-setting PostgreSQL checks,25 native resend checks, full TypeScript/
+serving build and11 selected signed concurrent cases pass. Both E2E380 content
+cases actually executed in that final cohort. This focused result does not replace
+the red combined verdict, qualify the financial lifecycle or activate a consumer.
+Earlier references to the concurrently running6bdf350 job describe its historical
+state when those primitives were qualified, not a current live reservation.
