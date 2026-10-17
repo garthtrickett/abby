@@ -54,18 +54,19 @@ function assertPhaseAffirmation(call: Call) {
 }
 
 async function assertStageWriteCount(call: Call, expected: number, stage: string) {
-  if (writes(call).length !== expected) {
+  const actual = writes(call).length;
+  if (actual !== expected) {
     const probes = call.messages.filter(row => row.kind === "classDiagnostic").length;
     call.child.send({ kind: "classDiagnostic" });
     try { await voiceUntil(() => call.messages.filter(row => row.kind === "classDiagnostic").length > probes, "failed stage state only", 1000); }
     catch { /* Missing diagnostic cannot hide the original failed assertion. */ }
     // Only fixed states/counts from the existing private-safe fixture boundary.
     // No caller speech, identifiers, notes, provider bodies or private codes.
-    const diagnostic = { stage, expected, actual: writes(call).length,
+    const diagnostic = { stage, expected, actual,
       lastOutcome: call.messages.filter(row => row.kind === "classWriteOutcome").at(-1)?.actionStatus ?? null,
       affirmation: call.messages.filter(row => row.kind === "classPhaseAffirmation").at(-1)?.diagnostic ?? null,
       state: call.messages.filter(row => row.kind === "classDiagnostic").at(-1)?.diagnostic ?? null };
-    assert.equal(writes(call).length, expected, "Staged native write checkpoint: " + JSON.stringify(diagnostic));
+    assert.equal(actual, expected, "Staged native write checkpoint: " + JSON.stringify(diagnostic));
   }
 }
 
