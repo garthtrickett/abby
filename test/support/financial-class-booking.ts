@@ -95,5 +95,6 @@ export async function financialClassBookingFixture(options: { passes?: boolean; 
     return value(verifyFinancialBookingObservation(observed.notes, { intent, intentRecallRef: `cliniko:recall:${source.id}`, producerKeyRef: keyRef, publicKey: keys.publicKey }));
   };
   return { ...f, flowConfig, funding, config, financialLife, events, texts, selections, pending, readback, accept, confirm, proof,
+    get claims() { return f.claims; },
     denyFinancial: () => { allowed = false; funding.deny(); }, close: async () => { financialLife.abort(); await f.close(); } };
 }
