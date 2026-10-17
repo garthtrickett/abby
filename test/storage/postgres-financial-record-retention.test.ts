@@ -74,9 +74,9 @@ for (const kind of ["book", "classBook"] as const) test(`${kind}: provider-owned
   assert.equal(rows.length, 2); assert.deepEqual(rows.map(r => r.effect_ref).sort(), [intent.actionRef, saved.actionRef].sort());
   assert.deepEqual(Object.keys(rows[0]!).sort(), ["claimed_at", "clinic_id", "effect_ref", "location_id", "owner_binding", "tenant_id"]);
   assert.deepEqual(await scanPatientDataCanaries(db, [
-    { label: "recipient", value: intent.recipient.address }, { label: "nativeTarget", value: context.observation.targetRef },
-    { label: "nativeIntent", value: c.binding.recallRef }, { label: "intentBody", value: "Abby financial intent v1" },
-    { label: "observationBody", value: "Abby financial booking observation v1" },
+    { label: "recipient", value: intent.recipient.address }, { label: "native_target", value: context.observation.targetRef },
+    { label: "native_intent", value: c.binding.recallRef }, { label: "intent_body", value: "Abby financial intent v1" },
+    { label: "observation_body", value: "Abby financial booking observation v1" },
   ]), { ok: true, value: [] });
   assert.equal(c.writes.length, 1);
 });
