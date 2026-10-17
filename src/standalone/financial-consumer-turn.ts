@@ -80,7 +80,7 @@ export async function consumeFinancialPair(pair: FinancialConsumerPair, attempts
           receipt.intentDigest !== financialIntentDigest(intent) || receipt.targetRef !== pair.observation.targetRef ||
           receipt.accountRef !== intent.stripe.accountRef || receipt.livemode !== intent.stripe.livemode ||
           receipt.amount !== intent.payment.amount || receipt.currency !== intent.payment.currency) return "reviewRequired";
-      await wait(Promise.resolve().then(() => ports.authority.onCheckoutAcknowledged(receipt, signal)));
+      await wait(Promise.resolve().then(() => ports.authority.onCheckoutAcknowledged(receipt, signal)).then(() => true));
       // Rediscovery on the next poll supplies the exact durable attempt. Never
       // synthesize native record fields or use a volatile receipt as work storage.
       return "creationAcknowledged";
