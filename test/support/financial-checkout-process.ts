@@ -23,8 +23,9 @@ const port: typeof fetch = async (input, init) => {
   return new Response(raw.body, { status: raw.status });
 };
 process.on("message", async (message: unknown) => {
-  if (message !== null && typeof message === "object" && "kind" in message && message.kind === "reply") {
-    const reply = message as { id: number; data: unknown }; replies.get(reply.id)?.(reply.data); replies.delete(reply.id); return;
+  if (message !== null && typeof message === "object" && "kind" in message && message.kind === "reply" &&
+      "id" in message && typeof message.id === "number" && "data" in message) {
+    replies.get(message.id)?.(message.data); replies.delete(message.id); return;
   }
   const setup = message as Setup;
   if (setup?.kind !== "start") return;

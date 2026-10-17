@@ -163,3 +163,19 @@ test("POST 500 and malformed/oversize Stripe bodies remain uncertain", async () 
     assert.equal(value(await f.owner.createOnce(f.binding, stop())).kind, "uncertain"); assert.equal(posts(f).length, 1);
   }
 });
+
+test("nested configuration changes after construction cannot redirect discovery or ownership", async () => {
+  const f = await checkoutFixture();
+  const changed = f.config.cliniko as { apiKey: string; scope: typeof f.intent.scope; stripe: typeof f.intent.stripe };
+  changed.apiKey = "synthetic-other-clinic-au5"; changed.scope = { ...changed.scope, tenantId: "foreign" };
+  changed.stripe = { accountRef: "acct_foreign", livemode: false };
+  assert.equal(value(await f.owner.createOnce(f.binding, stop())).kind, "created");
+});
+test("native attempt timestamps within the accepted clock margin cannot hide prior dispatch", async () => {
+  const f = await checkoutFixture(), created = value(await f.owner.createOnce(f.binding, stop()));
+  const row = f.rows.get(created.attemptRecallRef.split(":").at(-1)!)!;
+  row.created_at = new Date(Date.parse(now) + 5_000).toISOString(); row.updated_at = row.created_at;
+  f.burned.clear();
+  const r = await value(f.make()).createOnce(f.binding, stop()); assert.equal(r.ok, false); if (!r.ok) assert.equal(r.error.kind, "alreadyClaimed");
+  assert.equal(posts(f).length, 1);
+});

@@ -79,7 +79,8 @@ export class ClinikoStripeCheckoutOwner {
   readonly #binding: string;
   private constructor(config: CheckoutOwnerConfig, authority: CheckoutOwnerAuthority, barrier: FinancialEffectBarrier,
                       reader: ClinikoFinancialReviewReader, records: ClinikoFinancialRecordRetainer, stripe: StripeApiRead, port: typeof fetch, binding: string, clinikoPort: typeof fetch) {
-    this.#config = Object.freeze({ ...config, stripe: Object.freeze({ ...config.stripe }) });
+    this.#config = Object.freeze({ ...config, stripe: Object.freeze({ ...config.stripe }), cliniko: Object.freeze({ ...config.cliniko,
+      scope: Object.freeze({ ...config.cliniko.scope }), stripe: Object.freeze({ ...config.cliniko.stripe }), producer: Object.freeze({ ...config.cliniko.producer }) }) });
     this.#clinikoPort = clinikoPort; this.#reader = reader; this.#records = records; this.#stripe = stripe; this.#port = port; this.#claim = barrier.claimOnce.bind(barrier); this.#binding = binding;
     this.#authority = Object.freeze({ attemptScanAuthorized: authority.attemptScanAuthorized.bind(authority), sourceAuthorized: authority.sourceAuthorized.bind(authority), collectionAuthorized: authority.collectionAuthorized.bind(authority),
       producerAdmitted: authority.producerAdmitted.bind(authority), current: authority.current.bind(authority) });
@@ -152,8 +153,9 @@ export class ClinikoStripeCheckoutOwner {
         current: (_q, stop) => !stop.aborted && this.#authority.current(query, signal) === true,
       }, this.#clinikoPort);
       if (!discovery.ok) throw new CheckoutFailure("unavailable");
-      const history = await wait(discovery.value.scanPatient({ patientId: intent.patientId, createdFrom: intent.createdAt,
-        createdThrough: new Date(now()).toISOString() }, signal));
+      const history = await wait(discovery.value.scanPatient({ patientId: intent.patientId,
+        createdFrom: new Date(Math.min(Date.parse(intent.createdAt), Date.parse(context.value.createdAt)) - 30_000).toISOString(),
+        createdThrough: new Date(now() + 30_000).toISOString() }, signal));
       if (!history.ok) throw new CheckoutFailure(history.error.kind === "forbidden" ? "forbidden" : "unavailable");
       if (history.value.attempts.some(a => a.attempt.effectRef === intent.effects.checkout || a.attempt.financialActionRef === intent.actionRef)) throw new CheckoutFailure("alreadyClaimed");
       await permit();
