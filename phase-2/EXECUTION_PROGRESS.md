@@ -2751,3 +2751,7 @@ fingerprint (`work1792198214576`: one pass/one failure). Review confirms the
 booking.scope claim is unchanged: new denial controls strengthen its evidence.
 Refresh that source fingerprint and the reference date/current qualification
 header; preserve the failed full-suite and unavailable cloud-CI status.
+The reviewed product facts and scenario manifest then pass 2/2, zero skips
+(`work1792198250633`, terminal 00:50:52.334110 UTC), while preserving the cited
+booking.scope claim, all assertions, source authority boundaries and scenario
+statuses. The header was updated to report actual current results.
