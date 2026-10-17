@@ -2661,3 +2661,87 @@ no memory limit/OOM events. These are actual new-graph checks, alongside the
 retained signed deadline/intake/correction and source-identical adapter evidence.
 The complete new combined PostgreSQL suite has not started; its source/artifact
 pins and fresh launch guards remain required after current7ca finishes naturally.
+
+### Actual full regression failure and intake menu diagnosis, 17 October 2026
+
+The frozen 7ca regression `work1792194028312` naturally finished at
+00:28:40.046326 UTC with exit 1: 3,179 tests, 3,171 passes, seven failures,
+one existing C-LIVE-40 skip and no cancellations. Ordered follow-up did not
+run. The 1,185 source inputs and 451 runtime artifacts remained unchanged.
+Node peaked at 879,820,800 B and aggregate disposable PostgreSQL at
+567,664,640 B; memory limit and OOM counters stayed zero.
+
+Failures were E2E-329 and E2E-307 played-reply observation races; E2E-358's
+new South registration/offline booking produced zero appointment writes;
+E2E-380 telehealth resend response timed out; accepted and declined E2E-375
+resends did not reach a private choice result; and routed E2E-353 exhausted
+its existing 15-second booking-menu deadline. The E2E-375 suite's aggregate
+`not ok` is not an eighth failing test. Prior focused passes did not solve
+these whole-regression results. No new complete regression is green.
+
+Played-reply correction 992 is already part of the combined 127 candidate.
+Test-only synthetic observations on 2d3fc1c preserve the actual receiver's
+outcomes and retain only event/sequence, boolean progress, presentation kinds
+and statuses, and fixed aggregate source timings. They exclude digits,
+patient references and caller text. Full TypeScript and a fresh serving build
+passed (`work1792197053406`), with all production JavaScript unchanged.
+
+The five original failing files reproduced E2E-353 on that graph at original
+four-file concurrency and deadlines (`work1792197600542`,
+00:40:01.128676–00:42:12.504852 UTC): 14 tests, 13 passes, one failure and no
+skips. The compiled roster, resend and conversation cases passed this focused
+run, which does not establish that their full-suite failures are resolved.
+The routed menu took 15,034 ms. Across that call, owner membership was read
+644 times (6,709 ms aggregate, one pending at failure); these are whole-call
+counts, not menu-only counts. Clinic policy totalled 41 ms and native budget
+claims 1 ms; individual provider calls took 0–1 ms. Node/Docker peaks were
+665,604,096/290,021,376 B, with no memory limit/OOM events. Source and 452
+runtime hashes stayed unchanged; wrapper, scope and own Docker jobs were
+absent after terminal. An earlier admission failure stopped before any tests.
+
+The intake route performs full native proof validation to obtain private menu
+references, then performs the protected availability checks independently.
+Candidate f1e0e5e separates those responsibilities using a concrete
+IntakeBookingProof routing grant, matching the existing returning-patient
+routing contract. Initial issuance retains its exact-registration attestation;
+subsequent references retain policy/expiry/lifetime checks. Native offers,
+evidence and writes retain their existing verifyOperation boundaries. No
+patient permission, approval freshness, original proof expiry, write rule,
+application quota or deadline is relaxed; serial member reads remain serial.
+
+The complete intake session and menu-deadline controls pass 40/40, zero skips
+(`work1792197885389`, terminal 00:45:27.836983 UTC). New controls withdraw
+permission, contact, registration approval, membership or the owner after a
+first real menu and require denial before another availability read, with no
+booking/review write. Peak 132,038,656 B under 512 MiB/CPU100%/Swap0, with
+zero memory limit/OOM events. Full TypeScript and the fresh serving build also passed
+(`work1792197903451`, 00:45:03.682594–00:47:16.458989 UTC), peak
+1,422,184,448 B/2 GiB/CPU200%/Swap0/1536 MiB old-space heap. The 452
+runtime artifacts differ only in the intended menu and intake-proof modules
+from diagnostic 2d. Source inputs stayed unchanged; no memory-limit/OOM events.
+
+The identical five-file command then passed 14/14, zero skips
+(`work1792198050689`, 00:47:31.201106–00:49:26.368369 UTC), including
+the complete original sixteen-mode intake case. Original concurrency and all
+deadlines were retained. Node/Docker peaks were 675,168,256/290,820,096 B
+under the same 1.5 GiB/CPU200% and 1 GiB/CPU200% caps, Swap0, with no
+memory-limit/OOM events. All 1,195 source inputs and 452 runtime artifacts
+remained unchanged. Terminal exit0, wrapper/scope and own container absence
+were verified; the paired work wait completed. This is focused qualification;
+the whole combined regression still needs a new complete run.
+
+Validation commands: `node --test --test-concurrency=2
+test/cliniko/intake-booking-session.test.ts test/text/booking-menu-deadline.test.ts`;
+`npm run typecheck`; `npm run build:voice-tests`; and a disposable PostgreSQL
+`npm run db:migrate && ABBY_LEDGER=postgres node --test --test-concurrency=4
+test/voice/compiled-roster-coverage.test.ts
+test/voice/confirmation-resend-content-runner.test.ts
+test/voice/confirmation-resend-runner.test.ts
+test/voice/conversation-baseline.test.ts
+test/voice/intake-service-catalogue.test.ts`. No test or registry row was
+removed, relabelled or skipped.
+
+All thirteen gaps remain active. Payment protocol work remains inactive;
+financial-work ownership is still awaiting the operator's choice. No deployment,
+provider action, clinical acceptance, Aeva removal or successful cloud CI is
+inferred from these local checks.
