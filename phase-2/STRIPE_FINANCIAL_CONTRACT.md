@@ -429,3 +429,63 @@ PostgreSQL concurrent-owner, killed-worker recovery and all-column privacy
 cases, with synthetic provider ports. See [execution evidence](EXECUTION_PROGRESS.md#one-shot-stripe-checkout-owner-qualification).
 It does not qualify a real provider, actual serving financial consent or complete
 webhook/delivery/receipt/expiry/producer-restore lifecycle. All13 gaps remain active.
+
+## Private financial consent before individual booking
+
+The optional financial preparation config is now connected to the actual
+`ClinikoBookingHost` and approved individual booking composition. It requires a
+clinic policy returning an exact required deposit or an explicit versioned
+`notRequired` assessment, independent financial source/record/producer grants,
+a matching approved Ed25519 key, a shared physical Cliniko rate budget and an
+independently owned financial-retention signal. Unknown requirements refuse.
+This is an internal composition port, not a new public activation setting or
+an approved clinic fee policy.
+
+Before any clinical proposal the host retains a prospective intent once in
+Cliniko. The private keypad path reads the exact amount/currency, fixed deadline,
+recipient/contact purpose and approved terms in bounded parts. Each part needs
+a fresh continuation digit after its actual played receipt. Every private
+prompt retains its existing20-second deadline and each digit's owner work stays
+bounded25seconds; no deadline is increased to accommodate a long readback.
+Parts contain at most160 text characters/24 words plus continuation instructions;
+an unusually long individual word/address refuses rather than silently dropping
+content. Initial spoken currencies are GBP/AUD/NZD/USD/EUR/CAD; other display
+currencies need qualification. These text bounds do not prove real TTS timing.
+A final played instruction precedes a separate acceptance digit. Failed,
+interrupted, repeated-receipt, stale-selection, withdrawn-authority and early
+queued digits cannot accept. Declining any part does not book or create checkout.
+
+The caller then says “continue booking” and separately confirms the ordinary
+clinical proposal. A financial answer never creates a clinical action. Private
+media is discarded before ASR/model handling. Raw DTMF arrival captures an opaque
+in-memory owner/quote/phase token before semantic queuing; a queued request for
+the next part cannot become final acceptance. The transport's per-chunk gate
+also closes on financial authority/selection loss. SAM retains only blank notice
+presentations with opaque IDs, without money, recipient, readback or consent.
+
+After an exact native booking ACK, the producer signs observation v2 into a
+separate Cliniko review. Its financial consent binds the complete ordered
+readback digest, final opaque presentation reference/play time, separate
+acceptance reference/time and exact intent. The producer attests completion of
+all parts; the last presentation reference alone is not a transcript or financial
+grant. Existing v1 booking signatures remain supported and domain-separated.
+Financial signature/retention errors cannot erase an acknowledged appointment.
+Financial retention can continue after the caller ends using the independent
+service signal. No financial async preparation is inserted between final native
+availability and the booking POST.
+
+The checkout owner's independent collection authority can inspect the fully
+verified v2 booking observation. A signature, clinical yes, unplayed text,
+expired grant or discovery result still cannot grant collection, contact,
+producer/cohort/restore authority, money truth or email delivery.
+
+Qualification covers the real host, SAM/review/worker path, actual private
+VoiceSession playback marks/per-chunk gate, actual signed Twilio wire arrival
+admission, and real PostgreSQL booking-to-fixture-Stripe exclusion/privacy.
+Those are separate focused cohorts, not a single complete signed serving
+journey or real phone/provider/mail acceptance. Configured financial class
+booking currently refuses instead of bypassing financial requirements; its
+native cohort and full catalogue/intake serving journeys remain to be completed.
+Webhook durable handoff, complete creation-range reconciliation, delivery,
+receipts, financial/clinical expiry and producer/restore composition remain
+unfinished. All thirteen gaps remain active.

@@ -7,13 +7,13 @@
 | Execution stage | Current evidence and next action |
 | --- | --- |
 | 1 Aeva preservation | Independently retrieved and hash-checked 113 explicit source/test/map references at the audited revision through GitHub. All four original planning documents were published and independently retrieved at Abby `229a3596696d8ebb9bf263e58457f412898c1327`. Local-only material still requires owner selection and preservation before deletion. |
-| 2 Delivery baseline | Initial integrated baseline is draft457; owned reviewable work is stacked through native discovery494 and the one-shot checkout-owner candidate. None is landed. Frozen clinical36b5285c/draft489 passed the complete local PostgreSQL regression:3225main passes/one existing skip, then6/6ordered. Newer financial adapters have separate focused qualification. Authoritative cloud jobs remain unavailable before execution because of billing/spending limits. |
+| 2 Delivery baseline | Initial integrated baseline is draft457; owned reviewable work is stacked through native discovery494 and checkout-owner495 and the private financial-consent candidate. None is landed. Frozen clinical36b5285c/draft489 passed the complete local PostgreSQL regression:3225main passes/one existing skip, then6/6ordered. Newer financial adapters have separate focused qualification. Authoritative cloud jobs remain unavailable before execution because of billing/spending limits. |
 | 3 Exact receipt foundation | Implemented and locally qualified in `codex/abby-provider-ack-receipt`, stacked on the published plans and integrated candidate. The full interval is captured, sent and validated. The later individual/class changes consume this exact receipt; post-create observations cannot erase an established creation acknowledgement. Independent review and exact-head CI remain outstanding. |
 | 4 Individual booking | Published in draft [PR #460](https://github.com/garthtrickett/abby/pull/460), `codex/abby-provider-ack-individual`, based on receipt correction `92a16e5`. Final online/roster availability follows preparation; exact acknowledgement survives host/review/worker cancellation. Focused, isolated database/process/compiled-location and complete local `npm test` checks passed. Independent review and cloud qualification remain open; cloud jobs have not started because of billing. |
 | 5 Native class creation | Draft [PR #461](https://github.com/garthtrickett/abby/pull/461) supplies exact attendee acknowledgement and final double capacity ordering for ordinary/approved-pass creation. Focused process-loss/privacy and movement/cancellation preservation evidence is retained below. Later staged caller work composes these creation semantics; acknowledgement of replacement creation alone never completes a move. Current whole-graph and authoritative cloud qualification remain open. |
 | 6 Earlier-gap qualification | Combined clinical36b5285c work1792203076121 passed3225main/0fail/1existing skip plus6/6ordered, with source/runtime hashes unchanged. Earlier7ca seven-failure and ff795012 cancelled-choice failure remain historical evidence. Both instrumented E2E-380 content cases passed this full; no production root-cause fix is inferred. Gaps1–9 retain clinic, mail, recovery/operator, acoustic and public-route acceptance limits. |
 | 7 Class/pass completion | Drafts465–473 and487 include staged caller/SAM/private renewal, separate played consent, bounded native/proposal cost admission, cold staff observation, signed uncertainty-to-staff recovery and same/cross-case date/ordinal/pass journeys. Their current composed cohorts also ran in the passing36b5285c complete clinical graph. Broader operator acceptance, original/replacement recovery obligations and separate financial provisioning remain explicit; no blanket cohort or clinic activation follows. |
-| 8 Payments | Stripe and dedicated Cliniko financial reviews are selected. Drafts475/476/482 qualify signed event/money/receipt reading and discovery;488 supplies private intent context,490 the current-owner reader,491 signed booking-observation capture and492 opaque effect barriers/transfer. Draft493 qualifies once-only intent/observation POST and exact authenticated reload through individual/class native writer cohorts. Draft494 adds account/record-authorized archived-inclusive discovery and exact signed-citation/source pairing. The subsequent one-shot checkout-owner candidate joins current native context, independent collection/producer admission, opaque exclusion, provider-owned attempt retention and one Stripe Session POST; its qualification is recorded below. Actual serving financial/queue/producer admission, fee consent, webhook/delivery/receipt/expiry and clinic activation remain unfinished. Generic one-shot payable creation now has focused fixture/PG qualification, not actual serving acceptance. |
+| 8 Payments | Stripe and dedicated Cliniko financial reviews are selected. Drafts475/476/482 qualify signed event/money/receipt reading and discovery;488 supplies private intent context,490 the current-owner reader,491 signed booking-observation capture and492 opaque effect barriers/transfer. Draft493 qualifies once-only intent/observation POST and exact authenticated reload through individual/class native writer cohorts. Draft494 adds account/record-authorized archived-inclusive discovery and exact signed-citation/source pairing. The subsequent one-shot checkout-owner candidate joins current native context, independent collection/producer admission, opaque exclusion, provider-owned attempt retention and one Stripe Session POST; its qualification is recorded below. The private financial-consent candidate now connects the actual individual booking host, separate private played readback/answer, native signed v2 producer observation and checkout collection query. Its233focused checks plus full TypeScript pass; these separate real-host/private-playback/wire/PG cohorts do not qualify one complete signed serving journey. Actual clinic financial/producer/restore admission, financial class support, webhook/delivery/receipt/expiry and activation remain unfinished. |
 | 9 Outbound | Pending gap 12, audit R20/R21 and contact-policy decisions. |
 | 10 Writeback | Pending gap 13, exact permissions/content/storage decisions and audit R08/R22. |
 | 11 Combined qualification | Latest complete clinical graph36b5285c naturally passed work1792203076121 at03:07:14.717255UTC:3225main passes/0fail/1existing skip, then6/6ordered. All1197source/455runtime hashes stayed unchanged. Newer reader/capture/barrier graphs have scoped focused+TypeScript evidence, not a replacement full result. Authoritative cloud, independent review, clinic/mail/native provider, acoustic/public-route, deployment and carrier gates remain distinct. |
@@ -3449,3 +3449,51 @@ handoff and separately authorized expiry, followed by gaps12/13 and combined
 acceptance. No real provider/mail, deployment, activation, Aeva removal or merge
 was performed. All13 gaps remain active; exact-head cloud CI and independent
 review remain required.
+
+## Private financial-consent qualification
+
+Frozen `75664828b0b982d7024d14e8892300e6a2de3cb8` passed work1792213842267
+at05:13:01.701728UTC:233/233checks, zero failures/skips/cancellations, then
+full TypeScript. All frozen tracked input hashes and lockfile remained unchanged.
+The2GiB/CPU200%/Swap0 Node scope peaked1,432,530,944bytes; its separately owned
+512MiB/CPU100%/Swap0 PostgreSQL slice peaked181,899,264bytes. All OOM/high/max
+events were zero. The wrapper exited, scope became inactive, owned Docker
+containers were absent and paired work wait was reaped. The bounded readback
+unit regression also passed209/209, work1792213813993, peak160,256,000bytes.
+
+Exact composed command (fresh disposable database, synthetic provider ports):
+
+```sh
+bash scripts/with-postgres.sh bash -c 'npm run db:migrate && ABBY_LEDGER=postgres node --test --test-concurrency=2 test/cliniko/financial-booking-host.test.ts test/cliniko/financial-consent-observation.test.ts test/voice/private-financial-booking.test.ts test/voice/private-digit-arrival.test.ts test/voice/private-representative-presentation.test.ts test/voice/private-keypad-verification.test.ts test/voice/private-resend-finalization.test.ts test/cliniko/provider-acknowledged-booking.test.ts test/contract/cliniko-stripe-checkout.test.ts test/contract/stripe-checkout-read.test.ts test/contract/stripe-checkout-discovery.test.ts test/cliniko/financial-work-discovery.test.ts test/cliniko/financial-record-retention.test.ts test/cliniko/financial-review-read.test.ts test/cliniko/financial-booking-capture.test.ts test/cliniko/financial-review-intent.test.ts test/portability/financial-effect-history.test.ts test/contract/product-facts.test.ts test/contract/scenario-manifest.test.ts test/storage/postgres-financial-effect-barrier.test.ts test/storage/postgres-financial-record-retention.test.ts test/storage/postgres-cliniko-stripe-checkout.test.ts test/storage/postgres-financial-booking-consent.test.ts && NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck'
+```
+
+This qualifies the actual native booking host/SAM/review/worker financial gate,
+v2 consent signature/domain and exact intent pairing, separate real private
+VoiceSession playback/per-chunk gates, signed Twilio wire-arrival admission,
+caller-end preservation and PostgreSQL booking-to-fixture-Stripe privacy and
+one-use exclusion. Earlier0060c60's229checks passed but its TypeScript failed
+on test-fixture typing; that was corrected before this qualification. Earlier
+wall-clock deadline phase fixtures and the playback test's cleared pending-pointer
+assumption were corrected without changing production deadlines or assertions.
+The native retention deadline test now enters the actual stalled headers/body
+phase before advancing deterministic time; it still requires refusal at15ms.
+
+The old single financial utterance could exceed the existing private20-second
+prompt deadline. The candidate now requires bounded parts and fresh post-play
+continuation keys, preserving20seconds per prompt and25seconds per digit-owner
+operation. Every part must complete before the final acceptance instruction and
+answer; reused/early receipts cannot advance. The native proof signs the ordered
+readback digest and final playback reference/time. Text size bounds are not real
+TTS/acoustic acceptance. No patient-bearing fee, recipient, readback, financial
+receipt or pending payload enters local SQL.
+
+The checkout collection-authority query receives the verified v2 observation;
+this does not grant collection or producer/restore authority. No actual Stripe,
+Cliniko, TTS, phone or mail service was used. Configured financial class booking
+refuses pending its own native cohort. Complete catalogue/intake/signed-serving
+financial journeys, concrete clinic policy, full combined regression, independent
+review and authoritative cloud validation remain open. The complete clinical
+36b5285c result remains historical and does not qualify this newer graph.
+Webhook durable handoff, complete provider creation-range reconciliation,
+link/receipt delivery and separately authorized financial/clinical expiry remain
+active gap11 work; gaps12/13 and the full execution order remain active.
