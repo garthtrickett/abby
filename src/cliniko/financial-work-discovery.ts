@@ -1,3 +1,4 @@
+import type { FinancialResendRequest } from "./financial-resend-request.ts";
 import { assembleFinancialRecords, FinancialDiscoveryError as ScanFailure } from "./internal/financial-discovery-records.ts";
 import type { FinancialListedRecord as Listed } from "./internal/financial-discovery-records.ts";
 import { KeyObject } from "node:crypto";
@@ -49,11 +50,16 @@ export type FinancialDiscoveredExpiryAttempt = Readonly<{
   kind: "expiryAttemptContext"; intent: ClinikoFinancialReviewContext; attempt: FinancialExpiryAttempt;
   recallRef: string; recalled: boolean; archivedAt: string | null;
 }>;
+export type FinancialDiscoveredResendRequest = Readonly<{
+  kind: "resendRequestContext"; intent: ClinikoFinancialReviewContext; request: FinancialResendRequest;
+  recallRef: string; recalled: boolean; archivedAt: string | null;
+}>;
 export type FinancialDiscoveryResult = Readonly<{
   kind: "windowContext"; window: FinancialDiscoveryWindow; scanned: number; observedAt: string;
   work: readonly FinancialDiscoveredWork[]; attempts: readonly FinancialDiscoveredAttempt[];
   messageAttempts?: readonly FinancialDiscoveredMessageAttempt[];
   expiryAttempts?: readonly FinancialDiscoveredExpiryAttempt[];
+  resendRequests?: readonly FinancialDiscoveredResendRequest[];
 }>;
 type Failure = ClinikoFinancialReviewFailure;
 type Row = Record<string, unknown>;
@@ -183,7 +189,7 @@ export class ClinikoFinancialWorkDiscovery {
         if (!result.ok) throw new ScanFailure(result.error.kind);
         return result.value;
       };
-      const { work, attempts, messageAttempts, expiryAttempts } = await assembleFinancialRecords(selected, {
+      const { work, attempts, messageAttempts, expiryAttempts, resendRequests } = await assembleFinancialRecords(selected, {
         trust: { producerKeyRef: this.#config.producer.keyRef, publicKey: this.#config.producer.publicKey }, beganAt, readIntent,
         permitRecord: (recallRef, actionRef) => recordPermit(queryFor(recallRef, actionRef, "listedFinancialRecord")),
       });
@@ -192,7 +198,7 @@ export class ClinikoFinancialWorkDiscovery {
       current(account); for (const q of grants.values()) current(q);
       const observedAt = instant(this.#config.clock?.() ?? new Date().toISOString());
       if (!observedAt || observedAt < beganAt || signal.aborted || performance.now() - began > ms) throw new ScanFailure("unavailable");
-      return ok({ kind: "windowContext", window, scanned, observedAt, work, attempts, ...(messageAttempts ? { messageAttempts } : {}), ...(expiryAttempts ? { expiryAttempts } : {}) });
+      return ok({ kind: "windowContext", window, scanned, observedAt, work, attempts, ...(messageAttempts ? { messageAttempts } : {}), ...(expiryAttempts ? { expiryAttempts } : {}), ...(resendRequests ? { resendRequests } : {}) });
     } catch (error) { return err({ kind: error instanceof ScanFailure || error instanceof OwnedBodyError ? error.kind : "unavailable" }); }
     finally { clearTimeout(timer); deadline.abort(); }
   }

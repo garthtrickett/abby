@@ -1,3 +1,5 @@
+import { decodeFinancialResendRequest, resendRequestMatchesIntent } from "../financial-resend-request.ts";
+import type { FinancialResendRequest } from "../financial-resend-request.ts";
 import type { KeyObject } from "node:crypto";
 import { decodeFinancialCheckoutAttempt, checkoutAttemptMatchesIntent } from "../financial-checkout-attempt.ts";
 import type { FinancialCheckoutAttempt } from "../financial-checkout-attempt.ts";
@@ -9,7 +11,7 @@ import { financialIntentDigest, authenticateFinancialBookingCitation, verifyFina
 import type { ClinikoFinancialBookingObservation } from "../financial-booking-observation.ts";
 import { decodeClinikoFinancialIntent } from "../financial-review-intent.ts";
 import type { ClinikoFinancialReviewContext, ClinikoFinancialReviewFailure } from "../financial-review-read.ts";
-import type { FinancialDiscoveredWork, FinancialDiscoveredAttempt, FinancialDiscoveredMessageAttempt, FinancialDiscoveredExpiryAttempt, FinancialDiscoveryRecordQuery } from "../financial-work-discovery.ts";
+import type { FinancialDiscoveredWork, FinancialDiscoveredAttempt, FinancialDiscoveredMessageAttempt, FinancialDiscoveredExpiryAttempt, FinancialDiscoveredResendRequest, FinancialDiscoveryRecordQuery } from "../financial-work-discovery.ts";
 
 export class FinancialDiscoveryError extends Error {
   readonly kind: ClinikoFinancialReviewFailure["kind"];
@@ -29,6 +31,7 @@ export async function assembleFinancialRecords(selected: readonly FinancialListe
   work: readonly FinancialDiscoveredWork[]; attempts: readonly FinancialDiscoveredAttempt[];
   messageAttempts?: readonly FinancialDiscoveredMessageAttempt[];
   expiryAttempts?: readonly FinancialDiscoveredExpiryAttempt[];
+  resendRequests?: readonly FinancialDiscoveredResendRequest[];
 }>> {
   const { trust, beganAt, readIntent, permitRecord } = ports;
   if (selected.length > 50) throw new FinancialDiscoveryError("unavailable");
@@ -37,13 +40,15 @@ export async function assembleFinancialRecords(selected: readonly FinancialListe
   const pendingAttempts: { native: FinancialListedRecord; attempt: FinancialCheckoutAttempt }[] = [];
   const pendingMessages: { native: FinancialListedRecord; attempt: FinancialMessageAttempt }[] = [];
   const pendingExpiries: { native: FinancialListedRecord; attempt: FinancialExpiryAttempt }[] = [];
+  const pendingResends: { native: FinancialListedRecord; request: FinancialResendRequest }[] = [];
   for (const native of selected) {
     const decoded = decodeClinikoFinancialIntent(native.notes);
     const attempt = decoded.ok ? undefined : decodeFinancialCheckoutAttempt(native.notes);
     const message = decoded.ok || attempt?.ok ? undefined : decodeFinancialMessageAttempt(native.notes);
     const expiry = decoded.ok || attempt?.ok || message?.ok ? undefined : decodeFinancialExpiryAttempt(native.notes);
-    const citation = decoded.ok || attempt?.ok || message?.ok || expiry?.ok ? undefined : authenticateFinancialBookingCitation(native.notes, trust);
-    const actionRef = decoded.ok ? decoded.value.actionRef : attempt?.ok ? attempt.value.actionRef : message?.ok ? message.value.actionRef : expiry?.ok ? expiry.value.actionRef : citation?.ok ? citation.value.actionRef : undefined;
+    const resend = decoded.ok || attempt?.ok || message?.ok || expiry?.ok ? undefined : decodeFinancialResendRequest(native.notes);
+    const citation = decoded.ok || attempt?.ok || message?.ok || expiry?.ok || resend?.ok ? undefined : authenticateFinancialBookingCitation(native.notes, trust);
+    const actionRef = decoded.ok ? decoded.value.actionRef : attempt?.ok ? attempt.value.actionRef : message?.ok ? message.value.actionRef : expiry?.ok ? expiry.value.actionRef : resend?.ok ? resend.value.actionRef : citation?.ok ? citation.value.actionRef : undefined;
     if (!actionRef || actions.has(actionRef)) throw new FinancialDiscoveryError("mismatched");
     actions.add(actionRef);
     await permitRecord(native.recallRef, actionRef);
@@ -56,6 +61,7 @@ export async function assembleFinancialRecords(selected: readonly FinancialListe
     } else if (attempt?.ok) pendingAttempts.push({ native, attempt: attempt.value });
     else if (message?.ok) pendingMessages.push({ native, attempt: message.value });
     else if (expiry?.ok) pendingExpiries.push({ native, attempt: expiry.value });
+    else if (resend?.ok) pendingResends.push({ native, request: resend.value });
     else if (citation?.ok) observations.push({ native, proof: citation.value });
     else throw new FinancialDiscoveryError("malformed");
   }
@@ -108,10 +114,26 @@ export async function assembleFinancialRecords(selected: readonly FinancialListe
     expiryAttempts.push({ kind: "expiryAttemptContext", intent, attempt, recallRef: native.recallRef,
       recalled: native.recalled, archivedAt: native.archivedAt });
   }
+  const resendRequests: FinancialDiscoveredResendRequest[] = [];
+  for (const { native, request } of pendingResends) {
+    if ([request.intentRecallRef, request.observationRecallRef, request.checkoutAttemptRecallRef].includes(native.recallRef) ||
+        attempted.has(request.effectRef) || Date.parse(request.requestedAt) > Date.parse(beganAt) + 30_000) throw new FinancialDiscoveryError("mismatched");
+    const intent = intents.get(request.intentRecallRef) ?? await readIntent(request.intentRecallRef, request.financialActionRef, "sourceIntent");
+    if (!resendRequestMatchesIntent(request, intent.intent, intent.recallRef) || intent.intent.patientId !== native.patientId) throw new FinancialDiscoveryError("mismatched");
+    const pair = work.find(w => w.kind === "pairedContext" && w.intent.recallRef === intent.recallRef);
+    if (pair?.kind === "pairedContext" && (pair.observationRecallRef !== request.observationRecallRef || pair.observation.actionRef !== request.observationActionRef ||
+        pair.observation.targetRef !== request.targetRef)) throw new FinancialDiscoveryError("mismatched");
+    const creation = attempts.find(a => a.recallRef === request.checkoutAttemptRecallRef);
+    if (creation && (creation.attempt.actionRef !== request.checkoutAttemptActionRef || creation.attempt.financialActionRef !== request.financialActionRef ||
+        creation.attempt.intentRecallRef !== request.intentRecallRef || creation.attempt.observationRecallRef !== request.observationRecallRef ||
+        creation.attempt.observationActionRef !== request.observationActionRef || creation.attempt.targetRef !== request.targetRef)) throw new FinancialDiscoveryError("mismatched");
+    attempted.add(request.effectRef);
+    resendRequests.push({ kind: "resendRequestContext", intent, request, recallRef: native.recallRef, recalled: native.recalled, archivedAt: native.archivedAt });
+  }
   // Attempts are unsigned possible-dispatch context, never creation receipts.
   // A source outside this window still requires independent exact authority.
   const obligations = new Map([...work.map(w => [w.intent.recallRef, w.intent.intent] as const),
-    ...attempts.map(a => [a.intent.recallRef, a.intent.intent] as const), ...messageAttempts.map(a => [a.intent.recallRef, a.intent.intent] as const), ...expiryAttempts.map(a => [a.intent.recallRef, a.intent.intent] as const)]);
+    ...attempts.map(a => [a.intent.recallRef, a.intent.intent] as const), ...messageAttempts.map(a => [a.intent.recallRef, a.intent.intent] as const), ...expiryAttempts.map(a => [a.intent.recallRef, a.intent.intent] as const), ...resendRequests.map(a => [a.intent.recallRef, a.intent.intent] as const)]);
   const obligationIds = new Set<string>();
   for (const intent of obligations.values()) {
     for (const id of [intent.actionRef, intent.booking.actionRef, ...Object.values(intent.effects)]) {
@@ -121,5 +143,10 @@ export async function assembleFinancialRecords(selected: readonly FinancialListe
   for (const id of [...work.flatMap(w => w.kind === "pairedContext" ? [w.observation.actionRef] : []), ...attempts.map(a => a.attempt.actionRef), ...messageAttempts.map(a => a.attempt.actionRef), ...expiryAttempts.map(a => a.attempt.actionRef)]) {
     if (obligationIds.has(id)) throw new FinancialDiscoveryError("mismatched"); obligationIds.add(id);
   }
-  return { work, attempts, ...(messageAttempts.length ? { messageAttempts } : {}), ...(expiryAttempts.length ? { expiryAttempts } : {}) };
+  for (const request of resendRequests.map(r => r.request)) {
+    for (const id of [request.actionRef, request.effectRef, request.approvalRef]) {
+      if (obligationIds.has(id)) throw new FinancialDiscoveryError("mismatched"); obligationIds.add(id);
+    }
+  }
+  return { work, attempts, ...(resendRequests.length ? { resendRequests } : {}), ...(messageAttempts.length ? { messageAttempts } : {}), ...(expiryAttempts.length ? { expiryAttempts } : {}) };
 }

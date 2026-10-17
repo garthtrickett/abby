@@ -2,18 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { encodeFinancialResendRequest, decodeFinancialResendRequest, resendRequestMatchesIntent } from "../../src/cliniko/financial-resend-request.ts";
 import type { FinancialResendRequest } from "../../src/cliniko/financial-resend-request.ts";
-import { financialIntentDigest } from "../../src/cliniko/financial-booking-observation.ts";
 import { financialMessageSelectionDigest } from "../../src/standalone/smtp-financial-message-delivery.ts";
 import { intentValue, uuid, now, value } from "../support/financial-retention.ts";
-const selection = { sender: "clinic@example.test", template: "clinicFinancial.v1" as const, timeZone: "Australia/Sydney" };
-function request(): FinancialResendRequest {
-  const intent = intentValue();
-  return { actionRef: uuid(100), effectRef: uuid(101), approvalRef: uuid(102), financialActionRef: intent.actionRef,
-    purpose: "linkDelivery", intentRecallRef: "cliniko:recall:30", intentDigest: financialIntentDigest(intent)!,
-    observationRecallRef: "cliniko:recall:31", observationActionRef: uuid(8), targetRef: "cliniko:appointment:91",
-    checkoutAttemptRecallRef: "cliniko:recall:32", checkoutAttemptActionRef: uuid(9), checkoutRef: "cs_test_owner",
-    selectionDigest: financialMessageSelectionDigest(selection)!, requestedAt: now, expiresAt: "2026-11-01T10:30:00.000Z" };
-}
+import { resendSelection as selection, resendRequestValue as request } from "../support/financial-resend.ts";
 for (const purpose of ["linkDelivery", "receiptDelivery"] as const) test(`bounded canonical ${purpose} resend context is separate from the original effects`, () => {
   const a = { ...request(), purpose }, encoded = value(encodeFinancialResendRequest(a)), decoded = value(decodeFinancialResendRequest(encoded));
   assert.deepEqual(decoded, a); assert.equal(Object.isFrozen(decoded), true); assert.ok(encoded.length <= 1_050);
