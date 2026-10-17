@@ -3,6 +3,7 @@ import test from "node:test";
 import { ClinikoFinancialPendingDiscovery } from "../../src/cliniko/financial-pending-discovery.ts";
 import { ClinikoReadBudget } from "../../src/cliniko/read-budget.ts";
 import { encodeClinikoFinancialIntent } from "../../src/cliniko/financial-review-intent.ts";
+import { ClinikoStripeCheckoutOwner } from "../../src/standalone/cliniko-stripe-checkout.ts";
 import { pendingFinancialFixture } from "../support/financial-pending-discovery.ts";
 import { value, now, uuid, observation, reviewDate } from "../support/financial-retention.ts";
 
@@ -24,6 +25,23 @@ test("pending source and signed observation assemble exact private context witho
   const result = value(await f.scan()); assert.equal(result.work.length, 1); assert.equal(result.work[0]?.kind, "pairedContext");
   if (result.work[0]?.kind === "pairedContext") assert.equal(result.work[0].observation.targetRef, "cliniko:appointment:91");
   assert.equal(f.rows.size, 2); assert.equal(result.attempts.length, 0); assert.ok(f.calls.every(u => u.pathname.startsWith("/v1/recalls")));
+});
+
+test("an open pending citation cannot make its closed source collectible", async () => {
+  const f = pendingFinancialFixture();
+  value(await f.retainer.retainBookingObservationOnce(observation(f.intent), { intent: f.intent, intentRecallRef: "cliniko:recall:30" }, reviewDate, new AbortController().signal));
+  f.rows.get("31")!.recalled_at = null; f.rows.get("30")!.recalled = true; f.rows.get("30")!.recalled_at = now;
+  const found = value(await f.scan()); assert.equal(found.work[0]?.kind, "pairedContext"); assert.equal(found.work[0]?.intent.recalled, true);
+  let stripeReads = 0;
+  const owner = value(ClinikoStripeCheckoutOwner.create({ cliniko: f.config, stripe: { apiKey: "sk_test_synthetic12345678", accountRef: f.config.stripe.accountRef,
+    livemode: false, connected: true, apiVersion: "2025-06-30.basil", clock: () => Date.parse(now) }, productLabel: "Clinic deposit", paymentMethod: "card",
+    successUrl: "https://clinic.example.invalid/complete", cancelUrl: "https://clinic.example.invalid/return" },
+    { attemptScanAuthorized: async () => true, sourceAuthorized: async () => true, collectionAuthorized: async () => true,
+      producerAdmitted: async () => true, current: () => true }, f.authority, f.barrier, f.port,
+    async () => { stripeReads++; throw new Error("Closed source cannot reach Stripe"); }));
+  assert.equal((await owner.createOnce({ intentRecallRef: "cliniko:recall:30", financialActionRef: f.intent.actionRef,
+    observationRecallRef: "cliniko:recall:31", observationActionRef: uuid(8), reviewDate }, new AbortController().signal)).ok, false);
+  assert.equal(stripeReads, 0); assert.equal(f.burned.has(f.intent.effects.checkout), false);
 });
 
 test("the full 500-row/50-selected pending bound uses 55 claims from the actual shared 180 budget", async () => {
