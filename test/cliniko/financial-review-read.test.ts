@@ -227,6 +227,12 @@ test("a synchronously throwing body cancel cannot retain the financial reader lo
   assert.doesNotMatch(JSON.stringify(result), /private-cancel-canary/);
 });
 
+test("a rejected native response with broken cancellation still returns only a bounded financial failure", async () => {
+  const f = fixture({ response: () => ({ status: 500, body: { cancel() { throw new Error("private-rejected-body-canary"); } } }) as unknown as Response });
+  assert.deepEqual(await f.reader.read(binding, signal()), { ok: false, error: { kind: "unavailable" } });
+  assert.equal(f.calls.length, 1);
+});
+
 test("factory and exact query validation require explicit native budget and never expose credentials", async () => {
   const f = fixture(), permission = { allows: async () => true };
   for (const patch of [{ apiKey: "bad" }, { apiKey: "private\nkey-au5" }, { recallTypeId: "0" }, { businessId: "" },

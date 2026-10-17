@@ -3007,3 +3007,13 @@ property in the new local error class. The19 new reader cases did not load;
 the parameter property with an explicit declared field, retaining the same
 failure contract. Peak127,229,952B, all memory events zero, inputs unchanged
 and paired wait completed. No provider/database/financial effect ran.
+
+Corrected loader sourcecb06ce02 passed60/60 focused checks, including all19
+new reader controls and the existing Stripe/schema/metadata checks. Its
+work1792203933581 then naturally failed TypeScript at02:27:30.283284UTC:
+TS18048 identified a response binding also mutated by late-header cleanup.
+Separate the immutable awaited response from the tracked cleanup reference.
+Review additionally guards rejected/late body cancellation so a broken cancel
+port cannot escape the bounded failure result. An additional hostile-interface
+control covers rejected-response cleanup. Peak1,440,681,984B, all memory events
+zero, source inputs unchanged and paired wait completed.

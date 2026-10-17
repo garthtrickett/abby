@@ -61,6 +61,9 @@ class ReadFailure extends Error {
   readonly kind: ClinikoFinancialReviewFailure["kind"];
   constructor(kind: ClinikoFinancialReviewFailure["kind"]) { super("Financial review unavailable"); this.kind = kind; }
 }
+function discardBody(response: Response | undefined): void {
+  try { void response?.body?.cancel().catch(() => {}); } catch { /* Cleanup cannot disclose an upstream error. */ }
+}
 
 /** One exact GET with independent current financial-owner permission. No list/
  * latest/patient fallback, retry, effect, SQL persistence or public route.
@@ -117,7 +120,7 @@ export class ClinikoFinancialReviewReader {
     const deadline = new AbortController(), timer = setTimeout(() => deadline.abort(), this.#deadlineMs);
     const signal = AbortSignal.any([external, deadline.signal]), started = performance.now();
     const query = Object.freeze({ ...this.#selection, ...wanted });
-    let response: Response | undefined, bodyOwned = false;
+    let ownedResponse: Response | undefined, bodyOwned = false;
     const wait = async <T>(task: Promise<T>): Promise<T> => {
       const value = await awaitUntilAbort(task, signal);
       if (value === undefined || signal.aborted || performance.now() - started > this.#deadlineMs) throw new ReadFailure("unavailable");
@@ -133,10 +136,10 @@ export class ClinikoFinancialReviewReader {
       // Quota admission may have waited. An earlier permission cannot authorize
       // the subsequent protected read after financial access has been withdrawn.
       await permit();
-      response = await wait(this.#fetch(`${this.#base}/recalls/${nativeId}`, { method: "GET", redirect: "error", signal,
+      const response = await wait(this.#fetch(`${this.#base}/recalls/${nativeId}`, { method: "GET", redirect: "error", signal,
         headers: { Accept: "application/json", Authorization: this.#authorization, "User-Agent": this.#agent } }).then(value => {
-        response = value;
-        if (signal.aborted) void value.body?.cancel().catch(() => {});
+        ownedResponse = value;
+        if (signal.aborted) discardBody(value);
         return value;
       }));
       if (response.status === 429) return err(await wait(observeCliniko429(this.#budget, response.headers.get("X-RateLimit-Reset"))));
@@ -172,7 +175,7 @@ export class ClinikoFinancialReviewReader {
       return err({ kind: error instanceof ReadFailure || error instanceof OwnedBodyError ? error.kind : "unavailable" });
     } finally {
       clearTimeout(timer); deadline.abort();
-      if (response && !bodyOwned) void response.body?.cancel().catch(() => {});
+      if (!bodyOwned) discardBody(ownedResponse);
     }
   }
 }
