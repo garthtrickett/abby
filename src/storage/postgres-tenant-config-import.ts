@@ -98,8 +98,8 @@ async function writeLocation(trx: Transaction<Database>, location: TenantConfigA
     knowledge: location.knowledge };
   const mapped = mapConfig(scoped, scope, mapper);
   if (!mapped.ok) throw new Error("validated mapping changed");
-  const policyRows = mapped.value.policyRows.length ? mapped.value.policyRows : [
-    { version: 0, isHead: true, policy: mapped.value.policy, changedBy: null,
+  const policyRows: typeof mapped.value.policyRows = mapped.value.policyRows.length ? mapped.value.policyRows : [
+    { version: 0, isHead: true, storageShape: mode, policy: mapped.value.policy, changedBy: null,
       previousBookingEnabled: null, changedAt: null }];
   for (const row of policyRows) {
     const value = mode === "standaloneMinimal" ? storedStandalonePolicy(scope, row.version, row.policy) : row.policy;

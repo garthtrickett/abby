@@ -42,35 +42,52 @@ export async function reconcileFinancialEffectCarryover(db: Db, data: TenantConf
   return isDeepStrictEqual(await readFinancialEffectCarryover(db, data.targetTenantId), expected);
 }
 
-/** Re-export checks audited import receipt, whole mixed staff-work digest and
- * every retained imported barrier before carrying original logical ownership.
- * New locally claimed effects keep their current scope; history is never inferred
- * from a supplied mapping or repaired from an import receipt. */
-export async function carryFinancialEffectOrigins(db: Db, tenantId: string,
-  current: readonly ScopedFinancialEffectHistory[]): Promise<readonly ScopedFinancialEffectHistory[]> {
+type ImportedEffect = Readonly<{ target: LocationScope; origin: LocationScope; barrier: FinancialEffectArchiveRow }>;
+/** Current retained receipt and canonical mixed section, never a caller mapping. */
+async function importedEffects(db: Db, tenantId: string): Promise<ReadonlyMap<string, ImportedEffect>> {
   const registry = (await sql<TargetImportRow>`select archive_id, manifest_digest, receipt, source_history
     from tenant_config_imports where target_tenant_id = ${tenantId}`.execute(db)).rows[0];
-  if (!registry) return current;
+  const result = new Map<string, ImportedEffect>();
+  if (!registry) return result;
   const data = registry.source_history;
   if (!receiptMatches(registry, data) || data.targetTenantId !== tenantId || !validStaffWorkHistoryManifest(data) ||
       data.locations.length < 1 || data.locations.length > 16) throw new Error("invalid financial barrier import receipt");
-  const origins = new Map<string, LocationScope>(), actual = new Map(current.map(row => [row.barrier.effectRef, row]));
   const sources = new Set<string>(), targets = new Set<string>();
   for (const location of data.locations) {
     if (!validFinancialEffectScope(location.sourceScope) || !validFinancialEffectScope(location.targetScope) ||
         location.sourceScope.tenantId !== data.sourceTenantId || location.targetScope.tenantId !== tenantId ||
         !validFinancialEffectHistory(location.financialEffects)) throw new Error("invalid financial barrier import mapping");
-    const source = JSON.stringify(location.sourceScope), target = JSON.stringify(location.targetScope);
+    const source = JSON.stringify([location.sourceScope.tenantId, location.sourceScope.clinicId, location.sourceScope.locationId]);
+    const target = JSON.stringify([location.targetScope.tenantId, location.targetScope.clinicId, location.targetScope.locationId]);
     if (sources.has(source) || targets.has(target)) throw new Error("ambiguous financial barrier import mapping");
     sources.add(source); targets.add(target);
     for (const row of location.financialEffects ?? []) {
-      if (origins.has(row.effectRef)) throw new Error("ambiguous financial barrier import reference");
-      const retained = actual.get(row.effectRef);
-      if (!retained || retained.clinicId !== location.targetScope.clinicId || retained.locationId !== location.targetScope.locationId ||
-          !isDeepStrictEqual(retained.barrier, financialEffectBarrierRow(row))) throw new Error("lost financial barrier import history");
-      origins.set(row.effectRef, row.originScope ?? location.sourceScope);
+      if (result.has(row.effectRef)) throw new Error("ambiguous financial barrier import reference");
+      result.set(row.effectRef, { target: location.targetScope, origin: row.originScope ?? location.sourceScope, barrier: financialEffectBarrierRow(row) });
     }
   }
-  return current.map(row => origins.has(row.barrier.effectRef)
-    ? { ...row, barrier: { ...row.barrier, originScope: structuredClone(origins.get(row.barrier.effectRef)!) } } : row);
+  return result;
+}
+
+/** A known consumed imported ID may never be recreated after native-row loss.
+ * Invalid retained metadata also blocks a new claim. This does not prove absence
+ * of attempts newer than a backup: independent producer admission is still needed. */
+export async function financialEffectWasImported(db: Db, tenantId: string, effectRef: string): Promise<boolean> {
+  return (await importedEffects(db, tenantId)).has(effectRef);
+}
+
+/** Re-export verifies every retained imported barrier and carries original scope.
+ * Additional locally claimed effects keep their current ownership. */
+export async function carryFinancialEffectOrigins(db: Db, tenantId: string,
+  current: readonly ScopedFinancialEffectHistory[]): Promise<readonly ScopedFinancialEffectHistory[]> {
+  const imported = await importedEffects(db, tenantId), actual = new Map(current.map(row => [row.barrier.effectRef, row]));
+  for (const [ref, binding] of imported) {
+    const retained = actual.get(ref);
+    if (!retained || retained.clinicId !== binding.target.clinicId || retained.locationId !== binding.target.locationId ||
+        !isDeepStrictEqual(retained.barrier, binding.barrier)) throw new Error("lost financial barrier import history");
+  }
+  return current.map(row => {
+    const binding = imported.get(row.barrier.effectRef);
+    return binding ? { ...row, barrier: { ...row.barrier, originScope: structuredClone(binding.origin) } } : row;
+  });
 }

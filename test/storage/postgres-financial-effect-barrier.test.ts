@@ -15,6 +15,7 @@ import { PostgresPortabilityFence } from "../../src/storage/postgres-portability
 import { decodeTenantConfigArchive } from "../../src/portability/config-archive.ts";
 import { validStaffWorkHistoryManifest } from "../../src/portability/staff-work-history.ts";
 import { down } from "../../src/storage/migrations/049_financial_effect_barriers.ts";
+import type Database from "../../src/storage/generated/Database.ts";
 import { withDisposablePostgres } from "../support/disposable-postgres.ts";
 import { targetReady } from "../../src/storage/postgres-cutover-target.ts";
 import type { TargetImportRow } from "../../src/storage/postgres-cutover-target.ts";
@@ -53,7 +54,7 @@ test("financial effect races and fresh owners consume exactly one permanently re
     assert.deepEqual(await new PostgresFinancialEffectBarrier(db, changed, binding).claimOnce(ref), { ok: false, error: { kind: "bindingMismatch" } });
   }
   assert.deepEqual(await new PostgresFinancialEffectBarrier(db, owner, "b".repeat(64)).claimOnce(ref), { ok: false, error: { kind: "bindingMismatch" } });
-  await assert.rejects(() => db.transaction().execute(trx => down(trx)), /financial effect barriers/);
+  await assert.rejects(() => db.transaction().execute(trx => down<Database>(trx)), /financial effect barriers/);
 });
 
 test("financial barrier writes participate in the real portability freeze", async () => {
@@ -112,6 +113,7 @@ test("mixed financial and resend barriers survive durable import, repeated stagi
   // neither path may repair it or grant a replacement effect ID.
   await sql`delete from financial_effect_barriers where tenant_id = ${target.tenantId} and effect_ref = ${ref}::uuid`.execute(db);
   assert.equal(await cutoverReady(target.tenantId), false);
+  assert.deepEqual(await new PostgresFinancialEffectBarrier(db, target, binding).claimOnce(ref), { ok: false, error: { kind: "storageFailure" } });
   assert.deepEqual(await importer.preflight(archive, target.tenantId, "fixture-owner", importAuthority, mapper), { ok: false, error: { kind: "storageFailure" } });
   assert.deepEqual(await importer.stage(archive, target.tenantId, "fixture-owner", importAuthority, mapper), { ok: false, error: { kind: "storageFailure" } });
   // Removing both the barrier and its retained projection must still fail the
@@ -119,6 +121,7 @@ test("mixed financial and resend barriers survive durable import, repeated stagi
   const edited = { ...decoded, locations: decoded.locations.map(location => ({ ...location, financialEffects: [] })) };
   assert.equal(validStaffWorkHistoryManifest(edited), false);
   await sql`update tenant_config_imports set source_history = ${JSON.stringify(edited)}::jsonb where target_tenant_id = ${target.tenantId}`.execute(db);
+  assert.deepEqual(await new PostgresFinancialEffectBarrier(db, target, binding).claimOnce(ref), { ok: false, error: { kind: "storageFailure" } });
   assert.equal(await cutoverReady(target.tenantId), false);
   assert.deepEqual(await importer.preflight(archive, target.tenantId, "fixture-owner", importAuthority, mapper), { ok: false, error: { kind: "storageFailure" } });
   const lost = await buildPostgresTenantConfigArchive(db, { sourceTenantId: target.tenantId,

@@ -1,3 +1,4 @@
+import { financialEffectWasImported } from "./postgres-financial-effect-carryover.ts";
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import { err, ok } from "../core/model.ts";
@@ -24,6 +25,17 @@ export class PostgresFinancialEffectBarrier implements FinancialEffectBarrier {
     if (!validFinancialEffectRef(effectRef)) return err({ kind: "invalidInput" });
     try {
       return await this.#db.transaction().execute(async trx => {
+        // Same tenant lock as import/freeze writers. A retained consumed ID is
+        // never recreated, even if the relational barrier was lost on restore.
+        await sql`select pg_advisory_xact_lock(172934501, hashtext(${this.#scope.tenantId}))`.execute(trx);
+        if (await financialEffectWasImported(trx, this.#scope.tenantId, effectRef)) {
+          const prior = (await sql<{ clinic_id: string; location_id: string; owner_binding: string }>`select
+            clinic_id, location_id, owner_binding from financial_effect_barriers
+            where tenant_id = ${this.#scope.tenantId} and effect_ref = ${effectRef}::uuid`.execute(trx)).rows[0];
+          if (!prior) return err({ kind: "storageFailure" });
+          return prior.clinic_id === this.#scope.clinicId && prior.location_id === this.#scope.locationId && prior.owner_binding === this.#binding
+            ? ok({ claimed: false }) : err({ kind: "bindingMismatch" });
+        }
         const inserted = await sql`insert into financial_effect_barriers
           (tenant_id, clinic_id, location_id, effect_ref, owner_binding)
           values (${this.#scope.tenantId}, ${this.#scope.clinicId}, ${this.#scope.locationId}, ${effectRef}::uuid, ${this.#binding})
