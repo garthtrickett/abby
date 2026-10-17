@@ -30,7 +30,7 @@ const rpc = (kind: string, data: unknown): Promise<unknown> => new Promise(resol
 const port: typeof fetch = async (input, init) => {
   const response = await rpc("fetch", { input: String(input), method: init?.method, body: init?.body,
     headers: Object.fromEntries(new Headers(init?.headers)) }) as { body: string; status: number };
-  return new Response(response.body, { status: response.status });
+  return new Response([204, 205, 304].includes(response.status) ? null : response.body, { status: response.status });
 };
 const grant = async (purpose: string, query: unknown) => await rpc("grant", { purpose, query }) === true;
 process.on("message", async (raw: unknown) => {
