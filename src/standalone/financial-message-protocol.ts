@@ -187,7 +187,7 @@ export class FinancialMessageProtocol {
     const payloadDigest = financialMessageDigest(this.#messageSelection, message); if (!payloadDigest) throw new FinancialMessageProtocolRefusal("mismatched");
     const base = frozen({ ...this.#selection, purpose: "financialMessageDelivery" as const, ownerBinding: this.#binding, binding: b,
       effectRef: i.effects[purpose], sources, correlation: c, money: evidence.value, selection: this.#messageSelection, message, payloadDigest });
-    return op.wait(this.#mode.query(base, op));
+    return frozen(await op.wait(this.#mode.query(base, op)));
   }
   async #permit(q: FinancialMessageQuery, op: FinancialMessageOperation): Promise<void> {
     for (const grant of [this.#authority.providerBindingAuthorized, this.#authority.messageAuthorized, this.#authority.producerAdmitted]) {
