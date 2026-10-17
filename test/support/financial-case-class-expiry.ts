@@ -53,7 +53,7 @@ export async function caseClassExpiryFixture(options: Omit<BaseOptions, "authori
       const url = new URL(String(input));
       if (url.pathname.startsWith("/v1/patient_cases/71")) {
         assert.equal(init?.method, "GET"); assert.equal(init.redirect, "error");
-        await options.caseRead?.(url.pathname, ++caseReads, init.signal!);
+        caseReads++; await options.caseRead?.(url.pathname, caseReads, init.signal!);
         if (url.pathname === "/v1/patient_cases/71") { assert.deepEqual(url.searchParams.getAll("q[]"), ["archived_at:*"]); return Response.json(record); }
         assert.equal(url.pathname, "/v1/patient_cases/71/attendees");
         assert.deepEqual(url.searchParams.getAll("q[]"), ["archived_at:*", "cancelled_at:*", "deleted_at:*"]);
