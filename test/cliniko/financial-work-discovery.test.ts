@@ -129,13 +129,14 @@ test("invalid oversized window and ended lifetime perform no I/O", async () => {
   const ended = new AbortController(); ended.abort(); assert.equal((await f.scanner.scan(window, ended.signal)).ok, false); assert.equal(f.requests.length, 0);
 });
 
-test("late headers after deadline are cancelled without returning a context", async () => {
+test("late headers after caller abort are cancelled without returning a context", async () => {
+  const ended = new AbortController();
   let release!: (r: Response) => void, cancelled = false;
-  const f = fixture({ config: { deadlineMs: 20 } });
+  const f = fixture();
   const scanner = value(ClinikoFinancialWorkDiscovery.create(f.config, {
     allowsAccountRead: async () => true, allowsRecordRead: async () => true, current: () => true,
-  }, () => new Promise(resolve => { release = resolve; })));
-  assert.equal((await scanner.scan(window, stop())).ok, false);
+  }, () => new Promise(resolve => { release = resolve; setImmediate(() => ended.abort()); })));
+  assert.equal((await scanner.scan(window, ended.signal)).ok, false);
   release(new Response(new ReadableStream({ cancel() { cancelled = true; } })));
   await new Promise(resolve => setImmediate(resolve)); assert.equal(cancelled, true);
 });
