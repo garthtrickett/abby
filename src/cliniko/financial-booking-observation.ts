@@ -67,8 +67,8 @@ export function verifyFinancialBookingObservation(notes: unknown, expected: Read
     const fields: unknown = JSON.parse(lines[2]!);
     if (!Array.isArray(fields) || fields.length !== 8 || !fields.every(f => typeof f === "string")) return invalid();
     const value: ClinikoFinancialBookingObservation = {
-      actionRef: fields[0], financialActionRef: fields[1], intentRecallRef: fields[2], intentDigest: fields[3],
-      bookingActionRef: fields[4], targetRef: fields[5], observedAt: fields[6], producerKeyRef: fields[7],
+      actionRef: fields[0]!, financialActionRef: fields[1]!, intentRecallRef: fields[2]!, intentDigest: fields[3]!,
+      bookingActionRef: fields[4]!, targetRef: fields[5]!, observedAt: fields[6]!, producerKeyRef: fields[7]!,
     };
     if (formatFinancialBookingObservation(value, lines[3]!) !== notes ||
         value.financialActionRef !== expected.intent.actionRef || value.intentRecallRef !== expected.intentRecallRef ||

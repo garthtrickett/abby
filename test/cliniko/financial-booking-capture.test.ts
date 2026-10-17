@@ -23,8 +23,8 @@ function value<T extends { ok: true; value: unknown } | { ok: false; error: unkn
 function fixture(kind: "book" | "classBook" = "book") {
   const intent: ClinikoFinancialIntent = {
     actionRef: uuid(1), scope, patientId: "21", businessId: "11", credentialFingerprint: clinikoCredentialFingerprint(apiKey),
-    booking: { kind, actionRef: uuid(2), practitionerId: "12", appointmentTypeId: "13",
-      startsAt: "2026-11-03T09:00:00.000Z", endsAt: "2026-11-03T09:30:00.000Z", ...(kind === "classBook" ? { sessionId: "15" } : {}) },
+    booking: { actionRef: uuid(2), practitionerId: "12", appointmentTypeId: "13",
+      startsAt: "2026-11-03T09:00:00.000Z", endsAt: "2026-11-03T09:30:00.000Z", ...(kind === "classBook" ? { kind, sessionId: "15" } : { kind }) },
     stripe: { accountRef: "acct_fixture", livemode: false },
     payment: { amount: 5000, currency: "gbp", policyVersion: "fees-1", termsVersion: "terms-1", deadline: "2026-11-02T08:00:00.000Z" },
     recipient: { kind: "email", address: "private-finance@example.invalid" },
