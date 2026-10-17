@@ -23,7 +23,7 @@ function valid(a: FinancialCheckoutAttempt): boolean {
     /^cliniko:(?:appointment|attendee):[1-9][0-9]{0,18}$/.test(a.targetRef) &&
     [a.intentDigest, a.requestDigest].every(v => /^[a-f0-9]{64}$/.test(v)) &&
     Number.isSafeInteger(a.createdFrom) && a.createdFrom >= 0 && Number.isSafeInteger(a.createdThrough) &&
-    a.createdThrough > a.createdFrom && a.createdThrough - a.createdFrom <= 3_600 && a.createdThrough <= 253_402_300_799;
+    a.createdThrough > a.createdFrom && a.createdThrough - a.createdFrom <= 86_400 && a.createdThrough <= 253_402_300_799;
 }
 export function encodeFinancialCheckoutAttempt(a: FinancialCheckoutAttempt): Result<string, Readonly<{ kind: "invalidCheckoutAttempt" }>> {
   if (!valid(a)) return invalid();

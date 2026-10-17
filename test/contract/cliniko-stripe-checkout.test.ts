@@ -179,3 +179,11 @@ test("native attempt timestamps within the accepted clock margin cannot hide pri
   const r = await value(f.make()).createOnce(f.binding, stop()); assert.equal(r.ok, false); if (!r.ok) assert.equal(r.error.kind, "alreadyClaimed");
   assert.equal(posts(f).length, 1);
 });
+
+test("retained creation range covers later server processing up to the fixed expiry bound", async () => {
+  const f = await checkoutFixture(); const result = value(await f.owner.createOnce(f.binding, stop()));
+  const attempt = value(decodeFinancialCheckoutAttempt(f.rows.get(result.attemptRecallRef.split(":").at(-1)!)!.notes));
+  assert.equal(attempt.createdThrough, Date.parse(f.intent.payment.deadline) / 1_000 - 1_800);
+  assert.ok(attempt.createdThrough > Date.parse(now) / 1_000 + 60);
+  assert.ok(attempt.createdThrough - attempt.createdFrom <= 86_400);
+});

@@ -134,7 +134,7 @@ export class ClinikoStripeCheckoutOwner {
       const expiresAt = Date.parse(intent.payment.deadline) / 1_000;
       const checkCurrent = () => {
         const t = now() / 1_000;
-        if (signal.aborted || !Number.isSafeInteger(expiresAt) || expiresAt - t < 1_800 || expiresAt - t > 86_400 ||
+        if (signal.aborted || !Number.isSafeInteger(expiresAt) || expiresAt - t <= 1_800 || expiresAt - t > 86_400 ||
             Date.parse(intent.createdAt) > now() || this.#authority.current(query, signal) !== true) throw new CheckoutFailure("forbidden");
       };
       const permit = async () => {
@@ -169,7 +169,7 @@ export class ClinikoStripeCheckoutOwner {
       const start = Math.floor(now() / 1_000), attempt: FinancialCheckoutAttempt = Object.freeze({ actionRef: randomUUID(),
         financialActionRef: intent.actionRef, effectRef: intent.effects.checkout, intentRecallRef: wanted.intentRecallRef, intentDigest: financialIntentDigest(intent)!,
         observationRecallRef: wanted.observationRecallRef, observationActionRef: wanted.observationActionRef, targetRef: query.targetRef,
-        requestDigest: createHash("sha256").update(body.toString()).digest("hex"), createdFrom: start - 30, createdThrough: start + 60 });
+        requestDigest: createHash("sha256").update(body.toString()).digest("hex"), createdFrom: start - 30, createdThrough: expiresAt - 1_800 });
       checkCurrent();
       const claimed = await wait(this.#claim(intent.effects.checkout));
       if (claimed?.ok !== true || claimed.value?.claimed !== true) throw new CheckoutFailure(claimed?.ok === true && claimed.value?.claimed === false ? "alreadyClaimed" : "unavailable");
@@ -209,7 +209,7 @@ export class ClinikoStripeCheckoutOwner {
             session.livemode !== intent.stripe.livemode || session.client_reference_id !== intent.actionRef ||
             session.amount_total !== intent.payment.amount || session.amount_subtotal !== intent.payment.amount || session.currency !== intent.payment.currency ||
             session.status !== "open" || session.payment_status !== "unpaid" || session.payment_intent !== null || session.expires_at !== expiresAt ||
-            !Number.isSafeInteger(session.created) || Number(session.created) < attempt.createdFrom || Number(session.created) > attempt.createdThrough ||
+            !Number.isSafeInteger(session.created) || Number(session.created) < attempt.createdFrom || Number(session.created) > attempt.createdThrough || Number(session.created) > Math.floor(now() / 1_000) + 30 ||
             metadata?.abby_financial_action !== intent.actionRef || metadata.abby_effect !== intent.effects.checkout || metadata.abby_intent_digest !== attempt.intentDigest ||
             details?.amount_discount !== 0 || details.amount_shipping !== 0 || details.amount_tax !== 0 ||
             record(session.automatic_tax)?.enabled !== false || record(session.adaptive_pricing)?.enabled === true ||

@@ -356,3 +356,68 @@ precise limits/results are recorded in [execution progress](EXECUTION_PROGRESS.m
 This is a provider-port fixture qualification, not an activated scheduler/worker,
 real provider read or serving financial-consent proof. No later money, delivery,
 webhook, expiry or restore/producer admission is inferred from it.
+
+
+## One-shot checkout owner candidate
+
+`ClinikoStripeCheckoutOwner.createOnce` joins exact financial intent/producer
+observation reads, independent current collection/producer admission, a durable
+opaque effect exclusion, Cliniko-owned attempt retention and one Stripe Session
+POST. It is a trusted financial-owner command, not a caller route or a scheduler.
+Actual serving fee/recipient/contact-purpose approval and separately played
+financial consent remain required; clinical yes and a signature do not provide
+these grants. Concrete clinic/producer/restore authorities are mandatory ports,
+not default deployment permission.
+
+Before consuming the checkout effect, the owner verifies the configured Stripe
+account and completes an independently authorized patient-filtered native review
+scan, including archived records and the30-second clock allowance. Existing
+attempts refuse creation even if local claim history was lost. The new patient
+scan uses the documented patient filter and the existing500-row/five-page/
+50-selected/50-exact/15-second/1MB limits across the whole selected interval;
+ordinary account-window discovery retains its one-hour limit. Incomplete,
+malformed or unauthorized history never becomes a clean absence or send permit.
+Independent producer/cohort/restore admission still cannot be replaced by a scan,
+expired lease, missing record or restored database snapshot.
+
+The checkout effect UUID is durably consumed before any possible external
+creation. A separate random attempt UUID is consumed before its Cliniko POST.
+The new canonical attempt family binds exact intent/digest, observation citation,
+native target, effect, canonical request digest and provider creation range.
+Native attempt retention must receive an exact acknowledgement. Lost/nonexact
+attempt retention prevents Stripe dispatch; all consumed IDs remain consumed.
+Source intent/observation and permissions are reread after retention. No local
+patient, native/Stripe/event reference, amount, recipient, request/response body
+or pending/retry payload is stored. Existing approved ownership metadata and
+independently random effect/attempt UUIDs remain the only local claim content.
+
+Stripe receives one fixed-amount hosted card Session, an explicitly clinic-approved
+generic label/public return URLs, opaque action/effect correlation and an intent
+digest. No patient/native record reference, transcript or email is inserted.
+Account/mode/API-version binding and a fixed idempotency key are required;
+automatic tax, adaptive pricing and promotion codes are disabled. Exact creation
+acknowledgement checks identity/mode, action/effect/digest, total/currency,
+open-unpaid state, expiry/creation time and the provider checkout URL. It proves
+creation only, never money or email delivery. If read permission is withdrawn
+after an exact acknowledgement, `createdWithheld` preserves that truth without
+disclosing the checkout URL. Errors after dispatch remain uncertain, with no
+automatic POST replay even after Stripe idempotency retention.
+
+The adapter pins the documented2025-06-30.basil contract and supports explicitly
+approved card payment. Other methods/version changes need qualification. Fixed
+clinic deadlines outside Stripe's30-minute/24-hour creation limits refuse; they
+are never silently extended/clamped. The persisted possible-creation range covers
+from admission minus clock allowance through the latest creation permitted by
+the fixed expiry. It is not a client-timeout absence proof. Subsequent readonly
+Stripe reconciliation must cover that whole range in bounded windows, bind exact
+current account/action/amount/currency and treat incomplete/unknown results as
+review. A provider attempt note is unsigned context, not a receipt or permission.
+[Stripe creation](https://docs.stripe.com/api/checkout/sessions/create?api-version=2025-06-30.basil)
+and [idempotency](https://docs.stripe.com/api/idempotent_requests) define the
+provider contract; local one-use history and independent admission retain the
+stronger no-replay rule.
+
+This candidate adds no webhook acknowledgement/durable event handoff, link/receipt
+sender, auto expiry/cancellation, public financial endpoint, approved fee
+presentation or real-provider activation. Those remain the next gap11 lifecycle
+work, followed by gaps12/13 and combined/clinic acceptance. All13 gaps remain active.
