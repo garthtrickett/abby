@@ -1,17 +1,16 @@
+import { assembleFinancialRecords, FinancialDiscoveryError as ScanFailure } from "./internal/financial-discovery-records.ts";
+import type { FinancialListedRecord as Listed } from "./internal/financial-discovery-records.ts";
 import { KeyObject } from "node:crypto";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { OwnedBodyError, ownedBodyBytes } from "../shared/owned-body-bytes.ts";
-import { decodeFinancialCheckoutAttempt, checkoutAttemptMatchesIntent } from "./financial-checkout-attempt.ts";
 import type { FinancialCheckoutAttempt } from "./financial-checkout-attempt.ts";
-import { financialIntentDigest, authenticateFinancialBookingCitation, verifyFinancialBookingObservation } from "./financial-booking-observation.ts";
 import type { ClinikoFinancialBookingObservation } from "./financial-booking-observation.ts";
 import { financialRecordOwnerBinding } from "./financial-record-retention.ts";
 import type { FinancialRecordRetentionConfig } from "./financial-record-retention.ts";
 import { ClinikoFinancialReviewReader } from "./financial-review-read.ts";
 import type { ClinikoFinancialReviewContext, ClinikoFinancialReviewFailure, ClinikoFinancialReviewSelection } from "./financial-review-read.ts";
-import { decodeClinikoFinancialIntent } from "./financial-review-intent.ts";
 import { financialConfigShard, financialSelection, financialRecordInstant as instant } from "./internal/financial-record-context.ts";
 import { claimClinikoBudget, observeCliniko429 } from "./read-budget.ts";
 import { validRecallDate } from "./recall-note.ts";
@@ -48,12 +47,8 @@ type Failure = ClinikoFinancialReviewFailure;
 type Row = Record<string, unknown>;
 function row(v: unknown): Row | undefined { return v !== null && typeof v === "object" && !Array.isArray(v) ? v as Row : undefined; }
 const nativeId = (v: unknown): v is string => typeof v === "string" && /^[1-9][0-9]{0,18}$/.test(v);
-class ScanFailure extends Error {
-  readonly kind: Failure["kind"];
-  constructor(kind: Failure["kind"]) { super("Financial discovery unavailable"); this.kind = kind; }
-}
 function discard(response: Response | undefined): void { try { void response?.body?.cancel().catch(() => {}); } catch { /* No private diagnostics. */ } }
-type Listed = { recallRef: string; patientId: string; notes: string; recalled: boolean; archivedAt: string | null };
+
 
 /** Read-only, count-driven bounded discovery. No writes, arbitrary link following,
  * local queue, implicit account budget, latest-row choice or partial success. */
@@ -162,10 +157,6 @@ export class ClinikoFinancialWorkDiscovery {
         if (scanned === total) break;
         if (page >= 5) throw new ScanFailure("malformed");
       }
-      const intents = new Map<string, ClinikoFinancialReviewContext>(), actions = new Set<string>();
-      const observations: { native: Listed; proof: ClinikoFinancialBookingObservation }[] = [];
-      const pendingAttempts: { native: Listed; attempt: FinancialCheckoutAttempt }[] = [];
-      const trust = { producerKeyRef: this.#config.producer.keyRef, publicKey: this.#config.producer.publicKey };
       const queryFor = (recallRef: string, actionRef: string, purpose: FinancialDiscoveryRecordQuery["purpose"]): FinancialDiscoveryRecordQuery =>
         Object.freeze({ ...this.#selection, recallRef, actionRef, purpose, includeArchived: true });
       let lookups = 0;
@@ -180,60 +171,10 @@ export class ClinikoFinancialWorkDiscovery {
         if (!result.ok) throw new ScanFailure(result.error.kind);
         return result.value;
       };
-      for (const native of selected) {
-        const decoded = decodeClinikoFinancialIntent(native.notes);
-        const attempt = decoded.ok ? undefined : decodeFinancialCheckoutAttempt(native.notes);
-        const citation = decoded.ok || attempt?.ok ? undefined : authenticateFinancialBookingCitation(native.notes, trust);
-        const actionRef = decoded.ok ? decoded.value.actionRef : attempt?.ok ? attempt.value.actionRef : citation?.ok ? citation.value.actionRef : undefined;
-        if (!actionRef || actions.has(actionRef)) throw new ScanFailure("mismatched");
-        actions.add(actionRef);
-        await recordPermit(queryFor(native.recallRef, actionRef, "listedFinancialRecord"));
-        if (decoded.ok) {
-          const context = await readIntent(native.recallRef, actionRef, "listedFinancialRecord");
-          // Reject record mutation during discovery rather than mix two contexts.
-          if (JSON.stringify(context.intent) !== JSON.stringify(decoded.value) || context.intent.patientId !== native.patientId ||
-              context.recalled !== native.recalled || context.archivedAt !== native.archivedAt) throw new ScanFailure("mismatched");
-          intents.set(native.recallRef, context);
-        } else if (attempt?.ok) pendingAttempts.push({ native, attempt: attempt.value });
-        else if (citation?.ok) observations.push({ native, proof: citation.value });
-        else throw new ScanFailure("malformed");
-      }
-      const paired = new Set<string>(), targets = new Set<string>(), bookingActions = new Set<string>(), work: FinancialDiscoveredWork[] = [];
-      for (const { native, proof } of observations) {
-        if (proof.intentRecallRef === native.recallRef || paired.has(proof.intentRecallRef) || targets.has(proof.targetRef) || bookingActions.has(proof.bookingActionRef)) throw new ScanFailure("mismatched");
-        const intent = intents.get(proof.intentRecallRef) ?? await readIntent(proof.intentRecallRef, proof.financialActionRef, "sourceIntent");
-        const bound = verifyFinancialBookingObservation(native.notes, { intent: intent.intent, intentRecallRef: intent.recallRef, ...trust });
-        if (!bound.ok || intent.intent.patientId !== native.patientId || Date.parse(proof.observedAt) > Date.parse(beganAt) + 30_000) throw new ScanFailure("mismatched");
-        paired.add(proof.intentRecallRef); targets.add(proof.targetRef); bookingActions.add(proof.bookingActionRef);
-        work.push({ kind: "pairedContext", intent, observation: bound.value, observationRecallRef: native.recallRef,
-          recalled: native.recalled, archivedAt: native.archivedAt });
-      }
-      for (const [ref, intent] of intents) if (!paired.has(ref)) work.push({ kind: "intentContext", intent });
-      const attempts: FinancialDiscoveredAttempt[] = [], attempted = new Set<string>();
-      for (const { native, attempt } of pendingAttempts) {
-        if (native.recallRef === attempt.intentRecallRef || native.recallRef === attempt.observationRecallRef || attempted.has(attempt.effectRef)) throw new ScanFailure("mismatched");
-        const intent = intents.get(attempt.intentRecallRef) ?? await readIntent(attempt.intentRecallRef, attempt.financialActionRef, "sourceIntent");
-        if (!checkoutAttemptMatchesIntent(attempt, intent.intent, intent.recallRef) || intent.intent.patientId !== native.patientId) throw new ScanFailure("mismatched");
-        const pair = work.find(w => w.kind === "pairedContext" && w.intent.recallRef === intent.recallRef);
-        if (pair?.kind === "pairedContext" && (pair.observationRecallRef !== attempt.observationRecallRef ||
-            pair.observation.actionRef !== attempt.observationActionRef || pair.observation.targetRef !== attempt.targetRef ||
-            financialIntentDigest(pair.intent.intent) !== attempt.intentDigest)) throw new ScanFailure("mismatched");
-        attempted.add(attempt.effectRef);
-        attempts.push({ kind: "attemptContext", intent, attempt, recallRef: native.recallRef, recalled: native.recalled, archivedAt: native.archivedAt });
-      }
-      // Attempts are unsigned possible-dispatch context, never creation receipts.
-      // A source outside this window still requires independent exact authority.
-      const obligations = new Map([...work.map(w => [w.intent.recallRef, w.intent.intent] as const),
-        ...attempts.map(a => [a.intent.recallRef, a.intent.intent] as const)]);
-      const obligationIds = new Set<string>();
-      for (const intent of obligations.values()) {
-        for (const id of [intent.actionRef, intent.booking.actionRef, ...Object.values(intent.effects)]) {
-          if (obligationIds.has(id)) throw new ScanFailure("mismatched"); obligationIds.add(id);
-        }
-      }
-      for (const id of [...work.flatMap(w => w.kind === "pairedContext" ? [w.observation.actionRef] : []), ...attempts.map(a => a.attempt.actionRef)]) {
-        if (obligationIds.has(id)) throw new ScanFailure("mismatched"); obligationIds.add(id);
-      }
+      const { work, attempts } = await assembleFinancialRecords(selected, {
+        trust: { producerKeyRef: this.#config.producer.keyRef, publicKey: this.#config.producer.publicKey }, beganAt, readIntent,
+        permitRecord: (recallRef, actionRef) => recordPermit(queryFor(recallRef, actionRef, "listedFinancialRecord")),
+      });
       await accountPermit();
       for (const q of grants.values()) await recordPermit(q);
       current(account); for (const q of grants.values()) current(q);
