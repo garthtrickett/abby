@@ -2904,7 +2904,7 @@ source counts/timing, never arguments, provider paths, native identities or
 private values. On failure, a best-effort snapshot preserves the original error.
 Successful content cases print only fixed source diagnostics. Production
 authority/reader/queue behavior, test assertions, deadlines, quotas and concurrency
-are unchanged; no next full run is launched until the cause is established.
+are unchanged. Focused observations precede any further full-load diagnostic.
 
 Diagnostic TypeScript work1792201921541 naturally failed at01:53:43.218574UTC:
 TS2339 identified a fixture configuration that does not expose its captured
@@ -2952,3 +2952,30 @@ measures the failing first-reply wait. Add a parent first-reply timer around the
 unchanged digit wait. No production authority/performance fix is inferred.
 The reviewed product-facts checkpoint now records the actual full failure; none
 of the three changed diagnostic files is a directly fingerprinted citation.
+
+Exact source74af6216 passed full `npm run typecheck` plus product-facts and
+scenario-manifest2/2 in work1792202559785,02:02:40.229267–02:04:30.233060UTC.
+Peak1,420,115,968B under2GiB/CPU200%/Swap0,heap1536, all memory events zero;
+all1197 inputs unchanged. Authoritative exit0, wrapper absence and paired wait
+completion verified. No serving compiler was repeated for the parent-only timer.
+
+Fresh first-reply observation work1792202810252 passed2/2, zero skips/failures/
+cancellations,02:06:50.837909–02:07:50.008801UTC. Telehealth first reply4,430ms
+and cancelled3,681ms; completed selection5,903ms/4,652ms. Production behavior,
+all original test deadlines/assertions, source1197 and455 runtime/terminal pins
+remained unchanged. The diagnostic’s prospective Docker budget was512MiB,
+based on prior121MiB two-case and195MiB larger-cohort measurements; this is
+separate from the historical1GiB Docker qualification. Node stayed1.5GiB and
+both CPU quotas200%,Swap0. Peaks were190,349,312B Node/123,736,064B Docker,
+all memory-limit/OOM events zero. Exit0, wrapper/scope/container absence and
+paired wait completion were verified. The earlier unlaunched1GiB DB probe’s
+failed live admission is retained; no running/historical limits were changed.
+
+Focused observations have not reproduced the complete-suite failure. Source
+metrics overlap and cannot establish its cause. A further complete current-graph
+diagnostic is justified only with these new start/completion/source/first-reply
+observations, fresh TypeScript/artifact/admission checks, original full resource
+caps/default4 concurrency/deadlines and all cases. This can collect the missing
+full-load evidence and qualify the later staff/financial schema cohorts; it is
+not an unchanged blind rerun or a claim that a production fix exists. Ordered
+follow-up still requires the main gate. The whole13-gap scope remains active.
