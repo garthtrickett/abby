@@ -55,7 +55,7 @@ export class StripeCheckoutCorrelationReader {
     if (!ref(checkoutRef, "cs")) return err({ kind: "invalidBinding" });
     const result = await this.#api.run(signal, async get => {
       const session = await get("checkout/sessions/" + encodeURIComponent(checkoutRef)), correlation = data(session, checkoutRef, this.#scope);
-      if (!["open", "complete", "expired"].includes(String(session.status)) || !Number.isSafeInteger(session.expires_at) ||
+      if (session.status !== "open" && session.status !== "complete" && session.status !== "expired" || !Number.isSafeInteger(session.expires_at) ||
           Number(session.expires_at) <= correlation.created || Number(session.expires_at) > 253_402_300_799) throw new ReadError("mismatched");
       return { ...correlation, status: session.status as "open" | "complete" | "expired", expiresAt: new Date(Number(session.expires_at) * 1000).toISOString() };
     });
