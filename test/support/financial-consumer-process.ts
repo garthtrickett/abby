@@ -1,3 +1,6 @@
+import { ClinikoFinancialResendRecords } from "../../src/cliniko/financial-resend-records.ts";
+import type { FinancialResendRequest } from "../../src/cliniko/financial-resend-request.ts";
+import type { ClinikoFinancialIntent } from "../../src/cliniko/financial-review-intent.ts";
 import type { FinancialCaseClassApproval } from "../../src/standalone/cliniko-financial-case-class-expiry.ts";
 /** Compiled synthetic host. Private provider/approval traffic uses IPC; only a
  * loopback raw webhook listener and fixed cycle counts are exposed. No retry
@@ -20,7 +23,7 @@ import type { SmtpMailConfig } from "../../src/standalone/smtp-text-mail-transpo
 import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 
 export type FinancialConsumerClassExpirySetup = Readonly<{ path: string; directoryPath: string; binding: ClassPolicyBinding }>;
-export type FinancialConsumerProcessSetup = Readonly<{ kind: "start"; now: string; supportsHeadroom?: boolean; enableCheckoutExpiry?: boolean; enableClinicalExpiry?: boolean; classClinicalExpiry?: FinancialConsumerClassExpirySetup; caseClassClinicalExpiry?: FinancialConsumerClassExpirySetup & Readonly<{ maximumAuthorityRequests: number }>; smtp: SmtpMailConfig;
+export type FinancialConsumerProcessSetup = Readonly<{ kind: "start"; now: string; resendRequestRetention?: Readonly<{ request: FinancialResendRequest; intent: ClinikoFinancialIntent; reviewDate: string }>; supportsHeadroom?: boolean; enableCheckoutExpiry?: boolean; enableClinicalExpiry?: boolean; classClinicalExpiry?: FinancialConsumerClassExpirySetup; caseClassClinicalExpiry?: FinancialConsumerClassExpirySetup & Readonly<{ maximumAuthorityRequests: number }>; smtp: SmtpMailConfig;
   config: Omit<FinancialConsumerConfig, "checkout" | "webhook"> & {
     checkout: Omit<FinancialConsumerConfig["checkout"], "cliniko" | "stripe"> & {
       cliniko: Omit<FinancialConsumerConfig["checkout"]["cliniko"], "producer" | "rateBudget" | "clock"> & { producer: { keyRef: string; pem: string } };
@@ -56,6 +59,15 @@ process.on("message", async (raw: unknown) => {
     const binding = financialRecordOwnerBinding(config.checkout.cliniko); if (!binding.ok) throw new Error("Invalid synthetic owner");
     const barrier = new PostgresFinancialEffectBarrier(db, config.checkout.cliniko.scope, binding.value);
     const current = () => process.connected;
+    if (setup.resendRequestRetention) {
+      const records = ClinikoFinancialResendRecords.create(config.checkout.cliniko,
+        { allows: q => grant("resendRecord", q), producerAdmitted: q => grant("producer", q), current }, barrier, port);
+      if (!records.ok) throw new Error("Invalid synthetic resend recorder");
+      process.send?.({ kind: "ready", port: 0 });
+      const request = setup.resendRequestRetention;
+      const retained = await records.value.retainRequestOnce(request.request, request.intent, request.reviewDate, new AbortController().signal);
+      process.send?.({ kind: "resendRetained", data: retained }); return;
+    }
     const capturedClass = setup.classClinicalExpiry ? await OwnerFileClassPolicy.capture({ ...setup.classClinicalExpiry.binding,
       path: setup.classClinicalExpiry.path, directory: new OwnerFileAdminDirectory(setup.classClinicalExpiry.directoryPath, setup.classClinicalExpiry.binding.scope),
       clock: () => setup.now }) : undefined;

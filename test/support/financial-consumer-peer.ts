@@ -1,3 +1,5 @@
+import type { Result } from "../../src/core/model.ts";
+import type { FinancialRecordRetention, FinancialRecordFailure } from "../../src/cliniko/financial-record-retention.ts";
 import type { FinancialCaseClassExpiryQuery, FinancialCaseClassApproval } from "../../src/standalone/cliniko-financial-case-class-expiry.ts";
 import assert from "node:assert/strict";
 import { fork } from "node:child_process";
@@ -14,6 +16,8 @@ export type FinancialConsumerPeerFixture = Readonly<{ config: FinancialConsumerC
   dependencies: Readonly<{ native: typeof fetch; stripe: typeof fetch }>; approved: Set<string>; receipts: CheckoutCreationReceipt[] }>;
 export type FinancialConsumerPeerOptions = Readonly<{ now?: string; enableCheckoutExpiry?: boolean; enableClinicalExpiry?: boolean; producerAdmitted?(): boolean;
   allows?(purpose: string, query: unknown): boolean; holdExpiryReply?: boolean; onExpirySubmitted?(): void;
+  resendRequestRetention?: FinancialConsumerProcessSetup["resendRequestRetention"];
+  holdResendRequestReply?: boolean; onResendRequestSubmitted?(): void;
   classClinicalExpiry?: FinancialConsumerClassExpirySetup;
   caseClassClinicalExpiry?: FinancialConsumerClassExpirySetup & Readonly<{ maximumAuthorityRequests: number }>;
   caseClassClinicalApproval?(query: FinancialCaseClassExpiryQuery): FinancialCaseClassApproval | null | Promise<FinancialCaseClassApproval | null>;
@@ -32,12 +36,15 @@ export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smt
   let waiting: { resolve(c: FinancialConsumerCycle): void; reject(e: Error): void } | undefined;
   let resolveReady!: (port: number) => void, rejectReady!: (error: Error) => void;
   const ready = new Promise<number>((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
-  const fail = (error: Error) => { rejectReady(error); waiting?.reject(error); };
+  type Retention = Result<FinancialRecordRetention, FinancialRecordFailure>;
+  let retention: Retention | undefined, waitingRetention: { resolve(value: Retention): void; reject(error: Error): void } | undefined;
+  const fail = (error: Error) => { rejectReady(error); waiting?.reject(error); waitingRetention?.reject(error); };
   child.once("error", fail); child.once("exit", () => fail(new Error("Synthetic consumer process terminal")));
   child.on("message", async (raw: unknown) => {
     const m = raw as { kind: string; id: number; port: number; cycle: FinancialConsumerCycle; data: unknown };
     try {
       if (m.kind === "ready") { resolveReady(m.port); return; }
+      if (m.kind === "resendRetained") { const next = waitingRetention; waitingRetention = undefined; if (next) next.resolve(m.data as Retention); else retention = m.data as Retention; return; }
       if (m.kind === "cycle") {
         if (waiting) { const next = waiting; waiting = undefined; next.resolve(m.cycle); } else counts.push(m.cycle); return;
       }
@@ -49,6 +56,8 @@ export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smt
           { method: request.method, redirect: "error", headers: request.headers, signal: AbortSignal.timeout(30_000), ...(request.body === undefined ? {} : { body: request.body }) });
         if (options.holdExpiryReply && request.method === "POST" && request.input.endsWith("/expire")) { options.onExpirySubmitted?.(); return; }
         if (options.holdClinicalReply && request.method === "PATCH" && /\/(?:individual_appointments|attendees)\/[1-9][0-9]*\/cancel$/.test(request.input)) { options.onClinicalSubmitted?.(); return; }
+        if (options.holdResendRequestReply && request.method === "POST" && request.input.endsWith("/v1/recalls") &&
+            String(request.body).includes("Abby financial resend request v1")) { options.onResendRequestSubmitted?.(); return; }
         data = { body: await response.text(), status: response.status };
       } else if (m.kind === "grant") {
         const grant = m.data as { purpose: string; query: { checkoutRef?: string; binding?: { checkoutRef: string } } };
@@ -67,7 +76,7 @@ export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smt
   });
   const { producer, rateBudget: _budget, clock: _nativeClock, ...cliniko } = f.config.checkout.cliniko;
   const { clock: _stripeClock, ...stripe } = f.config.checkout.stripe, { clock: _webhookClock, ...webhook } = f.config.webhook;
-  const start: FinancialConsumerProcessSetup = { kind: "start", now: options.now ?? now, ...(f.config.checkout.cliniko.rateBudget.checkHeadroom ? { supportsHeadroom: true } : {}), ...(options.enableCheckoutExpiry ? { enableCheckoutExpiry: true } : {}), ...(options.enableClinicalExpiry ? { enableClinicalExpiry: true } : {}), ...(options.classClinicalExpiry ? { classClinicalExpiry: options.classClinicalExpiry } : {}), ...(options.caseClassClinicalExpiry ? { caseClassClinicalExpiry: options.caseClassClinicalExpiry } : {}), smtp: { ...smtp, ...(smtp.ca ? { ca: Buffer.from(smtp.ca).toString() } : {}) },
+  const start: FinancialConsumerProcessSetup = { kind: "start", ...(options.resendRequestRetention ? { resendRequestRetention: options.resendRequestRetention } : {}), now: options.now ?? now, ...(f.config.checkout.cliniko.rateBudget.checkHeadroom ? { supportsHeadroom: true } : {}), ...(options.enableCheckoutExpiry ? { enableCheckoutExpiry: true } : {}), ...(options.enableClinicalExpiry ? { enableClinicalExpiry: true } : {}), ...(options.classClinicalExpiry ? { classClinicalExpiry: options.classClinicalExpiry } : {}), ...(options.caseClassClinicalExpiry ? { caseClassClinicalExpiry: options.caseClassClinicalExpiry } : {}), smtp: { ...smtp, ...(smtp.ca ? { ca: Buffer.from(smtp.ca).toString() } : {}) },
     config: { ...f.config, checkout: { ...f.config.checkout, cliniko: { ...cliniko,
       producer: { keyRef: producer.keyRef, pem: producer.publicKey.export({ type: "spki", format: "pem" }).toString() } }, stripe }, webhook } };
   child.send(start);
@@ -85,7 +94,15 @@ export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smt
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const port = await Promise.race([ready, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Synthetic process ready deadline")), 10_000); })]);
-    return { child, port, nextCycle, kill, output };
+    const nextRetention = async (): Promise<Retention> => {
+      if (retention) { const result = retention; retention = undefined; return result; }
+      assert.equal(waitingRetention, undefined);
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => { waitingRetention = undefined; reject(new Error("Synthetic resend retention deadline")); }, 10_000);
+        waitingRetention = { resolve: value => { clearTimeout(timer); resolve(value); }, reject: error => { clearTimeout(timer); reject(error); } };
+      });
+    };
+    return { child, port, nextCycle, nextRetention, kill, output };
   } catch (error) { await kill(); throw error; }
   finally { if (timer) clearTimeout(timer); }
 }
