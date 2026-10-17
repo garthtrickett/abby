@@ -1,3 +1,4 @@
+import type { OutboundRecipientRequest } from "../../src/cliniko/outbound-recipient-request.ts";
 import assert from "node:assert/strict";
 import { outboundRequestValue } from "./outbound-recipient-request.ts";
 import { ClinikoOutboundRecipientRecords, outboundRecordOwnerBinding } from "../../src/cliniko/outbound-recipient-records.ts";
@@ -7,12 +8,13 @@ import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 export function value<T>(r: { ok: true; value: T } | { ok: false; error: unknown }): T { assert.ok(r.ok, JSON.stringify(r)); return r.value; }
 export const outboundNow = "2026-11-01T10:00:00.000Z", outboundReviewDate = "2026-11-02";
 export async function outboundRecordsFixture(options: {
+  request?: OutboundRecipientRequest;
   response?(row: Record<string, unknown>, method: string): Response | Promise<Response>;
   authority?: Partial<OutboundRecordAuthority>; deadlineMs?: number;
   barrierFactory?(config: OutboundRecordConfig): OutboundEffectBarrier;
 } = {}) {
   let now = outboundNow, allowed = true, producer = true, live = true, claims = 0, next = 30;
-  const apiKey = "synthetic-outbound-au5", original = outboundRequestValue(), request = { ...original, credentialFingerprint: clinikoCredentialFingerprint(apiKey) };
+  const apiKey = "synthetic-outbound-au5", original = options.request ?? outboundRequestValue(), request = { ...original, credentialFingerprint: clinikoCredentialFingerprint(apiKey) };
   const rows = new Map<string, Record<string, unknown>>(), burned = new Set<string>(), queries: OutboundRecordQuery[] = [], calls: { method: string; path: string }[] = [];
   const config: OutboundRecordConfig = { scope: request.scope, apiKey, contactEmail: "clinic@example.invalid", businessId: request.businessId,
     outboundRecallTypeId: "61", recordPolicyDigest: "d".repeat(64), clock: () => now, ...(options.deadlineMs === undefined ? {} : { deadlineMs: options.deadlineMs }),

@@ -124,8 +124,10 @@ test("mixed outbound and resend barriers survive durable import, repeated stagin
   // original mixed-section digest; a cached receipt cannot sanitize history loss.
   const edited = { ...decoded, locations: decoded.locations.map(location => ({ ...location, outboundEffects: [] })) };
   assert.equal(validStaffWorkHistoryManifest(edited), false);
+  assert.equal(validStaffWorkHistoryManifest({ ...decoded, locations: decoded.locations.map(location => ({ ...location, financialEffects: [] })) }), false);
   await sql`update tenant_config_imports set source_history = ${JSON.stringify(edited)}::jsonb where target_tenant_id = ${target.tenantId}`.execute(db);
   assert.deepEqual(await new PostgresOutboundEffectBarrier(db, target, binding).claimOnce(ref), { ok: false, error: { kind: "storageFailure" } });
+  assert.deepEqual(await new PostgresFinancialEffectBarrier(db, target, binding).claimOnce(financialRef), { ok: false, error: { kind: "storageFailure" } });
   assert.equal(await cutoverReady(target.tenantId), false);
   assert.deepEqual(await importer.preflight(archive, target.tenantId, "fixture-owner", importAuthority, mapper), { ok: false, error: { kind: "storageFailure" } });
   const lost = await buildPostgresTenantConfigArchive(db, { sourceTenantId: target.tenantId,
