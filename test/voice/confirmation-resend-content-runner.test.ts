@@ -7,13 +7,14 @@ import { withClinicalRunner } from "../support/clinical-runner-call.ts";
 import { voiceUntil } from "../support/cliniko-workflow-voice.ts";
 
 for (const variant of ["telehealth", "cancelled"] as const) test(`E2E-380 signed compiled ${variant} email uses private current content and separate consent`,
-  { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async () => {
+  { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 120_000 }, async t => {
     await withClinicalRunner("confirmationResend", async call => {
       await call.say(`Please resend my ${variant} appointment confirmation email.`); await call.mark(); await call.verify();
       await voiceUntil(() => call.spoken.some(s => s.includes("Choose the appointment")), "private content menu"); await call.mark();
       if (variant === "cancelled") assert.match(call.spoken.at(-1)!, /cancelled/);
       const ordinary = call.messages.filter(m => m.kind === "ordinaryFrame").length;
       await call.digit("1"); await call.mark();
+      t.diagnostic(JSON.stringify({ phase: "privateChoice", sources: call.messages.filter(row => row.kind === "privateChoiceResult").at(-1)?.diagnostic }));
       await voiceUntil(() => call.spoken.at(-1)?.includes("Press pound to return") === true, "private readback complete"); await call.mark();
       assert.equal(call.messages.filter(m => m.kind === "ordinaryFrame").length, ordinary);
       assert.equal(call.mutations.length, 0);

@@ -15,9 +15,10 @@ readonly discovery and bounded stream adapters. Its full TypeScript/serving
 build, forty intake authority/deadline controls, original five-file PostgreSQL
 reproduction (14/14) and product-facts/manifest checks pass locally. Those
 focused checks do not qualify the whole graph. The corrected complete
-PostgreSQL regression `work1792198488746` started at 00:54:49 UTC and is still
-pending with one reported cancelled-email E2E-380 private-choice timeout;
-ordered follow-up requires the main suite to pass.
+PostgreSQL regression `work1792198488746` naturally finished at01:47:50UTC:
+3,218passes, one cancelled-email E2E-380 private-choice timeout and one existing
+skip across3,220tests. Ordered follow-up did not run. Diagnose this remaining
+failure before another full regression; no whole-graph pass is claimed.
 
 The latest completed full regression is `7ca`, with 3,171 passes, seven failures
 and one existing skip; its ordered follow-up did not run. Exact-head draft485

@@ -135,7 +135,8 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
     const count = (kind: string) => messages.filter(m => m.kind === kind).length;
     const wireDiagnostic = () => ({ socket: socket?.readyState, closeCode: transportCloseCode, childExit: child.exitCode,
       playback: { marks: playback.count, outstanding: playback.hasPendingAfter() },
-      results: ["privateMenuResult", "privateMenuPlayback", "privateChoiceResult"].map(kind => ({ kind, count: count(kind), accepted: messages.filter(row => row.kind === kind).at(-1)?.accepted })),
+      results: ["privateMenuStarted", "privateMenuResult", "privateMenuPlayback", "privateChoiceStarted", "privateChoiceResult"].map(kind => ({ kind, count: count(kind), accepted: messages.filter(row => row.kind === kind).at(-1)?.accepted })),
+      sources: messages.filter(row => row.kind === "resendSourceDiagnostic" || row.kind === "privateChoiceResult").at(-1)?.diagnostic,
       wire: messages.filter(row => row.kind === "wireProcessed").slice(-16).map(row => ({ event: row.event, sequence: row.sequence,
         accepted: row.accepted, progress: row.progress, lifecycle: row.lifecycle, pendingPresentation: row.pendingPresentation, presentations: row.presentations })) });
     const say = async (text: string, privateField = false, expectFailure = false) => {
@@ -223,7 +224,16 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
       get mutations() { return messages.filter(m => m.kind === "providerMutation"); },
       async digit(digit: string) { const before = count("speech"), marks = playback.count; send({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
         try { await voiceUntil(() => count("speech") > before && playback.hasPendingAfter(marks), "private runner prompt"); }
-        catch (error) { throw new Error("Private response unavailable: " + JSON.stringify(wireDiagnostic()), { cause: error }); } },
+        catch (error) {
+          if (operation === "confirmationResend" && child.connected) {
+            const before = count("resendSourceDiagnostic");
+            try {
+              child.send({ kind: "resendDiagnostics" }, () => {});
+              await voiceUntil(() => count("resendSourceDiagnostic") > before, "failure diagnostics only", 1_000);
+            } catch { /* Diagnostics cannot replace the original deadline failure. */ }
+          }
+          throw new Error("Private response unavailable: " + JSON.stringify(wireDiagnostic()), { cause: error });
+        } },
       async verify(expected = true) { const resultsBefore = count("verificationResult"); await voiceUntil(() => count("verificationEmail") > 0, "runner verification mail"); const mail = messages.filter(m => m.kind === "verificationEmail").at(-1)!;
         assert.ok(mail.code); for (const digit of `${mail.code}#`) send({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
         await voiceUntil(() => count("verificationResult") > resultsBefore, "completed private runner verification");

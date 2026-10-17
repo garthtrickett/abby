@@ -7,16 +7,16 @@
 | Execution stage | Current evidence and next action |
 | --- | --- |
 | 1 Aeva preservation | Independently retrieved and hash-checked 113 explicit source/test/map references at the audited revision through GitHub. All four original planning documents were published and independently retrieved at Abby `229a3596696d8ebb9bf263e58457f412898c1327`. Local-only material still requires owner selection and preservation before deletion. |
-| 2 Delivery baseline | Draft457 is the initial integrated baseline; later owned changes are stacked through draft487. None is landed. Frozen clinical source ff795012/draft485 is in complete PostgreSQL qualification with one reported cancelled-email private-choice failure. Draft487 additionally qualifies the composed signed pass-to-cold-staff cohort. Exact-head authoritative cloud jobs have not executed because of billing/spending limits. |
+| 2 Delivery baseline | Draft457 is the initial integrated baseline; later owned changes are stacked through draft487. None is landed. Frozen clinical source ff795012/draft485 completed full PostgreSQL qualification with3218passes, one cancelled-email private-choice failure and one existing skip; ordered did not run. Draft487 additionally qualifies the composed signed pass-to-cold-staff cohort. Exact-head authoritative cloud jobs have not executed because of billing/spending limits. |
 | 3 Exact receipt foundation | Implemented and locally qualified in `codex/abby-provider-ack-receipt`, stacked on the published plans and integrated candidate. The full interval is captured, sent and validated. The later individual/class changes consume this exact receipt; post-create observations cannot erase an established creation acknowledgement. Independent review and exact-head CI remain outstanding. |
 | 4 Individual booking | Published in draft [PR #460](https://github.com/garthtrickett/abby/pull/460), `codex/abby-provider-ack-individual`, based on receipt correction `92a16e5`. Final online/roster availability follows preparation; exact acknowledgement survives host/review/worker cancellation. Focused, isolated database/process/compiled-location and complete local `npm test` checks passed. Independent review and cloud qualification remain open; cloud jobs have not started because of billing. |
 | 5 Native class creation | Draft [PR #461](https://github.com/garthtrickett/abby/pull/461) supplies exact attendee acknowledgement and final double capacity ordering for ordinary/approved-pass creation. Focused process-loss/privacy and movement/cancellation preservation evidence is retained below. Later staged caller work composes these creation semantics; acknowledgement of replacement creation alone never completes a move. Current whole-graph and authoritative cloud qualification remain open. |
-| 6 Earlier-gap qualification | The latest completed full7ca result is3171pass/7fail/1existing skip; ordered did not run. Played-reply and intake-routing fixes have focused current qualification, including the original five-file reproduction14/14. Corrected full ff795012 work1792198488746 is still running with one reported cancelled-email E2E-380 private-choice timeout. No whole-graph pass is inferred; preserve first-failure diagnosis before another full run. Gaps1–9 retain clinic, mail, recovery/operator and failing speech/public-route gates. |
+| 6 Earlier-gap qualification | The latest completed full7ca result is3171pass/7fail/1existing skip; ordered did not run. Played-reply and intake-routing fixes have focused current qualification, including the original five-file reproduction14/14. Corrected full ff795012 work1792198488746 finished3218pass/1fail/1existing skip; the remaining cancelled-email E2E-380 private-choice timeout requires diagnosis. No whole-graph pass is inferred; preserve first-failure diagnosis before another full run. Gaps1–9 retain clinic, mail, recovery/operator and failing speech/public-route gates. |
 | 7 Class/pass completion | Drafts465–473 now include actual staged caller/SAM/private same-subject renewal, separate played phase consent, complete bounded native/proposal cost admission, cold staff observation, signed uncertainty-to-staff recovery, corrected same/cross-case date/ordinal journeys and a compiled competing-account allocation case. Current focused ordinary, maximum-history and cross-case pass journeys have real disposable PostgreSQL/quota/privacy evidence. Larger current whole-graph qualification is pending; scope limits for pass restoration/financial provisioning and broader operator acceptance remain explicit. No blanket completion follows from the focused cases. |
 | 8 Payments | Stripe was selected by the owner. Draft [PR #475](https://github.com/garthtrickett/abby/pull/475) locally qualifies raw signed event validation and fresh exact Checkout money/receipt evidence; draft [PR #476](https://github.com/garthtrickett/abby/pull/476) adds bounded complete-window readonly discovery after uncertain creation. The captured raw-input/shared-reader follow-up is qualified in draft482 with34/34 checks and full TypeScript; no public payment route is active. Authoritative CI has not executed. No payment lifecycle, payable creation, link delivery, durable webhook handoff or clinical expiry is activated. The owner selected dedicated Cliniko financial reviews on17October. Pending: qualify the concrete schema/permissions and actual host lifecycle. No local patient-financial database is assumed. |
 | 9 Outbound | Pending gap 12, audit R20/R21 and contact-policy decisions. |
 | 10 Writeback | Pending gap 13, exact permissions/content/storage decisions and audit R08/R22. |
-| 11 Combined qualification | Corrected full ff795012 work1792198488746 is live with1195 source inputs/452 runtime pins, original concurrency/deadlines and one reported E2E-380 failure. Latest completed7ca full failed seven; ordered did not run. Subsequent draft487 staff-cohort and financial-intent checks are focused evidence, not a replacement full result. Clinic, mail, native provider, cloud, deployment, speech/public-route and carrier acceptance remain distinct. |
+| 11 Combined qualification | Corrected full ff795012 work1792198488746 ended3218pass/1fail/1existing skip with1195 source inputs/452 runtime pins unchanged; ordered did not run. Latest completed7ca full failed seven; ordered did not run. Subsequent draft487 staff-cohort and financial-intent checks are focused evidence, not a replacement full result. Clinic, mail, native provider, cloud, deployment, speech/public-route and carrier acceptance remain distinct. |
 
 The three detailed plans retain the requirements and acceptance matrices. No source merge, deployment, real provider mutation, mail send or Aeva deletion is established by this ledger.
 
@@ -2881,3 +2881,27 @@ This qualifies the codec interface only; native financial record discovery,
 permissions/history, acknowledged-booking handoff, attempts, lifecycle and
 process/restore/privacy through the actual host remain open. The chosen owner
 supersedes earlier ledger entries that described its selection as pending.
+
+##17October: full terminal and private-choice diagnosis
+
+Frozen ff795012 full PostgreSQL regression1792198488746 naturally ended
+exit1 at01:47:50.788377UTC. Original default4 file concurrency/deadlines and
+all cases remained. TAP reports3,220tests:3,218passed, one failed, one existing
+skip and zero cancellations. Ordered follow-up did not run. The sole failure
+is E2E-380 cancelled-email private choice; all other previously failing cases
+passed this full run. This is failure evidence, not a qualified whole graph.
+
+The1195 source inputs and452 pre-existing runtime artifacts remained unchanged;
+all455 final generated artifacts were verified. Node peaked844,517,376B under
+1.5GiB/CPU200%; aggregate Docker563,085,312B under1GiB/CPU200%,Swap0, with all
+memory-limit/OOM events zero. Authoritative exit1, wrapper absence, inactive
+scope and no own-labelled containers were verified; the paired wait completed.
+
+The original failure had no select-completion result after a played private
+menu, but did not record whether selection started or source timing. A separate
+test-only diagnostic patch now records starts/completions and bounded aggregate
+source counts/timing, never arguments, provider paths, native identities or
+private values. On failure, a best-effort snapshot preserves the original error.
+Successful content cases print only fixed source diagnostics. Production
+authority/reader/queue behavior, test assertions, deadlines, quotas and concurrency
+are unchanged; no next full run is launched until the cause is established.
