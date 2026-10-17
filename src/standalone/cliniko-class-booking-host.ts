@@ -27,6 +27,8 @@ import { preparationMayBeDiscarded } from "./prepared-proposal.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { ClinikoClassPassBooking } from "./cliniko-class-pass-booking.ts";
 import type { ClassPassAuthority, ClassPassBookingBinding } from "./cliniko-class-pass-booking.ts";
+import { ClinikoFinancialBookingPreparation } from "./cliniko-financial-booking-preparation.ts";
+import type { FinancialBookingPreparationConfig } from "./cliniko-financial-booking-preparation.ts";
 /** Channel verification cannot establish a membership, pass, fee or booking entitlement. */
 export type ClassAttendancePermission = Readonly<{
   allows(query: Readonly<{
@@ -52,6 +54,7 @@ export type ClinikoClassBookingConfig = Readonly<{
   classPolicy: OwnerFileClassPolicy;
   permission: ClassAttendancePermission;
   classPassAuthority?: ClassPassAuthority;
+  financial?: FinancialBookingPreparationConfig;
   cliniko: Omit<ClinikoAttendanceConfig, "scope">;
   clock: () => string;
   signal: AbortSignal;
@@ -83,6 +86,8 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
   readonly #review: ClinikoReviewedSend;
   readonly #passes?: ClinikoClassPassBooking;
   readonly #lifetime = new AbortController();
+  readonly financial: ClinikoFinancialBookingPreparation | undefined;
+  #financialMarker: string | undefined;
   readonly #choices = new Map<string, Choice>();
   #menu: {
     turnId: string;
@@ -98,6 +103,8 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
   private constructor(config: ClinikoClassBookingConfig, approval: ClassApproval) {
     super();
     this.#config = config;
+    if (config.financial && config.financial.native.rateBudget !== config.cliniko.rateBudget) throw new TypeError("Financial class booking must share the physical Cliniko budget");
+    this.financial = config.financial ? new ClinikoFinancialBookingPreparation(config.financial, config) : undefined;
     const fetchPort = config.fetchPort ?? fetch;
     const reader = ClinikoClassAttendanceReader.create({ ...config.cliniko, scope: config.scope, className: approval.className }, { verifyPatient: (scope, ref, now, signal) => config.verification.proof.verifyOperation(scope, ref, "appointments.book", now, signal) }, fetchPort, config.clock);
     const writer = ClinikoClassAttendanceWriter.create({ ...config.cliniko, scope: config.scope }, fetchPort);
@@ -182,6 +189,7 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
   }
   bookingMenuAvailable(): boolean { return !this.#lifetime.signal.aborted && !this.#attempted; }
   async readBookingMenu(query: BookingMenuReadQuery): Promise<Result<BookingMenuRead, HostReadFailure>> {
+    this.financial?.invalidate();
     if (!this.#matches(query) || this.#busy || this.#attempted || query.preference !== undefined || query.window != null && !validBookingSearchWindow(query.window))
       return denied();
     const epoch = ++this.#epoch;
@@ -250,6 +258,7 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
     verificationRef: string;
     offerRef: string;
   }, HostReadFailure>> {
+    this.financial?.invalidate();
     const menu = this.#menu;
     this.#menu = undefined;
     ++this.#epoch;
@@ -262,6 +271,7 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
     return ok({ verificationRef: choice.verificationRef, offerRef: choice.offer.offerRef });
   }
   async correctBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; startsAt: string }>): Promise<Result<Readonly<{ verificationRef: string; offerRef: string }>, HostReadFailure>> {
+    this.financial?.invalidate();
     const previous = this.#previous, choice = previous?.choices.find(item => item.offer.startsAt === query.startsAt);
     if (!this.#matches(query) || this.#busy || this.#attempted || !previous || previous.turnId !== query.menuTurnId || !choice || Date.parse(choice.offer.expiresAt) <= Date.parse(query.now)) return denied();
     const epoch = ++this.#epoch, signal = this.#signal(query.signal);
@@ -299,8 +309,10 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
   }
   async resolveBooking(scope: LocationScope, ref: string, offerRef: string, now: string, external?: AbortSignal): Promise<Result<Booking, HostReadFailure>> {
     const choice = this.#choices.get(offerRef);
-    if (!choice || ref !== choice.verificationRef || !sameScope(scope, this.#config.scope) || this.#busy || this.#attempted)
+    if (!choice || ref !== choice.verificationRef || !sameScope(scope, this.#config.scope) || this.#busy || this.#attempted) {
+      this.financial?.invalidate();
       return denied();
+    }
     this.#busy = true;
     const signal = this.#signal(external);
     try {
@@ -309,10 +321,25 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
         return denied();
       this.#prepared = undefined;
       const patient = await this.#inspectChoice(choice, now, "proposal", signal), again = await this.#ready(now, signal);
-      if (!patient || !again || again.conversationRevision !== state.conversationRevision)
+      if (!patient || !again || again.conversationRevision !== state.conversationRevision) {
+        this.financial?.invalidate();
         return denied();
+      }
       const request: Booking = { kind: "book", patient, offer: structuredClone(choice.offer) };
       this.#prepared = { request: structuredClone(request), choice: structuredClone(choice), revision: state.conversationRevision };
+      if (this.financial) {
+        const current = await this.#config.classPolicy.current(scope); if (!current.ok) return denied();
+        const a = current.value;
+        const financial = await this.financial.prepare({ request,
+          evidence: { callId: this.#config.callId, sessionId: this.#config.sessionId, businessId: a.businessId,
+            credentialFingerprint: a.credentialFingerprint, practitionerId: a.practitionerId, appointmentTypeId: a.appointmentTypeId,
+            endsAt: choice.session.endsAt, timeZone: a.timeZone },
+          booking: { kind: "classBook", sessionId: choice.session.sessionRef, ...(choice.pass ? { pass: choice.pass } : {}) } }, signal);
+        const fresh = await this.#ready(this.#now(), signal);
+        if (!financial || !fresh || fresh.conversationRevision !== state.conversationRevision) { this.financial.invalidate(); return denied(); }
+        this.#financialMarker = financial.marker;
+        if (financial.kind === "pending") return err({ kind: "financialConsentRequired", target: "offer" });
+      }
       return ok(request);
     }
     catch {
@@ -359,7 +386,8 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
     return at !== undefined && this.#dispatchLeaseExpiry !== undefined && this.#dispatchLeaseExpiry > at &&
       this.#prepared === prepared && !this.#lifetime.signal.aborted && !signal.aborted &&
       this.#config.verification.proof.ownsLiveReference(choice.verificationRef, "appointments.book", now) &&
-      Date.parse(prepared.request.patient.expiresAt) > at && Date.parse(choice.offer.expiresAt) > at && Date.parse(choice.session.startsAt) > at;
+      Date.parse(prepared.request.patient.expiresAt) > at && Date.parse(choice.offer.expiresAt) > at && Date.parse(choice.session.startsAt) > at &&
+      (!this.financial || this.financial.currentForSend(signal));
   }
   async checkConfirmationCapacity(query: BookingMenuQuery & Readonly<{ actionKey: string; digest: string }>): Promise<Result<Readonly<{ kind: "ready" }> | Readonly<{ kind: "wait"; seconds: number }>, HostReadFailure>> {
     if (!this.#passes) return ok({ kind: "ready" });
@@ -395,11 +423,13 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
       mutation.payloadDigest !== digestActionRequest(prepared.request) || !approvalRef(mutation.actionKey) || this.#time(now) === undefined)
       return reject();
     this.#attempted = true;
-    const signal = this.#signal(external, 30000), choice = prepared.choice, actionId = randomUUID();
+    const signal = this.#signal(external, 30000), choice = prepared.choice, actionId = this.#financialMarker ?? randomUUID();
     const uncertain = (): HostWriteReceipt => ({ kind: "uncertain", actionKey: mutation.actionKey, reconcileAfter: now, deadline: new Date(Date.parse(now) + 300000).toISOString() });
     const a = await c.classPolicy.current(c.scope);
     if (!a.ok || choice.pass && await checkClinikoHeadroom(c.cliniko.rateBudget, 180) !== null)
       return reject();
+    const financialCapture = this.financial ? await this.financial.capture(signal) : undefined;
+    if (this.financial && !financialCapture) return reject();
     const provider: Extract<ClinikoAttendanceRequest, { kind: "book" }> = { kind: "book", scope: c.scope, patientId: choice.patientRef, sessionId: choice.session.sessionRef, actionId,
       ...(choice.pass ? { patientCaseId: choice.pass.selection.patientCaseId } : {}) };
     const review: ClinikoReviewRequest = { scope: c.scope, patientId: choice.patientRef, businessId: a.value.businessId, credentialFingerprint: a.value.credentialFingerprint, policyVersion: c.policyVersion,
@@ -411,15 +441,25 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
     const result = await this.#review.run(review, {
       authorize: (_request, stop) => this.#authorize(prepared, mutation, "commit", stop),
       acknowledgedBooking: () => acknowledged ? ok(acknowledged) : undefined,
-      send: (_request, stop) => this.#writer.executeBookingOnce(provider, stop, {
-        beforeSend: final => this.#authorizeForSend(prepared, mutation, final),
-        current: final => this.#currentForSend(prepared, final),
-        acknowledged: receipt => {
+      send: async (_request, stop) => {
+        if (this.financial && !await this.financial.beforeSend(stop)) return err({ kind: "forbidden" });
+        const checks = {
+          beforeSend: (final: AbortSignal) => this.#authorizeForSend(prepared, mutation, final),
+          current: (final: AbortSignal) => this.#currentForSend(prepared, final),
+          acknowledged: (receipt: Extract<ClinikoAttendanceWrite, { kind: "accepted" }>) => {
           acknowledged = receipt;
           committed = Object.freeze({ kind: "committed", actionKey: mutation.actionKey, hostRef: receipt.attendeeRef });
           try { onBookingAcknowledged?.(committed); } catch { /* Native success survives observer failure. */ }
-        },
-      }),
+          },
+        };
+        if (financialCapture?.kind === "required") {
+          const captured = await financialCapture.capture.classBook(this.#writer, provider, stop, checks);
+          if (!captured.ok) return err({ kind: "forbidden" });
+          if (captured.value.observation.kind === "captured") await this.financial!.retain(financialCapture, captured.value.observation.notes);
+          return captured.value.native;
+        }
+        return this.#writer.executeBookingOnce(provider, stop, checks);
+      },
     }, signal);
     if (committed) return committed;
     if (!result.ok)
@@ -431,5 +471,5 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
   async reconcile(mutation: HostMutation): Promise<ReconcileObservation> { return { kind: "stillUnknown", actionKey: mutation.actionKey }; }
   async openTask(item: StaffItem): Promise<StaffTaskReceipt> { return { kind: "rejected", taskKey: item.key }; }
   async reconcileTask(item: StaffItem): Promise<StaffTaskObservation> { return { kind: "stillUnknown", taskKey: item.key }; }
-  dispose(): void { this.#config.signal.removeEventListener("abort", this.#onClose); this.#lifetime.abort(); this.#review.close(); this.#choices.clear(); this.#menu = undefined; this.#previous = undefined; this.#prepared = undefined; ++this.#epoch; }
+  dispose(): void { this.#config.signal.removeEventListener("abort", this.#onClose); this.#lifetime.abort(); this.financial?.dispose(); this.#review.close(); this.#choices.clear(); this.#menu = undefined; this.#previous = undefined; this.#prepared = undefined; ++this.#epoch; }
 }

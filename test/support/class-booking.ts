@@ -17,14 +17,19 @@ import type { ClassPassAuthority, ClassPassAuthorityQuery, ClassPassSelection } 
 import type { LocationScope } from "../../src/core/model.ts";
 import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 import type { PatientVerificationBudget } from "../../src/standalone/email-patient-authority.ts";
+import type { FinancialBookingPreparationConfig } from "../../src/standalone/cliniko-financial-booking-preparation.ts";
 export async function classBookingFixture(options: { passes?: boolean; fetchAround?: (port: typeof fetch) => typeof fetch;
-  scope?: LocationScope; folder?: string; budget?: ClinikoRequestBudget; verificationBudget?: PatientVerificationBudget } = {}) {
+  scope?: LocationScope; folder?: string; budget?: ClinikoRequestBudget; verificationBudget?: PatientVerificationBudget;
+  financialFor?: (native: import("../../src/cliniko/class-attendance-write.ts").ClinikoAttendanceConfig, port: typeof fetch) => FinancialBookingPreparationConfig } = {}) {
   let sourceTime = verificationNow;
   const nativeBudget = options.budget ?? new ClinikoReadBudget(200, () => Date.parse(sourceTime));
   let claims = 0;
   const budget = { claim: () => { claims++; return nativeBudget.claim(); }, observe429: nativeBudget.observe429.bind(nativeBudget),
     ...(nativeBudget.checkHeadroom ? { checkHeadroom: nativeBudget.checkHeadroom.bind(nativeBudget) } : {}) };
+  const mail: { email: string; code: string }[] = [];
+  let delivered!: () => void; const delivery = new Promise<void>(resolve => { delivered = resolve; });
   const f = await callerVerificationFixture({ apiKey: "synthetic-class-au5", bookingExecute: true, operation: "appointments.book", rateBudget: budget,
+    delivery: { send: async (email, code) => { mail.push({ email, code }); delivered(); return true; } },
     ...(options.scope ? { scope: options.scope } : {}), ...(options.folder ? { folder: options.folder } : {}),
     ...(options.verificationBudget ? { budget: options.verificationBudget } : {}) });
   let callState = () => f.state();
@@ -107,9 +112,10 @@ export async function classBookingFixture(options: { passes?: boolean; fetchArou
     return native.fetchPort(value, init);
   };
   const fetchPort = options.fetchAround ? options.fetchAround(baseFetchPort) : baseFetchPort;
+  const financial = options.financialFor?.(native.config, fetchPort);
   const host = resultValue(await ClinikoClassBookingHost.create({ scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion,
     ledger: f.ledger, policies: f.policies, verification: f.session, classPolicy: policy, permission: { allows: async () => permitted },
-    ...(options.passes ? { classPassAuthority: passAuthority } : {}), cliniko: native.config, clock: () => sourceTime, signal: lifetime.signal, fetchPort }));
+    ...(options.passes ? { classPassAuthority: passAuthority } : {}), ...(financial ? { financial } : {}), cliniko: native.config, clock: () => sourceTime, signal: lifetime.signal, fetchPort }));
   const reception = new TextReception(f.ledger, f.policies, host, undefined, undefined, undefined, undefined, () => sourceTime), agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope: f.scope }, f.policies, reception, undefined, undefined, undefined, f.ledger);
   let turns = 0;
   const turn = (name: string, text = "Book a class") => ({ callId: f.callId, sessionId: f.sessionId, turnId: `class-${name}-${++turns}`, text, quality: "clear" as const, at: sourceTime });
@@ -117,8 +123,8 @@ export async function classBookingFixture(options: { passes?: boolean; fetchArou
     resultValue(await f.runtime.startPresentation(f.callId, pending, f.sessionId, sourceTime));
     resultValue(await f.runtime.resolvePresentation(f.callId, pending, "played", f.sessionId, sourceTime));
   } };
-  const verify = async () => { await play(); assert.match(f.session.begin().prompt, /verification code/); for (let i = 0; i < 50 && !f.mail.length; i++)
-    await new Promise(resolve => setTimeout(resolve, 2)); assert.equal(f.mail.length, 1); assert.equal((await f.session.submitCode(f.mail[0]!.code)).verified, true); };
+  const verify = async () => { await play(); assert.match(f.session.begin().prompt, /verification code/);
+    await delivery; assert.equal(mail.length, 1); assert.equal((await f.session.submitCode(mail[0]!.code)).verified, true); };
   const propose = async () => {
     const checked = await f.state();
     assert.equal(checked.policy.staffWorkEnabled, true, "admitted staff workflow required");
@@ -147,7 +153,7 @@ export async function classBookingFixture(options: { passes?: boolean; fetchArou
     callerApprovalPath: f.config.path, classApprovalPath: path, operation: "book" as const,
     classPermission: { allows: async () => permitted }, ...(options.passes ? { classPassAuthority: passAuthority } : {}), cliniko: { ...native.config, timeZone: approval.timeZone, countryCallingCode: "61", recallTypeId: "7" },
     signal: lifetime.signal, fetchPort, clock: () => sourceTime };
-  return { ...f, classSessionConfig, bindNativeCall: (read: typeof callState) => { callState = read; }, native, host, reception, agent, recalls, writes, policy, path, turn, play, verify, propose, confirm,
+  return { ...f, mail, classSessionConfig: { ...classSessionConfig, ...(financial ? { financial } : {}) }, bindNativeCall: (read: typeof callState) => { callState = read; }, native, host, reception, agent, recalls, writes, policy, path, turn, play, verify, propose, confirm,
     pause: async (seconds: number) => {
       while (seconds > 0) { const step = Math.min(15, seconds); sourceTime = new Date(Date.parse(sourceTime) + step * 1000).toISOString(); f.setTime(sourceTime);
         resultValue(await f.runtime.renewSession(f.callId, f.sessionId, (await f.state()).sessionLease!.version, sourceTime)); seconds -= step; }

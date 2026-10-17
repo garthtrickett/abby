@@ -1,4 +1,5 @@
 import { ClinikoBookingHost } from "./cliniko-booking-host.ts";
+import { ClinikoClassBookingHost } from "./cliniko-class-booking-host.ts";
 import { ClassServiceDialogue } from "./class-service-dialogue.ts";
 import { readClassServices, classServiceName } from "./class-service-catalogue.ts";
 import type { ClassServiceConfig, PublicClassService } from "./class-service-catalogue.ts";
@@ -848,9 +849,6 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       const config = { ...selectedConfig, ...(representative ? { representative } : {}), lookup: this.#tasks && !representative ? this.#tasks.lookup(lookup) : lookup,
         ...(selectedConfig.resend && this.#tasks ? { resend: { ...selectedConfig.resend, taskSequence: this.#tasks } } : {}), signal: AbortSignal.any([this.#workflowLifetime.signal, this.#patientLifetime.signal, this.#lifetime.signal, this.#config.signal, buildLifetime.signal]) }, paths = config.approvals;
       const classes = config.classAttendance;
-      // Financial class consent/capture requires its own native cohort; an
-      // enabled financial path cannot silently bypass that requirement.
-      if (classAttendance && operation === "book" && config.financial) return unavailable();
       building = classAttendance && classes ? operation === "book" ? ClinikoClassSession.create({ ...config, operation: "book", callerApprovalPath: paths.bookCaller,
         classApprovalPath: classes.approvalPath, classPermission: classes.bookPermission,
         ...(classes.passAuthority ? { classPassAuthority: classes.passAuthority } : {}),
@@ -1005,7 +1003,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   #booking() { return this.#staffActive ? undefined : this.#owner instanceof ClinikoClassSession ? this.#owner.booking : this.#config.serviceCatalogue && !this.#serviceChoice ? undefined : this.#owner instanceof ClinikoBookingSession ? this.#owner.effects : this.#owner instanceof ClinikoIntakeBookingSession ? this.#owner : undefined; }
   get financialBookingInput() {
     const booking = this.#booking();
-    return booking instanceof ClinikoBookingHost || booking instanceof ClinikoCatalogueBookingHost || booking instanceof ClinikoIntakeBookingSession ? booking.financial : undefined;
+    return booking instanceof ClinikoBookingHost || booking instanceof ClinikoClassBookingHost || booking instanceof ClinikoCatalogueBookingHost || booking instanceof ClinikoIntakeBookingSession ? booking.financial : undefined;
   }
   financialBookingResume(text: string) {
     return !this.closed && !this.#verificationRequired && /^(?:please )?continue (?:the )?booking[.!]?$/i.test(text.trim()) ? this.financialBookingInput?.readySelection : undefined;

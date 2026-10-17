@@ -78,7 +78,7 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
       this.#preparedRevision = before.value.conversationRevision;
       this.#prepared = selected.value;
       if (this.financial) {
-        const financial = await this.financial.prepare(selected.value, signal);
+        const financial = await this.financial.prepare({ ...selected.value, booking: { kind: "book" } }, signal);
         if (!financial) return err({ kind: "unavailable", target: "offer" });
         const current = await awaitUntilAbort(this.#config.ledger.read(this.#config.callId, this.#config.scope), signal);
         if (!current?.ok || current.value.conversationRevision !== before.value.conversationRevision || signal.aborted) {

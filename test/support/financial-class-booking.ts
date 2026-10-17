@@ -1,0 +1,68 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { classBookingFixture } from "./class-booking.ts";
+import { fixture, intentValue, keys, keyRef, value } from "./financial-retention.ts";
+import { verificationNow } from "./caller-verification.ts";
+import { financialRecordOwnerBinding } from "../../src/cliniko/financial-record-retention.ts";
+import { decodeClinikoFinancialIntent } from "../../src/cliniko/financial-review-intent.ts";
+import { verifyFinancialBookingObservation } from "../../src/cliniko/financial-booking-observation.ts";
+import type { FinancialBookingAssessment, FinancialBookingPreparationConfig, FinancialBookingSelection } from "../../src/standalone/cliniko-financial-booking-preparation.ts";
+
+export async function financialClassBookingFixture(options: { passes?: boolean; required?: boolean; scope?: import("../../src/core/model.ts").LocationScope;
+  quote?: (selection: FinancialBookingSelection, ordinary: FinancialBookingAssessment) => FinancialBookingAssessment | undefined;
+  barrierFor?: (native: FinancialBookingPreparationConfig["native"]) => FinancialBookingPreparationConfig["barrier"];
+  lostIntent?: boolean; lostObservation?: boolean; onObservation?: () => void; play?: FinancialBookingPreparationConfig["presentation"]["play"] } = {}) {
+  let funding!: ReturnType<typeof fixture>, config!: FinancialBookingPreparationConfig, allowed = true;
+  let clock = () => verificationNow;
+  const financialLife = new AbortController(), events: string[] = [], texts: string[] = [], selections: FinancialBookingSelection[] = [];
+  const f = await classBookingFixture({ ...(options.passes ? { passes: true } : {}), ...(options.scope ? { scope: options.scope } : {}),
+    fetchAround: port => async (input, init) => {
+      const url = new URL(String(input)), body = init?.method === "POST" ? JSON.parse(String(init.body)) : undefined;
+      if (url.pathname === "/v1/recalls" && body?.recall_type_id === "40" || url.pathname.startsWith("/v1/recalls/") && funding?.rows.has(url.pathname.split("/").at(-1)!)) {
+        events.push(`financial:${init?.method ?? "GET"}`); return funding.port(input, init);
+      }
+      events.push(`clinical:${init?.method ?? "GET"}:${url.pathname}`); return port(input, init);
+    }, financialFor: (native, fetchPort) => {
+      funding = fixture({ intent: { ...intentValue(), scope: native.scope }, config: { scope: native.scope, apiKey: native.apiKey,
+        businessId: native.businessId, contactEmail: native.contactEmail, rateBudget: native.rateBudget, clock: () => clock() },
+        barrierFactory: native => {
+          if (options.barrierFor) return options.barrierFor(native);
+          const burned = new Set<string>(), owner = value(financialRecordOwnerBinding(native));
+          return { matches: (scope, binding) => JSON.stringify(scope) === JSON.stringify(native.scope) && binding === owner,
+            claimOnce: async ref => { const claimed = !burned.has(ref); burned.add(ref); return { ok: true, value: { claimed } }; } };
+        }, response: (row, method) => {
+          if (method === "POST") {
+            if (options.lostIntent && String(row.notes).includes("financial intent")) throw new Error("Synthetic lost class financial intent response");
+            if (String(row.notes).includes("financial booking observation")) {
+              options.onObservation?.(); if (options.lostObservation) throw new Error("Synthetic lost class financial observation response");
+            }
+          }
+          return Response.json(row, { status: method === "POST" ? 201 : 200 });
+        } });
+      config = { native: funding.config, privateKey: keys.privateKey, sourceAuthorized: async () => allowed,
+        authority: funding.authority, barrier: funding.barrier, financialSignal: financialLife.signal, fetchPort,
+        policy: { quote: async selection => {
+          selections.push(structuredClone(selection));
+          const q: FinancialBookingAssessment = options.required === false ? { kind: "notRequired", version: "class-no-deposit-1", expiresAt: selection.expiresAt } : {
+            kind: "required", payment: { amount: 1200, currency: "gbp", policyVersion: "class-fees-1", termsVersion: "class-financial-terms-1", deadline: "2026-10-05T04:00:00.000Z" },
+            recipient: { kind: "email", address: "class-financial-recipient@example.invalid" }, approvedTerms: "The clinic will review late payment. A pass count does not prove payment.",
+            reviewDate: "2026-10-05", expiresAt: selection.expiresAt };
+          return options.quote ? options.quote(selection, q) : q;
+        }, current: async () => allowed, currentForSend: () => allowed },
+        presentation: { play: async (text, signal, canPresent) => { texts.push(text); return options.play ? options.play(text, signal, canPresent) :
+          canPresent() ? { presentationRef: randomUUID(), playedAt: clock() } : undefined; } } };
+      return config;
+    } });
+  clock = f.classSessionConfig.clock;
+  const pending = () => { assert.ok(f.host.financial); return f.host.financial; };
+  const readback = async () => { for (let i = 0; i < 16 && pending().inputAdmission()?.phase === "unplayed"; i++) await pending().acceptDigit("1", pending().inputAdmission()); };
+  const accept = () => pending().acceptDigit("1", pending().inputAdmission());
+  const proof = () => {
+    const source = [...funding.rows.values()].find(r => String(r.notes).includes("financial intent"))!;
+    const intent = value(decodeClinikoFinancialIntent(source.notes));
+    const observed = [...funding.rows.values()].find(r => String(r.notes).includes("financial booking observation"))!;
+    return value(verifyFinancialBookingObservation(observed.notes, { intent, intentRecallRef: `cliniko:recall:${source.id}`, producerKeyRef: keyRef, publicKey: keys.publicKey }));
+  };
+  return { ...f, funding, config, financialLife, events, texts, selections, pending, readback, accept, proof,
+    denyFinancial: () => { allowed = false; funding.deny(); }, close: async () => { financialLife.abort(); await f.close(); } };
+}

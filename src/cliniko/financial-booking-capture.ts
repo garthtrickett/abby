@@ -93,7 +93,7 @@ export class ClinikoFinancialBookingCapture {
     } catch { return accepted ? ok({ native: ok(accepted), observation }) : unavailable(); }
   }
   async classBook(writer: ClinikoClassAttendanceWriter, input: Extract<ClinikoAttendanceRequest, { kind: "book" }>, signal: AbortSignal,
-                  checks: Pick<ClinikoClassBookingChecks, "beforeSend" | "current">):
+                  checks: Pick<ClinikoClassBookingChecks, "beforeSend" | "current"> & Readonly<{ acknowledged?: (receipt: Extract<ClinikoAttendanceWrite, { kind: "accepted" }>) => void }>):
     Promise<Result<FinancialBookingCaptureResult<ClinikoAttendanceWrite, ClinikoAttendanceFailure>, Failure>> {
     if (this.#consumed) return unavailable();
     this.#consumed = true;
@@ -105,6 +105,7 @@ export class ClinikoFinancialBookingCapture {
     try {
       const native = await writer.executeBookingOnce(request, signal, { beforeSend: checks.beforeSend, current: checks.current, acknowledged: receipt => {
         accepted = receipt; observation = this.#observe(receipt.attendeeRef);
+        try { checks.acknowledged?.(receipt); } catch { /* Clinical receipt is irrevocable. */ }
       } });
       return ok({ native: accepted ? ok(accepted) : native, observation });
     } catch { return accepted ? ok({ native: ok(accepted), observation }) : unavailable(); }

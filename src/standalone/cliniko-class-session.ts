@@ -131,6 +131,7 @@ export class ClinikoClassSession {
           ledger: config.ledger, policies: config.policies, verification, classPolicy: classes.value, cliniko: config.cliniko,
           clock: config.clock, signal: callSignal, ...(config.fetchPort ? { fetchPort: config.fetchPort } : {}) };
         const created = config.operation === "book" ? await ClinikoClassBookingHost.create({ ...common, permission: config.classPermission,
+          ...(config.financial ? { financial: config.financial } : {}),
           ...(config.classPassAuthority ? { classPassAuthority: config.classPassAuthority } : {}) }) :
           config.operation === "cancel" && cancellation?.ok ? await ClinikoClassCancellationHost.create({ ...common, cancellationPolicy: cancellation.value, permission: config.classPermission,
             ...(config.classPassCancellationAuthority ? { classPassCancellationAuthority: config.classPassCancellationAuthority } : {}) }) :

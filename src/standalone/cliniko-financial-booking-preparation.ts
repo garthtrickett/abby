@@ -1,7 +1,7 @@
 import { createHash, createPublicKey, KeyObject, randomUUID } from "node:crypto";
 import { digestActionRequest } from "../core/digest.ts";
 import type { LedgerStore } from "../core/ledger.ts";
-import type { LocationScope } from "../core/model.ts";
+import type { ActionRequest, LocationScope } from "../core/model.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { ClinikoFinancialRecordRetainer } from "../cliniko/financial-record-retention.ts";
 import type { FinancialRecordAuthority, FinancialRecordRetentionConfig } from "../cliniko/financial-record-retention.ts";
@@ -13,13 +13,22 @@ import type { ClinikoFinancialIntent } from "../cliniko/financial-review-intent.
 import { encodeClinikoFinancialIntent } from "../cliniko/financial-review-intent.ts";
 import type { FinancialBookingConsent } from "../cliniko/financial-booking-observation.ts";
 import type { FinancialEffectBarrier } from "./financial-effect-barrier.ts";
-import type { PreparedClinikoBooking } from "./cliniko-booking-authority.ts";
+import type { ClassPassBookingBinding } from "./cliniko-class-pass-booking.ts";
 import { sameScope } from "./appointment-change-authority.ts";
 
 export type FinancialBookingSelection = Readonly<{
   scope: LocationScope; callId: string; sessionId: string; policyVersion: string; verificationRef: string; offerRef: string;
   patientId: string; practitionerId: string; appointmentTypeId: string; businessId: string; credentialFingerprint: string;
   startsAt: string; endsAt: string; timeZone: string; expiresAt: string; clinicalDigest: string;
+  bookingKind: "book" | "classBook"; classSessionId?: string; classPass?: ClassPassBookingBinding;
+}>;
+/** Exact private proposal from the operation owner, before any financial grant.
+ * Native class/pass selection remains separate from SAM's clinical book action. */
+export type FinancialBookingProposal = Readonly<{
+  request: Extract<ActionRequest, { kind: "book" }>;
+  evidence: Readonly<{ callId: string; sessionId: string; credentialFingerprint: string; businessId: string;
+    practitionerId: string; appointmentTypeId: string; endsAt: string; timeZone: string }>;
+  booking: Readonly<{ kind: "book" }> | Readonly<{ kind: "classBook"; sessionId: string; pass?: ClassPassBookingBinding }>;
 }>;
 export type FinancialBookingAssessment = Readonly<{ kind: "notRequired"; version: string; expiresAt: string }> | Readonly<{
   kind: "required"; payment: ClinikoFinancialIntent["payment"]; recipient: ClinikoFinancialIntent["recipient"];
@@ -109,7 +118,7 @@ export class ClinikoFinancialBookingPreparation {
   async #permit(p: Pending, signal: AbortSignal): Promise<boolean> {
     return await this.#live(signal) && await awaitUntilAbort(Promise.resolve().then(() => this.#config.policy.current(p.selection, p.assessment, signal)), signal) === true && this.#current(p, signal);
   }
-  async prepare(prepared: PreparedClinikoBooking, external: AbortSignal): Promise<Readonly<{ kind: "ready" | "pending"; marker: string }> | undefined> {
+  async prepare(prepared: FinancialBookingProposal, external: AbortSignal): Promise<Readonly<{ kind: "ready" | "pending"; marker: string }> | undefined> {
     if (this.#busy || this.#lifetime.signal.aborted) return undefined;
     this.#busy = true; const signal = AbortSignal.any([external, this.#lifetime.signal]);
     try {
@@ -121,7 +130,11 @@ export class ClinikoFinancialBookingPreparation {
         verificationRef: r.patient.verificationRef, offerRef: r.offer.offerRef, patientId: r.patient.patientRef,
         businessId: e.businessId, practitionerId: e.practitionerId, appointmentTypeId: e.appointmentTypeId, credentialFingerprint: e.credentialFingerprint,
         startsAt: r.offer.startsAt, endsAt: e.endsAt, timeZone: e.timeZone, clinicalDigest: digestActionRequest(r),
-        expiresAt: new Date(Math.min(Date.parse(r.offer.expiresAt), Date.parse(r.patient.expiresAt), Date.parse(state.value.sessionLease.expiresAt))).toISOString() });
+        bookingKind: prepared.booking.kind, ...(prepared.booking.kind === "classBook" ? { classSessionId: prepared.booking.sessionId,
+          ...(prepared.booking.pass ? { classPass: structuredClone(prepared.booking.pass) } : {}) } : {}),
+        // The live lease is rechecked on each part. Its ordinary renewal must
+        // not invalidate unchanged quote/offer/proof terms mid-readback.
+        expiresAt: new Date(Math.min(Date.parse(r.offer.expiresAt), Date.parse(r.patient.expiresAt))).toISOString() });
       const prior = this.#pending;
       if (prior && JSON.stringify(prior.selection) === JSON.stringify(selection)) {
         if (!await this.#permit(prior, signal) || prior.phase === "declined") return undefined;
@@ -142,7 +155,8 @@ export class ClinikoFinancialBookingPreparation {
       const now = this.#now(), marker = randomUUID();
       const intent: ClinikoFinancialIntent = freeze({ actionRef: randomUUID(), scope: { ...c.scope }, patientId: selection.patientId,
         businessId: selection.businessId, credentialFingerprint: selection.credentialFingerprint,
-        booking: { kind: "book", actionRef: marker, practitionerId: selection.practitionerId, appointmentTypeId: selection.appointmentTypeId, startsAt: selection.startsAt, endsAt: selection.endsAt },
+        booking: { actionRef: marker, practitionerId: selection.practitionerId, appointmentTypeId: selection.appointmentTypeId, startsAt: selection.startsAt, endsAt: selection.endsAt,
+          ...(prepared.booking.kind === "classBook" ? { kind: "classBook", sessionId: prepared.booking.sessionId } : { kind: "book" }) },
         stripe: { ...selected.stripe }, payment: assessment.payment, recipient: assessment.recipient, createdAt: now,
         effects: { checkout: randomUUID(), linkDelivery: randomUUID(), receiptDelivery: randomUUID(), checkoutExpiry: randomUUID(), clinicalExpiry: randomUUID() } });
       if (!encodeClinikoFinancialIntent(intent).ok) return undefined;
