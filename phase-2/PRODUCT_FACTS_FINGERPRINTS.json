@@ -1,7 +1,7 @@
 {
   "verifiedDate": "2026-10-17",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "41e9f600b879241aa8e9577338dc50b9d805a2942fc60c3633d23f47b1a2f1cd",
+  "factsSha256": "112d1d8b55b8e92fd7ecbf28ba045b71495d2f71e5ac99eb5a29522f21fb34da",
   "sources": {
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
     "docs/adr/0003-class-movement-staff-resolution.md": "683bdd10660afc00309bac21e32ceda976573aa5e29aca4106fb1cddcb71b62f",
@@ -67,8 +67,8 @@
     "test/cliniko/standalone-booking.test.ts": "5cf61b3ec82fb3653e613e1c350285d2ef0ae10be3e6162571ef5ff7812b1f73",
     "test/cliniko/verification-request-cost.test.ts": "028b3ebd9691bf1ba188ce4ee47de18e954979a0f96aef43c432fcbf66759c7c",
     "test/storage/owning-host-write-contract.test.ts": "63fe6e4cddc29f33c0aae2fbc4a0c1c154f612d8e506cd869cbf001c5de70090",
-    "test/support/class-move-cold-context.ts": "7e6d01a586fcc4246dccc94017e3f9e0aec87097b544144e5579a317eb11f628",
-    "test/support/class-move-recovery-worker.ts": "22a64f037e05bb81d71674fead419da112dc395cd78314adb173cfba3d91e5f8",
+    "test/support/class-move-cold-context.ts": "288e017b4a5ee1848e2fc8e0c5a44d5bc5ff5d8d0f04de32821629922bc6e57d",
+    "test/support/class-move-recovery-worker.ts": "a012d174394eb404998103edbf52be7180779405d044ac6c7c787c366a50ddf3",
     "test/support/class-move-recovery.ts": "1d0c1cedbb269c6fb6ffd3d0d42be995aedc91faec81865cdb7df4ea7b6ccbbc",
     "test/support/class-provider-proxy.ts": "8970ff5b3a3267fc84cd7276dbf0b72a7331d3b1887bac2a8709066fb447719f",
     "test/support/staged-class-move-journey.ts": "886d7a344fcfe0b2220ac153692f5f41758da38557667b0e17978ddad6e5e02c",
@@ -79,7 +79,7 @@
     "test/text/class-movement-sam.test.ts": "053465529634f37ef8556b8f13cd2bfc13ed44e89b2111aabf5ce7d85b77a074",
     "test/text/class-movement-turns.test.ts": "3ffdd5721585d43852837312768b4c801eedeef1b56daf4e3768611378baf56e",
     "test/text/effect-deadline.test.ts": "a3e025c4a5c52bb6d352be5157eed12cd0628a5a2689b73eb41298667f787e6f",
-    "test/voice/class-move-signed-staff-recovery.test.ts": "e2a8a10f0c8481b5a7ffbd187c82dd3efb1fa84a4de3f549d7d5341d7519b8e1",
+    "test/voice/class-move-signed-staff-recovery.test.ts": "2dda810ec8f32026c810d5115975bdd17c0ec4e34f11b14c62fe9ca5ee1bd4be",
     "test/voice/class-move-staged-concurrent-budget.test.ts": "4721f93c2e15765da8ad7f8db88791981640d3b29d5d28da769162d2a5cf724b",
     "test/voice/class-move-staged-runner.test.ts": "ffcc72a434fd6e010ff14a55b1d8efb15f74471ef240c8f14cdd38393b1704c0",
     "test/voice/class-move-staged-session.test.ts": "4266e54e3348220ac5efb1d7ac8935b87b53b4a137d4ab9243580b55249db443",

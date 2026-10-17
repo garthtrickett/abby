@@ -2755,3 +2755,62 @@ The reviewed product facts and scenario manifest then pass 2/2, zero skips
 (`work1792198250633`, terminal 00:50:52.334110 UTC), while preserving the cited
 booking.scope claim, all assertions, source authority boundaries and scenario
 statuses. The header was updated to report actual current results.
+
+### Signed pass association uncertainty to independent cold staff, 17 October 2026
+
+The signed-to-staff fixture previously excluded pass moves. Ordinary signed
+recovery and native pass process fixtures were separately qualified; they did
+not prove the composed pass journey. Source81d10254 extends only isolated
+test wiring and adds a signed cross-case/cross-service association-loss cohort.
+The synthetic staff worker receives an independently configured pass-mode enum
+and fixed host entitlement mapping, not patient/case bindings copied from the
+caller review. Strict signed-fixture keys and policy-membership matching remain
+required. No production reader, authorization, write rule or API is changed.
+
+The caller separately plays/affirms replacement, original cancellation and
+association, then loses the association response and ends uncertain. A fresh
+staff process first demonstrates investigation denial before protected reads,
+then inspects exact joint native/pass effects without acknowledgement. Only a
+separate provider-owned staff acknowledgement plus fresh inspection yields the
+staff-reviewed result. Only GETs occur; prior caller speech/results and native
+mutation count remain unchanged. Case IDs, entitlement references and patient
+canaries stay out of public output, SQL and unfiltered backups.
+
+`work1792199620082` naturally passed4/4, zero skips/failures/cancellations,
+01:13:40.640761–01:23:13.912596UTC. This includes both original native process
+cases, the original ordinary signed journey (215,712ms under its unchanged
+240s deadline), and the new pass journey (343,390ms). The new480s limit bounds
+at most five caller quota windows, two independently elapsed staff windows
+and60s serving/scans; an assertion refuses additional caller waits. Actual
+PostgreSQL time releases each window; no budget timestamps,180 ceiling,
+application quota or proof expiry are edited. Native process deadlines remain
+unchanged. Command: disposable PostgreSQL `npm run db:migrate &&
+ABBY_LEDGER=postgres node --test --test-concurrency=2
+test/cliniko/class-move-recovery-process.test.ts
+test/voice/class-move-signed-staff-recovery.test.ts`.
+
+Node peaked329,179,136B under1GiB/CPU200%; aggregate Docker147,779,584B
+under512MiB/CPU100%,Swap0, with all memory-limit/OOM events zero. All1,195
+source inputs and455 artifact pins remained unchanged. Authoritative exit0,
+wrapper absence, inactive scope and no own-labelled containers were verified;
+the paired work wait completed. The parent full regression continues in its
+separate frozen checkout; this focused result does not turn it green.
+
+TypeScript and fixture compiler commands both passed on81d10254 in
+`work1792199329133`. Its wrapper then exited1 on an artifact-set assertion: the
+independently copied full build also contained three dashboard bundles beyond
+the452 serving-artifact baseline. The narrow reconciliation at01:13:16UTC
+verified no missing artifacts, exactly one changed synthetic class-runner module
+and the exact three additional bundles byte-identical to the frozen parent.
+It pinned455 artifacts without repeating compilers or changing production JS.
+Final compiler resource accounting was not reached after that assertion, so no
+compiler peak or zero-event claim is made for that job. The focused PostgreSQL
+run verified the reconciled inventory before and after execution.
+
+Registry1.242 adds the actual signed staff file to E2E-419's synthetic evidence,
+keeps419 stable IDs and leaves full-call evidence planned. The class.move.staffReview
+product claim was reviewed against the unchanged reader and four passed cases;
+refresh precisely its three changed fixture/test citations and remove the stale
+public-scan-pending note. Current registry/facts and exact-head TypeScript
+validation follow; no clinic/operator/cloud acceptance or thirteen-gap completion
+is inferred. Financial-work ownership remains awaiting the operator's choice.

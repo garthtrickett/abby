@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.241
+# Scenario manifest, version 1.242
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -965,3 +965,23 @@ and database/unfiltered backup/output privacy assertions pass. Version1.240
 registers this synthetic voice evidence while retaining419 IDs and planned
 full-call status. Combined booking-menu, broader mixed/concurrent/correction,
 whole-suite and independent/cloud/clinic/provider acceptance remain open.
+
+## Signed pass movement to independent staff observation
+
+Version1.242 retains419 stable IDs and planned full-call evidence. Source81d10254
+adds the previously excluded composed pass journey under E2E-419: an actual
+signed cross-case/cross-service move loses its association response, ends the
+caller and reaches a fresh staff process. Current independent investigation,
+exact native case effects and separate review acknowledgement are required.
+The reader sends only GETs and cannot revive caller outcomes or replay writes.
+
+Both original native process controls and the original ordinary signed journey
+pass alongside the new pass journey: four tests, zero skips
+(`work1792199620082`). SQL, unfiltered backup and public-output scans pass,
+including case/entitlement canaries. The ordinary240s deadline is preserved;
+the new pass480s explicitly bounds five caller windows, two independently
+elapsed staff windows and60s serving/scans, without changing the180 ceiling.
+Compiler commands passed; only the synthetic class-runner JavaScript changed.
+The separate complete parent regression remains running, and authoritative
+CI/clinic/provider/operator acceptance remains open. See the execution ledger
+for exact pins, timing, artifact-inventory reconciliation and measured caps.

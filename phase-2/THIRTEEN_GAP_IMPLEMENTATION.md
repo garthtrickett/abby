@@ -26,6 +26,13 @@ limits. No merge, clinic/provider acceptance, activation, real mail/payment,
 carrier work or Aeva deletion is inferred. The pending financial-work owner
 choice remains required before its dependent lifecycle adapter can be built.
 
+The separate source81d10254 staff cohort now passes four native/signed tests,
+including cross-case/cross-service pass association-response loss followed by
+independent fresh-process inspection. It preserves caller uncertainty and
+requires separate staff acknowledgement, exact case effects and GET-only
+observation, with SQL/backup/public-output privacy. This focused extension does
+not complete the running parent regression or external operator acceptance.
+
 ## Requirements and evidence needed
 
 | Order | Requirement | Current work and completion evidence |
