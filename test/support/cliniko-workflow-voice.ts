@@ -54,7 +54,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     fallbackNumbers: { [config.inbound.dialedNumber]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x38), now: () => new Date(now()) });
   const policy = new Proxy(config.policies, { get(target, key) {
     if (key === "read") return async (...args: Parameters<typeof target.read>) => {
-      const found = await target.read(...args); return found.ok ? ok(approvedSyntheticPolicy(found.value)) : found;
+      const found = await observeSource("clinicPolicy", target.read.bind(target))(...args); return found.ok ? ok(approvedSyntheticPolicy(found.value)) : found;
     };
     const value = Reflect.get(target, key); return typeof value === "function" ? value.bind(target) : value;
   } });
@@ -79,6 +79,18 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       stages.push(stage);
       try { return await run(...args); } finally { stage.settled = performance.now(); }
     };
+  // Fixed aggregate diagnostics, never arguments, provider refs or private values.
+  const sourceCalls = new Map<string, { count: number; pending: number; totalMs: number; maximumMs: number }>();
+  const observeSource = <Args extends unknown[], Value>(name: string, run: (...args: Args) => Promise<Value>) => async (...args: Args): Promise<Value> => {
+    const record = sourceCalls.get(name) ?? { count: 0, pending: 0, totalMs: 0, maximumMs: 0 };
+    sourceCalls.set(name, record); record.count++; record.pending++; const start = performance.now();
+    try { return await run(...args); }
+    finally { const elapsed = performance.now() - start; record.pending--; record.totalMs += elapsed; record.maximumMs = Math.max(record.maximumMs, elapsed); }
+  };
+  config.cliniko.rateBudget.claim = observeSource("nativeBudget", config.cliniko.rateBudget.claim.bind(config.cliniko.rateBudget));
+  config.directory.findByRef = observeSource("ownerMembership", config.directory.findByRef.bind(config.directory));
+  const sourceDiagnostic = () => Object.fromEntries([...sourceCalls].map(([name, record]) => [name, { ...record,
+    totalMs: Math.round(record.totalMs), maximumMs: Math.round(record.maximumMs) }]));
   let ledger: MemoryLedger | undefined, flow: ClinikoCallFlow | undefined, socket: WebSocket | undefined, closed = false;
   let disposedState: ReturnType<MemoryLedger["read"]> | undefined, closeCode: number | undefined;
   let after: Record<string, unknown> | undefined, sequence = 1, chunk = 0, utterance = 0, transcriptionFrames = 0;
@@ -327,7 +339,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
           const state = await diagnosticState();
           throw new Error(`caller turn delivery stalled: ${JSON.stringify({ closed, workflowClosed: flow?.closed,
             workflow: flow?.workflow, lifecycle: state?.lifecycle, terminalReason: state?.terminal?.reason, queuedInputs: inputs.length, processedChunk, chunk,
-            modelTurns: modelTurns.length, transcriptionFrames, writes: writes.length, hostWritesStarted, hostWritesSettled, staffPreparationsStarted, staffPreparationsSettled, staffWritesStarted, staffWritesSettled, failures, stageFailure: error instanceof Error ? error.message : "unknown",
+            sourceCalls: sourceDiagnostic(), modelTurns: modelTurns.length, transcriptionFrames, writes: writes.length, hostWritesStarted, hostWritesSettled, staffPreparationsStarted, staffPreparationsSettled, staffWritesStarted, staffWritesSettled, failures, stageFailure: error instanceof Error ? error.message : "unknown",
             actions: Object.values(state?.actions ?? {}).map(action => action.status),
             presentations: Object.values(state?.presentations ?? {}).map(presentation => presentation.status),
             stages: stages.map(stage => ({ name: stage.name, pending: stage.settled === undefined,
@@ -337,7 +349,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         const failureState = failures.length && !options.expectedFailure ? await diagnosticState() : undefined;
         assert.deepEqual(failures, options.expectedFailure ? [options.expectedFailure] : [], `wire failure after ${modelTurns.length} model turns and ${transcriptionFrames} transcribed frames ${failureState ? JSON.stringify({
           workflow: flow?.workflow, lifecycle: failureState.lifecycle, terminalReason: failureState.terminal?.reason, now: now(),
-          processedChunk, finalChunk, pendingPresentation: failureState.pendingPresentationId !== undefined,
+          sourceCalls: sourceDiagnostic(), processedChunk, finalChunk, pendingPresentation: failureState.pendingPresentationId !== undefined,
           actions: Object.values(failureState.actions).map(action => ({ kind: action.kind, status: action.status })),
           presentations: Object.values(failureState.presentations).map(p => ({ kind: p.kind, status: p.status })),
           effects: Object.values(failureState.effects).map(e => ({ kind: e.kind, status: e.status })),

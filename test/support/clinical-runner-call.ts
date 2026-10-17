@@ -22,6 +22,8 @@ import type { LocationScope } from "../../src/core/model.ts";
 type Message = { kind: string; coldContext?: ClassMoveColdContext; markName?: string; diagnostic?: unknown; aheadByMs?: number; actionStatus?: string; text?: string; method?: string; path?: string; body?: Record<string, unknown>;
   originalActive?: boolean; replacementActive?: boolean; sourceUsed?: number; destinationUsed?: number; caseLinked?: boolean;
   phase?: string; elapsedMs?: number;
+  event?: "mark" | "dtmf"; sequence?: number; progress?: string; lifecycle?: string; pendingPresentation?: boolean;
+  presentations?: readonly { kind: string; status: string }[];
   claims?: number; denialKind?: string;
   stage?: "fixtureProcessKilled" | "runnerStartupUnavailable";
   locations?: readonly { scope: LocationScope; policyVersion: string; businessId: string }[];
@@ -131,6 +133,11 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
     await once(socket, "open"); socket.send(JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }));
     send({ event: "start", start: { accountSid, callSid, streamSid, tracks: ["inbound"], customParameters: { abbyBinding: binding }, mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 } } });
     const count = (kind: string) => messages.filter(m => m.kind === kind).length;
+    const wireDiagnostic = () => ({ socket: socket?.readyState, closeCode: transportCloseCode, childExit: child.exitCode,
+      playback: { marks: playback.count, outstanding: playback.hasPendingAfter() },
+      results: ["privateMenuResult", "privateMenuPlayback", "privateChoiceResult"].map(kind => ({ kind, count: count(kind), accepted: messages.filter(row => row.kind === kind).at(-1)?.accepted })),
+      wire: messages.filter(row => row.kind === "wireProcessed").slice(-16).map(row => ({ event: row.event, sequence: row.sequence,
+        accepted: row.accepted, progress: row.progress, lifecycle: row.lifecycle, pendingPresentation: row.pendingPresentation, presentations: row.presentations })) });
     const say = async (text: string, privateField = false, expectFailure = false) => {
       if (options.classQuotaStaging) {
         assert.ok(stagedMedia);
@@ -159,7 +166,7 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
         await voiceUntil(() => (count("speech") > beforeSpeech && playback.hasPendingAfter(beforeMarks)) || child.exitCode !== null ||
           (expectFailure && socket!.readyState === WebSocket.CLOSED), "clinical runner response", 20_000);
       } catch (error) {
-        if (!options.classQuotaStaging) throw error;
+        if (!options.classQuotaStaging) throw new Error("Clinical response unavailable: " + JSON.stringify(wireDiagnostic()), { cause: error });
         const probes = count("classDiagnostic"); child.send({ kind: "classDiagnostic" });
         try { await voiceUntil(() => count("classDiagnostic") > probes || child.exitCode !== null, "bounded class state diagnostic", 1000); } catch { /* absence is part of the diagnostic */ }
         const counts = Object.fromEntries([...new Set(messages.map(row => row.kind))].map(kind => [kind, count(kind)]));
@@ -215,7 +222,8 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
       get spoken() { return messages.filter(m => m.kind === "speech").map(m => m.text!); },
       get mutations() { return messages.filter(m => m.kind === "providerMutation"); },
       async digit(digit: string) { const before = count("speech"), marks = playback.count; send({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
-        await voiceUntil(() => count("speech") > before && playback.hasPendingAfter(marks), "private runner prompt"); },
+        try { await voiceUntil(() => count("speech") > before && playback.hasPendingAfter(marks), "private runner prompt"); }
+        catch (error) { throw new Error("Private response unavailable: " + JSON.stringify(wireDiagnostic()), { cause: error }); } },
       async verify(expected = true) { const resultsBefore = count("verificationResult"); await voiceUntil(() => count("verificationEmail") > 0, "runner verification mail"); const mail = messages.filter(m => m.kind === "verificationEmail").at(-1)!;
         assert.ok(mail.code); for (const digit of `${mail.code}#`) send({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
         await voiceUntil(() => count("verificationResult") > resultsBefore, "completed private runner verification");

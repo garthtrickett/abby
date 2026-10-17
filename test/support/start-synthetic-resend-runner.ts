@@ -1,3 +1,4 @@
+import { observeSyntheticWire } from "./synthetic-wire-observer.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresConfirmationResendJournal } from "../../src/storage/postgres-confirmation-resend-journal.ts";
 import { ok } from "../../src/core/model.ts";
@@ -12,6 +13,8 @@ import { confirmationResendFixture } from "./confirmation-resend.ts";
 import { withSmtpVerificationServer } from "./smtp-verification-server.ts";
 import { withApprovedSyntheticVoice } from "./approved-voice.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
+
+observeSyntheticWire();
 
 const url = process.env.DATABASE_URL, apiKey = process.env.ABBY_CLINIKO_API_KEY;
 if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
@@ -117,6 +120,8 @@ try {
             permission: { allows: async () => !denied && f.config.permission.allows() } },
           intent(owner) {
             const list = owner.listResendAppointments.bind(owner), select = owner.selectResendAppointment.bind(owner);
+            const menuPlayed = owner.resendMenuPlaybackCompleted.bind(owner);
+            owner.resendMenuPlaybackCompleted = async () => { const accepted = await menuPlayed(); process.send?.({ kind: "privateMenuPlayback", accepted }); return accepted; };
             owner.listResendAppointments = async signal => { const result = await list(signal); process.send?.({ kind: "privateMenuResult", accepted: result.ok }); return result; };
             owner.selectResendAppointment = async (choice, signal) => { const result = await select(choice, signal); process.send?.({ kind: "privateChoiceResult", accepted: result.ok }); return result; };
             const page = owner.pageResendAppointments.bind(owner);

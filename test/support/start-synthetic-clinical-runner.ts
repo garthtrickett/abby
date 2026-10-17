@@ -1,3 +1,4 @@
+import { observeSyntheticWire } from "./synthetic-wire-observer.ts";
 import { syntheticTaskSequence, syntheticMultiTaskBookingProvider } from "./call-task-sequence.ts";
 import { withSmtpVerificationServer } from "./smtp-verification-server.ts";
 import { SmtpPatientCodeDelivery } from "../../src/standalone/smtp-patient-code-delivery.ts";
@@ -25,6 +26,8 @@ import { withApprovedSyntheticVoice } from "./approved-voice.ts";
 import { captureVoicePolicy } from "../../src/core/voice-policy.ts";
 import { OpenAIVoiceProfileHost } from "../../src/voice/openai-voice-profile.ts";
 import { rosterPlan, rosterInterval, syntheticRosterProvider } from "./roster-booking.ts";
+
+observeSyntheticWire();
 
 const operation = process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION;
 if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
