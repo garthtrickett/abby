@@ -2687,3 +2687,13 @@ Narrow the shared boundary to the default reader's actual read/cancel/release
 methods, with unknown wire chunks still checked as Uint8Array at runtime.
 No cast, dependency or signature/body rule bypass is needed. All34 protocol
 checks pass again (`work1792195384423`); corrected full TypeScript is next.
+
+Corrected stream sourcee2791a8 full TypeScript passed
+(`work1792195424172`),00:03:44.489737–00:05:12.081901UTC,1192 inputs unchanged,
+peak1,399,615,488B/2GiB/CPU200%/Swap0/1536MiB heap,no memory limit/OOM events.
+The structural default-reader correction retains34/34 protocol passes and all
+prior exact account/action/money/discovery bindings. The prior type failure and
+finite queued-abort red remain recorded. This qualifies the inactive input/read
+boundary locally; lifecycle ownership, durable webhook handoff, financial effects
+and independent/cloud/clinic acceptance remain open. The separate clinical7ca
+full is still running with an E2E-329 failure and is not a green regression.
