@@ -489,3 +489,10 @@ native cohort and full catalogue/intake serving journeys remain to be completed.
 Webhook durable handoff, complete creation-range reconciliation, delivery,
 receipts, financial/clinical expiry and producer/restore composition remain
 unfinished. All thirteen gaps remain active.
+
+A follow-up withdrawal check now closes private financial collection on the next
+key without consent when current financial authority is lost, both before initial
+readback and before final acceptance. Frozen e97e1a9 passed 235 focused/database
+checks and full TypeScript in separate measured phases. See the execution ledger
+for exact jobs, limits and commands. Complete current-graph regression remains
+required; the historical clinical full is not substituted for it.
