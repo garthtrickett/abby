@@ -2,6 +2,8 @@ import { createHash, KeyObject } from "node:crypto";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import type { FinancialEffectBarrier } from "../standalone/financial-effect-barrier.ts";
+import { encodeFinancialCheckoutAttempt, decodeFinancialCheckoutAttempt, checkoutAttemptMatchesIntent } from "./financial-checkout-attempt.ts";
+import type { FinancialCheckoutAttempt } from "./financial-checkout-attempt.ts";
 import { decodeClinikoFinancialIntent, encodeClinikoFinancialIntent } from "./financial-review-intent.ts";
 import type { ClinikoFinancialIntent } from "./financial-review-intent.ts";
 import { financialIntentDigest, verifyFinancialBookingObservation } from "./financial-booking-observation.ts";
@@ -120,4 +122,38 @@ export class ClinikoFinancialRecordRetainer {
     const { recallRef, recallAt, createdAt, updatedAt, recalled, archivedAt } = result.value;
     return ok({ kind: "observation", recallRef, recallAt, createdAt, updatedAt, recalled, archivedAt, observation: observed.value });
   }
+  /** Exact attempt evidence must be durable before the owner may invoke Stripe.
+   * A consumed local effect or this record alone can never authorize a replay. */
+  async retainCheckoutAttemptOnce(attempt: FinancialCheckoutAttempt, expected: Readonly<{
+    intent: ClinikoFinancialIntent; intentRecallRef: string; observationRecallRef: string; observation: ClinikoFinancialBookingObservation;
+  }>, recallAt: string, signal: AbortSignal): Promise<Result<FinancialRecordRetention, FinancialRecordFailure>> {
+    const intent = this.#intent(expected?.intent), encoded = encodeFinancialCheckoutAttempt(attempt);
+    if (!intent || !encoded.ok || !validRecallDate(recallAt) || !checkoutAttemptMatchesIntent(attempt, intent, expected.intentRecallRef) ||
+        attempt.observationRecallRef !== expected.observationRecallRef || attempt.observationActionRef !== expected.observation.actionRef ||
+        attempt.targetRef !== expected.observation.targetRef || expected.observation.financialActionRef !== intent.actionRef ||
+        expected.observation.intentDigest !== financialIntentDigest(intent)) return invalid();
+    const result = await this.#native.request({ method: "POST", notes: encoded.value, recallAt,
+      notBefore: new Date(attempt.createdFrom * 1_000).toISOString(), notAfter: new Date(attempt.createdThrough * 1_000).toISOString(),
+      query: this.#query(intent, attempt.actionRef, "retainCheckoutAttempt", { intentRecallRef: expected.intentRecallRef, recallAt }) }, signal);
+    if (!result.ok) return result;
+    if (result.value.kind === "record" && result.value.recallRef === attempt.observationRecallRef) return ok({ kind: "uncertain" });
+    return ok(result.value.kind === "uncertain" ? result.value : { kind: "accepted", recallRef: result.value.recallRef, actionRef: attempt.actionRef });
+  }
+  async readCheckoutAttempt(binding: Readonly<{ recallRef: string; actionRef: string; intentRecallRef: string }>,
+                            expected: ClinikoFinancialIntent, signal: AbortSignal): Promise<Result<Readonly<{
+    kind: "attemptContext"; recallRef: string; recalled: boolean; archivedAt: string | null; attempt: FinancialCheckoutAttempt;
+  }>, FinancialRecordFailure>> {
+    const intent = this.#intent(expected), id = typeof binding?.recallRef === "string" ? /^cliniko:recall:([1-9][0-9]{0,18})$/.exec(binding.recallRef)?.[1] : undefined;
+    if (!intent || !id || !validRecallMarker(binding.actionRef) || binding.recallRef === binding.intentRecallRef) return invalid();
+    const result = await this.#native.request({ method: "GET", recallId: id,
+      query: this.#query(intent, binding.actionRef, "readCheckoutAttempt", { recallRef: binding.recallRef, intentRecallRef: binding.intentRecallRef }) }, signal);
+    if (!result.ok) return result;
+    if (result.value.kind !== "record") return err({ kind: "unavailable" });
+    const attempt = decodeFinancialCheckoutAttempt(result.value.notes);
+    if (!attempt.ok || !checkoutAttemptMatchesIntent(attempt.value, intent, binding.intentRecallRef) ||
+        attempt.value.observationRecallRef === binding.recallRef) return err({ kind: "mismatched" });
+    return ok({ kind: "attemptContext", recallRef: result.value.recallRef, recalled: result.value.recalled,
+      archivedAt: result.value.archivedAt, attempt: attempt.value });
+  }
+
 }

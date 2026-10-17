@@ -3,7 +3,9 @@ import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { OwnedBodyError, ownedBodyBytes } from "../shared/owned-body-bytes.ts";
-import { authenticateFinancialBookingCitation, verifyFinancialBookingObservation } from "./financial-booking-observation.ts";
+import { decodeFinancialCheckoutAttempt, checkoutAttemptMatchesIntent } from "./financial-checkout-attempt.ts";
+import type { FinancialCheckoutAttempt } from "./financial-checkout-attempt.ts";
+import { financialIntentDigest, authenticateFinancialBookingCitation, verifyFinancialBookingObservation } from "./financial-booking-observation.ts";
 import type { ClinikoFinancialBookingObservation } from "./financial-booking-observation.ts";
 import { financialRecordOwnerBinding } from "./financial-record-retention.ts";
 import type { FinancialRecordRetentionConfig } from "./financial-record-retention.ts";
@@ -35,9 +37,12 @@ export type FinancialDiscoveredWork = Readonly<
 /** A bounded scan observation, not an atomic snapshot, global queue completion,
  * absence proof, immutable history, booking/effect admission or payment truth.
  * Private contexts must be reread and independently authorized before effects. */
+export type FinancialDiscoveredAttempt = Readonly<{
+  kind: "attemptContext"; intent: ClinikoFinancialReviewContext; attempt: FinancialCheckoutAttempt; recallRef: string; recalled: boolean; archivedAt: string | null;
+}>;
 export type FinancialDiscoveryResult = Readonly<{
   kind: "windowContext"; window: FinancialDiscoveryWindow; scanned: number; observedAt: string;
-  work: readonly FinancialDiscoveredWork[];
+  work: readonly FinancialDiscoveredWork[]; attempts: readonly FinancialDiscoveredAttempt[];
 }>;
 type Failure = ClinikoFinancialReviewFailure;
 type Row = Record<string, unknown>;
@@ -149,6 +154,7 @@ export class ClinikoFinancialWorkDiscovery {
       }
       const intents = new Map<string, ClinikoFinancialReviewContext>(), actions = new Set<string>();
       const observations: { native: Listed; proof: ClinikoFinancialBookingObservation }[] = [];
+      const pendingAttempts: { native: Listed; attempt: FinancialCheckoutAttempt }[] = [];
       const trust = { producerKeyRef: this.#config.producer.keyRef, publicKey: this.#config.producer.publicKey };
       const queryFor = (recallRef: string, actionRef: string, purpose: FinancialDiscoveryRecordQuery["purpose"]): FinancialDiscoveryRecordQuery =>
         Object.freeze({ ...this.#selection, recallRef, actionRef, purpose, includeArchived: true });
@@ -166,8 +172,9 @@ export class ClinikoFinancialWorkDiscovery {
       };
       for (const native of selected) {
         const decoded = decodeClinikoFinancialIntent(native.notes);
-        const citation = decoded.ok ? undefined : authenticateFinancialBookingCitation(native.notes, trust);
-        const actionRef = decoded.ok ? decoded.value.actionRef : citation?.ok ? citation.value.actionRef : undefined;
+        const attempt = decoded.ok ? undefined : decodeFinancialCheckoutAttempt(native.notes);
+        const citation = decoded.ok || attempt?.ok ? undefined : authenticateFinancialBookingCitation(native.notes, trust);
+        const actionRef = decoded.ok ? decoded.value.actionRef : attempt?.ok ? attempt.value.actionRef : citation?.ok ? citation.value.actionRef : undefined;
         if (!actionRef || actions.has(actionRef)) throw new ScanFailure("mismatched");
         actions.add(actionRef);
         await recordPermit(queryFor(native.recallRef, actionRef, "listedFinancialRecord"));
@@ -177,7 +184,8 @@ export class ClinikoFinancialWorkDiscovery {
           if (JSON.stringify(context.intent) !== JSON.stringify(decoded.value) || context.intent.patientId !== native.patientId ||
               context.recalled !== native.recalled || context.archivedAt !== native.archivedAt) throw new ScanFailure("mismatched");
           intents.set(native.recallRef, context);
-        } else if (citation?.ok) observations.push({ native, proof: citation.value });
+        } else if (attempt?.ok) pendingAttempts.push({ native, attempt: attempt.value });
+        else if (citation?.ok) observations.push({ native, proof: citation.value });
         else throw new ScanFailure("malformed");
       }
       const paired = new Set<string>(), targets = new Set<string>(), bookingActions = new Set<string>(), work: FinancialDiscoveredWork[] = [];
@@ -191,23 +199,37 @@ export class ClinikoFinancialWorkDiscovery {
           recalled: native.recalled, archivedAt: native.archivedAt });
       }
       for (const [ref, intent] of intents) if (!paired.has(ref)) work.push({ kind: "intentContext", intent });
-      // One-use IDs and clinical markers cannot be shared by separate obligations.
-      // A note signature alone cannot make duplicate payment intents unique.
+      const attempts: FinancialDiscoveredAttempt[] = [], attempted = new Set<string>();
+      for (const { native, attempt } of pendingAttempts) {
+        if (native.recallRef === attempt.intentRecallRef || native.recallRef === attempt.observationRecallRef || attempted.has(attempt.effectRef)) throw new ScanFailure("mismatched");
+        const intent = intents.get(attempt.intentRecallRef) ?? await readIntent(attempt.intentRecallRef, attempt.financialActionRef, "sourceIntent");
+        if (!checkoutAttemptMatchesIntent(attempt, intent.intent, intent.recallRef) || intent.intent.patientId !== native.patientId) throw new ScanFailure("mismatched");
+        const pair = work.find(w => w.kind === "pairedContext" && w.intent.recallRef === intent.recallRef);
+        if (pair?.kind === "pairedContext" && (pair.observationRecallRef !== attempt.observationRecallRef ||
+            pair.observation.actionRef !== attempt.observationActionRef || pair.observation.targetRef !== attempt.targetRef ||
+            financialIntentDigest(pair.intent.intent) !== attempt.intentDigest)) throw new ScanFailure("mismatched");
+        attempted.add(attempt.effectRef);
+        attempts.push({ kind: "attemptContext", intent, attempt, recallRef: native.recallRef, recalled: native.recalled, archivedAt: native.archivedAt });
+      }
+      // Attempts are unsigned possible-dispatch context, never creation receipts.
+      // A source outside this window still requires independent exact authority.
+      const obligations = new Map([...work.map(w => [w.intent.recallRef, w.intent.intent] as const),
+        ...attempts.map(a => [a.intent.recallRef, a.intent.intent] as const)]);
       const obligationIds = new Set<string>();
-      for (const item of work) {
-        const intent = item.intent.intent;
-        for (const id of [intent.actionRef, intent.booking.actionRef, ...Object.values(intent.effects),
-          ...(item.kind === "pairedContext" ? [item.observation.actionRef] : [])]) {
-          if (obligationIds.has(id)) throw new ScanFailure("mismatched");
-          obligationIds.add(id);
+      for (const intent of obligations.values()) {
+        for (const id of [intent.actionRef, intent.booking.actionRef, ...Object.values(intent.effects)]) {
+          if (obligationIds.has(id)) throw new ScanFailure("mismatched"); obligationIds.add(id);
         }
+      }
+      for (const id of [...work.flatMap(w => w.kind === "pairedContext" ? [w.observation.actionRef] : []), ...attempts.map(a => a.attempt.actionRef)]) {
+        if (obligationIds.has(id)) throw new ScanFailure("mismatched"); obligationIds.add(id);
       }
       await accountPermit();
       for (const q of grants.values()) await recordPermit(q);
       current(account); for (const q of grants.values()) current(q);
       const observedAt = instant(this.#config.clock?.() ?? new Date().toISOString());
       if (!observedAt || observedAt < beganAt || signal.aborted || performance.now() - began > ms) throw new ScanFailure("unavailable");
-      return ok({ kind: "windowContext", window, scanned, observedAt, work });
+      return ok({ kind: "windowContext", window, scanned, observedAt, work, attempts });
     } catch (error) { return err({ kind: error instanceof ScanFailure || error instanceof OwnedBodyError ? error.kind : "unavailable" }); }
     finally { clearTimeout(timer); deadline.abort(); }
   }
