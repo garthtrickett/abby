@@ -53,6 +53,22 @@ function assertPhaseAffirmation(call: Call) {
     "real phase affirmation follows processed playback and cannot outrun the host clock");
 }
 
+async function assertStageWriteCount(call: Call, expected: number, stage: string) {
+  if (writes(call).length !== expected) {
+    const probes = call.messages.filter(row => row.kind === "classDiagnostic").length;
+    call.child.send({ kind: "classDiagnostic" });
+    try { await voiceUntil(() => call.messages.filter(row => row.kind === "classDiagnostic").length > probes, "failed stage state only", 1000); }
+    catch { /* Missing diagnostic cannot hide the original failed assertion. */ }
+    // Only fixed states/counts from the existing private-safe fixture boundary.
+    // No caller speech, identifiers, notes, provider bodies or private codes.
+    const diagnostic = { stage, expected, actual: writes(call).length,
+      lastOutcome: call.messages.filter(row => row.kind === "classWriteOutcome").at(-1)?.actionStatus ?? null,
+      affirmation: call.messages.filter(row => row.kind === "classPhaseAffirmation").at(-1)?.diagnostic ?? null,
+      state: call.messages.filter(row => row.kind === "classDiagnostic").at(-1)?.diagnostic ?? null };
+    assert.equal(writes(call).length, expected, "Staged native write checkpoint: " + JSON.stringify(diagnostic));
+  }
+}
+
 export async function prepareSignedStagedReplacement(call: Call, scenario: StagedMoveScenario) {
   await call.say("Start"); await call.mark(); await call.verify();
   await call.say("Appointments"); await call.mark(); await call.say("The first time please."); await call.mark();
@@ -125,7 +141,7 @@ export async function stagedMoveJourney(scenario: StagedMoveScenario) {
       }
       await call.mark(); await call.say("Yes");
       assertPhaseAffirmation(call);
-      assert.equal(writes(call).length, count + (stage === "associationInspection" ? 0 : 1));
+      await assertStageWriteCount(call, count + (stage === "associationInspection" ? 0 : 1), stage);
       assert.equal(call.messages.filter(row => row.kind === "classWriteOutcome").at(-1)!.actionStatus,
         "classMovement", "native receipt remains a staged movement receipt through final inspection");
       if (pass && index < 2) assert.match(call.spoken.at(-1)!, /overall class move is not confirmed/);
