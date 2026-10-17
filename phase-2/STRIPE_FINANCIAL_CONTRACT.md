@@ -635,3 +635,47 @@ recovery, and the running earlier6bdf350 full excludes this subsequent source.
 
 Provider references checked on 17 October 2026: [recall filters and schema](https://docs.api.cliniko.com/openapi/recall),
 [DateTime filter operators](https://docs.api.cliniko.com/#filtering-results).
+
+## Raw webhook handoff to existing native pending work
+
+The raw HTTP route candidate authenticates the original bounded transport bytes;
+it does not reconstruct JSON before verifying Stripe's signature. It accepts
+only its explicit account/mode and pinned2025-06-30.basil Checkout notifications.
+The event supplies a reference, never paid state, recipient, amount or effect
+permission. The exact fresh Stripe Session is reread privately under the
+configured account, and only its bounded correlation fields survive.
+
+A relevant event can return200 only when independent financial reference-read
+and pending-handoff grants remain current, the actual native pending discovery
+succeeds, and exactly one open intent/signed booking observation/retained attempt
+matches the Session. Account/mode, amount/currency, action/effect/digest, exact
+native citation/target and complete retained possible-creation range must match.
+After the handoff grant, both providers are reread; changed context refuses.
+Authority callbacks are checks only; they cannot enqueue or perform an effect.
+
+Durability uses the three native records already retained before possible Stripe
+creation. No event-ref ledger, local retry payload, patient-bearing SQL record or
+volatile wake callback supplies acceptance. The synthetic provider process stays
+alive while the handler is killed after acceptance; a fresh process rediscovers
+the same native work without event history or selected recall references, then
+accepts a duplicate without another native/Stripe write or effect claim. This is
+a synthetic process boundary witness, not real Cliniko durability or a deployed
+consumer qualification. Mutable Stripe metadata remains context, not an immutable
+creation receipt or financial authority.
+
+Unknown/closed/changed/denied/over-capacity/exhausted/held/aborted work remains
+unacknowledged with a fixed503. Invalid signature, endpoint or pinned version
+returns a fixed400. Authenticated unrelated event types may return200 without
+financial I/O. Route/method/header/encoding/size restrictions,32 concurrent
+requests, a shared maximum10-second deadline, disconnect and service-close
+cancellation bound the receiver. Fixed responses expose no private context.
+The exported route factory starts no listener and activates no public ingress.
+
+The focused162-check cohort and full TypeScript pass qualify this candidate's
+synthetic raw transport, process loss, native pairing and preservation contracts.
+They do not qualify periodic consumer provisioning, all-producer quiescence or
+restore admission, money inspection/effects, delivery/receipts, independent
+Checkout/clinical expiry or the complete financial lifecycle through the host.
+The earlier frozen6bdf350 full regression excludes this subsequent source and
+has an observed staged same-case pass failure still under diagnosis. All13 gaps
+and required authoritative CI/clinic/provider acceptance remain open.

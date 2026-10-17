@@ -3871,3 +3871,54 @@ full `npm run typecheck`,exit0. Peak1,426,882,560B under2GiB/CPU200%/
 Swap0, heap1536, all memory events0; source/document/dependency pins unchanged,
 paired wait reaped. The following evidence-only commit changes no tested
 executable input. This qualification does not supply a consumer or webhook ACK.
+
+## Stripe raw webhook to existing native pending work — candidate
+
+The financial route now composes the actual native pending reader with exact
+fresh Stripe correlation and separate current financial handoff/read grants.
+It validates open intent/signed booking observation/retained attempt pairing,
+account/mode/action/effect/digest/amount/currency and the retained possible-create
+range. Both providers are reread after the handoff grant. A raw signed event is
+only a reference; paid/recipient/body fields cannot supply financial truth.
+
+Durable acceptance refers to native records retained before possible creation,
+not a local event/ref queue. A synthetic provider process survives handler
+SIGKILL; a fresh handler process independently rediscovers the native work and
+accepts a duplicate without replaying an effect. The fixed raw-byte HTTP route
+does not start a listener or provision a consumer. Unknown/closed/changed/denied
+work returns503; invalid signature/scope/version returns400; an authentic
+unrelated event needs no financial I/O. Body/request/concurrency/deadline and
+disconnect/service-close limits are explicit, with no private response detail.
+
+- Correlation source5811059 passed78 existing/read/protocol/owner controls in
+  work1792220665989 at07:04:29.881324UTC; peak151,687,168B/512MiB/CPU200%/
+  Swap0, all memory events0, pins unchanged and paired wait reaped.
+- First handoff run1792221259778 passed30/31: the oversized HTTP stream's
+  cancellation destroyed its transport before the fixed refusal. The owned
+  iterator now retires without destroying the response socket; unread input is
+  paused and the connection closes after the fixed response. Corrected
+  work1792221280381 passed31/31, peak154,763,264B/512MiB, events0.
+- Work1792221332160 failed before tests because the new launcher file was not
+  generated. Corrected launcher work1792221341784 passed52/52 including actual
+  handler SIGKILL/fresh-process discovery, peak182,190,080B/512MiB, events0.
+- The first full typecheck1792221348611 found three strict adapter/test type
+  errors and also rejected changed source pins. That result is not qualification;
+  the job finished naturally before correction and the frozen rerun.
+- Final executable source3ac46bf passed work1792221522833 at
+  07:18:53.720312UTC:162/162 handoff/raw HTTP/process-loss/correlation/pending/
+  existing discovery/Checkout/webhook controls, no failures/skips/cancellations.
+  Peak172,838,912B under512MiB/CPU200%/Swap0, all memory events0.
+- The same frozen executable inputs passed full `npm run typecheck` in
+  work1792221528268 at07:20:58.803370UTC, exit0. Peak1,471,557,632B under
+  2GiB/CPU200%/Swap0/heap1536, all memory events0. Pins unchanged before/after
+  both final jobs and paired waits reaped. No deadline, quota or semantic
+  assertion was relaxed to obtain these passes.
+
+This is synthetic native/provider/process qualification of the handoff primitive,
+not a configured periodic financial consumer, SQL restore/quiescence admission,
+complete money/delivery/receipt/expiry lifecycle or real provider activation.
+The parallel full graph is frozen at earlier6bdf350 and now has an observed
+signed date-corrected same-case pass failure2578 (native writes expected3/saw2),
+not a green verdict. Its job continues naturally; safe isolated diagnosis is in
+a separate checkout. Required cloud checks remain unavailable from billing;
+all13 gaps remain active and no merge or deployment is implied.
