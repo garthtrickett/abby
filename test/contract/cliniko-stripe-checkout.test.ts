@@ -105,3 +105,19 @@ test("bad exact source refs and ended service lifetime perform no Stripe calls",
   const f = await checkoutFixture(); assert.equal((await f.owner.createOnce({ ...f.binding, observationRecallRef: f.binding.intentRecallRef }, stop())).ok, false);
   const ended = new AbortController(); ended.abort(); assert.equal((await f.owner.createOnce(f.binding, ended.signal)).ok, false); assert.equal(f.requests.length, 0);
 });
+
+test("retained native attempt denies recreation after the local claim history is missing", async () => {
+  const f = await checkoutFixture(); assert.equal(value(await f.owner.createOnce(f.binding, stop())).kind, "created");
+  f.burned.clear(); // Simulate lost local history; provider-owned records remain.
+  const r = await value(f.make()).createOnce(f.binding, stop()); assert.equal(r.ok, false); if (!r.ok) assert.equal(r.error.kind, "alreadyClaimed");
+  assert.equal(posts(f).length, 1);
+});
+test("archived native attempts also deny recreation with missing local history", async () => {
+  const f = await checkoutFixture(); const r = value(await f.owner.createOnce(f.binding, stop()));
+  f.rows.get(r.attemptRecallRef.split(":").at(-1)!)!.archived_at = now; f.burned.clear();
+  assert.equal((await value(f.make()).createOnce(f.binding, stop())).ok, false); assert.equal(posts(f).length, 1);
+});
+test("patient history needs its own current grant before any new effect", async () => {
+  const f = await checkoutFixture({ authority: { attemptScanAuthorized: async () => false } });
+  assert.equal((await f.owner.createOnce(f.binding, stop())).ok, false); assert.equal(posts(f).length, 0); assert.equal(f.burned.has(f.intent.effects.checkout), false);
+});

@@ -17,7 +17,7 @@ import { claimClinikoBudget, observeCliniko429 } from "./read-budget.ts";
 import { validRecallDate } from "./recall-note.ts";
 
 export type FinancialDiscoveryWindow = Readonly<{ createdFrom: string; createdThrough: string }>;
-export type FinancialDiscoveryAccountQuery = ClinikoFinancialReviewSelection & FinancialDiscoveryWindow & Readonly<{ includeArchived: true }>;
+export type FinancialDiscoveryAccountQuery = ClinikoFinancialReviewSelection & FinancialDiscoveryWindow & Readonly<{ includeArchived: true; patientId?: string }>;
 export type FinancialDiscoveryRecordQuery = ClinikoFinancialReviewSelection & Readonly<{
   recallRef: string; actionRef: string; includeArchived: true; purpose: "listedFinancialRecord" | "sourceIntent";
 }>;
@@ -81,12 +81,21 @@ export class ClinikoFinancialWorkDiscovery {
     } catch { return err({ kind: "invalidConfig" }); }
   }
   async scan(input: FinancialDiscoveryWindow, external: AbortSignal): Promise<Result<FinancialDiscoveryResult, Failure>> {
+    return this.#scan(input, external);
+  }
+  /** Explicit patient-filtered complete scan, independently authorized in the
+   * account query. Row/page/deadline bounds still apply over the whole interval. */
+  async scanPatient(input: FinancialDiscoveryWindow & Readonly<{ patientId: string }>, external: AbortSignal): Promise<Result<FinancialDiscoveryResult, Failure>> {
+    if (!nativeId(input?.patientId)) return err({ kind: "invalidQuery" });
+    return this.#scan(input, external, input.patientId);
+  }
+  async #scan(input: FinancialDiscoveryWindow, external: AbortSignal, patientId?: string): Promise<Result<FinancialDiscoveryResult, Failure>> {
     const from = instant(input?.createdFrom), through = instant(input?.createdThrough);
     if (!from || !through || from !== input.createdFrom || through !== input.createdThrough || from > through ||
-        Date.parse(through) - Date.parse(from) > 3_600_000) return err({ kind: "invalidQuery" });
+        patientId === undefined && Date.parse(through) - Date.parse(from) > 3_600_000) return err({ kind: "invalidQuery" });
     if (!(external instanceof AbortSignal) || external.aborted) return err({ kind: "unavailable" });
     const window = Object.freeze({ createdFrom: from, createdThrough: through });
-    const account = Object.freeze({ ...this.#selection, ...window, includeArchived: true as const });
+    const account = Object.freeze({ ...this.#selection, ...window, includeArchived: true as const, ...(patientId ? { patientId } : {}) });
     const deadline = new AbortController(), ms = this.#config.deadlineMs ?? 15_000;
     const timer = setTimeout(() => deadline.abort(), ms), signal = AbortSignal.any([external, deadline.signal]), began = performance.now();
     const grants = new Map<string, FinancialDiscoveryRecordQuery>();
@@ -114,6 +123,7 @@ export class ClinikoFinancialWorkDiscovery {
         await accountPermit();
         const query = new URLSearchParams({ page: String(page), per_page: "100", sort: "id:asc" });
         query.append("q[]", `created_at:>=${from}`); query.append("q[]", `created_at:<=${through}`); query.append("q[]", "archived_at:*");
+        if (patientId) query.append("q[]", `patient_id:=${patientId}`);
         let response: Response | undefined, bodyOwned = false;
         let body: unknown;
         try {
@@ -141,7 +151,7 @@ export class ClinikoFinancialWorkDiscovery {
           const patient = typeof patientLink === "string" && patientLink.startsWith(`${this.#base}/patients/`) ? patientLink.slice(`${this.#base}/patients/`.length) : undefined;
           const type = typeof typeLink === "string" && typeLink.startsWith(`${this.#base}/recall_types/`) ? typeLink.slice(`${this.#base}/recall_types/`.length) : undefined;
           if (!r || !nativeId(id) || BigInt(id) <= previous || row(r.links)?.self !== `${this.#base}/recalls/${id}` ||
-              !nativeId(patient) || !nativeId(type) || !created || created < from || created > through || !updated || created > updated ||
+              !nativeId(patient) || patientId !== undefined && patient !== patientId || !nativeId(type) || !created || created < from || created > through || !updated || created > updated ||
               archived === undefined || archived !== null && (archived < created || Date.parse(archived) > Date.parse(beganAt) + 30_000) ||
               Date.parse(updated) > Date.parse(beganAt) + 30_000 || typeof r.recalled !== "boolean" || !validRecallDate(r.recall_at)) throw new ScanFailure("malformed");
           previous = BigInt(id); scanned++;

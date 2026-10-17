@@ -4,6 +4,8 @@ import type { Result } from "../core/model.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { ownedBodyBytes } from "../shared/owned-body-bytes.ts";
 import type { ClinikoFinancialReviewSelection, ClinikoFinancialReviewBinding } from "../cliniko/financial-review-read.ts";
+import { ClinikoFinancialWorkDiscovery } from "../cliniko/financial-work-discovery.ts";
+import type { FinancialDiscoveryAccountQuery } from "../cliniko/financial-work-discovery.ts";
 import { ClinikoFinancialReviewReader } from "../cliniko/financial-review-read.ts";
 import { ClinikoFinancialRecordRetainer, financialRecordOwnerBinding } from "../cliniko/financial-record-retention.ts";
 import type { FinancialRecordRetentionConfig, FinancialRecordAuthority } from "../cliniko/financial-record-retention.ts";
@@ -36,6 +38,7 @@ export type CheckoutOwnerQuery = CheckoutOwnerBinding & Readonly<{
  * separately played collection consent. Clinical yes, termsVersion, caller OTP,
  * signed booking observation or a restored claim do not supply either grant. */
 export type CheckoutOwnerAuthority = Readonly<{
+  attemptScanAuthorized(query: FinancialDiscoveryAccountQuery, signal: AbortSignal): Promise<boolean>;
   sourceAuthorized(query: ClinikoFinancialReviewSelection & ClinikoFinancialReviewBinding, signal: AbortSignal): Promise<boolean>;
   collectionAuthorized(query: CheckoutOwnerQuery, signal: AbortSignal): Promise<boolean>;
   producerAdmitted(query: CheckoutOwnerQuery, signal: AbortSignal): Promise<boolean>;
@@ -70,21 +73,22 @@ export class ClinikoStripeCheckoutOwner {
   readonly #records: ClinikoFinancialRecordRetainer;
   readonly #stripe: StripeApiRead;
   readonly #port: typeof fetch;
+  readonly #clinikoPort: typeof fetch;
   readonly #authority: CheckoutOwnerAuthority;
   readonly #claim: FinancialEffectBarrier["claimOnce"];
   readonly #binding: string;
   private constructor(config: CheckoutOwnerConfig, authority: CheckoutOwnerAuthority, barrier: FinancialEffectBarrier,
-                      reader: ClinikoFinancialReviewReader, records: ClinikoFinancialRecordRetainer, stripe: StripeApiRead, port: typeof fetch, binding: string) {
+                      reader: ClinikoFinancialReviewReader, records: ClinikoFinancialRecordRetainer, stripe: StripeApiRead, port: typeof fetch, binding: string, clinikoPort: typeof fetch) {
     this.#config = Object.freeze({ ...config, stripe: Object.freeze({ ...config.stripe }) });
-    this.#reader = reader; this.#records = records; this.#stripe = stripe; this.#port = port; this.#claim = barrier.claimOnce.bind(barrier); this.#binding = binding;
-    this.#authority = Object.freeze({ sourceAuthorized: authority.sourceAuthorized.bind(authority), collectionAuthorized: authority.collectionAuthorized.bind(authority),
+    this.#clinikoPort = clinikoPort; this.#reader = reader; this.#records = records; this.#stripe = stripe; this.#port = port; this.#claim = barrier.claimOnce.bind(barrier); this.#binding = binding;
+    this.#authority = Object.freeze({ attemptScanAuthorized: authority.attemptScanAuthorized.bind(authority), sourceAuthorized: authority.sourceAuthorized.bind(authority), collectionAuthorized: authority.collectionAuthorized.bind(authority),
       producerAdmitted: authority.producerAdmitted.bind(authority), current: authority.current.bind(authority) });
   }
   static create(config: CheckoutOwnerConfig, authority: CheckoutOwnerAuthority, recordAuthority: FinancialRecordAuthority,
                 barrier: FinancialEffectBarrier, clinikoPort: typeof fetch = fetch, stripePort: typeof fetch = fetch): Result<ClinikoStripeCheckoutOwner, CheckoutOwnerFailure> {
     try {
       const binding = financialRecordOwnerBinding(config?.cliniko);
-      if (!binding.ok || typeof authority?.sourceAuthorized !== "function" || typeof authority.collectionAuthorized !== "function" || typeof authority.producerAdmitted !== "function" || typeof authority.current !== "function" ||
+      if (!binding.ok || typeof authority?.attemptScanAuthorized !== "function" || typeof authority.sourceAuthorized !== "function" || typeof authority.collectionAuthorized !== "function" || typeof authority.producerAdmitted !== "function" || typeof authority.current !== "function" ||
           config.stripe.accountRef !== config.cliniko.stripe.accountRef || config.stripe.livemode !== config.cliniko.stripe.livemode ||
           config.stripe.apiVersion !== "2025-06-30.basil" || !config.stripe.apiKey.startsWith(config.stripe.livemode ? "sk_live_" : "sk_test_") &&
           !config.stripe.apiKey.startsWith(config.stripe.livemode ? "rk_live_" : "rk_test_") ||
@@ -95,7 +99,7 @@ export class ClinikoStripeCheckoutOwner {
       const records = ClinikoFinancialRecordRetainer.create(config.cliniko, recordAuthority, barrier, clinikoPort);
       if (!reader.ok || !records.ok) return err({ kind: "invalidConfig" });
       return ok(new ClinikoStripeCheckoutOwner(config, authority, barrier, reader.value, records.value,
-        new StripeApiRead(config.stripe, stripePort), stripePort, binding.value));
+        new StripeApiRead(config.stripe, stripePort), stripePort, binding.value, clinikoPort));
     } catch { return err({ kind: "invalidConfig" }); }
   }
   async createOnce(input: CheckoutOwnerBinding, external: AbortSignal): Promise<Result<CheckoutOwnerResult, CheckoutOwnerFailure>> {
@@ -141,6 +145,17 @@ export class ClinikoStripeCheckoutOwner {
       // Stripe account introspection precedes the irreversible local exclusion.
       const account = await wait(this.#stripe.run(signal, async () => true));
       if (!account.ok) throw new CheckoutFailure(account.error.kind === "mismatched" ? "mismatched" : "unavailable");
+      await permit();
+      const discovery = ClinikoFinancialWorkDiscovery.create(this.#config.cliniko, {
+        allowsAccountRead: this.#authority.attemptScanAuthorized,
+        allowsRecordRead: this.#authority.sourceAuthorized,
+        current: (_q, stop) => !stop.aborted && this.#authority.current(query, signal) === true,
+      }, this.#clinikoPort);
+      if (!discovery.ok) throw new CheckoutFailure("unavailable");
+      const history = await wait(discovery.value.scanPatient({ patientId: intent.patientId, createdFrom: intent.createdAt,
+        createdThrough: new Date(now()).toISOString() }, signal));
+      if (!history.ok) throw new CheckoutFailure(history.error.kind === "forbidden" ? "forbidden" : "unavailable");
+      if (history.value.attempts.some(a => a.attempt.effectRef === intent.effects.checkout || a.attempt.financialActionRef === intent.actionRef)) throw new CheckoutFailure("alreadyClaimed");
       await permit();
       const body = new URLSearchParams({ mode: "payment", ui_mode: "hosted", client_reference_id: intent.actionRef,
         success_url: query.successUrl, cancel_url: query.cancelUrl, expires_at: String(expiresAt),

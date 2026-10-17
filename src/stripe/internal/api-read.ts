@@ -42,15 +42,18 @@ export class StripeApiRead {
       if (value === undefined || signal.aborted) throw new ReadError("unavailable"); return value;
     };
     const get = async (path: string) => {
-      const response = await wait(this.#fetch("https://api.stripe.com/v1/" + path, { method: "GET", redirect: "error", signal,
-        headers: { Authorization: `Bearer ${config.apiKey}`, "Stripe-Version": config.apiVersion,
-          ...(config.connected ? { "Stripe-Account": config.accountRef } : {}) } }));
-      if (response.status !== 200) {
-        void response.body?.cancel().catch(() => {});
-        throw new ReadError(response.status === 401 || response.status === 403 ? "forbidden" : "unavailable");
-      }
-      if (!response.body) throw new ReadError("malformed");
+      let responseOwned: Response | undefined, bodyOwned = false;
       try {
+        const response = await wait(this.#fetch("https://api.stripe.com/v1/" + path, { method: "GET", redirect: "error", signal,
+          headers: { Authorization: `Bearer ${config.apiKey}`, "Stripe-Version": config.apiVersion,
+            ...(config.connected ? { "Stripe-Account": config.accountRef } : {}) } }).then(value => {
+          responseOwned = value;
+          if (signal.aborted) { try { void value.body?.cancel().catch(() => {}); } catch { /* Owned cleanup only. */ } }
+          return value;
+        }));
+        if (response.status !== 200) throw new ReadError(response.status === 401 || response.status === 403 ? "forbidden" : "unavailable");
+        if (!response.body) throw new ReadError("malformed");
+        bodyOwned = true;
         const bytes = await ownedBodyBytes(response.body, 1_000_000, signal);
         let value: unknown;
         try { value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); }
@@ -58,6 +61,8 @@ export class StripeApiRead {
         const object = record(value); if (!object) throw new ReadError("malformed"); return object;
       } catch (error) {
         throw error instanceof OwnedBodyError ? new ReadError(error.kind) : error;
+      } finally {
+        if (!bodyOwned) { try { void responseOwned?.body?.cancel().catch(() => {}); } catch { /* Foreign reader remains its owner's. */ } }
       }
     };
     try {
@@ -70,6 +75,6 @@ export class StripeApiRead {
       if (!Number.isSafeInteger(ended) || ended < started || ended - started > (config.deadlineMs ?? 10_000) || signal.aborted) throw new ReadError("unavailable");
       return ok(Object.freeze({ data, observedAt: new Date(ended).toISOString() }));
     } catch (error) { return err({ kind: error instanceof ReadError ? error.kind : "unavailable" }); }
-    finally { clearTimeout(timer); signal.removeEventListener("abort", onAbort); }
+    finally { clearTimeout(timer); deadline.abort(); signal.removeEventListener("abort", onAbort); }
   }
 }

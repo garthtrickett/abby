@@ -16,7 +16,7 @@ export async function checkoutFixture(options: {
   const config: CheckoutOwnerConfig = { cliniko: f.config, stripe: { apiKey: "sk_test_synthetic12345678", accountRef: f.intent.stripe.accountRef,
     livemode: f.intent.stripe.livemode, connected: true, apiVersion: "2025-06-30.basil", clock: () => Date.parse(now) },
     paymentMethod: "card", productLabel: "Clinic deposit", successUrl: "https://clinic.example.invalid/payment-complete", cancelUrl: "https://clinic.example.invalid/payment-return", ...options.config };
-  const authority: CheckoutOwnerAuthority = { sourceAuthorized: async () => allowed,
+  const authority: CheckoutOwnerAuthority = { attemptScanAuthorized: async () => allowed, sourceAuthorized: async () => allowed,
     collectionAuthorized: async q => { queries.push(q); return allowed; }, producerAdmitted: async () => admitted, current: () => current, ...options.authority };
   const stripePort: typeof fetch = async (input, init) => {
     const url = String(input), method = init?.method ?? "GET", headers = new Headers(init?.headers), body = String(init?.body ?? "");
