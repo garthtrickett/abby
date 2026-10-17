@@ -5,16 +5,17 @@ import type { CheckoutExpiryAuthority, CheckoutExpiryQuery } from "../../src/sta
 
 export async function expiryFixture(options: {
   authority?: Partial<CheckoutExpiryAuthority>; deadlineMs?: number;
+  checkout?: NonNullable<Parameters<typeof financialMessageFixture>[0]>["checkout"];
   retained?(row: Record<string, unknown>): void | Promise<void>;
   post?(row: Record<string, unknown>): Response | Promise<Response>;
 } = {}) {
   let clock = Date.parse(now);
-  const f = await financialMessageFixture({ checkout: { native: { response: async (row, method) => {
+  const f = await financialMessageFixture({ checkout: { ...options.checkout, native: { ...options.checkout?.native, response: async (row, method) => {
     if (method === "POST" && /financial (?:expiry|message) attempt/.test(String(row.notes))) {
       row.created_at = new Date(clock).toISOString(); row.updated_at = row.created_at;
       if (String(row.notes).includes("financial expiry attempt")) await options.retained?.(row);
     }
-    return Response.json(row, { status: method === "POST" ? 201 : 200 });
+    return options.checkout?.native?.response ? options.checkout.native.response(row, method) : Response.json(row, { status: method === "POST" ? 201 : 200 });
   } } } });
   clock = Date.parse(f.intent.payment.deadline) + 1_000;
   let source = true, history = true, reference = true, provider = true, allowed = true, admitted = true, live = true;
