@@ -71,3 +71,43 @@ test("expired preparation and replacement permission methods cannot manufacture 
   const g = await outboundRecordsFixture(); g.deny(); Object.assign(g.authority, { allows: async () => true });
   assert.equal((await g.retain()).ok, false); assert.equal(g.burned.size, 0);
 });
+test("financial-shaped or incomplete configuration cannot supply outbound record selection", async () => {
+  const f = await outboundRecordsFixture();
+  for (const patch of [{ outboundRecallTypeId: undefined }, { recordPolicyDigest: undefined }, { rateBudget: undefined }])
+    assert.equal(ClinikoOutboundRecipientRecords.create({ ...f.config, ...patch } as unknown as typeof f.config, f.authority, f.barrier, f.port).ok, false);
+  assert.equal(ClinikoOutboundRecipientRecords.create(f.config, f.authority, { ...f.barrier, matches: () => false }, f.port).ok, false);
+  assert.equal(f.calls.length, 0); assert.equal(f.burned.size, 0);
+});
+test("foreign scope business or credential context refuses before exclusions and native dispatch", async () => {
+  const f = await outboundRecordsFixture();
+  for (const patch of [{ scope: { ...f.request.scope, locationId: "other" } }, { businessId: "22" }, { credentialFingerprint: "e".repeat(64) }])
+    assert.equal((await f.records.retainRequestOnce({ ...f.request, ...patch }, outboundReviewDate, new AbortController().signal)).ok, false);
+  assert.equal(f.calls.length, 0); assert.equal(f.burned.size, 0);
+});
+test("physical quota refusal after record exclusion keeps it consumed and leaves launch IDs untouched", async () => {
+  const f = await outboundRecordsFixture(); Object.assign(f.config.rateBudget, { claim: async () => ({ kind: "rateLimited" as const }) });
+  const records = value(f.make());
+  assert.deepEqual(await records.retainRequestOnce(f.request, outboundReviewDate, new AbortController().signal), { ok: false, error: { kind: "rateLimited" } });
+  assert.deepEqual([...f.burned], [f.request.actionRef]); assert.equal(f.calls.length, 0);
+  assert.deepEqual(await records.retainRequestOnce(f.request, outboundReviewDate, new AbortController().signal), { ok: false, error: { kind: "alreadyClaimed" } });
+});
+test("producer withdrawal after exclusion cannot dispatch or restore its record action", async () => {
+  let f!: Awaited<ReturnType<typeof outboundRecordsFixture>>; const consumed = new Set<string>();
+  f = await outboundRecordsFixture({ barrierFactory: () => ({ matches: () => true,
+    claimOnce: async ref => { const claimed = !consumed.has(ref); consumed.add(ref); f.denyProducer(); return { ok: true, value: { claimed } }; } }) });
+  assert.deepEqual(await f.retain(), { ok: false, error: { kind: "forbidden" } });
+  assert.deepEqual([...consumed], [f.request.actionRef]); assert.equal(f.calls.length, 0);
+});
+test("known exact native acknowledgement survives later authority withdrawal without admitting another action", async () => {
+  let f!: Awaited<ReturnType<typeof outboundRecordsFixture>>;
+  f = await outboundRecordsFixture({ response: (row, method) => { if (method === "POST") f.retire(); return Response.json(row, { status: method === "POST" ? 201 : 200 }); } });
+  const retained = value(await f.retain()); assert.equal(retained.kind, "accepted"); if (retained.kind !== "accepted") assert.fail();
+  assert.equal((await f.records.readRequest(binding(f, retained.recallRef), new AbortController().signal)).ok, false);
+  assert.equal(f.calls.length, 1); assert.deepEqual([...f.burned], [f.request.actionRef]);
+});
+test("headers without a complete exact native body remain uncertain and consumed at the whole-operation deadline", { timeout: 3000 }, async () => {
+  let cancelled = 0;
+  const f = await outboundRecordsFixture({ deadlineMs: 250, response: () => new Response(new ReadableStream<Uint8Array>({ cancel() { cancelled++; } }), { status: 201 }) });
+  assert.deepEqual(value(await f.retain()), { kind: "uncertain" }); assert.equal(cancelled, 1);
+  assert.deepEqual([...f.burned], [f.request.actionRef]); assert.equal(f.calls.length, 1);
+});
