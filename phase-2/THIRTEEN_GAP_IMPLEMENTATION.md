@@ -4284,3 +4284,18 @@ playback ordering corrections. Exact runs, commands, source/artifact pins and
 limits are in the execution ledger. This closes that local regression gate;
 new staged correction/mixed, signed-to-cold-staff and concurrent cohorts, cloud
 review and external acceptance remain open. All thirteen gaps remain active.
+
+### Current complete graph and public approval read overlap — 17 October
+
+Latest frozen d4170bd full qualification is red3,562passed/1failed/1existing skip;
+ordered follow-ups did not run. The sole remaining E353 routed registration/menu
+failure hit the existing15-second deadline; prior four failures passed. Current
+ccfe3ad overlaps only independent public child/parent approval reads while both
+fresh-source/current-membership checks and exclusive patient-verifier/member
+sequencing remain. Thirty-three existing controls, five new live-source refusal
+controls, full TypeScript/serving build and five original signed cases at default
+four-file concurrency pass. A14,850ms menu against15,000ms leaves little load
+margin, so this is focused evidence, not a green complete graph or failure closure.
+See [exact progress and evidence](EXECUTION_PROGRESS.md). The separately qualified
+financial consumer and pending Checkout/clinical expiry work do not close the
+remaining earlier-gap, cloud or clinic acceptance gates.

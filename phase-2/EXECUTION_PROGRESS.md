@@ -4056,3 +4056,53 @@ passed2/2 at08:34:01.958014UTC on8953fb8, peak64,229,376B/512MiB/
 CPU200%/Swap0, all memory events0. Source pins were unchanged and its paired wait
 completed. This subsequent evidence-only note changes no tested executable or
 fingerprinted claim/source.
+
+## Combined regression terminal and remaining intake-menu latency — 17 October
+
+The frozen d4170bd complete PostgreSQL work1792223409622 naturally terminated
+08:47:32.225526UTC, exit1:3,562passed/1failed/1existing skip,3,564 tests.
+Ordered follow-ups did not run. The four previous failure cases passed. The sole
+remaining failure was E2E353 routed registration followed by booking-menu read
+15,006ms at the unchanged15-second deadline, then invalidTransition/sessionClosed.
+It had504 owner-membership checks/6,489ms cumulative over the call, not a measured
+menu-only causal breakdown. Node/Docker peaks886,284,288/572,461,056B under
+1.5GiB/1GiB, CPU200%/Swap0, memory events0. Source and473 generated artifacts
+were unchanged, own processes/DBs ended, wait47537 reaped. This newer terminal
+supersedes earlier still-running descriptions; draft504's later consumer is
+outside that complete graph. Evidence is recorded on owned drafts498–504.
+
+The independent unchanged-production E353 diagnostic on5924155, work1792226754039,
+passed its original16 variants/three internal workers at08:47:13.657960UTC. Its
+optional fixture observation reports fixed stage/source counts and timing only,
+never caller/provider/private context. Isolated menu maximum was5,497ms, no
+aborts; that lower-load pass did not reproduce or resolve the whole-graph failure.
+Node/Docker peaks135,720,960/150,228,992B under1GiB/512MiB, CPU200%/Swap0,
+no events, source unchanged and wait38173 reaped.
+
+Current candidate ccfe3ad overlaps only independent public booking and parent
+service-catalogue approval reads. Each retains exact before/after source and
+current-membership checks. Scope/binding/terms/eligible-practitioner/duration/
+timezone/search checks remain. Shared patient contact attestation and catalogue
+member reads remain serialized; no permission cache or deadline/quota change.
+
+- Initial focused work1792227046115 passed33 existing policy/catalogue/deadline
+  controls; five new cases reached their semantic checks but failed a test's
+  `.length` assertion on an existing numeric write count. Fixture-only ccfe3ad
+  corrects that count. The five held-source/parent/role/membership cases pass in
+  1792227084734 at08:51:27.302257UTC, peak75,198,464B/512MiB/events0.
+- Full TypeScript and serving build1792227093455 passed08:54:06.730919UTC,
+  peak1,453,498,368B/2GiB/heap1536/events0, source unchanged, wait71504 reaped.
+- Original four-file PostgreSQL cohort1792227354726 passed5/5 at
+  08:57:31.424007UTC. E353's original variants, E354's two compiled/TLS cases,
+  E349 preferences and E346 service catalogue executed with default four-file
+  concurrency, original internal workers/deadlines and no title filter. All488
+  actual serving artifacts and source pins were unchanged. Node/Docker peaks
+  551,022,592/376,299,520B under1.5GiB/1GiB, CPU200%/Swap0/events0; own
+  processes/DBs ended, wait29977 reaped.
+
+The39 observed menu reads had no aborts, but the slowest was14,850ms against
+15,000ms. That is little load margin; the isolated baseline and concurrent cohort
+are different workloads and do not prove a measured speedup. This qualifies a
+narrow safe-read optimization, not closure of the complete-regression failure.
+Fresh combined qualification and cloud/clinic acceptance remain open. All13 gaps
+continue; no payment/clinical/outbound/deployment activation follows.
