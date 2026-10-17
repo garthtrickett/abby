@@ -3708,3 +3708,59 @@ work1792218361413 on35b4c3478742eb0d0fa2b97b1ab30aa8679274c4 at
 Peak1,452,568,576B under2GiB/CPU200%/Swap0, heap1536, all memory events0;
 all source/document pins and dependency lock unchanged, paired wait reaped.
 The subsequent evidence-only commit changes no tested executable input.
+
+## Selected-range private resend refresh — 17 October 2026
+
+Full3dc3b90/work1792214516199 retained an E2E-380 cancelled-email failure:
+the unchanged10-second private first-response fixture wait elapsed while the
+actual selection owner was still preparing. The prior diagnostic exposed real
+source timings; it did not fix that repeated whole-menu work. The owner rebuilt
+active, past-cancelled and future-cancelled lists for a choice that referenced
+only one already played item, then performed its separate exact evidence reads.
+
+Selection now refreshes that item's original active/cancelled date range only.
+The complete initial menu and every page refresh retain their prior contract.
+The selection must still exactly match native ID, time and cancellation status,
+subject, source and clinic time zone under fresh proof/permission and unchanged
+conversation revision/played-menu checks. Both exact protected evidence reads
+around private playback remain; private acceptance is not SMTP consent. No
+native write, SMTP permission, public patient context or deadline is added.
+
+- Source3468acac7b27b56c17777c3fbb4533235fb6770c passed focused realPostgreSQL
+  work1792218219140 at06:26:48.867012UTC:25/25, no failures/skips/cancellations.
+  It includes active/past-cancelled/future-cancelled selection with exactly one
+  collection refresh plus at least four exact-target GETs; retiming/restoration/
+  changed cancellation/foreign subject/business/archive/permission-loss refusal;
+  and existing private workflow, content, consent and complete paging contracts.
+  Node peak122,974,208B/512MiB/CPU200%; aggregateDocker150,511,616B/512MiB/
+  CPU100%, Swap0 and all memory events0. Source/dependency pins unchanged;
+  wrapper/scope/owned containers absent and paired wait reaped.
+- Rebased7953df520e240f316d42b323798ea3554c8fe939 passed full
+  `npm run typecheck && npm run build:voice-tests`,work1792218425331,terminal
+  06:29:38.216095UTC. Peak1,438,167,040B/2GiB/CPU200%/Swap0, heap1536 and
+  all memory events0. Source/dependency pins unchanged, paired wait reaped.
+  The first prospective2GiB launcher1792218175396 refused before npm/TSC on
+  live headroom accounting; no phase ran and no budget/reserve was lowered.
+  Later fresh capacity allowed the same existing cap. No stale reservation or
+  peer acknowledgement was required.
+- Subsequentde64a0ae4be523ea17b57d268a2eacfa3ae3d1d8 differs from that typed
+  source only by its parent's evidence Markdown. It passed original compiled
+  work1792218625898 at06:31:34.462636UTC:4/4, no failures/skips/cancellations.
+  Command: `bash scripts/with-postgres.sh bash -c 'npm run db:migrate && ABBY_LEDGER=postgres node --test --test-concurrency=4 test/voice/confirmation-resend-content-runner.test.ts test/voice/confirmation-resend-paging-runner.test.ts'`.
+  The telehealth first private reply measured4,099ms and cancelled reply6,134ms;
+  the existing10-second response fixture wait and120-second case deadline are
+  unchanged. Actual signedHTTP/WS, compiled serving, registered private code,
+  native evidence, separate clinical yes, one reviewed encrypted synthetic SMTP
+  send and privacy scans pass, with paging drift/selection preservation.
+  All470 generated artifacts and source pins unchanged. Node peak310,267,904B
+  under1.5GiB/CPU200%; aggregateDocker155,430,912B/512MiB/CPU200%, bothSwap0/
+  all memory events0. Natural exit0/PID absence/cleanup/wait verified.
+
+These are focused results, not a replacement for the full3dc3b90 two-failure
+terminal. A new isolated complete regression is next after reviewed fact checks;
+no current whole-graph green, real provider/mail/clinic acceptance or activation
+is claimed. All13 gaps remain active. Draft498 contains the separately qualified
+native180 financial-class change. Its exactf30f9bb HEAD's PR run39010028036 and
+push39010025250 failed before jobs could start; primary annotations report failed
+account payments/spending limits. No billing/configuration change, rerun or merge
+was attempted. Synthetic engineering continues independently of cloud admission.
