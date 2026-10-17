@@ -54,10 +54,10 @@ async function privacy(f: Fixture) {
 test("compiled prospective resend retains one native record with an opaque durable action, no send and a restorable exclusion", { timeout: 35_000 }, async t => {
   const f = await setup(), dir = await directory(); t.after(() => f.consumer.close()); t.after(() => rm(dir, { recursive: true, force: true }));
   await withSmtpVerificationServer(async smtp => {
-    const before = f.rows.size, posts = f.posts.length;
+    const before = f.rows.size, posts = f.requests.filter(r => r.method === "POST").length;
     const peer = await financialConsumerPeer(f, smtp.config, dir, f.options); t.after(peer.kill);
     const result = value(await peer.nextRetention()); assert.equal(result.kind, "accepted"); await peer.kill();
-    assert.equal(f.rows.size, before + 1); assert.equal(f.posts.length, posts); assert.equal(smtp.messages.length, 0); assert.deepEqual(await readdir(dir), []);
+    assert.equal(f.rows.size, before + 1); assert.equal(f.requests.filter(r => r.method === "POST").length, posts); assert.equal(smtp.messages.length, 0); assert.deepEqual(await readdir(dir), []);
     assert.equal((await claims(f, f.request.actionRef)).length, 1); assert.equal((await claims(f, f.request.effectRef)).length, 0);
     assert.equal((await claims(f, f.intent.effects.linkDelivery)).length, 0);
     const dump = await privacy(f), name = `resend_restore_${randomUUID().replaceAll("-", "")}`;
