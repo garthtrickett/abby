@@ -1,3 +1,4 @@
+import { reconcileOutboundEffectCarryover } from "./postgres-outbound-effect-carryover.ts";
 import { storedStandalonePolicy } from "./standalone-policy-record.ts";
 import { reconcileFinancialEffectCarryover } from "./postgres-financial-effect-carryover.ts";
 import { reconcileConfirmationResendCarryover } from "./postgres-confirmation-resend-carryover.ts";
@@ -94,7 +95,7 @@ function importActor(archiveId: string): string {
 /** Reconciles native target rows against the durable import, under the target tenant lock. */
 export async function targetReady(trx: Transaction<Database>, data: TenantConfigArchiveData,
                                   registry: TargetImportRow): Promise<boolean> {
-  if (!receiptMatches(registry, data) || !await reconcileConfirmationResendCarryover(trx, data) || !await reconcileFinancialEffectCarryover(trx, data)) return false;
+  if (!receiptMatches(registry, data) || !await reconcileConfirmationResendCarryover(trx, data) || !await reconcileFinancialEffectCarryover(trx, data) || !await reconcileOutboundEffectCarryover(trx, data)) return false;
   const activity = await sql<{ calls: boolean; pending: boolean }>`select
     exists(select 1 from calls where tenant_id = ${data.targetTenantId}) as calls,
     exists(select 1 from pending_location_calls where tenant_id = ${data.targetTenantId}) as pending`.execute(trx);

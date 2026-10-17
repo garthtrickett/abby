@@ -1,3 +1,5 @@
+import { validOutboundEffectHistory } from "../portability/outbound-effect-history.ts";
+import { writeOutboundEffectCarryover, reconcileOutboundEffectCarryover } from "./postgres-outbound-effect-carryover.ts";
 import { storedStandalonePolicy } from "./standalone-policy-record.ts";
 import { validFinancialEffectHistory } from "../portability/financial-effect-history.ts";
 import { writeFinancialEffectCarryover, reconcileFinancialEffectCarryover } from "./postgres-financial-effect-carryover.ts";
@@ -33,7 +35,7 @@ type RegistryRow = { archive_id: string; manifest_digest: string; receipt: Refer
 function minimalHistory(data: TenantConfigArchiveData): boolean {
   return Array.isArray(data?.clinics) && data.clinics.every(clinic => validClinicIntakeArchiveHistory(clinic.clinicIntake) && validPatientCorrectionArchiveHistory(clinic.clinicPatientCorrections) && validNotificationArchiveHistory(clinic.clinicNotifications) && validVoiceArchiveHistory(clinic.clinicVoice)) &&
     Array.isArray(data?.locations) && data.locations.length > 0 && data.locations.every(location =>
-    validConfirmationResendArchiveHistory(location.confirmationResends) && validFinancialEffectHistory(location.financialEffects) &&
+    validConfirmationResendArchiveHistory(location.confirmationResends) && validFinancialEffectHistory(location.financialEffects) && validOutboundEffectHistory(location.outboundEffects) &&
     Array.isArray(location.policies) && location.policies.length > 0 &&
     location.policies.every((row: ConfigArchiveData["policies"][number]) => row.storageShape === "standaloneMinimal") &&
     Array.isArray(location.knowledge) && location.knowledge.length === 0);
@@ -66,6 +68,7 @@ async function occupied(db: Kysely<Database> | Transaction<Database>, tenantId: 
     exists(select 1 from tenant_portability_fences where tenant_id = ${tenantId}) or
     exists(select 1 from confirmation_resend_journal where tenant_id = ${tenantId}) or
     exists(select 1 from financial_effect_barriers where tenant_id = ${tenantId}) or
+    exists(select 1 from outbound_effect_barriers where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_settings where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_automation where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_intake_settings where tenant_id = ${tenantId}) or
@@ -262,7 +265,7 @@ export class PostgresTenantConfigArchiveImporter {
       const row = await existing(this.db, targetTenantId);
       if (row && this.mode === "standaloneMinimal" && !minimalHistory(row.source_history)) return err({ kind: "storageFailure" });
       if (row && row.archive_id === validated.value.archiveId && row.manifest_digest === validated.value.manifestDigest &&
-          (!await reconcileConfirmationResendCarryover(this.db, row.source_history) || !await reconcileFinancialEffectCarryover(this.db, row.source_history))) return err({ kind: "storageFailure" });
+          (!await reconcileConfirmationResendCarryover(this.db, row.source_history) || !await reconcileFinancialEffectCarryover(this.db, row.source_history) || !await reconcileOutboundEffectCarryover(this.db, row.source_history))) return err({ kind: "storageFailure" });
       if (row) return row.archive_id === validated.value.archiveId && row.manifest_digest === validated.value.manifestDigest
         ? ok({ ...row.receipt, status: "alreadyStaged" })
         : err({ kind: row.archive_id === validated.value.archiveId ? "archiveConflict" : "targetOccupied" });
@@ -290,7 +293,7 @@ export class PostgresTenantConfigArchiveImporter {
         const row = await existing(trx, targetTenantId);
         if (row && this.mode === "standaloneMinimal" && !minimalHistory(row.source_history)) return err({ kind: "storageFailure" });
         if (row && row.archive_id === data.archiveId && row.manifest_digest === data.manifestDigest &&
-            (!await reconcileConfirmationResendCarryover(trx, row.source_history) || !await reconcileFinancialEffectCarryover(trx, row.source_history))) return err({ kind: "storageFailure" });
+            (!await reconcileConfirmationResendCarryover(trx, row.source_history) || !await reconcileFinancialEffectCarryover(trx, row.source_history) || !await reconcileOutboundEffectCarryover(trx, row.source_history))) return err({ kind: "storageFailure" });
         if (row) return row.archive_id === data.archiveId && row.manifest_digest === data.manifestDigest
           ? ok(row.receipt)
           : err({ kind: row.archive_id === data.archiveId ? "archiveConflict" : "targetOccupied" });
@@ -303,6 +306,7 @@ export class PostgresTenantConfigArchiveImporter {
           await writeLocation(trx, location, clinic, mapperFromReceipt, actor, importedAt, this.mode);
           await writeConfirmationResendCarryover(trx, location.targetScope, location.confirmationResends);
           await writeFinancialEffectCarryover(trx, location.targetScope, location.financialEffects);
+          await writeOutboundEffectCarryover(trx, location.targetScope, location.outboundEffects);
         }
         for (const clinic of data.clinics) {
           const location = data.locations.find(item => item.sourceScope.clinicId === clinic.sourceClinicId);

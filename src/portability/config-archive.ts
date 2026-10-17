@@ -1,3 +1,5 @@
+import { validOutboundEffectHistory } from "./outbound-effect-history.ts";
+import type { OutboundEffectArchiveRow } from "./outbound-effect-history.ts";
 import { validFinancialEffectHistory } from "./financial-effect-history.ts";
 import type { FinancialEffectArchiveRow } from "./financial-effect-history.ts";
 import { validConfirmationResendArchiveHistory } from "./confirmation-resend-history.ts";
@@ -55,6 +57,7 @@ export type ConfigArchiveData = Readonly<{
     reasonDigest: string; changedAt: string }>[];
   confirmationResends?: readonly ConfirmationResendArchiveRow[];
   financialEffects?: readonly FinancialEffectArchiveRow[];
+  outboundEffects?: readonly OutboundEffectArchiveRow[];
   knowledge: readonly PortablePublishedKnowledge[];
 }>;
 
@@ -77,6 +80,7 @@ export type TenantConfigArchiveData = Readonly<{
     omittedTextCalls?: number;
     confirmationResends?: readonly ConfirmationResendArchiveRow[];
   financialEffects?: readonly FinancialEffectArchiveRow[];
+  outboundEffects?: readonly OutboundEffectArchiveRow[];
     policies: ConfigArchiveData["policies"];
     knowledge: readonly PortablePublishedKnowledge[];
   }>[];
@@ -333,6 +337,7 @@ type MutableLocation = {
   policies: ConfigArchiveData["policies"][number][];
   confirmationResends?: ConfirmationResendArchiveRow[];
   financialEffects?: FinancialEffectArchiveRow[];
+  outboundEffects?: OutboundEffectArchiveRow[];
   knowledge: PortablePublishedKnowledge[];
 };
 
@@ -412,7 +417,7 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
     }
     if (locations.size !== declaredMappings.size) throw new InvalidConfigArchive("locations");
 
-    const resendRefs = new Set<string>(), financialRefs = new Set<string>();
+    const resendRefs = new Set<string>(), financialRefs = new Set<string>(), outboundRefs = new Set<string>();
     for (const row of lines(sections.staffWork, "staffWork")) {
       if (row.kind === "financialEffectBarrier") {
         if (row.recordVersion !== 1 || !["claimedAt,effectRef,kind,ownerBinding,recordId,recordVersion,sourceClinicId,sourceLocationId,sourceTenantId",
@@ -426,6 +431,20 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
         const barrier = barriers[0]!;
         if (financialRefs.has(barrier.effectRef) || row.recordId !== expectedId("financialEffect", barrier.effectRef, 1)) throw new InvalidConfigArchive("staffWork");
         financialRefs.add(barrier.effectRef); location.financialEffects ??= []; location.financialEffects.push(barrier);
+        continue;
+      }
+      if (row.kind === "outboundEffectBarrier") {
+        if (row.recordVersion !== 1 || !["claimedAt,effectRef,kind,ownerBinding,recordId,recordVersion,sourceClinicId,sourceLocationId,sourceTenantId",
+            "claimedAt,effectRef,kind,originScope,ownerBinding,recordId,recordVersion,sourceClinicId,sourceLocationId,sourceTenantId"].includes(Object.keys(row).sort().join(","))) {
+          throw new InvalidConfigArchive("staffWork");
+        }
+        const key = JSON.stringify([ref(row.sourceClinicId, "staffWork"), ref(row.sourceLocationId, "staffWork")]);
+        const location = locations.get(key), barriers: unknown = [{ effectRef: row.effectRef, ownerBinding: row.ownerBinding,
+          claimedAt: row.claimedAt, ...(Object.hasOwn(row, "originScope") ? { originScope: row.originScope } : {}) }];
+        if (!location || !validOutboundEffectHistory(barriers) || barriers === undefined) throw new InvalidConfigArchive("staffWork");
+        const barrier = barriers[0]!;
+        if (outboundRefs.has(barrier.effectRef) || row.recordId !== expectedId("outboundEffect", barrier.effectRef, 1)) throw new InvalidConfigArchive("staffWork");
+        outboundRefs.add(barrier.effectRef); location.outboundEffects ??= []; location.outboundEffects.push(barrier);
         continue;
       }
       if (!["completedAt,createdAt,kind,messageRef,ownerBinding,recordId,recordVersion,requestRef,sourceClinicId,sourceLocationId,sourceTenantId,status",
@@ -450,6 +469,7 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
     for (const location of locations.values()) {
       location.confirmationResends?.sort((a, b) => a.requestRef.localeCompare(b.requestRef));
       location.financialEffects?.sort((a, b) => a.effectRef.localeCompare(b.effectRef));
+      location.outboundEffects?.sort((a, b) => a.effectRef.localeCompare(b.effectRef));
     }
 
     if (verified.manifest.archiveVersion === 2) {
@@ -723,5 +743,6 @@ export async function decodeConfigArchive(input: ArchiveEnvelope, expectedTarget
     clinicNotifications: clinic.clinicNotifications ?? [], clinicVoice: clinic.clinicVoice ?? [],
     ...(location.confirmationResends === undefined ? {} : { confirmationResends: location.confirmationResends }),
     ...(location.financialEffects === undefined ? {} : { financialEffects: location.financialEffects }),
+    ...(location.outboundEffects === undefined ? {} : { outboundEffects: location.outboundEffects }),
     writeStops: clinic.writeStops, knowledge: location.knowledge });
 }
