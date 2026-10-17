@@ -32,6 +32,7 @@ export async function financialClassBookingFixture(options: { passes?: boolean; 
             claimOnce: async ref => { const claimed = !burned.has(ref); burned.add(ref); return { ok: true, value: { claimed } }; } };
         }, response: (row, method) => {
           if (method === "POST") {
+            row.created_at = clock(); row.updated_at = clock();
             if (options.lostIntent && String(row.notes).includes("financial intent")) throw new Error("Synthetic lost class financial intent response");
             if (String(row.notes).includes("financial booking observation")) {
               options.onObservation?.(); if (options.lostObservation) throw new Error("Synthetic lost class financial observation response");
@@ -57,12 +58,21 @@ export async function financialClassBookingFixture(options: { passes?: boolean; 
   const pending = () => { assert.ok(f.host.financial); return f.host.financial; };
   const readback = async () => { for (let i = 0; i < 16 && pending().inputAdmission()?.phase === "unplayed"; i++) await pending().acceptDigit("1", pending().inputAdmission()); };
   const accept = () => pending().acceptDigit("1", pending().inputAdmission());
+  const confirm = async () => {
+    let result = await f.confirm();
+    const state = value(result), notice = state.pendingPresentationId ? state.presentations[state.pendingPresentationId] : undefined;
+    if (notice?.kind === "notice" && notice.confirmationWaitSeconds) {
+      assert.equal(f.writes.length, 0); assert.equal(f.recalls.length, 0);
+      await f.play(); await f.pause(notice.confirmationWaitSeconds + 1); result = await f.confirm();
+    }
+    return result;
+  };
   const proof = () => {
     const source = [...funding.rows.values()].find(r => String(r.notes).includes("financial intent"))!;
     const intent = value(decodeClinikoFinancialIntent(source.notes));
     const observed = [...funding.rows.values()].find(r => String(r.notes).includes("financial booking observation"))!;
     return value(verifyFinancialBookingObservation(observed.notes, { intent, intentRecallRef: `cliniko:recall:${source.id}`, producerKeyRef: keyRef, publicKey: keys.publicKey }));
   };
-  return { ...f, funding, config, financialLife, events, texts, selections, pending, readback, accept, proof,
+  return { ...f, funding, config, financialLife, events, texts, selections, pending, readback, accept, confirm, proof,
     denyFinancial: () => { allowed = false; funding.deny(); }, close: async () => { financialLife.abort(); await f.close(); } };
 }
