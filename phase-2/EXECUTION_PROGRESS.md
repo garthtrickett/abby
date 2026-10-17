@@ -2651,3 +2651,13 @@ correction evidence does not turn it green. Fresh combined-source qualification
 is pending. Another full suite must wait for the actual current suite terminal
 and fresh shared-compute/file/database checks; preparing this tree starts no
 compiler, test, provider action or second full run. All13 gaps remain active.
+
+Combined source4e65b44 full TypeScript passed (`work1792195895312`),
+00:11:35.568006–00:13:12.083816UTC,1194 pinned inputs unchanged,
+peak1,410,711,552B/2GiB/CPU200%/Swap0/1536MiB heap,no memory limit/OOM events.
+The actual combined tree additionally passes39/39 protocol/receipt controls,
+0skips (`work1792196041125`),3.616s,peak197,120,000B/512MiB/CPU100%/Swap0,
+no memory limit/OOM events. These are actual new-graph checks, alongside the
+retained signed deadline/intake/correction and source-identical adapter evidence.
+The complete new combined PostgreSQL suite has not started; its source/artifact
+pins and fresh launch guards remain required after current7ca finishes naturally.
