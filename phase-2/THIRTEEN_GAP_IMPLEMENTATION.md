@@ -4500,3 +4500,10 @@ Current clinical full-graph/cloud and actual clinic/provider/acoustic/deployment
 acceptance remain open. All thirteen gaps continue, including remaining gap11,
 gaps12/13 and earlier acceptance limits. No live cancellation, payment/email,
 refund, restoration, merge, deployment or Aeva deletion is authorized here.
+
+
+### Exact clinical draft and completed full-regression limits, 17 October 2026
+
+Individual clinical expiry is published as draft PR509 on ee26ff07b3492c7596994cb1510ee4fcf002f8d4. Exact-head GitHub Actions checks failed before execution: the account billing/spending-limit annotation is retained; no application test result is inferred, no retry or CI configuration change is made. Local reviewed facts/scenario manifest passed2/2 in1792233463741 at10:37:45.655782UTC, peak65,904,640B/256MiB/CPU100/Swap0/OOM0.
+
+The older frozen c562 full repository PostgreSQL job1792229861359 naturally terminated at10:35:12.324431UTC, exit1:3,673 passed/7 failed/1 existing skip of3,681 tests. Ordered followups did not run after the failed main gate. Node953,339,904B/1.5GiB and Docker572,174,336B/1GiB,CPU200% each/Swap0/OOM0; source unchanged and own resources cleaned; paired wait73839 reaped. This supersedes the prior still-running observations and older d417 completed result. Six failures have focused passing clock witnesses in508. E376 last-page resend remains unresolved; its isolated pass is diagnostic evidence only. The complete graph excludes clinical expiry and the later clock correction, so it does not qualify this draft's full graph. All thirteen gaps and the previously recorded acceptance limits remain open.
