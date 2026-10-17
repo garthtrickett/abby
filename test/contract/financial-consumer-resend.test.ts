@@ -25,7 +25,7 @@ async function composed(options: Parameters<typeof financialResendFixture>[0] = 
   };
   let notify: ((cycle: FinancialConsumerCycle) => void) | undefined;
   const consumer = value(ClinikoFinancialConsumer.create({ checkout, pollEveryMs: 1000, cycleDeadlineMs: 10_000,
-    webhook: { endpointSecret: secret, accountRef: checkout.stripe.accountRef, livemode: false, apiVersion: checkout.stripe.apiVersion, clock: checkout.stripe.clock } }, authority,
+    webhook: { endpointSecret: secret, accountRef: checkout.stripe.accountRef, livemode: false, apiVersion: checkout.stripe.apiVersion, clock: () => Date.parse(now) } }, authority,
   { barrier: f.barrier, delivery: f.delivery, native: f.nativePort, stripe, onCycle: cycle => { const waiting = notify; notify = undefined; waiting?.(cycle); } }));
   const cycle = () => new Promise<FinancialConsumerCycle>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("Synthetic explicit resend cycle unavailable")), 5_000);

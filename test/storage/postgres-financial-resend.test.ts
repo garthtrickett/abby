@@ -49,7 +49,7 @@ async function setup(purpose: FinancialMessagePurpose = "linkDelivery") {
   const checkout = { ...f.checkoutConfig, cliniko: f.config.cliniko, stripe: f.config.stripe };
   return { ...f, selected, events, approved: new Set([f.binding.checkoutRef]), receipts: [], dependencies: { native, stripe },
     config: { checkout, pollEveryMs: 1000, cycleDeadlineMs: 10_000, webhook: { endpointSecret: secret,
-      accountRef: checkout.stripe.accountRef, livemode: false, apiVersion: checkout.stripe.apiVersion, clock: checkout.stripe.clock } } };
+      accountRef: checkout.stripe.accountRef, livemode: false, apiVersion: checkout.stripe.apiVersion, clock: () => Date.parse(now) } } };
 }
 type Fixture = Awaited<ReturnType<typeof setup>>;
 function options(f: Fixture): FinancialConsumerPeerOptions {
@@ -125,11 +125,11 @@ test("SIGKILL with a possible native resend cannot replay after both local claim
 test("a killed compiled sender after real TLS DATA leaves one possible send and cannot send again", { timeout: 35_000 }, async t => {
   const f = await setup(), dir = await directory(); t.after(() => rm(dir, { recursive: true, force: true }));
   await withSmtpVerificationServer(async smtp => {
-    smtp.setFault("stallData"); const first = await financialConsumerPeer(f, smtp.config, dir, options(f)); t.after(first.kill);
+    smtp.fault("stallData"); const first = await financialConsumerPeer(f, smtp.config, dir, options(f)); t.after(first.kill);
     let timer: ReturnType<typeof setTimeout> | undefined;
     try { await Promise.race([smtp.receivedData, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Synthetic resend TLS DATA unavailable")), 10_000); })]); }
     finally { if (timer) clearTimeout(timer); }
-    await first.kill(); assert.equal(smtp.messages.length, 1); smtp.setFault();
+    await first.kill(); assert.equal(smtp.messages.length, 1); smtp.fault(undefined);
     const cold = await financialConsumerPeer(f, smtp.config, dir, options(f)); t.after(cold.kill);
     const cycle = await cold.nextCycle(); assert.equal(cycle.kind, "observed"); assert.equal(cycle.messageAccepted, 0); assert.ok(cycle.reviewRequired > 0); await cold.kill();
     assert.equal(smtp.messages.length, 1); await privacy(f);

@@ -208,7 +208,9 @@ export class ClinikoFinancialWorkDiscovery {
         }, this.#port);
         if (!reader.ok) throw new ScanFailure("invalidConfig");
         const result = await wait(reader.value.readRequest({ recallRef, actionRef, intentRecallRef }, intent, signal));
-        if (!result.ok) throw new ScanFailure(result.error.kind); return result.value;
+        // A record GET cannot acquire a write claim; keep an impossible
+        // write-only refusal fail-closed at the discovery boundary.
+        if (!result.ok) throw new ScanFailure(result.error.kind === "alreadyClaimed" ? "unavailable" : result.error.kind); return result.value;
       };
       const { work, attempts, messageAttempts, expiryAttempts, resendRequests, resendAttempts } = await assembleFinancialRecords(selected, {
         trust: { producerKeyRef: this.#config.producer.keyRef, publicKey: this.#config.producer.publicKey }, beganAt, readIntent, readResendRequest,
