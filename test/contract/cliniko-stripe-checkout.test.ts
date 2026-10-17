@@ -121,3 +121,45 @@ test("patient history needs its own current grant before any new effect", async 
   const f = await checkoutFixture({ authority: { attemptScanAuthorized: async () => false } });
   assert.equal((await f.owner.createOnce(f.binding, stop())).ok, false); assert.equal(posts(f).length, 0); assert.equal(f.burned.has(f.intent.effects.checkout), false);
 });
+
+test("late Stripe POST headers are discarded after service abort; no second POST", async () => {
+  const ended = new AbortController(); let release!: (r: Response) => void, cancelled = false;
+  const f = await checkoutFixture({ stripe: (row, method) => method === "POST" ? new Promise(resolve => {
+    release = resolve; setImmediate(() => ended.abort());
+  }) : Response.json(row) });
+  assert.equal(value(await f.owner.createOnce(f.binding, ended.signal)).kind, "uncertain");
+  release(new Response(new ReadableStream({ cancel() { cancelled = true; } })));
+  await new Promise(resolve => setImmediate(resolve)); assert.equal(cancelled, true);
+  assert.equal((await value(f.make()).createOnce(f.binding, stop())).ok, false); assert.equal(posts(f).length, 1);
+});
+test("late account headers are discarded after abort without burning checkout", async () => {
+  const ended = new AbortController(); let release!: (r: Response) => void, cancelled = false;
+  const f = await checkoutFixture({ stripe: () => new Promise(resolve => { release = resolve; setImmediate(() => ended.abort()); }) });
+  assert.equal((await f.owner.createOnce(f.binding, ended.signal)).ok, false);
+  release(new Response(new ReadableStream({ cancel() { cancelled = true; } })));
+  await new Promise(resolve => setImmediate(resolve)); assert.equal(cancelled, true); assert.equal(f.burned.has(f.intent.effects.checkout), false);
+});
+test("foreign Stripe body reader remains owned by its original consumer", async () => {
+  let cancelled = false; const body = new ReadableStream({ cancel() { cancelled = true; } }), foreign = body.getReader();
+  const f = await checkoutFixture({ stripe: (row, method) => method === "POST" ? new Response(body) : Response.json(row) });
+  try { assert.equal(value(await f.owner.createOnce(f.binding, stop())).kind, "uncertain"); assert.equal(cancelled, false); }
+  finally { await foreign.cancel(); foreign.releaseLock(); }
+});
+test("producer withdrawal after durable attempt prevents Stripe dispatch", async () => {
+  const f = await checkoutFixture({ native: { response: (row, method) => {
+    if (method === "POST" && String(row.notes).includes("checkout attempt")) f.unadmitCheckout();
+    return Response.json(row, { status: method === "POST" ? 201 : 200 });
+  } } });
+  assert.equal((await f.owner.createOnce(f.binding, stop())).ok, false); assert.equal(posts(f).length, 0); assert.equal(f.rows.size, 3);
+});
+test("truthy nonboolean durable claim cannot admit checkout or attempt POST", async () => {
+  let claims = 0;
+  const f = await checkoutFixture({ native: { claim: async () => ({ ok: true, value: { claimed: ++claims === 1 ? true : "true" as unknown as boolean } }) } });
+  assert.equal((await f.owner.createOnce(f.binding, stop())).ok, false); assert.equal(posts(f).length, 0); assert.equal(f.rows.size, 2);
+});
+test("POST 500 and malformed/oversize Stripe bodies remain uncertain", async () => {
+  for (const response of [() => new Response("private upstream", { status: 500 }), () => new Response("{bad"), () => new Response("x".repeat(1_000_001))]) {
+    const f = await checkoutFixture({ stripe: (row, method) => method === "POST" ? response() : Response.json(row) });
+    assert.equal(value(await f.owner.createOnce(f.binding, stop())).kind, "uncertain"); assert.equal(posts(f).length, 1);
+  }
+});
