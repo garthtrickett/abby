@@ -83,3 +83,25 @@ for (const mode of ["abort", "deadline"] as const) test(`a held class native rea
     assert.equal((await running).ok, false); release(); await new Promise<void>(done => setImmediate(done)); assert.equal(f.cancellations.length, 0);
   } finally { release(); controller.abort(); await f.close(); }
 });
+
+for (const phase of ["afterNativeAbsence", "afterNativeCancellation"] as const)
+  test(`a held clinic policy read ${phase} respects the operation deadline`, { timeout: 4_000 }, async t => {
+    const f = await unlinkedClassExpiryFixture({ deadlineMs: 1_500 });
+    let release!: () => void; const held = new Promise<void>(done => { release = done; });
+    t.after(release); t.after(f.close);
+    const original = f.classPolicy.current.bind(f.classPolicy); let afterAbsence = 0, blocked = false;
+    f.classPolicy.current = async scope => {
+      const current = await original(scope);
+      const block = phase === "afterNativeCancellation" ? f.cancellations.length > 0
+        : f.filters.length === 2 && ++afterAbsence > 1;
+      if (block) { blocked = true; await held; }
+      return current;
+    };
+    const result = await f.expireClass();
+    assert.equal(blocked, true, "the actual clinic-policy read reached the held boundary");
+    if (phase === "afterNativeCancellation") {
+      assert.ok(result.ok); assert.equal(result.value.kind, "uncertain"); assert.equal(result.value.reviewRequired, true);
+      assert.equal(f.cancellations.length, 1);
+    } else { assert.equal(result.ok, false); assert.equal(f.cancellations.length, 0); }
+    release();
+  });
