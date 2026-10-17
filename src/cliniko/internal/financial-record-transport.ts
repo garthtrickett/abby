@@ -10,7 +10,7 @@ import { financialRecordInstant, financialSelection } from "./financial-record-c
 import type { ClinikoFinancialReviewConfig, ClinikoFinancialReviewSelection } from "./financial-record-context.ts";
 
 export type FinancialRecordQuery = ClinikoFinancialReviewSelection & Readonly<{
-  ownerBinding: string; operation: "retainIntent" | "retainBookingObservation" | "readBookingObservation" | "retainCheckoutAttempt" | "readCheckoutAttempt" | "retainMessageAttempt" | "readMessageAttempt";
+  ownerBinding: string; operation: "retainIntent" | "retainBookingObservation" | "readBookingObservation" | "retainCheckoutAttempt" | "readCheckoutAttempt" | "retainMessageAttempt" | "readMessageAttempt" | "retainExpiryAttempt" | "readExpiryAttempt";
   actionRef: string; financialActionRef: string; patientId: string; intentDigest: string;
   recallRef?: string; intentRecallRef?: string; recallAt?: string;
 }>;

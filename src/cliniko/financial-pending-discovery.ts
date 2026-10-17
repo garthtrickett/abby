@@ -9,7 +9,7 @@ import { financialRecordOwnerBinding } from "./financial-record-retention.ts";
 import type { FinancialRecordRetentionConfig } from "./financial-record-retention.ts";
 import { ClinikoFinancialReviewReader } from "./financial-review-read.ts";
 import type { ClinikoFinancialReviewFailure, ClinikoFinancialReviewSelection } from "./financial-review-read.ts";
-import type { FinancialDiscoveredWork, FinancialDiscoveredAttempt, FinancialDiscoveredMessageAttempt, FinancialDiscoveryRecordQuery } from "./financial-work-discovery.ts";
+import type { FinancialDiscoveredWork, FinancialDiscoveredAttempt, FinancialDiscoveredMessageAttempt, FinancialDiscoveredExpiryAttempt, FinancialDiscoveryRecordQuery } from "./financial-work-discovery.ts";
 import { financialConfigShard, financialSelection, financialRecordInstant as instant } from "./internal/financial-record-context.ts";
 import { assembleFinancialRecords, FinancialDiscoveryError as ScanFailure } from "./internal/financial-discovery-records.ts";
 import type { FinancialListedRecord } from "./internal/financial-discovery-records.ts";
@@ -30,6 +30,7 @@ export type FinancialPendingResult = Readonly<{
   kind: "pendingContext"; scanned: number; observedAt: string;
   work: readonly FinancialDiscoveredWork[]; attempts: readonly FinancialDiscoveredAttempt[];
   messageAttempts?: readonly FinancialDiscoveredMessageAttempt[];
+  expiryAttempts?: readonly FinancialDiscoveredExpiryAttempt[];
 }>;
 type Failure = ClinikoFinancialReviewFailure;
 type Row = Record<string, unknown>;
@@ -138,14 +139,14 @@ export class ClinikoFinancialPendingDiscovery {
         const found = await wait(reader.value.read({ recallRef, actionRef }, signal, { includeArchived: true }));
         if (!found.ok) throw new ScanFailure(found.error.kind); return found.value;
       };
-      const { work, attempts, messageAttempts } = await assembleFinancialRecords(selected, { beganAt, readIntent,
+      const { work, attempts, messageAttempts, expiryAttempts } = await assembleFinancialRecords(selected, { beganAt, readIntent,
         trust: { producerKeyRef: this.#config.producer.keyRef, publicKey: this.#config.producer.publicKey },
         permitRecord: (recallRef, actionRef) => recordPermit(queryFor(recallRef, actionRef, "listedFinancialRecord")) });
       await accountPermit(); for (const q of grants.values()) await recordPermit(q);
       current(account); for (const q of grants.values()) current(q);
       const observedAt = instant(this.#config.clock?.() ?? new Date().toISOString());
       if (!observedAt || observedAt < beganAt || signal.aborted || performance.now() - began > ms) throw new ScanFailure("unavailable");
-      return ok({ kind: "pendingContext", scanned, observedAt, work, attempts, ...(messageAttempts ? { messageAttempts } : {}) });
+      return ok({ kind: "pendingContext", scanned, observedAt, work, attempts, ...(messageAttempts ? { messageAttempts } : {}), ...(expiryAttempts ? { expiryAttempts } : {}) });
     } catch (error) { return err({ kind: error instanceof ScanFailure || error instanceof OwnedBodyError ? error.kind : "unavailable" }); }
     finally { clearTimeout(timer); deadline.abort(); }
   }

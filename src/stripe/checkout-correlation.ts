@@ -10,6 +10,9 @@ export type StripeCheckoutCorrelation = Readonly<{
 export type StripeCheckoutLinkContext = Omit<StripeCheckoutCorrelation, "kind"> & Readonly<{
   kind: "linkContext"; url: string; expiresAt: string;
 }>;
+export type StripeCheckoutExpiryContext = Omit<StripeCheckoutCorrelation, "kind"> & Readonly<{
+  kind: "expiryContext"; expiresAt: string; status: "open" | "complete" | "expired";
+}>;
 const uuid = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(value);
 type Scope = Readonly<{ accountRef: string; livemode: boolean }>;
 function data(session: Record<string, unknown>, wanted: string, scope: Scope): Omit<StripeCheckoutCorrelation, "kind" | "observedAt"> {
@@ -45,6 +48,20 @@ export class StripeCheckoutCorrelationReader {
     if (!result.ok) return result;
     if (result.value.data.created * 1_000 > Date.parse(result.value.observedAt) + 30_000) return err({ kind: "mismatched" });
     return ok(Object.freeze({ kind: "correlation", ...result.value.data, observedAt: result.value.observedAt }));
+  }
+  /** Current expiry settings only, without a URL or payment assertion. The
+   * independently approved expiry owner must compare its exact captured terms. */
+  async readExpiry(checkoutRef: string, signal: AbortSignal): Promise<Result<StripeCheckoutExpiryContext, StripeReadFailure>> {
+    if (!ref(checkoutRef, "cs")) return err({ kind: "invalidBinding" });
+    const result = await this.#api.run(signal, async get => {
+      const session = await get("checkout/sessions/" + encodeURIComponent(checkoutRef)), correlation = data(session, checkoutRef, this.#scope);
+      if (!["open", "complete", "expired"].includes(String(session.status)) || !Number.isSafeInteger(session.expires_at) ||
+          Number(session.expires_at) <= correlation.created || Number(session.expires_at) > 253_402_300_799) throw new ReadError("mismatched");
+      return { ...correlation, status: session.status as "open" | "complete" | "expired", expiresAt: new Date(Number(session.expires_at) * 1000).toISOString() };
+    });
+    if (!result.ok) return result;
+    if (result.value.data.created * 1000 > Date.parse(result.value.observedAt) + 30_000) return err({ kind: "mismatched" });
+    return ok(Object.freeze({ kind: "expiryContext", ...result.value.data, observedAt: result.value.observedAt }));
   }
   /** Private capability read for an independently authorized delivery owner.
    * This does not prove money, creation history, recipient or send permission.

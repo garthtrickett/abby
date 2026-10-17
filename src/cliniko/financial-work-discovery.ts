@@ -7,6 +7,7 @@ import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { OwnedBodyError, ownedBodyBytes } from "../shared/owned-body-bytes.ts";
 import type { FinancialCheckoutAttempt } from "./financial-checkout-attempt.ts";
 import type { FinancialMessageAttempt } from "./financial-message-attempt.ts";
+import type { FinancialExpiryAttempt } from "./financial-expiry-attempt.ts";
 import type { ClinikoFinancialBookingObservation } from "./financial-booking-observation.ts";
 import { financialRecordOwnerBinding } from "./financial-record-retention.ts";
 import type { FinancialRecordRetentionConfig } from "./financial-record-retention.ts";
@@ -44,10 +45,15 @@ export type FinancialDiscoveredMessageAttempt = Readonly<{
   kind: "messageAttemptContext"; intent: ClinikoFinancialReviewContext; attempt: FinancialMessageAttempt;
   recallRef: string; recalled: boolean; archivedAt: string | null;
 }>;
+export type FinancialDiscoveredExpiryAttempt = Readonly<{
+  kind: "expiryAttemptContext"; intent: ClinikoFinancialReviewContext; attempt: FinancialExpiryAttempt;
+  recallRef: string; recalled: boolean; archivedAt: string | null;
+}>;
 export type FinancialDiscoveryResult = Readonly<{
   kind: "windowContext"; window: FinancialDiscoveryWindow; scanned: number; observedAt: string;
   work: readonly FinancialDiscoveredWork[]; attempts: readonly FinancialDiscoveredAttempt[];
   messageAttempts?: readonly FinancialDiscoveredMessageAttempt[];
+  expiryAttempts?: readonly FinancialDiscoveredExpiryAttempt[];
 }>;
 type Failure = ClinikoFinancialReviewFailure;
 type Row = Record<string, unknown>;
@@ -177,7 +183,7 @@ export class ClinikoFinancialWorkDiscovery {
         if (!result.ok) throw new ScanFailure(result.error.kind);
         return result.value;
       };
-      const { work, attempts, messageAttempts } = await assembleFinancialRecords(selected, {
+      const { work, attempts, messageAttempts, expiryAttempts } = await assembleFinancialRecords(selected, {
         trust: { producerKeyRef: this.#config.producer.keyRef, publicKey: this.#config.producer.publicKey }, beganAt, readIntent,
         permitRecord: (recallRef, actionRef) => recordPermit(queryFor(recallRef, actionRef, "listedFinancialRecord")),
       });
@@ -186,7 +192,7 @@ export class ClinikoFinancialWorkDiscovery {
       current(account); for (const q of grants.values()) current(q);
       const observedAt = instant(this.#config.clock?.() ?? new Date().toISOString());
       if (!observedAt || observedAt < beganAt || signal.aborted || performance.now() - began > ms) throw new ScanFailure("unavailable");
-      return ok({ kind: "windowContext", window, scanned, observedAt, work, attempts, ...(messageAttempts ? { messageAttempts } : {}) });
+      return ok({ kind: "windowContext", window, scanned, observedAt, work, attempts, ...(messageAttempts ? { messageAttempts } : {}), ...(expiryAttempts ? { expiryAttempts } : {}) });
     } catch (error) { return err({ kind: error instanceof ScanFailure || error instanceof OwnedBodyError ? error.kind : "unavailable" }); }
     finally { clearTimeout(timer); deadline.abort(); }
   }
