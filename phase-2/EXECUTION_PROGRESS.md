@@ -2999,3 +2999,11 @@ port. Focused interface controls cover exact native bindings, current role
 revocation, shared180 quota, unknown/error responses, hostile bodies and private
 configuration projection; validation is pending. The separate frozen complete
 regression36b5285 continues and is not evidence for this later source.
+
+Initial reader validation work1792203873570 naturally failed at02:24:36.954281UTC
+before TypeScript: Node rejected an erasable-only-incompatible parameter
+property in the new local error class. The19 new reader cases did not load;
+41 existing protocol/schema/metadata cases passed, with one failed file. Replaced
+the parameter property with an explicit declared field, retaining the same
+failure contract. Peak127,229,952B, all memory events zero, inputs unchanged
+and paired wait completed. No provider/database/financial effect ran.

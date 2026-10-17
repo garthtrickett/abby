@@ -58,7 +58,8 @@ function instant(value: unknown): string | undefined {
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
 }
 class ReadFailure extends Error {
-  constructor(readonly kind: ClinikoFinancialReviewFailure["kind"]) { super("Financial review unavailable"); }
+  readonly kind: ClinikoFinancialReviewFailure["kind"];
+  constructor(kind: ClinikoFinancialReviewFailure["kind"]) { super("Financial review unavailable"); this.kind = kind; }
 }
 
 /** One exact GET with independent current financial-owner permission. No list/
