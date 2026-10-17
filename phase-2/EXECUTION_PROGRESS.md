@@ -2905,3 +2905,10 @@ private values. On failure, a best-effort snapshot preserves the original error.
 Successful content cases print only fixed source diagnostics. Production
 authority/reader/queue behavior, test assertions, deadlines, quotas and concurrency
 are unchanged; no next full run is launched until the cause is established.
+
+Diagnostic TypeScript work1792201921541 naturally failed at01:53:43.218574UTC:
+TS2339 identified a fixture configuration that does not expose its captured
+directory. Removed that invalid observation; the independently created host
+directory remains observed, and no private policy internals are accessed.
+Serving build and PostgreSQL were not run. Peak1,422,512,128B under2GiB,
+all memory-limit/OOM events zero; source pins unchanged and wait completed.

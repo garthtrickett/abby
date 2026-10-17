@@ -40,7 +40,6 @@ try {
       if (!Reflect.set(directory, "findByRef", observe(name, directory.findByRef.bind(directory)))) throw new Error("synthetic membership observation unavailable");
       return directory;
     };
-    observedDirectory(f.config.directory, "resendMembership");
     const diagnostic = () => Object.fromEntries([...sourceCalls].map(([name, row]) => [name, { ...row,
       totalMs: Math.round(row.totalMs), maximumMs: Math.round(row.maximumMs) }]));
     const inputs: string[] = []; let denied = false, loseMail = false;
