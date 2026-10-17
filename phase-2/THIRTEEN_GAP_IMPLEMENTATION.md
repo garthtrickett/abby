@@ -20,7 +20,7 @@ PostgreSQL regression `work1792198488746` naturally finished at01:47:50UTC:
 skip across3,220tests. Ordered follow-up did not run. Diagnose this remaining
 failure before another full regression; no whole-graph pass is claimed.
 
-The latest completed full regression is `7ca`, with 3,171 passes, seven failures
+The earlier completed full regression `7ca` had 3,171 passes, seven failures
 and one existing skip; its ordered follow-up did not run. Exact-head draft485
 cloud runs never executed a job step because of the account payment/spending
 restriction. All thirteen gaps retain their recorded engineering and acceptance

@@ -11,7 +11,7 @@
 | 3 Exact receipt foundation | Implemented and locally qualified in `codex/abby-provider-ack-receipt`, stacked on the published plans and integrated candidate. The full interval is captured, sent and validated. The later individual/class changes consume this exact receipt; post-create observations cannot erase an established creation acknowledgement. Independent review and exact-head CI remain outstanding. |
 | 4 Individual booking | Published in draft [PR #460](https://github.com/garthtrickett/abby/pull/460), `codex/abby-provider-ack-individual`, based on receipt correction `92a16e5`. Final online/roster availability follows preparation; exact acknowledgement survives host/review/worker cancellation. Focused, isolated database/process/compiled-location and complete local `npm test` checks passed. Independent review and cloud qualification remain open; cloud jobs have not started because of billing. |
 | 5 Native class creation | Draft [PR #461](https://github.com/garthtrickett/abby/pull/461) supplies exact attendee acknowledgement and final double capacity ordering for ordinary/approved-pass creation. Focused process-loss/privacy and movement/cancellation preservation evidence is retained below. Later staged caller work composes these creation semantics; acknowledgement of replacement creation alone never completes a move. Current whole-graph and authoritative cloud qualification remain open. |
-| 6 Earlier-gap qualification | The latest completed full7ca result is3171pass/7fail/1existing skip; ordered did not run. Played-reply and intake-routing fixes have focused current qualification, including the original five-file reproduction14/14. Corrected full ff795012 work1792198488746 finished3218pass/1fail/1existing skip; the remaining cancelled-email E2E-380 private-choice timeout requires diagnosis. No whole-graph pass is inferred; preserve first-failure diagnosis before another full run. Gaps1–9 retain clinic, mail, recovery/operator and failing speech/public-route gates. |
+| 6 Earlier-gap qualification | The earlier completed full7ca result was3171pass/7fail/1existing skip; ordered did not run. Played-reply and intake-routing fixes have focused current qualification, including the original five-file reproduction14/14. Corrected full ff795012 work1792198488746 finished3218pass/1fail/1existing skip; the remaining cancelled-email E2E-380 private-choice timeout requires diagnosis. No whole-graph pass is inferred; preserve first-failure diagnosis before another full run. Gaps1–9 retain clinic, mail, recovery/operator and failing speech/public-route gates. |
 | 7 Class/pass completion | Drafts465–473 now include actual staged caller/SAM/private same-subject renewal, separate played phase consent, complete bounded native/proposal cost admission, cold staff observation, signed uncertainty-to-staff recovery, corrected same/cross-case date/ordinal journeys and a compiled competing-account allocation case. Current focused ordinary, maximum-history and cross-case pass journeys have real disposable PostgreSQL/quota/privacy evidence. Larger current whole-graph qualification is pending; scope limits for pass restoration/financial provisioning and broader operator acceptance remain explicit. No blanket completion follows from the focused cases. |
 | 8 Payments | Stripe was selected by the owner. Draft [PR #475](https://github.com/garthtrickett/abby/pull/475) locally qualifies raw signed event validation and fresh exact Checkout money/receipt evidence; draft [PR #476](https://github.com/garthtrickett/abby/pull/476) adds bounded complete-window readonly discovery after uncertain creation. The captured raw-input/shared-reader follow-up is qualified in draft482 with34/34 checks and full TypeScript; no public payment route is active. Authoritative CI has not executed. No payment lifecycle, payable creation, link delivery, durable webhook handoff or clinical expiry is activated. The owner selected dedicated Cliniko financial reviews on17October. Pending: qualify the concrete schema/permissions and actual host lifecycle. No local patient-financial database is assumed. |
 | 9 Outbound | Pending gap 12, audit R20/R21 and contact-policy decisions. |
@@ -2912,3 +2912,28 @@ directory. Removed that invalid observation; the independently created host
 directory remains observed, and no private policy internals are accessed.
 Serving build and PostgreSQL were not run. Peak1,422,512,128B under2GiB,
 all memory-limit/OOM events zero; source pins unchanged and wait completed.
+
+Corrected sourcecb960b1 passed full TypeScript and serving compilation in
+work1792202090297,01:54:50.697224–01:57:16.114124UTC. Exactly the synthetic
+resend runner changed among455 compiled artifacts; no production module did.
+Peak1,447,645,184B under2GiB/CPU200%/Swap0,heap1536, all memory events zero.
+All1197 source inputs remained unchanged and the paired wait completed.
+
+The original private resend/content/finalization cohort then passed12/12,
+zero skips/failures/cancellations, in disposable PostgreSQL work1792202254339,
+01:57:34.886055–01:58:56.261988UTC. Command after migration:
+`ABBY_LEDGER=postgres node --test --test-concurrency=4
+test/voice/confirmation-resend-content-runner.test.ts
+test/voice/confirmation-resend-runner.test.ts
+test/voice/private-resend-finalization.test.ts`. Both content variants passed,
+so this did not reproduce or resolve the full-only failure. Node411,475,968B
+under1.5GiB/CPU200%; Docker204,177,408B under1GiB/CPU200%,Swap0, all memory
+events zero. All1197 inputs/455 artifacts and terminal pins matched; exit0,
+wrapper absence, inactive scope, empty own container label and wait verified.
+
+The success report was before select completion and had no snapshot. Move it
+after the existing played-return-prompt check and require a completed diagnostic.
+This changes only a parent test report/assertion; the serving artifacts remain
+unchanged. Observe the two content cases again before changing production code
+or running a full suite. Source aggregates are since fixture startup, not
+counts attributed solely to selection; the wrapped choice timer is separate.
