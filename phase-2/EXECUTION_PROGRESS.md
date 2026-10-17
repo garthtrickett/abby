@@ -3814,3 +3814,53 @@ reviewed product facts/scenario manifest2/2 then full `npm run typecheck`,exit0.
 Peak1,451,466,752B under2GiB/CPU200%/Swap0, heap1536, all memory events0;
 all pinned source/document/dependency inputs unchanged, paired wait reaped.
 The following evidence-only commit changes no tested executable input.
+
+## Bounded native pending financial contexts — 17 October 2026
+
+The next financial prerequisite is provider-owned pending discovery without an
+initial creation-time cutoff. The new reader requires a separate account-wide
+pending grant and every selected/source record grant; existing window/patient
+or collection permissions cannot enable it. Official Cliniko recall filters do
+not include notes or recall type. The adapter uses documented recalled_at and
+archived_at DateTime-null operators, reads the explicitly authorized pending
+account collection, and selects only its configured financial type privately.
+Profile limits are 500 total rows/five pages, 50 selected records and 50 exact
+source reads under the existing 15-second maximum deadline/body owner. Bounds,
+counts, IDs, pending flags, source snapshots and permission/current gates are
+checked before any context is returned; failure never yields partial work.
+
+The original created-window/patient reader and new pending reader share one
+private record/signature/association assembler. The existing read contracts and
+per-record/source authorization remain intact. No provider write, local queue or
+patient-bearing SQL state is added. Pending context is not financial permission,
+queue completion, absence proof, producer/restore admission or HTTP webhook ACK.
+An open citation can lead to authorized closed-source context; that flag remains
+explicit, and the actual Checkout owner rejects it before Stripe/effect claims.
+The maximum fixture uses 55 claims from an actual memory-backed 180 budget with
+zero-native-I/O grants. Arbitrary grant I/O is not presumed free or bounded by55.
+
+- Shared-assembly source be7c0df passed work1792219674101 at
+  06:47:57.323942UTC:76/76 existing financial discovery/Checkout contracts,
+  no failures/skips/cancellations. Peak140,419,072B/512MiB/CPU200%/Swap0,
+  all memory events0; source/dependency pins unchanged, paired wait reaped.
+- Pending source1bba87a passed work1792219935819 at06:52:19.653960UTC:
+  98/98 combined new and preservation controls, no failures/skips/cancellations.
+  Covers old pending work, exact signed pairing,500/50 boundary/55 claims,
+  over-capacity/partial-page refusal, independent grants, late authority loss,
+  actual exhausted budget, native flag/link/time/note violations, changed totals,
+  source edits and held/cancelled requests. Peak140,365,824B/512MiB/CPU200%/
+  Swap0, all memory events0; source/dependency pins unchanged/wait reaped.
+- A new actual closed-source-to-Checkout witness first failed at configuration:
+  the test helper shadowed its record authority with a pending-read authority.
+  Fixture-only source2c63434 keeps those ports distinct. Work1792220114411
+  passed23/23 pending/closure controls at06:55:15.948913UTC, including actual
+  owner denial before any Stripe call or consumed checkout effect. Peak
+  77,611,008B/512MiB/CPU200%/Swap0, all memory events0/pins unchanged/wait
+  reaped. The preceding22pass/1fail work1792220038627 is retained. No
+  production grant, deadline, native bound or assertion was weakened.
+
+These are native-memory/synthetic provider witnesses, not a deployed financial
+consumer, durable webhook handoff, SQL producer-loss/restore or full lifecycle
+qualification. Current permissions, exact Stripe inspection, independently owned
+service and producer/restore/quiescence remain future composition obligations.
+All13 gaps remain active; the earlier frozen6bdf350 full runs independently.

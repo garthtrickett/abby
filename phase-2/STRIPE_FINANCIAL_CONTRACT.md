@@ -596,3 +596,42 @@ local claim. These synthetic leaves and native-memory record fixtures do not
 qualify the configured cold financial service, producer/restore quiescence, SQL
 recovery or the complete payment lifecycle. The concurrently frozen6bdf350 full
 regression excludes this subsequent source.
+
+## Bounded native pending review discovery candidate
+
+`ClinikoFinancialPendingDiscovery` reads pending provider-owned review context
+without a created-time cutoff. It requires its own explicit account-wide pending
+read grant plus every selected-record/source grant and synchronous current gate.
+A prior window/patient read grant, producer key, webhook signature, collection
+grant or discovery result does not supply that account permission.
+
+The API read uses only the documented `recalled_at:!?` and `archived_at:!?`
+DateTime-null filters. Cliniko does not document recall-type or notes filters.
+The account grant therefore covers unrelated pending recall rows too; the private
+adapter selects its configured financial type and discards unrelated notes.
+The supported profile is at most five 100-row pages, 500 total pending account
+rows and 50 selected financial records, with at most 50 exact source reads.
+Source/record grants are repeated after quota, body and assembly. Every actual
+request claims the supplied physical Cliniko budget, with no default allocation.
+These are protocol bounds, not a promise about arbitrary authority callback I/O.
+
+Counts, exact page sizes, monotonic IDs/self links, pending flags, timestamps and
+source snapshots must remain consistent. Over-capacity, malformed, changed,
+foreign, untrusted, denied, exhausted, held or aborted reads refuse the complete
+observation rather than release a partial candidate. The existing 15-second
+maximum deadline and bounded body owner apply. Existing created-window and
+patient discovery keep their own contracts and share the same private financial
+record/signature/association assembly.
+
+This is not global queue completion, an absence proof, a durable HTTP webhook
+acknowledgement, receipt, current producer/restore admission or financial effect
+permission. An open citation may reference an exactly authorized closed source;
+that closed state remains explicit, and the real Checkout owner refuses it before
+Stripe or an effect claim. A pending observation never reopens an intent.
+A future configured financial service must still qualify durable handoff, exact
+Stripe inspection, quiescence/restore, lifecycle actions and process-loss/privacy.
+The native-memory/180-budget witnesses do not establish that service or SQL
+recovery, and the running earlier6bdf350 full excludes this subsequent source.
+
+Provider references checked on 17 October 2026: [recall filters and schema](https://docs.api.cliniko.com/openapi/recall),
+[DateTime filter operators](https://docs.api.cliniko.com/#filtering-results).
