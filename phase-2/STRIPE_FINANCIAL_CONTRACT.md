@@ -306,3 +306,45 @@ producer/restore admission, original native versus mapped local owner binding,
 real process-loss composition, Stripe creation/webhook lifecycle, delivery,
 receipt and expiry remain to qualify. Clinic record/field/permission/key approval
 and real provider/sender activation are still separate acceptance gates.
+
+
+## Bounded native financial-work discovery candidate
+
+`ClinikoFinancialWorkDiscovery` reads a bounded created-time window from the
+native recall collection, including archived records. It uses only documented
+created-time/archive filters, ascending native IDs and count-driven pagination;
+it never follows provider pagination links or invents a recall-type/business
+filter. The native contract is documented in the [Cliniko recall API](https://docs.api.cliniko.com/openapi/recall)
+and [filtering reference](https://docs.api.cliniko.com/).
+
+Because recalls have no native business/location field, scanning requires an
+explicit currently valid account-wide read grant. Exact selected financial
+records and cited source intents require separate current record grants; neither
+an unsigned note nor an authenticated producer citation supplies ownership or
+permission. The clinic must approve the dedicated type and actual broad-read
+permissions before activation. No deploying permission source is invented here.
+
+A scan is at most one hour, five100-row pages,500 total native rows,50 selected
+financial records and50 exact source/intent lookups within one15-second lifetime.
+Every request claims the same configured physical account budget. Each owned body
+is bounded to1MB. Stable count, exact page size, strictly increasing unique IDs,
+canonical native links, dates/flags and timestamps are required. Unknown financial
+schemas, mismatched scope/account/patient, changed listed intents, invalid proof,
+ambiguous observations and shared one-use IDs refuse the whole window. No partial
+result, missing-record claim, retry admission or cached success is returned.
+
+Producer citations are first authenticated without assigning scope, then bound
+to an independently authorized exact native source intent, including a source
+outside the listed window or archived by staff. Full producer signature/digest,
+financial/native markers, patient and individual-versus-class target-kind binding
+remain required. The exact reader's optional archive-inclusive mode still checks
+the canonical self link; its default API/behavior remains unchanged.
+
+Results are private `pairedContext` or `intentContext`, with native workflow flags.
+An unmatched intent does not mean an acknowledgement is absent: a citation may
+fall outside the scanned window. A window result is an observation of bounded
+reads, not an atomic snapshot, global queue completion, immutable obligation,
+producer/restore admission, financial effect permit or money truth. A later
+worker must reread and independently authorize exact current context. This
+candidate adds no scheduler/cursor, local private queue, database rows, writes,
+Stripe creation, sender, public route or serving fee-consent integration.
