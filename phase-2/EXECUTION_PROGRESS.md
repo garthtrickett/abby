@@ -4106,3 +4106,8 @@ are different workloads and do not prove a measured speedup. This qualifies a
 narrow safe-read optimization, not closure of the complete-regression failure.
 Fresh combined qualification and cloud/clinic acceptance remain open. All13 gaps
 continue; no payment/clinical/outbound/deployment activation follows.
+
+Reviewed public-read product facts/fingerprints and scenario manifest1792227778939
+passed2/2 at09:03:00.446549UTC on9e3e05b, peak63,836,160B/512MiB/
+CPU200%/Swap0/events0, source pins unchanged and paired wait completed. This
+subsequent evidence-only note changes no tested executable/fingerprinted source.
