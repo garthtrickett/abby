@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ClinikoFinancialConsumer } from "../../src/standalone/cliniko-financial-consumer.ts";
 import type { FinancialConsumerAuthorities, FinancialConsumerCycle } from "../../src/standalone/cliniko-financial-consumer.ts";
-import { financialResendFixture, value, stop } from "../support/financial-resend-owner.ts";
+import { financialResendFixture, value, stop, now } from "../support/financial-resend-owner.ts";
 import { secret } from "../support/financial-webhook-handoff.ts";
 async function composed(options: Parameters<typeof financialResendFixture>[0] = {}, enable = true) {
   const f = await financialResendFixture(options); value(await f.send()); let live = true;
