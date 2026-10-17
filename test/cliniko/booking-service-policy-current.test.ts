@@ -26,7 +26,7 @@ async function fixture() {
 }
 
 for (const change of ["none", "child", "parent", "role", "membership"] as const)
-test(`bound public approval reads overlap while both current sources still refuse ${change} changes`, { timeout: 10_000 }, async () => {
+test(change === "none" ? "independent public approval reads overlap and preserve the approved result" : `both current public sources still refuse ${change} changes during overlapping reads`, { timeout: 10_000 }, async () => {
   const f = await fixture(), original = f.directory.findByRef.bind(f.directory), releases: (() => void)[] = [];
   let entered = 0, notify!: () => void;
   const both = new Promise<void>(resolve => { notify = resolve; });
@@ -46,7 +46,7 @@ test(`bound public approval reads overlap while both current sources still refus
     if (change === "membership") await f.replaceAccount([{ ...f.account, membershipVersion: "changed" }]);
     for (const release of releases) release();
     const result = await reading;
-    assert.equal(result.ok, change === "none"); assert.equal(f.posts.length, 0);
+    assert.equal(result.ok, change === "none"); assert.equal(f.posts, 0);
   } finally {
     if (timeout) clearTimeout(timeout); for (const release of releases) release();
     f.directory.findByRef = original; await reading; await f.close();
