@@ -194,6 +194,23 @@ export class ClinikoConfirmationResendWorkflow {
     return state.ok && state.value.lifecycle === "active" && state.value.sessionLease?.sessionId === this.#config.sessionId &&
       state.value.presentations[id]?.status === "played";
   }
+  /** Refresh the played selection's original native collection. Paging still
+   * refreshes the complete menu; selecting one item does not need to rebuild
+   * unrelated active/cancelled date ranges before exact private evidence. */
+  async #readSelection(menu: Menu, target: ResendAppointmentRead["appointments"][number], now: string, signal: AbortSignal): Promise<ResendAppointmentRead | undefined> {
+    const c = this.#config, approval = await c.resend.policy.current(c.receipt.scope);
+    if (!approval.ok || signal.aborted) return undefined;
+    if (target.cancelledAt !== undefined) {
+      if (approval.value.template !== "appointmentDetails.v2" || !approval.value.contentKinds?.includes("cancelled")) return undefined;
+      const past = Date.parse(target.startsAt) < Date.parse(menu.from);
+      const from = past ? new Date(Date.parse(now) - 90 * 86_400_000).toISOString() : menu.from, to = past ? menu.from : menu.to;
+      const read = await this.#reader.listCancelled(c.receipt.scope, menu.snapshot.verificationRef, from, to, now);
+      return read.ok && !signal.aborted ? read.value : undefined;
+    }
+    if (approval.value.template === "appointmentDetails.v2" && !approval.value.contentKinds?.some(kind => kind === "activeInPerson" || kind === "activeTelehealth")) return undefined;
+    const read = await this.#reader.list(c.receipt.scope, menu.snapshot.verificationRef, now, menu.to, now);
+    return read.ok && !signal.aborted ? read.value : undefined;
+  }
   async selectAppointment(choice: 1 | 2 | 3, external = this.#config.signal): Promise<Result<Readonly<{ requestRef: string }>, Failure>> {
     const menu = this.#menu;
     if (this.#busy || !menu || ![1, 2, 3].includes(choice) || !menu.snapshot.appointments[menu.offset + choice - 1] || choice > Math.min(3, menu.snapshot.appointments.length - menu.offset)) return unavailable();
@@ -205,7 +222,7 @@ export class ClinikoConfirmationResendWorkflow {
         if (!before || before.state.conversationRevision !== menu.conversationRevision || before.state.presentations[menu.presentationId]?.status !== "played" || before.state.pendingPresentationId ||
             before.subject.verificationRef !== menu.snapshot.verificationRef) return undefined;
         const now = this.#now(), target = menu.snapshot.appointments[menu.offset + choice - 1]!;
-        const fresh = await this.#readMenu(menu.from, menu.to, before.subject.verificationRef, now, signal);
+        const fresh = await this.#readSelection(menu, target, now, signal);
         const after = await this.#ready(signal);
         const match = fresh ? fresh.appointments.filter(a => a.appointmentRef === target.appointmentRef) : [];
         if (!fresh || !after || after.state.conversationRevision !== before.state.conversationRevision ||
