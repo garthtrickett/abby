@@ -1,3 +1,4 @@
+import { storedStandalonePolicy } from "./standalone-policy-record.ts";
 import { reconcileFinancialEffectCarryover } from "./postgres-financial-effect-carryover.ts";
 import { reconcileConfirmationResendCarryover } from "./postgres-confirmation-resend-carryover.ts";
 import { reconcilePatientCorrectionCarryover } from "./postgres-patient-correction-carryover.ts";
@@ -63,7 +64,12 @@ type PolicyRow = { version: number; policy: unknown; setting_kind: string;
 type AutomationRow = { version: number; enabled: boolean; changed_by: string | null;
   previous_enabled: boolean | null; changed_at: Date | null };
 
-function samePolicy(actual: unknown, expected: CallPolicy): boolean {
+function samePolicy(actual: unknown, expected: CallPolicy, sourceMinimal = false): boolean {
+  // A verified minimal source may be stored by a standalone target without the
+  // reference host's synthetic capabilities. Match its exact existing storage
+  // projection; extra fields and unapproved values still fail. Preserve the
+  // full representation for an embedded target importing that same source.
+  if (sourceMinimal && isDeepStrictEqual(actual, storedStandalonePolicy(expected.scope, Number(expected.policyVersion), expected))) return true;
   if (!actual || typeof actual !== "object" || Array.isArray(actual)) return false;
   const policy = actual as Record<string, unknown>;
   if (policy.cancellationEnabled !== undefined && typeof policy.cancellationEnabled !== "boolean") return false;
@@ -108,7 +114,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       automation: clinic.automation, knowledge: location.knowledge }, location.targetScope, mappedRefs);
     if (!mapped.ok) return false;
     const expectedRows = mapped.value.policyRows.length ? mapped.value.policyRows : [
-      { version: 0, isHead: true, policy: mapped.value.policy, changedBy: null,
+      { version: 0, isHead: true, storageShape: "unsafeReference" as const, policy: mapped.value.policy, changedBy: null,
         previousBookingEnabled: null, changedAt: null }];
     const actualPolicies = (await sql<PolicyRow>`select version, policy, setting_kind,
       previous_after_hours_mode, previous_cancellation_enabled, previous_rescheduling_enabled, previous_staffed_destination_ref, changed_by, previous_booking_enabled, changed_at
@@ -120,7 +126,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
     expectedTotals.policies += actualPolicies.length;
     for (const [index, expected] of expectedRows.entries()) {
       const actual = actualPolicies[index];
-      if (!actual || actual.version !== expected.version || !samePolicy(actual.policy, expected.policy) ||
+      if (!actual || actual.version !== expected.version || !samePolicy(actual.policy, expected.policy, expected.storageShape === "standaloneMinimal") ||
           actual.setting_kind !== (expected.settingKind ?? "booking") ||
           actual.previous_after_hours_mode !== (expected.previousAfterHoursMode ?? null) ||
           actual.previous_cancellation_enabled !== (expected.previousCancellationEnabled ?? null) ||
@@ -137,7 +143,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       const actual = actualPolicies[extraIndex++]!;
       const disabled: CallPolicy = { ...current, policyVersion: String(++version), bookingEnabled: false,
         capabilities: { ...current.capabilities, book: "unavailable" } };
-      if (actual.version !== version || !samePolicy(actual.policy, disabled) ||
+      if (actual.version !== version || !samePolicy(actual.policy, disabled, head.storageShape === "standaloneMinimal") ||
           actual.setting_kind !== "booking" || actual.previous_after_hours_mode !== null ||
           actual.previous_cancellation_enabled !== null || actual.previous_rescheduling_enabled !== null || actual.previous_staffed_destination_ref !== null ||
           actual.changed_by !== actor || actual.previous_booking_enabled !== true ||
@@ -148,7 +154,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       const actual = actualPolicies[extraIndex++]!;
       const disabled: CallPolicy = { ...current, policyVersion: String(++version), cancellationEnabled: false,
         capabilities: { ...current.capabilities, cancel: "unavailable" } };
-      if (actual.version !== version || !samePolicy(actual.policy, disabled) ||
+      if (actual.version !== version || !samePolicy(actual.policy, disabled, head.storageShape === "standaloneMinimal") ||
           actual.setting_kind !== "cancellation" || actual.previous_after_hours_mode !== null ||
           actual.previous_booking_enabled !== null || actual.previous_cancellation_enabled !== true ||
           actual.previous_rescheduling_enabled !== null || actual.previous_staffed_destination_ref !== null ||
@@ -159,7 +165,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       const actual = actualPolicies[extraIndex++]!;
       const disabled: CallPolicy = { ...current, policyVersion: String(++version), reschedulingEnabled: false,
         capabilities: { ...current.capabilities, reschedule: "unavailable" } };
-      if (actual.version !== version || !samePolicy(actual.policy, disabled) ||
+      if (actual.version !== version || !samePolicy(actual.policy, disabled, head.storageShape === "standaloneMinimal") ||
           actual.setting_kind !== "rescheduling" || actual.previous_after_hours_mode !== null ||
           actual.previous_booking_enabled !== null || actual.previous_rescheduling_enabled !== true ||
           actual.previous_cancellation_enabled !== null || actual.previous_staffed_destination_ref !== null ||

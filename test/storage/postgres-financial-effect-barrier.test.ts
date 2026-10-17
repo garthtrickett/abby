@@ -86,6 +86,15 @@ test("mixed financial and resend barriers survive durable import, repeated stagi
   assert.deepEqual(value(await importer.stage(archive, target.tenantId, "fixture-owner", importAuthority, mapper)), receipt);
   assert.equal(value(await importer.preflight(archive, target.tenantId, "fixture-owner", importAuthority, mapper)).status, "alreadyStaged");
   assert.equal(await cutoverReady(target.tenantId), true);
+  const policyRow = (await sql<{ version: number; policy: unknown }>`select version, policy from clinic_settings
+    where tenant_id = ${target.tenantId} and clinic_id = ${target.clinicId} and location_id = ${target.locationId}
+    order by version limit 1`.execute(db)).rows[0]!;
+  await sql`update clinic_settings set policy = policy || '{"capabilities":{"book":"write"}}'::jsonb
+    where tenant_id = ${target.tenantId} and version = ${policyRow.version}`.execute(db);
+  assert.equal(await cutoverReady(target.tenantId), false);
+  await sql`update clinic_settings set policy = ${JSON.stringify(policyRow.policy)}::jsonb
+    where tenant_id = ${target.tenantId} and version = ${policyRow.version}`.execute(db);
+  assert.equal(await cutoverReady(target.tenantId), true);
   assert.deepEqual(await new PostgresFinancialEffectBarrier(db, target, binding).claimOnce(ref), ok({ claimed: false }));
   assert.equal(value(await new PostgresConfirmationResendJournal(db, target, binding).claim(mailRef)).send, false);
   const second = value(await buildPostgresTenantConfigArchive(db, { sourceTenantId: target.tenantId,

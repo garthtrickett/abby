@@ -223,7 +223,7 @@ function patientCorrectionAudit(data: Pick<ConfigArchiveData, "clinicPatientCorr
 
 export type MappedConfig = Readonly<{
   policy: CallPolicy;
-  policyRows: readonly Readonly<{ version: number; isHead: boolean; policy: CallPolicy; changedBy: string | null;
+  policyRows: readonly Readonly<{ version: number; isHead: boolean; storageShape: ConfigArchiveData["policies"][number]["storageShape"]; policy: CallPolicy; changedBy: string | null;
     previousBookingEnabled: boolean | null; changedAt: string | null;
     settingKind?: "booking" | "afterHours" | "urgent" | "staffSchedule" | "greeting" | "cancellation" | "rescheduling" | "staffedDestination";
     previousStaffedDestinationRef?: string | null;

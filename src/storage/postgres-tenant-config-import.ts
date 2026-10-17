@@ -1,3 +1,4 @@
+import { storedStandalonePolicy } from "./standalone-policy-record.ts";
 import { validFinancialEffectHistory } from "../portability/financial-effect-history.ts";
 import { writeFinancialEffectCarryover, reconcileFinancialEffectCarryover } from "./postgres-financial-effect-carryover.ts";
 import { writeConfirmationResendCarryover, reconcileConfirmationResendCarryover } from "./postgres-confirmation-resend-carryover.ts";
@@ -36,23 +37,6 @@ function minimalHistory(data: TenantConfigArchiveData): boolean {
     Array.isArray(location.policies) && location.policies.length > 0 &&
     location.policies.every((row: ConfigArchiveData["policies"][number]) => row.storageShape === "standaloneMinimal") &&
     Array.isArray(location.knowledge) && location.knowledge.length === 0);
-}
-
-function storedPolicy(scope: LocationScope, version: number, policy: CallPolicy):
-  Readonly<{ scope: LocationScope; policyVersion: string; bookingEnabled: boolean; cancellationEnabled: boolean; reschedulingEnabled: boolean;
-    afterHoursMode: NonNullable<CallPolicy["afterHoursMode"]>; afterHoursInfo?: NonNullable<CallPolicy["afterHoursInfo"]>;
-    urgentResponse?: NonNullable<CallPolicy["urgentResponse"]>;
-    staffSchedule?: NonNullable<CallPolicy["staffSchedule"]>;
-    transferDestinationRef?: string;
-    greeting: NonNullable<CallPolicy["greeting"]> | null }> {
-  return { scope: { ...scope }, policyVersion: String(version), bookingEnabled: policy.bookingEnabled,
-    cancellationEnabled: policy.cancellationEnabled ?? false, reschedulingEnabled: policy.reschedulingEnabled ?? false,
-    afterHoursMode: policy.afterHoursMode ?? "staffRequest",
-    ...(policy.afterHoursInfo ? { afterHoursInfo: policy.afterHoursInfo } : {}),
-    ...(policy.urgentResponse ? { urgentResponse: policy.urgentResponse } : {}),
-    ...(policy.staffSchedule ? { staffSchedule: policy.staffSchedule } : {}),
-    ...(policy.transferDestinationRef === undefined ? {} : { transferDestinationRef: policy.transferDestinationRef }),
-    greeting: policy.greeting ?? null };
 }
 
 /** Public route refs require reviewed host mapping even when patient work is unavailable. */
@@ -118,7 +102,7 @@ async function writeLocation(trx: Transaction<Database>, location: TenantConfigA
     { version: 0, isHead: true, policy: mapped.value.policy, changedBy: null,
       previousBookingEnabled: null, changedAt: null }];
   for (const row of policyRows) {
-    const value = mode === "standaloneMinimal" ? storedPolicy(scope, row.version, row.policy) : row.policy;
+    const value = mode === "standaloneMinimal" ? storedStandalonePolicy(scope, row.version, row.policy) : row.policy;
     await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy,
       setting_kind, previous_after_hours_mode, previous_cancellation_enabled, previous_rescheduling_enabled, previous_staffed_destination_ref, changed_by, previous_booking_enabled, changed_at) values
       (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, ${row.version},
@@ -130,7 +114,7 @@ async function writeLocation(trx: Transaction<Database>, location: TenantConfigA
   let current = head.policy;
   let currentVersion = head.version;
   if (head.policy.bookingEnabled) {
-    const next = mode === "standaloneMinimal" ? storedPolicy(scope, head.version + 1,
+    const next = mode === "standaloneMinimal" ? storedStandalonePolicy(scope, head.version + 1,
       { ...head.policy, bookingEnabled: false }) :
       { ...head.policy, policyVersion: String(head.version + 1), bookingEnabled: false,
         capabilities: { ...head.policy.capabilities, book: "unavailable" as const } };
@@ -145,7 +129,7 @@ async function writeLocation(trx: Transaction<Database>, location: TenantConfigA
   if (current.cancellationEnabled === true) {
     const disabled: CallPolicy = { ...current, policyVersion: String(currentVersion + 1), cancellationEnabled: false,
       capabilities: { ...current.capabilities, cancel: "unavailable" } };
-    const value = mode === "standaloneMinimal" ? storedPolicy(scope, currentVersion + 1, disabled) : disabled;
+    const value = mode === "standaloneMinimal" ? storedStandalonePolicy(scope, currentVersion + 1, disabled) : disabled;
     await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy,
       setting_kind, changed_by, previous_cancellation_enabled, changed_at) values
       (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, ${currentVersion + 1},
@@ -156,7 +140,7 @@ async function writeLocation(trx: Transaction<Database>, location: TenantConfigA
   if (current.reschedulingEnabled === true) {
     const disabled: CallPolicy = { ...current, policyVersion: String(currentVersion + 1), reschedulingEnabled: false,
       capabilities: { ...current.capabilities, reschedule: "unavailable" } };
-    const value = mode === "standaloneMinimal" ? storedPolicy(scope, currentVersion + 1, disabled) : disabled;
+    const value = mode === "standaloneMinimal" ? storedStandalonePolicy(scope, currentVersion + 1, disabled) : disabled;
     await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy,
       setting_kind, changed_by, previous_rescheduling_enabled, changed_at) values
       (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, ${currentVersion + 1},
