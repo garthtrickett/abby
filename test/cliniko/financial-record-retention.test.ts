@@ -139,3 +139,34 @@ test("late headers are cancelled by their owner, while a prelocked foreign body 
   assert.deepEqual(await f.retainer.retainIntentOnce(f.intent, reviewDate, stop()), { ok: true, value: { kind: "uncertain" } });
   owner.releaseLock();
 });
+
+test("malformed claim admission is not truthy permission and cannot reach the provider", async () => {
+  for (const claimed of ["true", "false", 1, {}, null, undefined]) {
+    const f = fixture({ claim: async () => ({ ok: true, value: { claimed: claimed as boolean } }) });
+    assert.deepEqual(await f.retainer.retainIntentOnce(f.intent, reviewDate, stop()), { ok: false, error: { kind: "unavailable" } });
+    assert.equal(f.events.includes("POST"), false); assert.equal(f.events.includes("quota"), false);
+  }
+});
+
+test("the clinic's explicit review date participates in current authorization instead of an inferred UTC day", async () => {
+  const f = fixture({ authority: { allows: async q => q.recallAt === "2026-11-01" } });
+  assert.equal(value(await f.retainer.retainIntentOnce(f.intent, "2026-11-01", stop())).kind, "accepted");
+  assert.equal(f.rows.get("30")?.recall_at, "2026-11-01");
+  const denied = fixture({ authority: { allows: async q => q.recallAt === "2026-11-01" } });
+  assert.deepEqual(await denied.retainer.retainIntentOnce(denied.intent, reviewDate, stop()), { ok: false, error: { kind: "forbidden" } });
+  assert.equal(denied.events.includes("claim"), false);
+});
+
+test("oversize, malformed UTF-8 and endless empty response bodies cannot acknowledge retention", async () => {
+  for (const stream of [
+    () => new Response(new Uint8Array(1_000_001), { status: 201 }),
+    () => new Response(new Uint8Array([0xc3, 0x28]), { status: 201 }),
+    () => new Response(new ReadableStream<Uint8Array>({ pull(controller) { controller.enqueue(new Uint8Array()); } }), { status: 201 }),
+  ]) {
+    const f = fixture({ config: { deadlineMs: 25 }, response: async () => stream() });
+    const began = performance.now();
+    assert.deepEqual(await f.retainer.retainIntentOnce(f.intent, reviewDate, stop()), { ok: true, value: { kind: "uncertain" } });
+    assert.ok(performance.now() - began < 1_000);
+    assert.deepEqual(await f.retainer.retainIntentOnce(f.intent, reviewDate, stop()), { ok: false, error: { kind: "alreadyClaimed" } });
+  }
+});

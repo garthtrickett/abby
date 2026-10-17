@@ -92,8 +92,11 @@ export class FinancialRecordTransport {
       await permit();
       if (input.method === "POST") {
         const claim = await wait(this.#claim(input.query.actionRef));
-        if (!claim.ok) throw new RecordFailure("unavailable");
-        if (!claim.value.claimed) throw new RecordFailure("alreadyClaimed");
+        if (claim?.ok !== true) throw new RecordFailure("unavailable");
+        if (claim.value?.claimed !== true) {
+          if (claim.value?.claimed === false) throw new RecordFailure("alreadyClaimed");
+          throw new RecordFailure("unavailable");
+        }
       }
       const limited = await wait(claimClinikoBudget(this.#budget)); if (limited) return err(limited);
       await permit();
