@@ -1,3 +1,7 @@
+import type { FinancialResendAttempt } from "./financial-resend-attempt.ts";
+import type { FinancialResendContext } from "./financial-resend-records.ts";
+import { ClinikoFinancialResendRecords } from "./financial-resend-records.ts";
+import type { ClinikoFinancialIntent } from "./financial-review-intent.ts";
 import type { FinancialResendRequest } from "./financial-resend-request.ts";
 import { assembleFinancialRecords, FinancialDiscoveryError as ScanFailure } from "./internal/financial-discovery-records.ts";
 import type { FinancialListedRecord as Listed } from "./internal/financial-discovery-records.ts";
@@ -21,7 +25,7 @@ import { validRecallDate } from "./recall-note.ts";
 export type FinancialDiscoveryWindow = Readonly<{ createdFrom: string; createdThrough: string }>;
 export type FinancialDiscoveryAccountQuery = ClinikoFinancialReviewSelection & FinancialDiscoveryWindow & Readonly<{ includeArchived: true; patientId?: string }>;
 export type FinancialDiscoveryRecordQuery = ClinikoFinancialReviewSelection & Readonly<{
-  recallRef: string; actionRef: string; includeArchived: true; purpose: "listedFinancialRecord" | "sourceIntent";
+  recallRef: string; actionRef: string; includeArchived: true; purpose: "listedFinancialRecord" | "sourceIntent" | "sourceResendRequest";
 }>;
 /** Account-wide reading is an explicit trusted grant: Cliniko recalls have no
  * native business/location field or documented recall-type list filter. Notes
@@ -54,12 +58,17 @@ export type FinancialDiscoveredResendRequest = Readonly<{
   kind: "resendRequestContext"; intent: ClinikoFinancialReviewContext; request: FinancialResendRequest;
   recallRef: string; recalled: boolean; archivedAt: string | null;
 }>;
+export type FinancialDiscoveredResendAttempt = Readonly<{
+  kind: "resendAttemptContext"; intent: ClinikoFinancialReviewContext; attempt: FinancialResendAttempt; request: FinancialResendContext;
+  recallRef: string; recalled: boolean; archivedAt: string | null;
+}>;
 export type FinancialDiscoveryResult = Readonly<{
   kind: "windowContext"; window: FinancialDiscoveryWindow; scanned: number; observedAt: string;
   work: readonly FinancialDiscoveredWork[]; attempts: readonly FinancialDiscoveredAttempt[];
   messageAttempts?: readonly FinancialDiscoveredMessageAttempt[];
   expiryAttempts?: readonly FinancialDiscoveredExpiryAttempt[];
   resendRequests?: readonly FinancialDiscoveredResendRequest[];
+  resendAttempts?: readonly FinancialDiscoveredResendAttempt[];
 }>;
 type Failure = ClinikoFinancialReviewFailure;
 type Row = Record<string, unknown>;
@@ -189,8 +198,20 @@ export class ClinikoFinancialWorkDiscovery {
         if (!result.ok) throw new ScanFailure(result.error.kind);
         return result.value;
       };
-      const { work, attempts, messageAttempts, expiryAttempts, resendRequests } = await assembleFinancialRecords(selected, {
-        trust: { producerKeyRef: this.#config.producer.keyRef, publicKey: this.#config.producer.publicKey }, beganAt, readIntent,
+      const readResendRequest = async (recallRef: string, actionRef: string, intentRecallRef: string, intent: ClinikoFinancialIntent) => {
+        if (++lookups > 50) throw new ScanFailure("unavailable");
+        const query = queryFor(recallRef, actionRef, "sourceResendRequest");
+        const reader = ClinikoFinancialResendRecords.createReadOnly(this.#config, {
+          allows: async () => { try { await accountPermit(); await recordPermit(query); return true; }
+            catch (error) { if (error instanceof ScanFailure && error.kind === "forbidden") return false; throw error; } },
+          current: () => { try { current(account); current(query); return true; } catch { return false; } },
+        }, this.#port);
+        if (!reader.ok) throw new ScanFailure("invalidConfig");
+        const result = await wait(reader.value.readRequest({ recallRef, actionRef, intentRecallRef }, intent, signal));
+        if (!result.ok) throw new ScanFailure(result.error.kind); return result.value;
+      };
+      const { work, attempts, messageAttempts, expiryAttempts, resendRequests, resendAttempts } = await assembleFinancialRecords(selected, {
+        trust: { producerKeyRef: this.#config.producer.keyRef, publicKey: this.#config.producer.publicKey }, beganAt, readIntent, readResendRequest,
         permitRecord: (recallRef, actionRef) => recordPermit(queryFor(recallRef, actionRef, "listedFinancialRecord")),
       });
       await accountPermit();
@@ -198,7 +219,7 @@ export class ClinikoFinancialWorkDiscovery {
       current(account); for (const q of grants.values()) current(q);
       const observedAt = instant(this.#config.clock?.() ?? new Date().toISOString());
       if (!observedAt || observedAt < beganAt || signal.aborted || performance.now() - began > ms) throw new ScanFailure("unavailable");
-      return ok({ kind: "windowContext", window, scanned, observedAt, work, attempts, ...(messageAttempts ? { messageAttempts } : {}), ...(expiryAttempts ? { expiryAttempts } : {}), ...(resendRequests ? { resendRequests } : {}) });
+      return ok({ kind: "windowContext", window, scanned, observedAt, work, attempts, ...(messageAttempts ? { messageAttempts } : {}), ...(expiryAttempts ? { expiryAttempts } : {}), ...(resendRequests ? { resendRequests } : {}), ...(resendAttempts ? { resendAttempts } : {}) });
     } catch (error) { return err({ kind: error instanceof ScanFailure || error instanceof OwnedBodyError ? error.kind : "unavailable" }); }
     finally { clearTimeout(timer); deadline.abort(); }
   }
