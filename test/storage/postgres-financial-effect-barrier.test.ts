@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { sql } from "kysely";
 import { ok } from "../../src/core/model.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
@@ -14,6 +15,7 @@ import { PostgresPortabilityFence } from "../../src/storage/postgres-portability
 import { decodeTenantConfigArchive } from "../../src/portability/config-archive.ts";
 import { validStaffWorkHistoryManifest } from "../../src/portability/staff-work-history.ts";
 import { down } from "../../src/storage/migrations/049_financial_effect_barriers.ts";
+import { withDisposablePostgres } from "../support/disposable-postgres.ts";
 
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL required");
 const db = connectPostgres(process.env.DATABASE_URL);
@@ -106,4 +108,18 @@ test("unmapped financial location and a target containing only an effect barrier
   value(await new PostgresFinancialEffectBarrier(db, target, binding).claimOnce(randomUUID()));
   assert.deepEqual(await new PostgresTenantConfigArchiveImporter(db).preflight(archive, target.tenantId, "fixture-owner", importAuthority, mapper),
     { ok: false, error: { kind: "targetOccupied" } });
+});
+
+test("logical database backup preserves consumed barriers and never restores retry permission", async () => {
+  await withDisposablePostgres(async (original, originalUrl) => {
+    const owner = scope(), ref = randomUUID();
+    assert.deepEqual(await new PostgresFinancialEffectBarrier(original, owner, binding).claimOnce(ref), ok({ claimed: true }));
+    const dump = execFileSync("pg_dump", [originalUrl, "--data-only", "--inserts", "--table=financial_effect_barriers"], { timeout: 10_000, maxBuffer: 1_000_000 });
+    await withDisposablePostgres(async (restored, restoredUrl) => {
+      execFileSync("psql", [restoredUrl, "-X", "--set=ON_ERROR_STOP=1"], { input: dump, timeout: 10_000, maxBuffer: 1_000_000 });
+      assert.deepEqual(await new PostgresFinancialEffectBarrier(restored, owner, binding).claimOnce(ref), ok({ claimed: false }));
+      const before = (await sql`select * from financial_effect_barriers`.execute(original)).rows;
+      assert.deepEqual((await sql`select * from financial_effect_barriers`.execute(restored)).rows, before);
+    });
+  });
 });

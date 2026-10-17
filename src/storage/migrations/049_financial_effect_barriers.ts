@@ -21,9 +21,13 @@ export async function up<DB>(db: Kysely<DB>): Promise<void> {
     on financial_effect_barriers for each statement execute function abby_reject_portability_truncate()`.execute(db);
 }
 export async function down<DB>(db: Kysely<DB>): Promise<void> {
-  const rows = await sql<{ occupied: boolean; frozen: boolean }>`select
+  const rows = await sql<{ occupied: boolean; frozen: boolean; retained: boolean }>`select
     exists(select 1 from financial_effect_barriers) as occupied,
-    exists(select 1 from tenant_portability_fences where frozen) as frozen`.execute(db);
-  if (rows.rows[0]?.occupied !== false || rows.rows[0]?.frozen !== false) throw new Error("financial effect barriers/fences must be retained");
+    exists(select 1 from tenant_portability_fences where frozen) as frozen,
+    exists(select 1 from tenant_config_imports
+      where jsonb_path_exists(source_history, '$.locations[*].financialEffects[*]')) as retained`.execute(db);
+  if (rows.rows[0]?.occupied !== false || rows.rows[0]?.frozen !== false || rows.rows[0]?.retained !== false) {
+    throw new Error("financial effect barriers/fences must be retained");
+  }
   await db.schema.dropTable("financial_effect_barriers").execute();
 }
