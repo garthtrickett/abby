@@ -206,13 +206,19 @@ export class PostgresPolicyStore implements PolicyStore {
 
   private async capture(policy: CallPolicy, automation?: Readonly<{ version: number; enabled: boolean }>,
                         db: Kysely<Database> = this.db): Promise<CallPolicy> {
-    const intake = await new PostgresClinicIntakeSettingStore(db).read(policy.scope);
+    // These independently scoped, read-only settings do not depend on one
+    // another. Keep every fresh read/decoder and failure gate, while avoiding
+    // four serial database round trips at each protected policy boundary.
+    // A transaction still uses its own connection and existing isolation.
+    const [intake, corrections, notifications, voice] = await Promise.all([
+      new PostgresClinicIntakeSettingStore(db).read(policy.scope),
+      new PostgresClinicPatientCorrectionSettingStore(db).read(policy.scope),
+      new PostgresClinicNotificationSettingStore(db).read(policy.scope),
+      new PostgresClinicVoiceSettingStore(db).read(voiceClinicScope(policy.scope)),
+    ]);
     if (!intake.ok) throw new Error("clinic intake configuration unavailable");
-    const corrections = await new PostgresClinicPatientCorrectionSettingStore(db).read(policy.scope);
     if (!corrections.ok) throw new Error("clinic correction configuration unavailable");
-    const notifications = await new PostgresClinicNotificationSettingStore(db).read(policy.scope);
     if (!notifications.ok) throw new Error("clinic notification configuration unavailable");
-    const voice = await new PostgresClinicVoiceSettingStore(db).read(voiceClinicScope(policy.scope));
     if (!voice.ok) throw new Error("clinic voice configuration unavailable");
     const captured = await captureVoicePolicy(await captureNotificationPolicy(this.compose(policy, intake.value, corrections.value, automation),
       notifications.value, this.notificationRegistry), voice.value, this.voiceRegistry);
