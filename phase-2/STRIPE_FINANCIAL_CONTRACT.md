@@ -523,15 +523,33 @@ normal authorized lease renewal can continue unchanged terms beyond the initial
 lease expiry. This does not extend the offer, proof, financial assessment or
 payment deadline, and the real voice path retains its per-chunk lease guard.
 
-The pass admission retains the existing conservative 180-request clinical bound,
-plus one exact native intent GET for a required financial capture. A current
-explicit no-deposit assessment needs zero extra capture requests. Required-payment
-pass execution therefore refuses a configured 180 profile under this bound;
-the positive financial pass cohort uses the existing fixture's 200-request budget.
-No production/native quota was increased. The inherited allowance is not a
-measured minimum or a newly derived complete bound for arbitrary callbacks.
-Completing this financial route within 180 requires a genuine complete cost model
-or staged preparation and remains unfinished.
+The subsequent request-budget correction replaces that inherited allowance with
+complete global reader bounds and trusted callback ceilings for the exact clinic,
+Cliniko account and physical budget. Unknown, foreign, changed or above-180
+compositions refuse. Every actual request still claims the shared account budget;
+headroom is not a reservation and does not guarantee capacity against peers.
+
+One full protected occurrence check remains before clinical review. Its duplicate
+after review is omitted only for configured financial booking; proof, permission
+and pass history are still repeated, then final metadata/proof preparation and
+both exact occurrence/roster snapshots precede attendee POST. Legacy non-financial
+booking retains its existing ordering. Native changes after review still refuse.
+
+The bound includes metadata/roster growth to reader limits, three complete pass
+histories, clinical review and attendee POST, the exact financial GET and optional
+post-ACK observation POST. With proof ceiling one and zero-native-I/O authority
+callbacks, required-payment pass send/confirmation is149, ordinary class77 and
+explicit no-deposit pass147. A higher-cost declaration can require177 for send
+and exactly180 at confirmation;181 refuses. The supported maximum-page witness
+uses999 linked pass rows,500 inactive roster rows and both500-row metadata
+relationships, and measures exactly149 claims across confirmation/send/retention.
+The clinic's native limit is unchanged at180.
+
+Ordinary/pass signed HTTP/WS and booking-to-fixture Stripe cohorts now pass with
+the actual PostgreSQL180 request budget, real quota waits and renewed clinical
+affirmation, independently of the memory maximum-page witness. This replaces the
+earlier candidate's181 refusal and200-budget positive fixtures; it does not
+qualify arbitrary undeclared callbacks or the complete financial lifecycle.
 
 Qualification includes ordinary/pass actual call-flow ownership, local financial
 resume without a model request, signed HTTP/WebSocket private playback with real

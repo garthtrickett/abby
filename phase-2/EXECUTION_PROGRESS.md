@@ -3618,3 +3618,86 @@ provider/mail acceptance or deployment. The old complete clinical36b5285c result
 does not qualify these newer graphs. Current whole-graph and authoritative cloud
 validation remain open. Gap11 lifecycle/producer/profile work, gaps12/13 and the
 full execution order remain active.
+
+## Complete financial class booking request bounds — 17 October 2026
+
+This supersedes the preceding class-consent candidate's inherited181-request
+required-payment refusal. It does not change the native account limit or complete
+gap11. Stripe and dedicated clinic-approved Cliniko financial reviews remain the
+owner-selected contract; no patient-bearing financial queue is added to localSQL.
+
+The old pass admission simply added one financial source GET to an inherited180
+clinical allowance. The replacement derives a complete bounded send from the
+actual readers and exact scope/account/physical-budget callback declarations.
+Unknown, foreign or changed declarations and a confirmation requiring181 refuse.
+The planner covers global maximum page growth rather than extrapolating from a
+small observed list. Every native request still claims the shared account budget.
+
+The full protected occurrence scan before clinical review is preserved. Only the
+financial path omits its duplicate post-review occurrence scan; that check still
+repeats proof, permissions and full pass history. Final dispatch still prepares
+metadata/proof and takes both exact occurrence/roster snapshots before POST.
+Native cancellation, capacity/relationship/roster changes after review, and late
+financial or cost-authority withdrawal prevent attendee dispatch. Legacy booking
+without financial configuration keeps its prior ordering.
+
+The default required-payment pass composition is149:38 protected occurrence,
+25 final dispatch occurrence,66 for three stable case reads,2 clinical POSTs,
+2 financial requests (exact capture GET and optional post-ACK observation POST),
+and16 proof requests. Class-permission/pass-selection/financial-policy/source/
+record-permission/producer callback ceilings are included separately; their local
+fixture ceilings are zero, not assumptions about arbitrary owner ports. The
+ordinary class bound is77; explicit no-deposit pass147. Higher declared callback
+costs can yield177 send/180 confirmation;181 is rejected. The post-ACK retention
+allowance cannot veto or erase an exact clinical ACK.
+
+### Qualification
+
+- Runtime/source4a4afaa71f40ae4bc00b04aef503ef3f974d6b6a passed full
+  `npm run typecheck` and `npm run build:voice-tests` in work1792217729650,
+  terminal06:18:50.321771UTC. Node peak1,439,731,712B under2GiB/CPU200%/Swap0,
+  heap1536; all memory events0 and pinned inputs unchanged. A subsequent
+  fixture-only forwarding getter exposes the live claim count instead of the
+  spread object's initial zero. Production/compiled inputs did not change.
+- Frozenfc4ab15d1ee89a3f0f28b3d748f1d3a62c58304d passed work1792217950165,
+  terminal06:19:36.177765UTC:24/24 plan/cost/permission/native-change checks,
+  no skips/cancellations. Its maximum workload has999 linked pass rows,500
+  inactive roster rows and500 entries in each native relationship collection;
+  it actually consumes149 claims across confirmation/send/retention. Peak
+  98,238,464B under512MiB/CPU200%/Swap0, all memory events0.
+- The samefc4 source passed work1792217958303 at06:24:25.826820UTC:69/69,
+  no failures/skips/cancellations. Exact command:
+  `bash scripts/with-postgres.sh bash -c 'npm run db:migrate && ABBY_LEDGER=postgres node --test --test-concurrency=1 test/storage/postgres-class-financial-consent.test.ts test/voice/class-financial-voice.test.ts test/cliniko/class-booking-host.test.ts test/cliniko/class-pass-booking-host.test.ts test/cliniko/class-booking-acknowledgement.test.ts'`.
+  This includes64 legacy class/pass/ACK checks,3 native class-to-fixture Stripe
+  SQL exclusion/privacy/collection-denial checks and2 real signedHTTP/WS private
+  playback/early-digit/media/separate-clinical-yes checks. Financial cases use
+  the actual PostgreSQL180 request budget. Its real clock releases pass quota;
+  no budget row/timestamp is edited, and a new clinical yes is required after
+  waiting. Node peak141,586,432B under1GiB/CPU200%; aggregate ownedDocker peak
+  152,416,256B under512MiB/CPU100%, bothSwap0/all memory events0. Source pins
+  and dependency lock unchanged; wrapper/scope/owned containers gone and paired
+  wait reaped. Native Cliniko, speech/model, Stripe and mail leaves are synthetic.
+- The earlier first50 runtime checks passed. Two later measurement runs had
+  62pass/1fail because the fixture spread snapshotted the counter at zero;
+  their assertions and failures are retained. Forwarding the actual live getter
+  fixed measurement; no request bound, clinical assertion or deadline was raised.
+
+The separate complete combined full3dc3b90/work1792214516199 naturally ended
+06:19:36.020802UTC,exit1:3411pass/2fail/1existing skip (3414tests); ordered
+follow-ups did not run. Failures are E2E-392 prepared-class synthetic mail polling
+before its crash checkpoint, and E2E-380 cancelled-email private-choice first
+response while its native preparation was pending. The class candidate's mail
+fixture and all four focused process-loss passes do not settle the separate
+cancelled-email timeout. Source unchanged/472 generated artifacts pinned;
+Node peak975,446,016B/1.5GiB and aggregateDocker561,328,128B/1GiB, all
+OOM/high/max0. Natural terminal/exit1/PID absence/cleanup/wait were verified.
+Owned draft496/497 bodies record this result through the direct PR endpoint
+(the older `gh pr edit` path failed on deprecated Projects classic GraphQL).
+
+No whole-current-graph, production financial runner, financial-producer SIGKILL/
+restore quiescence, complete catalogue/intake, external clinic/provider/mail or
+cloud acceptance is inferred. A separate selected-range resend correction is
+being qualified against the original deadlines. All thirteen gaps remain active;
+payments still require lifecycle/discovery/delivery/expiry/recovery completion,
+then outbound and approved writeback remain in execution order. No deployment,
+real provider action, repository-policy/billing change or Aeva deletion occurred.
