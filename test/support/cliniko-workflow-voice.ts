@@ -41,6 +41,8 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     locationServiceSources?: readonly Parameters<typeof OwnerFileServiceCatalogue.capture>[0][];
     appointmentTypeMetadata?: Readonly<Record<string, Readonly<{ durationMinutes: number }>>>;
     beforeWriteResponse?: () => Promise<void>;
+    transitionTrace?: true;
+    beforeBookingMenuRead?: () => void;
     transcriptFinal?: (event: Extract<TranscriptEvent, { kind: "segmentFinal" }>) => readonly TranscriptEvent[] } = {}) {
   const accountSid = `AC${"4".repeat(32)}`, callSid = `CA${randomUUID().replaceAll("-", "")}`, streamSid = `MZ${randomUUID().replaceAll("-", "")}`;
   const webhookUrl = "https://workflow.example.test/twilio/inbound", streamUrl = "wss://workflow.example.test/twilio/media/";
@@ -65,6 +67,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   const writeRequests: { method: string; path: string; body: Record<string, unknown> }[] = [];
   const writtenActions = new Set<string>(), nativeRows = new Map<string, Record<string, unknown>>();
   const failures: string[] = [];
+  const transitionTrace: Record<string, unknown>[] = [];
   const playback = new SyntheticPlaybackReceipts(name => sendEvent({ event: "mark", mark: { name } }));
   // Fixed stage names and timings only; diagnostics never retain caller text,
   // provider paths, patient refs or verification material.
@@ -79,6 +82,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         ...(signal ? { signal } : {}) };
       if (stages.length >= 64) stages.shift();
       stages.push(stage);
+      if (name === "bookingMenuRead") options.beforeBookingMenuRead?.();
       try { return await run(...args); } finally {
         stage.settled = performance.now();
         if (sourceBefore) console.log(JSON.stringify({ kind: "bookingMenuTiming", elapsedMs: Math.round(stage.settled - stage.started),
@@ -178,6 +182,21 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
           if (config.financial) assert.ok(context.financialPresentation, "actual private financial playback port required");
           // Test-only observation before actual transient disposal; nothing is
           // persisted and the production ledger still releases every call.
+          if (options.transitionTrace) {
+            const apply = ledger.apply.bind(ledger);
+            ledger.apply = async (...args: Parameters<MemoryLedger["apply"]>) => {
+              const action = args[3];
+              const detail = { kind: action.kind, ...("now" in action ? { at: action.now } : {}),
+                ...(action.kind === "callerTurn" ? { interpretation: action.interpretation.kind,
+                  textPresent: !!action.turn.text, turnAt: action.turn.at } : {}) };
+              const result = await apply(...args);
+              if (transitionTrace.length >= 64) transitionTrace.shift();
+              transitionTrace.push({ ...detail, result: result.ok ? "ok" : result.error.kind,
+                ...(result.ok ? { lifecycle: result.value.lifecycle, revision: result.value.conversationRevision,
+                  leaseExpires: result.value.sessionLease?.expiresAt, pendingPresentation: result.value.pendingPresentationId !== undefined } : {}) });
+              return result;
+            };
+          }
           const callLedger = ledger, dispose = callLedger.dispose.bind(callLedger);
           callLedger.dispose = () => { disposedState ??= callLedger.read(callId, scope); dispose(); };
           flow = resultValue(ClinikoCallFlow.create({ ...config, ...context,
@@ -277,7 +296,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       const resumeChunk = chunk; await voiceUntil(() => processedChunk >= resumeChunk, "fresh private-audio quiet interval");
     };
     await mark();
-    return { callId, sent, spoken, transcripts, privateTranscripts, modelTurns, writes, writeRequests, close, mark, media, sendEvent, privateQuiet,
+    return { callId, sent, spoken, transcripts, privateTranscripts, modelTurns, transitionTrace, writes, writeRequests, close, mark, media, sendEvent, privateQuiet,
       get workflowStarted() { return flow !== undefined; },
       get flow() { assert.ok(flow); return flow; }, get transcriptionFrames() { return transcriptionFrames; },
       get closed() { return closed; }, get closeCode() { return closeCode; },
@@ -366,7 +385,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         const failureState = failures.length && !options.expectedFailure ? await diagnosticState() : undefined;
         assert.deepEqual(failures, options.expectedFailure ? [options.expectedFailure] : [], `wire failure after ${modelTurns.length} model turns and ${transcriptionFrames} transcribed frames ${failureState ? JSON.stringify({
           workflow: flow?.workflow, lifecycle: failureState.lifecycle, terminalReason: failureState.terminal?.reason, now: now(),
-          sourceCalls: sourceDiagnostic(), processedChunk, finalChunk, pendingPresentation: failureState.pendingPresentationId !== undefined,
+          sourceCalls: sourceDiagnostic(), ...(options.transitionTrace ? { transitionTrace } : {}), processedChunk, finalChunk, pendingPresentation: failureState.pendingPresentationId !== undefined,
           actions: Object.values(failureState.actions).map(action => ({ kind: action.kind, status: action.status })),
           presentations: Object.values(failureState.presentations).map(p => ({ kind: p.kind, status: p.status })),
           effects: Object.values(failureState.effects).map(e => ({ kind: e.kind, status: e.status })),
