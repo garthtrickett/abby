@@ -2,6 +2,30 @@
 
 Activated by the owner: bridge all thirteen gaps in the agreed order, including every part that can be completed without a Twilio number. The October 10 source comparison is an inventory, not a completion claim. Existing no-number contracts and privacy rules still apply.
 
+## Current qualification checkpoint, 17 October 2026
+
+Use [the execution ledger](EXECUTION_PROGRESS.md) for exact current evidence.
+The dated implementation sections below retain their historical source and
+publication state; a historical local pass does not qualify a later combined
+candidate or imply deployment.
+
+Current engineering candidate `ff795012` (draft485) includes the clinical
+played-reply and intake-routing corrections plus the inactive Stripe protocol,
+readonly discovery and bounded stream adapters. Its full TypeScript/serving
+build, forty intake authority/deadline controls, original five-file PostgreSQL
+reproduction (14/14) and product-facts/manifest checks pass locally. Those
+focused checks do not qualify the whole graph. The corrected complete
+PostgreSQL regression `work1792198488746` started at 00:54:49 UTC and is still
+pending; ordered follow-up requires the main suite to pass.
+
+The latest completed full regression is `7ca`, with 3,171 passes, seven failures
+and one existing skip; its ordered follow-up did not run. Exact-head draft485
+cloud runs never executed a job step because of the account payment/spending
+restriction. All thirteen gaps retain their recorded engineering and acceptance
+limits. No merge, clinic/provider acceptance, activation, real mail/payment,
+carrier work or Aeva deletion is inferred. The pending financial-work owner
+choice remains required before its dependent lifecycle adapter can be built.
+
 ## Requirements and evidence needed
 
 | Order | Requirement | Current work and completion evidence |

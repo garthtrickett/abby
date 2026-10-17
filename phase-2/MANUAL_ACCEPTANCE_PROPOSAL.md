@@ -20,11 +20,16 @@ environment. Keep native identities and any protected observations in the
 clinic-approved private evidence destination; the repository receives only
 scenario labels, source hashes, fixed outcomes and pass/fail reasons.
 
-Current clinical candidate7ca9da4 is under full local qualification. Its completed
-parentc54 full failed3169pass/4fail/1existing skip; focused corrections do not
-replace a complete result. Stripe protocol drafts475/476 are outside that
-clinical graph. No single candidate currently qualifies all13 gaps. Pin the
-then-current candidate rather than treating these historical hashes as approval.
+The 17 October engineering checkpoint is combined candidate `ff795012`
+(draft485), with the clinical fixes and inactive Stripe protocol/discovery/stream
+adapters from drafts475/476/482. The corrected complete PostgreSQL regression
+`work1792198488746` is running; its result is pending. The latest completed full
+run is `7ca`: 3,171 passes, seven failures and one existing skip, with ordered
+follow-up not run. Focused corrections do not replace a complete result, and
+exact-head cloud checks have not executed because of account billing limits.
+No single candidate currently qualifies all thirteen gaps. Pin the actual
+then-current source/build and its completed evidence before any separately
+authorized rehearsal; none of these hashes constitutes activation approval.
 
 ## Operator observations
 
