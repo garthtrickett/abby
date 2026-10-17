@@ -419,7 +419,7 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
             "claimedAt,effectRef,kind,originScope,ownerBinding,recordId,recordVersion,sourceClinicId,sourceLocationId,sourceTenantId"].includes(Object.keys(row).sort().join(","))) {
           throw new InvalidConfigArchive("staffWork");
         }
-        const key = JSON.stringify([ref(row.sourceTenantId, "staffWork"), ref(row.sourceClinicId, "staffWork"), ref(row.sourceLocationId, "staffWork")]);
+        const key = JSON.stringify([ref(row.sourceClinicId, "staffWork"), ref(row.sourceLocationId, "staffWork")]);
         const location = locations.get(key), barriers: unknown = [{ effectRef: row.effectRef, ownerBinding: row.ownerBinding,
           claimedAt: row.claimedAt, ...(Object.hasOwn(row, "originScope") ? { originScope: row.originScope } : {}) }];
         if (!location || !validFinancialEffectHistory(barriers) || barriers === undefined) throw new InvalidConfigArchive("staffWork");

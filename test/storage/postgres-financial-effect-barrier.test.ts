@@ -114,12 +114,18 @@ test("logical database backup preserves consumed barriers and never restores ret
   await withDisposablePostgres(async (original, originalUrl) => {
     const owner = scope(), ref = randomUUID();
     assert.deepEqual(await new PostgresFinancialEffectBarrier(original, owner, binding).claimOnce(ref), ok({ claimed: true }));
-    const dump = execFileSync("pg_dump", [originalUrl, "--data-only", "--inserts", "--table=financial_effect_barriers"], { timeout: 10_000, maxBuffer: 1_000_000 });
-    await withDisposablePostgres(async (restored, restoredUrl) => {
-      execFileSync("psql", [restoredUrl, "-X", "--set=ON_ERROR_STOP=1"], { input: dump, timeout: 10_000, maxBuffer: 1_000_000 });
+    // Restore schema and data into an empty database, so dump ordering installs
+    // guards after COPY rather than bypassing an already installed guard.
+    const dump = execFileSync("pg_dump", [originalUrl, "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 4_000_000 });
+    const name = `financial_restore_${randomUUID().replaceAll("-", "")}`;
+    await sql.raw(`create database "${name}"`).execute(original);
+    const restoredUrl = new URL(originalUrl); restoredUrl.pathname = `/${name}`;
+    const restored = connectPostgres(restoredUrl.toString());
+    try {
+      execFileSync("psql", [restoredUrl.toString(), "-X", "--set=ON_ERROR_STOP=1"], { input: dump, timeout: 10_000, maxBuffer: 4_000_000 });
       assert.deepEqual(await new PostgresFinancialEffectBarrier(restored, owner, binding).claimOnce(ref), ok({ claimed: false }));
       const before = (await sql`select * from financial_effect_barriers`.execute(original)).rows;
       assert.deepEqual((await sql`select * from financial_effect_barriers`.execute(restored)).rows, before);
-    });
+    } finally { await restored.destroy(); await sql.raw(`drop database "${name}"`).execute(original); }
   });
 });
