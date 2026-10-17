@@ -1,3 +1,5 @@
+import { validFinancialEffectHistory } from "./financial-effect-history.ts";
+import type { FinancialEffectArchiveRow } from "./financial-effect-history.ts";
 import { validConfirmationResendArchiveHistory } from "./confirmation-resend-history.ts";
 import type { ConfirmationResendArchiveRow } from "./confirmation-resend-history.ts";
 import { validPatientCorrectionArchiveHistory } from "./patient-correction-history.ts";
@@ -52,6 +54,7 @@ export type ConfigArchiveData = Readonly<{
   writeStops: readonly Readonly<{ version: number; isHead: boolean; stopped: boolean; actorRef: string;
     reasonDigest: string; changedAt: string }>[];
   confirmationResends?: readonly ConfirmationResendArchiveRow[];
+  financialEffects?: readonly FinancialEffectArchiveRow[];
   knowledge: readonly PortablePublishedKnowledge[];
 }>;
 
@@ -73,6 +76,7 @@ export type TenantConfigArchiveData = Readonly<{
     /** Present in archive v2; absent for legacy v1 imports. */
     omittedTextCalls?: number;
     confirmationResends?: readonly ConfirmationResendArchiveRow[];
+  financialEffects?: readonly FinancialEffectArchiveRow[];
     policies: ConfigArchiveData["policies"];
     knowledge: readonly PortablePublishedKnowledge[];
   }>[];
@@ -328,6 +332,7 @@ type MutableLocation = {
   omittedTextCalls?: number;
   policies: ConfigArchiveData["policies"][number][];
   confirmationResends?: ConfirmationResendArchiveRow[];
+  financialEffects?: FinancialEffectArchiveRow[];
   knowledge: PortablePublishedKnowledge[];
 };
 
@@ -407,8 +412,22 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
     }
     if (locations.size !== declaredMappings.size) throw new InvalidConfigArchive("locations");
 
-    const resendRefs = new Set<string>();
+    const resendRefs = new Set<string>(), financialRefs = new Set<string>();
     for (const row of lines(sections.staffWork, "staffWork")) {
+      if (row.kind === "financialEffectBarrier") {
+        if (row.recordVersion !== 1 || !["claimedAt,effectRef,kind,ownerBinding,recordId,recordVersion,sourceClinicId,sourceLocationId,sourceTenantId",
+            "claimedAt,effectRef,kind,originScope,ownerBinding,recordId,recordVersion,sourceClinicId,sourceLocationId,sourceTenantId"].includes(Object.keys(row).sort().join(","))) {
+          throw new InvalidConfigArchive("staffWork");
+        }
+        const key = JSON.stringify([ref(row.sourceTenantId, "staffWork"), ref(row.sourceClinicId, "staffWork"), ref(row.sourceLocationId, "staffWork")]);
+        const location = locations.get(key), barriers: unknown = [{ effectRef: row.effectRef, ownerBinding: row.ownerBinding,
+          claimedAt: row.claimedAt, ...(Object.hasOwn(row, "originScope") ? { originScope: row.originScope } : {}) }];
+        if (!location || !validFinancialEffectHistory(barriers) || barriers === undefined) throw new InvalidConfigArchive("staffWork");
+        const barrier = barriers[0]!;
+        if (financialRefs.has(barrier.effectRef) || row.recordId !== expectedId("financialEffect", barrier.effectRef, 1)) throw new InvalidConfigArchive("staffWork");
+        financialRefs.add(barrier.effectRef); location.financialEffects ??= []; location.financialEffects.push(barrier);
+        continue;
+      }
       if (!["completedAt,createdAt,kind,messageRef,ownerBinding,recordId,recordVersion,requestRef,sourceClinicId,sourceLocationId,sourceTenantId,status",
           "completedAt,createdAt,kind,messageRef,originScope,ownerBinding,recordId,recordVersion,requestRef,sourceClinicId,sourceLocationId,sourceTenantId,status"].includes(Object.keys(row).sort().join(",")) ||
           row.kind !== "confirmationResendSubmission" || row.recordVersion !== 1) throw new InvalidConfigArchive("staffWork");
@@ -428,7 +447,10 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
       location.confirmationResends ??= [];
       location.confirmationResends.push(submission);
     }
-    for (const location of locations.values()) location.confirmationResends?.sort((a, b) => a.requestRef.localeCompare(b.requestRef));
+    for (const location of locations.values()) {
+      location.confirmationResends?.sort((a, b) => a.requestRef.localeCompare(b.requestRef));
+      location.financialEffects?.sort((a, b) => a.effectRef.localeCompare(b.effectRef));
+    }
 
     if (verified.manifest.archiveVersion === 2) {
       const counts = new Map<string, number>();
@@ -700,5 +722,6 @@ export async function decodeConfigArchive(input: ArchiveEnvelope, expectedTarget
     mappingProvenance: location.mappingProvenance, policies: location.policies, automation: clinic.automation, clinicIntake: clinic.clinicIntake ?? [], clinicPatientCorrections: clinic.clinicPatientCorrections ?? [],
     clinicNotifications: clinic.clinicNotifications ?? [], clinicVoice: clinic.clinicVoice ?? [],
     ...(location.confirmationResends === undefined ? {} : { confirmationResends: location.confirmationResends }),
+    ...(location.financialEffects === undefined ? {} : { financialEffects: location.financialEffects }),
     writeStops: clinic.writeStops, knowledge: location.knowledge });
 }

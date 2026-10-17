@@ -103,6 +103,7 @@ function prepare(data: TenantConfigArchiveData, mapper: ReferenceImportMapper):
       timeZone: location.timeZone, mappingProvenance: location.mappingProvenance,
       policies: location.policies, automation: clinic.automation, clinicIntake: clinic.clinicIntake ?? [], clinicPatientCorrections: clinic.clinicPatientCorrections ?? [], clinicNotifications: clinic.clinicNotifications ?? [], clinicVoice: clinic.clinicVoice ?? [], writeStops: clinic.writeStops,
       ...(location.confirmationResends === undefined ? {} : { confirmationResends: location.confirmationResends }),
+      ...(location.financialEffects === undefined ? {} : { financialEffects: location.financialEffects }),
       knowledge: location.knowledge };
     const mapped = mapConfig(scoped, location.targetScope, mapper);
     if (!mapped.ok) return mapped;

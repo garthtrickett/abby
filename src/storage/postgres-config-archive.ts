@@ -1,3 +1,5 @@
+import { readFinancialEffectCarryover, carryFinancialEffectOrigins } from "./postgres-financial-effect-carryover.ts";
+import { financialEffectArchiveRecord } from "../portability/financial-effect-history.ts";
 import { carryConfirmationResendOrigins } from "./postgres-confirmation-resend-import-history.ts";
 import { confirmationResendArchiveRecord } from "../portability/confirmation-resend-history.ts";
 import { readConfirmationResendCarryover } from "./postgres-confirmation-resend-carryover.ts";
@@ -301,6 +303,7 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
       const observedLocations = await sql<{ clinic_id: string; location_id: string }>`select clinic_id, location_id from clinic_settings
         where tenant_id = ${sourceTenantId} union select clinic_id, location_id from clinic_knowledge_events
         where tenant_id = ${sourceTenantId} union select clinic_id, location_id from confirmation_resend_journal
+        where tenant_id = ${sourceTenantId} union select clinic_id, location_id from financial_effect_barriers
         where tenant_id = ${sourceTenantId}`.execute(trx);
       const observedClinics = await sql<{ clinic_id: string }>`select clinic_id from clinic_automation where tenant_id = ${sourceTenantId}
         union select clinic_id from clinic_intake_settings where tenant_id = ${sourceTenantId}
@@ -323,6 +326,9 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
       catch { throw new ExportAbort("storageCorrupt"); }
       let clinicNotifications: Awaited<ReturnType<typeof readNotificationCarryover>>;
       try { clinicNotifications = await readNotificationCarryover(trx, sourceTenantId); }
+      catch { throw new ExportAbort("storageCorrupt"); }
+      let financialEffects: Awaited<ReturnType<typeof readFinancialEffectCarryover>>;
+      try { financialEffects = await carryFinancialEffectOrigins(trx, sourceTenantId, await readFinancialEffectCarryover(trx, sourceTenantId)); }
       catch { throw new ExportAbort("storageCorrupt"); }
       let confirmationResends: Awaited<ReturnType<typeof readConfirmationResendCarryover>>;
       try { confirmationResends = await carryConfirmationResendOrigins(trx, sourceTenantId,
@@ -348,7 +354,7 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
           effective_from, effective_until, actor_ref, changed_at from clinic_knowledge_events
           where tenant_id = ${sourceTenantId} and status in ('approved', 'revoked')
           order by clinic_id, location_id, source_ref, version`.execute(trx)).rows;
-      return { schemaVersion, settings: settings.rows, automation: automation.rows, clinicIntake: clinicIntake.rows, clinicPatientCorrections, clinicNotifications, clinicVoice, confirmationResends, stops: stops.rows,
+      return { schemaVersion, settings: settings.rows, automation: automation.rows, clinicIntake: clinicIntake.rows, clinicPatientCorrections, clinicNotifications, clinicVoice, confirmationResends, financialEffects, stops: stops.rows,
         knowledge, omittedTextCalls: callScan.value.count,
         omittedTextCallsByLocation: callScan.value.countsByLocation,
         sourceFenceVersion: request.expectedFenceVersion };
@@ -443,6 +449,8 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
     });
     const staffWork: RecordData[] = snapshot.confirmationResends.map(row => confirmationResendArchiveRecord(
       { tenantId: sourceTenantId, clinicId: row.clinicId, locationId: row.locationId }, row.submission));
+    staffWork.push(...snapshot.financialEffects.map(row => financialEffectArchiveRecord(
+      { tenantId: sourceTenantId, clinicId: row.clinicId, locationId: row.locationId }, row.barrier)));
     const records: Record<ArchiveSection, readonly RecordData[]> = { locations, settings, knowledge, calls, staffWork };
     const bytes = Object.fromEntries(ARCHIVE_SECTIONS.map(name => [name, sectionBytes(records[name])])) as Record<ArchiveSection, Buffer>;
     const manifest = { archiveVersion: 2, archiveId: request.archiveId, createdAt: request.createdAt,

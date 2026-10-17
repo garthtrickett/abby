@@ -1,9 +1,9 @@
-import { createHash } from "node:crypto";
+import { validStaffWorkHistoryManifest } from "../portability/staff-work-history.ts";
 import { sql } from "kysely";
 import type { Kysely, Transaction } from "kysely";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
-import { confirmationResendArchiveRecord, validConfirmationResendArchiveHistory, validResendOriginScope } from "../portability/confirmation-resend-history.ts";
+import { validConfirmationResendArchiveHistory, validResendOriginScope } from "../portability/confirmation-resend-history.ts";
 import { confirmationResendRef } from "../standalone/confirmation-resend-journal.ts";
 import { sameScope } from "../standalone/appointment-change-authority.ts";
 import { receiptMatches } from "./postgres-cutover-target.ts";
@@ -28,7 +28,7 @@ async function bindings(db: Db, tenantId: string): Promise<ReadonlyMap<string, C
   if (!receiptMatches(registry, data) || data.targetTenantId !== tenantId || data.locations.length < 1 || data.locations.length > 16) {
     throw new Error("invalid resend import receipt");
   }
-  const records: ReturnType<typeof confirmationResendArchiveRecord>[] = [], sources = new Set<string>(), targets = new Set<string>();
+  const sources = new Set<string>(), targets = new Set<string>();
   for (const location of data.locations) {
     if (!validResendOriginScope(location.sourceScope) || !validResendOriginScope(location.targetScope) ||
         location.sourceScope.tenantId !== data.sourceTenantId || location.targetScope.tenantId !== tenantId ||
@@ -41,20 +41,9 @@ async function bindings(db: Db, tenantId: string): Promise<ReadonlyMap<string, C
       result.set(row.requestRef, { archiveId: data.archiveId, manifestDigest: data.manifestDigest,
         sourceScope: structuredClone(row.originScope ?? location.sourceScope), targetScope: structuredClone(location.targetScope),
         ownerBinding: row.ownerBinding, createdAt: row.createdAt });
-      records.push(confirmationResendArchiveRecord(location.sourceScope, row));
     }
   }
-  records.sort((a, b) => Buffer.compare(Buffer.from(a.recordId), Buffer.from(b.recordId)));
-  const digest = createHash("sha256"); let byteCount = 0;
-  for (const row of records) {
-    const bytes = Buffer.from(JSON.stringify(row) + "\n"); byteCount += bytes.byteLength;
-    if (byteCount > 64 * 1024 * 1024) throw new Error("resend import too large");
-    digest.update(bytes);
-  }
-  const manifest = data.sectionManifests.staffWork;
-  if (manifest.version !== 1 || manifest.recordCount !== records.length || manifest.byteCount !== byteCount || manifest.sha256 !== digest.digest("hex")) {
-    throw new Error("changed resend import history");
-  }
+  if (!validStaffWorkHistoryManifest(data)) throw new Error("changed resend import history");
   return result;
 }
 
