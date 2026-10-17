@@ -3038,3 +3038,65 @@ regression36b5285 covers its earlier graph, not this new adapter/shared reader.
 Current financial-host identity, producer-observed booking acknowledgement,
 durable attempts/discovery, payable creation, receipt/delivery, expiry and
 process/restore/SQL privacy remain explicit future gates. All13 gaps stay active.
+
+
+## Financial booking-observation capture candidate
+
+Stripe and dedicated clinic-approved Cliniko financial reviews remain selected.
+The next isolated candidate, `codex/abby-financial-booking-capture`, is stacked
+on draft490 at629d97fb. Semantic source7920902212ba140d2732466e2bacfdb231af8ea8
+adds producer-authenticated capture/verification only. The actual financial host,
+durable observation retention, financial effects and clinic activation remain open.
+
+`ClinikoFinancialBookingCapture` first reads the exact active financial intent
+under existing current financial-owner permission and checks the complete
+expected canonical terms. Individual/class methods delegate to their real native
+writers with mandatory final clinical checks and their own exact-201 callback.
+Only this callback can capture the native target. A nominal returned acceptance,
+lost response or later matching diary does not create an observation. Native
+acceptance remains sticky if optional signing or a later wrapper fails.
+
+A separately bounded canonical Ed25519 producer note binds the whole intent
+digest, exact intent recall, financial/native action UUIDs, created target, time
+and approved producer key reference. Verification needs an independently trusted
+current public key and expected private intent. It is not financial permission,
+received money, immutable history, durable retention or a replay grant. Keys are
+injected only; no serving route, real provider/sender call, new dependency,
+local patient-bearing record, deployment or activation is added. Actual host
+composition must share the explicit native physical-account request budget.
+
+Validation on frozen7920902, work1792205513518, naturally completed exit0 at
+02:53:49.755018UTC17October2026: `node --test --test-concurrency=2
+ test/cliniko/financial-booking-capture.test.ts
+ test/cliniko/financial-review-read.test.ts
+ test/cliniko/financial-review-intent.test.ts
+ test/cliniko/booking-write.test.ts
+ test/cliniko/class-attendance-write.test.ts
+ test/contract/product-facts.test.ts
+ test/contract/scenario-manifest.test.ts` passed83/83, with zero failures,
+cancellations or skips, followed by successful `npm run typecheck`.
+This includes15 new capture cases through actual native writers, lost/malformed
+responses, acceptance without callback, post-ack wrapper/signing failure,
+mandatory final permission, mismatched markers/patients/native selection,
+changed financial terms, tampering, wrong producer trust and cross-record reuse.
+All1574 tracked inputs and shared dependency lock remained unchanged during
+validation. Peak1,418,878,976B under2GiB/CPU200%/Swap0, Node heap1536MiB;
+all memory/OOM events0. Exitfile0, PID815082 absent, scope inactive and paired
+wait44147 reaped. Fresh host admission included peer remaining cap growth and
+a1.5GiB host reserve; no exclusive peer hold was required.
+
+The first source147ee86 run, work1792205363627, passed83/83 runtime checks but
+failed strict TypeScript optional-property/validated-array/fixture-union typing.
+Its exit2 and peak1,409,732,608B/events0 are retained. Narrow typing corrections
+preceded the successful changed-source rerun; no typecheck flags or tests were
+weakened. `git diff --check` passed. Final evidence documentation changes do not
+alter any tested executable input.
+
+The older complete current-graph regression remains separately frozen at
+36b5285c in work1792203076121 and was still running at02:54UTC, through E2E-357,
+without reported failure. It does not qualify this later unwired financial
+adapter. The latest completed full regression remains ff795012 with3218passes,
+one cancelled-email private-choice failure and one existing skip; ordered did
+not run. The new diagnostic run is investigating that failure, not already green.
+All13 gaps remain active; independent review, exact-head authoritative CI and
+composed provider-owned financial lifecycle/restore/privacy acceptance remain.

@@ -167,3 +167,43 @@ approved ownership fields rather than copying arbitrary private properties.
 Local interface validation passes61 focused checks and full TypeScript on
 sourcef71f863d. This does not qualify actual financial-host permissions or
 lifecycle/privacy/recovery. No real provider was accessed.
+
+
+## Producer-authenticated booking observation candidate
+
+`financial-booking-capture.ts` prepares against an exact active financial-intent
+record through the current-owner reader, comparing the complete canonical
+expected intent before the native final availability/consent checks. Its
+individual and class methods delegate to the real native writers and supply the
+acknowledgement callback themselves. A nominal returned acceptance without that
+callback, a lost response, or a later matching diary inspection cannot create an
+observation. Both existing clinical permission/current callbacks remain required.
+The financial intent's `booking.actionRef` binds the native provider marker/class
+action UUID, not the separate core host mutation key.
+
+The callback produces a bounded separate note containing the intent record,
+canonical intent digest, financial and native action UUIDs, exact created target,
+observation time and producer key reference. The record marker is also signed.
+It uses injected Ed25519 `KeyObject`s and domain-separated canonical bytes with
+Node's built-in [sign/verify API](https://nodejs.org/download/release/v22.15.0/docs/api/crypto.html#cryptosignalgorithm-data-key-callback).
+No key provisioning, environment activation or dependency is added. The trusted
+financial owner must independently supply its currently approved producer public
+key; neither a key reference nor a key obtained from notes establishes trust.
+Verification binds the whole expected intent, including location/account/mode,
+terms, recipient and all effect IDs, and refuses edits or cross-record reuse.
+
+This is producer-observation capture and verification only. The signed candidate
+is transient private provider-bound content; it must never enter local journal,
+model, transcript, public response, diagnostic log or outbox payload. Signing
+failure or a later wrapper error preserves an already validated native booking.
+Preparation is not a clinical grant, and a signature is not current financial
+permission, received money, immutable provider history, durable retention or a
+replay permit. The helper is not wired to the serving host or checkout creation.
+A consumed in-process capture is not a durable once-only barrier across restart.
+
+Durable Cliniko observation retention, current financial-host authorization,
+pre-booking approved fee capture and intent creation, one-use financial effects,
+producer/restore quiescence and the actual composed booking-to-payment workflow
+remain open. Missing retained acknowledgement stays unresolved for staff; diary
+matching must not reconstruct it. Clinic record/key/permission provisioning and
+real Stripe/sender activation remain separate acceptance gates.
