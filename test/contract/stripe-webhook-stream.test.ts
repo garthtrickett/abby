@@ -103,7 +103,7 @@ test("Stripe pre-aborted capture acquires no reader; empty and non-byte bodies c
   assert.deepEqual(await verifier.verifyStream(unused, header(raw), stop.signal), { ok: false, error: { kind: "unavailable" } });
   assert.equal(unused.locked, false);
   for (const body of [null, stream(new Uint8Array()),
-    new ReadableStream({ start(controller) { controller.enqueue("private wrong chunk"); controller.close(); } }) as unknown as ReadableStream<Uint8Array>]) {
+    new ReadableStream({ start(controller) { controller.enqueue("private wrong chunk"); controller.close(); } })]) {
     assert.deepEqual(await verifier.verifyStream(body, header(raw), signal()), { ok: false, error: { kind: "invalidWebhook" } });
   }
 });

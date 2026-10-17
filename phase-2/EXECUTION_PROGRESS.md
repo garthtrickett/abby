@@ -2678,3 +2678,12 @@ foreign reader ownership and malformed/pre-aborted input. The fixture HTTP resul
 is authentication evidence only; actual provider acknowledgement still requires
 a separately durable host handoff. Full TypeScript is next; no real provider,
 mail, payment, permission, clinical expiry or activation is added.
+
+First full TypeScript on stream sourcee1ebc28 (`work1792195197548`) finished
+00:01:57.957121UTC,exit2: Node HTTP-to-Web and DOM streams disagree on unrelated
+pipeThrough/BYOB overload types at the actual loopback HTTP test. Peak
+1,403,490,304B/no memory limit/OOM event; this is a type failure, not RAM.
+Narrow the shared boundary to the default reader's actual read/cancel/release
+methods, with unknown wire chunks still checked as Uint8Array at runtime.
+No cast, dependency or signature/body rule bypass is needed. All34 protocol
+checks pass again (`work1792195384423`); corrected full TypeScript is next.

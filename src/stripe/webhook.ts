@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import { StripeBodyError, stripeBodyBytes } from "./internal/body-bytes.ts";
+import type { StripeBodyStream } from "./internal/body-bytes.ts";
 
 const checkoutEvents = ["checkout.session.completed", "checkout.session.expired",
   "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed"] as const;
@@ -44,7 +45,7 @@ export class StripeWebhookVerifier {
   /** Authenticates captured transport bytes, without parsing/re-encoding them.
    * Returns the same reference-only result; no HTTP acknowledgement, financial
    * permission or durable handoff is established by this method. */
-  async verifyStream(body: ReadableStream<Uint8Array> | null, header: string | null, external: AbortSignal):
+  async verifyStream(body: StripeBodyStream | null, header: string | null, external: AbortSignal):
     Promise<Result<StripeCheckoutNotification | null, StripeWebhookFailure>> {
     if (!(external instanceof AbortSignal) || external.aborted) return err({ kind: "unavailable" });
     const deadline = new AbortController(), timer = setTimeout(() => deadline.abort(), this.#config.bodyDeadlineMs ?? 10_000);
