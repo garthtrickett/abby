@@ -2745,3 +2745,9 @@ All thirteen gaps remain active. Payment protocol work remains inactive;
 financial-work ownership is still awaiting the operator's choice. No deployment,
 provider action, clinical acceptance, Aeva removal or successful cloud CI is
 inferred from these local checks.
+
+The product-facts guard first reported the changed, directly cited intake test
+fingerprint (`work1792198214576`: one pass/one failure). Review confirms the
+booking.scope claim is unchanged: new denial controls strengthen its evidence.
+Refresh that source fingerprint and the reference date/current qualification
+header; preserve the failed full-suite and unavailable cloud-CI status.
