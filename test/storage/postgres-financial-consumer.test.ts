@@ -93,7 +93,7 @@ async function directory() { return mkdtemp(join(tmpdir(), "abby-financial-consu
 async function privacy(f: Fixture) {
   const canaries = [f.intent.recipient.address, "cs_test_owner", "https://checkout.stripe.com/c/pay/", "private-consumer", "Abby financial message attempt v1",
     "Abby financial intent v1", "cliniko:appointment:91", "cliniko:recall:30"];
-  assert.deepEqual(await scanPatientDataCanaries(db, canaries.map((v, i) => ({ label: `financial-${i}`, value: v }))), { ok: true, value: [] });
+  assert.deepEqual(await scanPatientDataCanaries(db, canaries.map((v, i) => ({ label: `financial_${i}`, value: v }))), { ok: true, value: [] });
   const dump = execFileSync("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 8_000_000 }).toString();
   for (const canary of canaries) assert.equal(dump.includes(canary), false);
   const rows = (await sql<Record<string, unknown>>`select * from financial_effect_barriers where tenant_id = ${f.intent.scope.tenantId}`.execute(db)).rows;
@@ -107,7 +107,7 @@ test("compiled financial host survives process loss, duplicate HTTP notification
     const first = await worker(f, smtp.config, dir); t.after(first.kill);
     assert.equal((await first.nextCycle()).creationAcknowledged, 1);
     assert.equal((await first.nextCycle()).messageAccepted, 1); assert.equal(smtp.messages.length, 1);
-    const e = signWebhook(JSON.stringify({ id: "evt_compiled_consumer", object: "event", type: "checkout.session.completed", created: Date.parse(now) / 1_000,
+    const e = signWebhook(JSON.stringify({ id: "evt_compiledConsumer", object: "event", type: "checkout.session.completed", created: Date.parse(now) / 1_000,
       account: f.intent.stripe.accountRef, livemode: false, api_version: f.config.webhook.apiVersion,
       data: { object: { object: "checkout.session", id: "cs_test_owner", payment_status: "paid" } } }));
     for (let i = 0; i < 2; i++) {
