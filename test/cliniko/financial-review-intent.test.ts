@@ -14,7 +14,7 @@ const intent: ClinikoFinancialIntent = {
   stripe: { accountRef: "acct_fixture", livemode: false },
   payment: { amount: 5000, currency: "gbp", policyVersion: "fees-1", termsVersion: "terms-1", deadline: "2026-11-01T12:00:00.000Z" },
   recipient: { kind: "email", address: "fixture@example.invalid" },
-  effects: { checkout: id(3), linkDelivery: id(4), receiptDelivery: id(5), expiry: id(6) },
+  effects: { checkout: id(3), linkDelivery: id(4), receiptDelivery: id(5), checkoutExpiry: id(6), clinicalExpiry: id(7) },
   createdAt: "2026-11-01T09:00:00.000Z",
 };
 function encoded(value: ClinikoFinancialIntent = intent): string {
@@ -30,7 +30,7 @@ test("financial intent retains exact private individual and class context within
     assert.match(notes, /No collection or clinical action authorized/);
     assert.equal(decodeClinikoReview(notes).ok, false);
   }
-  const bookingReview = encodeClinikoReview(id(7), {
+  const bookingReview = encodeClinikoReview(id(8), {
     scope: intent.scope, patientId: intent.patientId, businessId: intent.businessId,
     credentialFingerprint: intent.credentialFingerprint, policyVersion: "policy-1", termsVersion: "terms-1",
     timeZone: "Europe/London", createdAt: intent.createdAt,
@@ -56,7 +56,8 @@ test("financial intent refuses malformed identity, money, time, recipient and al
     { recipient: { kind: "email", address: "fixture@example.invalid\nBcc:other@example.invalid" } },
     { recipient: { kind: "sms", address: "+441234567890" } },
     { effects: { ...intent.effects, checkout: id(1) } }, { effects: { ...intent.effects, receiptDelivery: id(4) } },
-    { effects: { ...intent.effects, expiry: "unknown" } },
+    { effects: { ...intent.effects, clinicalExpiry: "unknown" } },
+    { effects: { ...intent.effects, clinicalExpiry: id(6) } },
   ];
   for (const patch of changes) {
     const value = { ...intent, ...patch as object } as ClinikoFinancialIntent;

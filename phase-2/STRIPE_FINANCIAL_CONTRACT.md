@@ -118,8 +118,9 @@ The prospective `financial-review-intent.ts` codec uses a separate versioned
 financial envelope and the action UUID as its recall marker. It binds clinic,
 location, native account credential fingerprint, patient, intended individual
 or class booking action/selection/interval, Stripe account/mode, approved minor
-unit amount/currency, policy/terms versions/deadline, email recipient and four
-independent effect IDs. Email is the initial encoding; real delivery is still
+unit amount/currency, policy/terms versions/deadline, email recipient and five
+independent effect IDs (creation, link, receipt, Checkout expiry and clinical
+expiry). Email is the initial encoding; real delivery is still
 deferred. No new local private table, sender or provider effect is introduced.
 
 The deterministic uncompressed payload must fit the existing1,000-character

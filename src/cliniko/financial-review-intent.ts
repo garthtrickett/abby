@@ -24,7 +24,7 @@ export type ClinikoFinancialIntent = Readonly<{
     amount: number; currency: string; policyVersion: string; termsVersion: string; deadline: string;
   }>;
   recipient: Readonly<{ kind: "email"; address: string }>;
-  effects: Readonly<{ checkout: string; linkDelivery: string; receiptDelivery: string; expiry: string }>;
+  effects: Readonly<{ checkout: string; linkDelivery: string; receiptDelivery: string; checkoutExpiry: string; clinicalExpiry: string }>;
   createdAt: string;
 }>;
 type Failure = Readonly<{ kind: "invalidFinancialIntent" }>;
@@ -71,7 +71,7 @@ function valid(value: unknown): value is ClinikoFinancialIntent {
       payment.deadline <= row.createdAt ||
       !exact(recipient, ["kind", "address"]) || recipient.kind !== "email" || typeof recipient.address !== "string" ||
       recipient.address.length > 254 || !/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(recipient.address) ||
-      !exact(effects, ["checkout", "linkDelivery", "receiptDelivery", "expiry"])) return false;
+      !exact(effects, ["checkout", "linkDelivery", "receiptDelivery", "checkoutExpiry", "clinicalExpiry"])) return false;
   const ids = [row.actionRef, booking.actionRef, ...Object.values(effects)];
   return ids.every(validRecallMarker) && new Set(ids).size === ids.length;
 }
@@ -86,7 +86,7 @@ export function encodeClinikoFinancialIntent(intent: ClinikoFinancialIntent): Re
     [s.tenantId, s.clinicId, s.locationId], intent.patientId, intent.businessId, intent.credentialFingerprint,
     [b.kind, b.actionRef, b.practitionerId, b.appointmentTypeId, b.startsAt, b.endsAt, ...(b.kind === "classBook" ? [b.sessionId] : [])],
     [a.accountRef, a.livemode], [p.amount, p.currency, p.policyVersion, p.termsVersion, p.deadline],
-    intent.recipient.address, [e.checkout, e.linkDelivery, e.receiptDelivery, e.expiry], intent.createdAt,
+    intent.recipient.address, [e.checkout, e.linkDelivery, e.receiptDelivery, e.checkoutExpiry, e.clinicalExpiry], intent.createdAt,
   ];
   const summary = `${header}\n${JSON.stringify(payload)}\n${instruction}`;
   return validRecallSummary(summary) ? ok(formatRecallNote(intent.actionRef, summary)) : invalid();
@@ -105,7 +105,7 @@ export function decodeClinikoFinancialIntent(notes: unknown): Result<ClinikoFina
   const array = (v: unknown, n: number): v is unknown[] => Array.isArray(v) && v.length === n;
   if (!array(value, 10) || !array(value[0], 3) ||
       !(array(value[4], 6) || array(value[4], 7)) || !array(value[5], 2) ||
-      !array(value[6], 5) || !array(value[8], 4)) return invalid();
+      !array(value[6], 5) || !array(value[8], 5)) return invalid();
   const [s, patientId, businessId, credentialFingerprint, b, a, p, address, e, createdAt] = value;
   const scope = s as unknown[], booking = b as unknown[], stripe = a as unknown[], payment = p as unknown[], effects = e as unknown[];
   const intent: unknown = {
@@ -115,7 +115,7 @@ export function decodeClinikoFinancialIntent(notes: unknown): Result<ClinikoFina
     stripe: { accountRef: stripe[0], livemode: stripe[1] },
     payment: { amount: payment[0], currency: payment[1], policyVersion: payment[2], termsVersion: payment[3], deadline: payment[4] },
     recipient: { kind: "email", address },
-    effects: { checkout: effects[0], linkDelivery: effects[1], receiptDelivery: effects[2], expiry: effects[3] }, createdAt,
+    effects: { checkout: effects[0], linkDelivery: effects[1], receiptDelivery: effects[2], checkoutExpiry: effects[3], clinicalExpiry: effects[4] }, createdAt,
   };
   if (!valid(intent)) return invalid();
   const canonical = encodeClinikoFinancialIntent(intent);

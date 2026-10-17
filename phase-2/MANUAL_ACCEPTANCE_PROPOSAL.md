@@ -23,7 +23,8 @@ scenario labels, source hashes, fixed outcomes and pass/fail reasons.
 The 17 October engineering checkpoint is combined candidate `ff795012`
 (draft485), with the clinical fixes and inactive Stripe protocol/discovery/stream
 adapters from drafts475/476/482. The corrected complete PostgreSQL regression
-`work1792198488746` is running; its result is pending. The latest completed full
+`work1792198488746` is running with a reported cancelled-email E2E-380 private-choice timeout;
+its terminal result is pending. The latest completed full
 run is `7ca`: 3,171 passes, seven failures and one existing skip, with ordered
 follow-up not run. Focused corrections do not replace a complete result, and
 exact-head cloud checks have not executed because of account billing limits.

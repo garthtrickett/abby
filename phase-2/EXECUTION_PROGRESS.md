@@ -13,7 +13,7 @@
 | 5 Native class creation | Draft [PR #461](https://github.com/garthtrickett/abby/pull/461) supplies exact attendee acknowledgement and final double capacity ordering for ordinary/approved-pass creation. Focused process-loss/privacy and movement/cancellation preservation evidence is retained below. Later staged caller work composes these creation semantics; acknowledgement of replacement creation alone never completes a move. Current whole-graph and authoritative cloud qualification remain open. |
 | 6 Earlier-gap qualification | Dispatch-lease, reader-kind, synthetic playback/media-clock, migration isolation and private-resend finalization fixes are locally qualified in the draft stack. Historical f57 full PostgreSQL passed3156/3157 with1 existing skip plus ordered6/6; it is not current-head evidence. Latest completed full c54 failed:3169pass/4fail/1existing skip, ordered not run. Resend6/6, intake16-mode/control5/5 and signed fault-path38/38 now pass focused qualification, but isolated passes do not establish every prior timeout cause. Full7ca work1792194028312 is still running with a reported E2E-329 fixture observation failure; source992 fixes that observation and passes7 deadline/clear controls,6 preservation tests and full TypeScript. Gaps1–9 retain their clinic, delivery, recovery/operator and failing speech/public-route acceptance gates. |
 | 7 Class/pass completion | Drafts465–473 now include actual staged caller/SAM/private same-subject renewal, separate played phase consent, complete bounded native/proposal cost admission, cold staff observation, signed uncertainty-to-staff recovery, corrected same/cross-case date/ordinal journeys and a compiled competing-account allocation case. Current focused ordinary, maximum-history and cross-case pass journeys have real disposable PostgreSQL/quota/privacy evidence. Larger current whole-graph qualification is pending; scope limits for pass restoration/financial provisioning and broader operator acceptance remain explicit. No blanket completion follows from the focused cases. |
-| 8 Payments | Stripe was selected by the owner. Draft [PR #475](https://github.com/garthtrickett/abby/pull/475) locally qualifies raw signed event validation and fresh exact Checkout money/receipt evidence; draft [PR #476](https://github.com/garthtrickett/abby/pull/476) adds bounded complete-window readonly discovery after uncertain creation. The captured raw-input/shared-reader follow-up is qualified in draft482 with34/34 checks and full TypeScript; no public payment route is active. Authoritative CI has not executed. No payment lifecycle, payable creation, link delivery, durable webhook handoff or clinical expiry is activated. Pending: select the clinic-owned durable financial-work record, then qualify its schema/permissions and actual host lifecycle. No local patient-financial database is assumed. |
+| 8 Payments | Stripe was selected by the owner. Draft [PR #475](https://github.com/garthtrickett/abby/pull/475) locally qualifies raw signed event validation and fresh exact Checkout money/receipt evidence; draft [PR #476](https://github.com/garthtrickett/abby/pull/476) adds bounded complete-window readonly discovery after uncertain creation. The captured raw-input/shared-reader follow-up is qualified in draft482 with34/34 checks and full TypeScript; no public payment route is active. Authoritative CI has not executed. No payment lifecycle, payable creation, link delivery, durable webhook handoff or clinical expiry is activated. The owner selected dedicated Cliniko financial reviews on17October. Pending: qualify the concrete schema/permissions and actual host lifecycle. No local patient-financial database is assumed. |
 | 9 Outbound | Pending gap 12, audit R20/R21 and contact-policy decisions. |
 | 10 Writeback | Pending gap 13, exact permissions/content/storage decisions and audit R08/R22. |
 | 11 Combined qualification | Full clinical7ca regression is running with1185 source inputs/451 runtime pins, original concurrency/deadlines, and no claimed terminal result. Latest completed c54 full remains failed. Stripe protocol drafts are separately qualified; the new combined candidate brings their exact source/tests together with the clinical fixture fixes, awaiting its own full result. Clinic, mail, native provider, deployment, speech/public-route and eventual carrier acceptance remain distinct gates. Real-mail/Twilio deferrals remain. |
@@ -2742,7 +2742,8 @@ test/voice/intake-service-catalogue.test.ts`. No test or registry row was
 removed, relabelled or skipped.
 
 All thirteen gaps remain active. Payment protocol work remains inactive;
-financial-work ownership is still awaiting the operator's choice. No deployment,
+financial-work ownership was still awaiting the operator’s choice at that
+checkpoint; the17October selection below supersedes that dependency. No deployment,
 provider action, clinical acceptance, Aeva removal or successful cloud CI is
 inferred from these local checks.
 
@@ -2841,3 +2842,16 @@ recall summary limit. It performs no provider effect and creates no local table.
 Parsed notes are untrusted context, never acknowledgement, money or permission.
 Focused validation is pending. The frozen parent regression continues; it has
 reported a cancelled-email E2E-380 private-choice timeout and is not green.
+
+The initial boundary fixture did not actually exceed1,000 characters. Its tracked
+run1792201213336 failed44/45 and did not start TypeScript; peak144,711,680B,
+all memory events zero. A fixture-only correction exercised the exact boundary.
+Source2e5252c then passed45/45 and full `npm run typecheck` in
+work1792201237806,01:40:38–01:42:45.555291UTC, with1,407,156,224B peak
+under2GiB/CPU200%/Swap0,heap1536, all memory events zero and1,345 TS/JSON
+inputs unchanged. The paired wait completed and the scope became inactive.
+
+Subsequent review split Checkout expiry and clinical expiry into separate
+opaque effect IDs: these operations have different permissions, receipts and
+recovery truth. Five effect IDs plus financial/booking action IDs must all be
+distinct. The refined schema still needs its own exact-source validation.
