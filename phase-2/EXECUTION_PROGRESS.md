@@ -3994,3 +3994,8 @@ four failures are resolved across the whole current graph. A fresh combined
 regression remains required. Financial primitives in draft500-502 remain partial;
 periodic consumer, producer/restore/quiescence, delivery/receipts/independent
 expiry and all13/external acceptance requirements remain active.
+
+Reviewed facts/fingerprints and scenario manifest work1792223314999 passed2/2
+at07:48:36.138755UTC on138cd446, exit0; peak66,789,376B/512MiB/
+CPU200%/Swap0, all memory events0, pins unchanged and paired wait60245 reaped.
+This evidence-only update changes no tested executable or fingerprinted source.
