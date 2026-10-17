@@ -694,3 +694,48 @@ cases actually executed in that final cohort. This focused result does not repla
 the red combined verdict, qualify the financial lifecycle or activate a consumer.
 Earlier references to the concurrently running6bdf350 job describe its historical
 state when those primitives were qualified, not a current live reservation.
+
+## Configured periodic owner and one-use financial messages
+
+The financial consumer candidate composes the actual pending reader, Checkout
+owner, complete possible-creation-range discovery, fresh money inspector,
+message owner and raw webhook route. Construction opens no listener or timer;
+an explicit lifetime starts bounded sequential polling. Each cycle needs current
+independent run/work authority; the existing effect owners separately enforce
+collection, recipient, sender/template, source, provider-binding and all-producer/
+complete-restore admission. The service does not manufacture those approvals.
+Native pending reviews survive the process without a patient-bearing local queue.
+
+A missing signed booking citation stays staff-owned. A possible creation attempt
+is readonly discovery, including a complete miss. Actual validated POST receipt
+context is offered only to the trusted financial-owner observer; mutable Session
+metadata cannot recreate that acknowledgement or independently authorize its
+binding. Observer failure preserves creation and never permits another Session.
+The next poll rediscovers the retained native attempt. Cold uncertain work needs
+independent exact binding approval before money inspection and message effects.
+
+Link and hosted-receipt delivery use separate one-use effects. Before SMTP, the
+owner burns its opaque SQL ID, retains a strictly bound native possible-send
+record, rereads native/provider context and rechecks current recipient, approved
+sender/template and all-producer/restore grants. It makes at most one actual TLS
+submission. Accepted, definitively unsent and unknown remain distinct; none
+permits automatic replay. Closed historical possible-send records still block a
+cold owner when its SQL claim is missing. Loss of both histories still cannot
+supply the independently required complete-restore/producer admission.
+
+Stripe hosts receipts; Abby does not create an invoice/PDF or attachment. Payment,
+mail acceptance, mailbox receipt and clinical status remain separate. Receipt
+failure cannot unpay received money. A receipt link is not clinical permission.
+Only the running admitted consumer may accept the separately authorized raw
+webhook handoff. Notifications provide references; polling and fresh reads decide
+what can be inspected, with no paid flag taken from an event and no event ledger.
+
+Focused source/runtime checks pass107/107. The current full TypeScript/compiled
+serving build passes, and four compiled PostgreSQL/TLS/raw-HTTP cases pass for
+cold receipt delivery, duplicate notifications, process interruption, concurrent
+owners, missing claims, denied restore admission, full backup and privacy.
+Fixtures use independently provisioned synthetic approvals and loopback providers;
+these results do not establish real clinic/provider acceptance or deployment.
+Explicit existing-link resends, Checkout/clinical expiry and their payment/manual-
+paid races remain unfinished. Native attempt records are possible-send evidence,
+not delivery completion or permission to close the clinical/financial review.

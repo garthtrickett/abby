@@ -3999,3 +3999,54 @@ Reviewed facts/fingerprints and scenario manifest work1792223314999 passed2/2
 at07:48:36.138755UTC on138cd446, exit0; peak66,789,376B/512MiB/
 CPU200%/Swap0, all memory events0, pins unchanged and paired wait60245 reaped.
 This evidence-only update changes no tested executable or fingerprinted source.
+
+## Gap 11 configured consumer and financial messages — 17 October 2026
+
+On code63a6fd2, with fixture-only correction af12dc0, the new periodic owner
+composes pending native discovery, one-shot Checkout creation, complete uncertain
+creation discovery, fresh money inspection, distinct link/hosted-receipt effects
+and an active-lifecycle raw webhook route. Native work survives without a local
+private/event queue. Independent financial/message/provider/run grants and
+complete producer/restore admission remain mandatory provisioned ports. Actual
+POST acknowledgement evidence is never reconstructed from editable metadata.
+The new message owner retains a possible-send record before a single TLS send;
+closed history or a burned opaque effect blocks replay. This is a coherent
+synthetic configured host candidate, not production activation or full gap11.
+
+Qualification and refinements:
+
+- Native possible-message codec/retention/discovery preservation initially passed
+  174/174 in work1792223853148. The composed message/Stripe/TLS cohort passed
+  103/103 in work1792224849852, with peak163,377,152B/512MiB and no memory events.
+- The first periodic cohort1792225376027 passed106/107; successful void observer
+  completion was incorrectly classified as an absent result. Frozen first full
+  TypeScript1792225380782 passed before that correction, peak1,486,970,880B/2GiB.
+  The corrected periodic/Checkout/message/handoff cohort1792225642731 passed
+  107/107 at08:27:33.487749UTC, peak180,510,720B/512MiB, no memory events.
+- Full TypeScript and `npm run build:voice-tests`1792225654165 passed at
+  08:30:20.738792UTC on63a6fd2, peak1,451,003,904B/2GiB/heap1536. All source
+  pins were unchanged; the488 actual serving artifacts were then pinned.
+- Initial PostgreSQL1792225833382 finished11/15 at08:31:07.753522UTC. The new
+  cases used a webhook event ID outside the existing accepted grammar and
+  hyphenated canary labels refused by the privacy scanner. The unchanged11
+  preceding Checkout/barrier/retention cases passed. Correction af12dc0 changes
+  only those two test identifiers, with no source, deadline or assertion change.
+- Corrected PostgreSQL1792225900306 passed all four actual new cases at
+  08:32:16.920896UTC, peak179,818,496B Node and99,835,904B Docker, each1GiB/
+  CPU200%/Swap0, memory events0. The compiled host used actual PostgreSQL,
+  loopback TLS SMTP, raw HTTP and separate killed/restarted processes. Tests
+  cover duplicate handoff, distinct cold receipt delivery, concurrent exclusion,
+  kill during possible SMTP submission, closed native attempt with missing SQL
+  claim, denied incomplete-restore admission, schema/data backup+restore and
+  every-column/full-dump privacy. Source and488 artifact pins were unchanged;
+  wrapper/scope/own database processes ended and paired waits were reaped.
+
+The independent frozen d4170bd full regression is still running and excludes this
+consumer. Its same-case pass-move case has now passed, but partial output cannot
+replace a terminal verdict. The latest completed6bdf350 full remains red
+3470passed/4failed/1existing skip, ordered follow-ups not run. No green combined
+claim, cloud qualification or activation follows from these focused results.
+Next engineering remains explicit resends and independently authorized Checkout/
+clinical expiry with payment/manual-paid races; real financial review type,
+permissions, sender/provider, restore/producer and deployment acceptance remain
+separate. All13 gaps continue; gaps12/13 and Aeva deletion readiness remain open.
