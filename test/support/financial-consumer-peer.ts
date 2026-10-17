@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { fork } from "node:child_process";
+import type { FinancialClinicalApproval, FinancialClinicalExpiryQuery } from "../../src/standalone/cliniko-financial-clinical-expiry.ts";
 import type { FinancialConsumerConfig, FinancialConsumerCycle } from "../../src/standalone/cliniko-financial-consumer.ts";
 import type { ClinikoFinancialIntent } from "../../src/cliniko/financial-review-intent.ts";
 import type { CheckoutCreationReceipt } from "../../src/standalone/cliniko-stripe-checkout.ts";
@@ -9,8 +10,10 @@ import { now } from "./financial-retention.ts";
 
 export type FinancialConsumerPeerFixture = Readonly<{ config: FinancialConsumerConfig; intent: ClinikoFinancialIntent;
   dependencies: Readonly<{ native: typeof fetch; stripe: typeof fetch }>; approved: Set<string>; receipts: CheckoutCreationReceipt[] }>;
-export type FinancialConsumerPeerOptions = Readonly<{ now?: string; enableCheckoutExpiry?: boolean; producerAdmitted?(): boolean;
-  allows?(purpose: string, query: unknown): boolean; holdExpiryReply?: boolean; onExpirySubmitted?(): void }>;
+export type FinancialConsumerPeerOptions = Readonly<{ now?: string; enableCheckoutExpiry?: boolean; enableClinicalExpiry?: boolean; producerAdmitted?(): boolean;
+  allows?(purpose: string, query: unknown): boolean; holdExpiryReply?: boolean; onExpirySubmitted?(): void;
+  clinicalApproval?(query: FinancialClinicalExpiryQuery): FinancialClinicalApproval | null | Promise<FinancialClinicalApproval | null>;
+  holdClinicalReply?: boolean; onClinicalSubmitted?(): void }>;
 /** Actual compiled host with outliving independently authorized fixture providers.
  * Private RPC payloads stay in volatile fixture memory, never operational logs or
  * a local retry file. Consumers receive only native discovery, not selected refs. */
@@ -39,12 +42,14 @@ export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smt
         const response = await (request.input.startsWith("https://api.stripe.com/") ? f.dependencies.stripe : f.dependencies.native)(request.input,
           { method: request.method, redirect: "error", headers: request.headers, ...(request.body === undefined ? {} : { body: request.body }) });
         if (options.holdExpiryReply && request.method === "POST" && request.input.endsWith("/expire")) { options.onExpirySubmitted?.(); return; }
+        if (options.holdClinicalReply && request.method === "PATCH" && /\/individual_appointments\/[1-9][0-9]*\/cancel$/.test(request.input)) { options.onClinicalSubmitted?.(); return; }
         data = { body: await response.text(), status: response.status };
       } else if (m.kind === "grant") {
         const grant = m.data as { purpose: string; query: { checkoutRef?: string; binding?: { checkoutRef: string } } };
-        data = grant.purpose === "producer" ? (options.producerAdmitted?.() ?? true) : grant.purpose === "providerBinding" || grant.purpose === "messageBinding"
+        data = grant.purpose === "producer" ? (options.producerAdmitted?.() ?? true) : grant.purpose === "providerBinding" || grant.purpose === "messageBinding" || grant.purpose === "clinicalBinding"
           ? f.approved.has(grant.query.checkoutRef ?? grant.query.binding?.checkoutRef ?? "") : options.allows?.(grant.purpose, grant.query) ?? true;
-      } else if (m.kind === "claim") data = await f.config.checkout.cliniko.rateBudget.claim();
+      } else if (m.kind === "clinicalApproval") data = await options.clinicalApproval?.(m.data as FinancialClinicalExpiryQuery) ?? null;
+      else if (m.kind === "claim") data = await f.config.checkout.cliniko.rateBudget.claim();
       else if (m.kind === "observe429") data = await f.config.checkout.cliniko.rateBudget.observe429(null);
       else if (m.kind === "acknowledged") { const receipt = m.data as CheckoutCreationReceipt; f.receipts.push(receipt); f.approved.add(receipt.checkoutRef); data = true; }
       else throw new Error("Unexpected synthetic consumer operation");
@@ -53,7 +58,7 @@ export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smt
   });
   const { producer, rateBudget: _budget, clock: _nativeClock, ...cliniko } = f.config.checkout.cliniko;
   const { clock: _stripeClock, ...stripe } = f.config.checkout.stripe, { clock: _webhookClock, ...webhook } = f.config.webhook;
-  const start: FinancialConsumerProcessSetup = { kind: "start", now: options.now ?? now, ...(options.enableCheckoutExpiry ? { enableCheckoutExpiry: true } : {}), smtp: { ...smtp, ...(smtp.ca ? { ca: Buffer.from(smtp.ca).toString() } : {}) },
+  const start: FinancialConsumerProcessSetup = { kind: "start", now: options.now ?? now, ...(options.enableCheckoutExpiry ? { enableCheckoutExpiry: true } : {}), ...(options.enableClinicalExpiry ? { enableClinicalExpiry: true } : {}), smtp: { ...smtp, ...(smtp.ca ? { ca: Buffer.from(smtp.ca).toString() } : {}) },
     config: { ...f.config, checkout: { ...f.config.checkout, cliniko: { ...cliniko,
       producer: { keyRef: producer.keyRef, pem: producer.publicKey.export({ type: "spki", format: "pem" }).toString() } }, stripe }, webhook } };
   child.send(start);

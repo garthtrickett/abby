@@ -115,3 +115,9 @@ test("loss of later financial reference permission cannot erase an inspected nat
   assert.deepEqual(value(await f.expireClinical()), { kind: "cancelled", money: "unknown", reviewRequired: true });
   assert.equal(f.cancellations.length, 1);
 });
+
+test("changed current cancellation reason after native review cannot send under the earlier payload", async () => {
+  let f!: Awaited<ReturnType<typeof clinicalExpiryFixture>>;
+  f = await clinicalExpiryFixture({ retained: () => { f.changeApproval({ cancellationReason: 10 }); } });
+  assert.equal((await f.expireClinical()).ok, false); assert.equal(attempts(f).length, 1); assert.equal(f.cancellations.length, 0);
+});

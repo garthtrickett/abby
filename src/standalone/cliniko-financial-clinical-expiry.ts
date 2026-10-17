@@ -178,9 +178,10 @@ export class ClinikoFinancialClinicalExpiryOwner {
       const retained = await op.wait(this.#sources.records.retainExpiryAttemptOnce(attempt, { intent: q.sources.intent.intent, intentRecallRef: b.intentRecallRef,
         observationRecallRef: b.observationRecallRef, observation: q.sources.booking.observation }, q.sources.intent.recallAt, signal));
       if (!retained.ok || retained.value.kind !== "accepted") throw new Failure("attemptUncertain");
+      const attemptRecallRef = retained.value.recallRef;
       const final = await this.#prepare(await this.#query(b, op), op);
       if (!isDeepStrictEqual(data(q), data(final.query)) || !isDeepStrictEqual(prepared.approval, final.approval) || prepared.payloadDigest !== final.payloadDigest) throw new Failure("mismatched");
-      const exact = await op.wait(this.#sources.records.readExpiryAttempt({ recallRef: retained.value.recallRef, actionRef: attempt.actionRef, intentRecallRef: b.intentRecallRef }, final.query.sources.intent.intent, signal));
+      const exact = await op.wait(this.#sources.records.readExpiryAttempt({ recallRef: attemptRecallRef, actionRef: attempt.actionRef, intentRecallRef: b.intentRecallRef }, final.query.sources.intent.intent, signal));
       if (!exact.ok || exact.value.recalled || exact.value.archivedAt !== null || !isDeepStrictEqual(exact.value.attempt, attempt)) throw new Failure("mismatched");
       const outcome = await this.#writer.cancelOnce(final.request, signal, async edgeSignal => {
         const edge: FinancialLifecycleOperation = { signal: edgeSignal, wait: async <T>(task: Promise<T>) => {
@@ -189,7 +190,7 @@ export class ClinikoFinancialClinicalExpiryOwner {
         // This runs after the cancellation writer's last target read/budget wait.
         const ready = await this.#prepare(await this.#query(b, edge), edge);
         if (!isDeepStrictEqual(data(final.query), data(ready.query)) || ready.payloadDigest !== prepared.payloadDigest) return false;
-        const retainedAgain = await edge.wait(this.#sources.records.readExpiryAttempt({ recallRef: retained.value.recallRef, actionRef: attempt.actionRef, intentRecallRef: b.intentRecallRef }, ready.query.sources.intent.intent, edgeSignal));
+        const retainedAgain = await edge.wait(this.#sources.records.readExpiryAttempt({ recallRef: attemptRecallRef, actionRef: attempt.actionRef, intentRecallRef: b.intentRecallRef }, ready.query.sources.intent.intent, edgeSignal));
         if (!retainedAgain.ok || retainedAgain.value.recalled || retainedAgain.value.archivedAt !== null || !isDeepStrictEqual(retainedAgain.value.attempt, attempt)) return false;
         const approvedAgain = await this.#prepare(ready.query, edge);
         if (approvedAgain.payloadDigest !== prepared.payloadDigest) return false;

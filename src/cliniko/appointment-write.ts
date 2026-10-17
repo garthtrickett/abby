@@ -465,7 +465,7 @@ export class ClinikoCancellationWriter {
     return this.#inner.selection();
   }
 
-  observe(request: ClinikoAppointmentTarget, signal?: AbortSignal):
+  observe(request: ClinikoAppointmentTarget | ClinikoCancellationRequest, signal?: AbortSignal):
     Promise<Result<ClinikoAppointmentObservation, ClinikoAppointmentWriteFailure>> {
     return this.#inner.observe(request, signal);
   }

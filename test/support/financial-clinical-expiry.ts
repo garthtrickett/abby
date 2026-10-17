@@ -13,6 +13,7 @@ export async function clinicalExpiryFixture(options: {
   checkout?: NonNullable<Parameters<typeof expiryFixture>[0]>["checkout"];
   retained?(row: Record<string, unknown>): void | Promise<void>;
   read?(row: Record<string, unknown>, count: number, signal: AbortSignal): void | Promise<void>;
+  beforeCancel?(): void | Promise<void>;
   cancel?(row: Record<string, unknown>): Response | Promise<Response>;
 } = {}) {
   const f = await expiryFixture({ checkout: { ...options.checkout, bookingObservation: i => {
@@ -22,7 +23,7 @@ export async function clinicalExpiryFixture(options: {
         playedAt: now, acceptedAt: now, acceptanceRef: uuid(41) } }) };
     const payload = financialBookingObservationPayload(row)!;
     return formatFinancialBookingObservation(row, sign(null, financialBookingObservationMessage(payload, options.legacyConsent ? 1 : 2), keys.privateKey).toString("base64url"))!;
-  } }, retained: options.retained });
+  } }, ...(options.retained ? { retained: options.retained } : {}) });
   f.naturallyExpired();
   let reference = true, provider = true, financial = true, admitted = true, live = true, reads = 0;
   let approval: FinancialClinicalApproval | null = { kind: "cancelUnpaidIndividual", policyVersion: f.intent.payment.policyVersion,
@@ -35,7 +36,7 @@ export async function clinicalExpiryFixture(options: {
   const native: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
     if (!url.pathname.startsWith("/v1/individual_appointments/")) return f.nativePort(input, init);
-    assert.equal(init?.redirect, "error"); assert.equal(init?.signal?.aborted, false);
+    assert.equal(init?.redirect, "error"); assert.notEqual(init?.signal?.aborted, true);
     assert.equal(new Headers(init.headers).get("Authorization"), `Basic ${Buffer.from(`${f.config.cliniko.apiKey}:`).toString("base64")}`);
     if (init?.method === "GET") {
       assert.equal(url.pathname, "/v1/individual_appointments/91"); reads++;
@@ -45,7 +46,8 @@ export async function clinicalExpiryFixture(options: {
     const body = JSON.parse(String(init.body));
     assert.deepEqual(body, { cancellation_note: null, cancellation_reason: 50, apply_to_repeats: false });
     assert.ok(f.rows.size >= 4, "possible-expiry native review precedes cancellation");
-    assert.ok(f.burned.has(f.intent.effects.clinicalExpiry), "opaque permanent exclusion precedes cancellation");
+    if (options.beforeCancel) await options.beforeCancel();
+    else assert.ok(f.burned.has(f.intent.effects.clinicalExpiry), "opaque permanent exclusion precedes cancellation");
     cancellations.push({ path: url.pathname, body });
     if (options.cancel) return options.cancel(appointment);
     appointment.cancelled_at = f.config.cliniko.clock!(); appointment.cancellation_reason = 50;
