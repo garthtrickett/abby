@@ -53,15 +53,15 @@ export function formatFinancialBookingObservation(value: ClinikoFinancialBooking
   return validRecallSummary(summary) ? formatRecallNote(value.actionRef, summary) : undefined;
 }
 
-/** The trusted financial owner supplies the CURRENT approved producer public key
- * and exact expected private intent/record. A key taken from notes is not trust.
- * Successful verification authenticates only what that producer observed. */
-export function verifyFinancialBookingObservation(notes: unknown, expected: Readonly<{
-  intent: ClinikoFinancialIntent; intentRecallRef: string; producerKeyRef: string; publicKey: KeyObject;
+/** Authenticates only an unscoped producer citation. Its source/digest must still
+ * be bound to independently authorized native intent context before use. A key
+ * reference from notes never supplies trust, ownership or current permission. */
+export function authenticateFinancialBookingCitation(notes: unknown, trust: Readonly<{
+  producerKeyRef: string; publicKey: KeyObject;
 }>): Result<ClinikoFinancialBookingObservation, Failure> {
   try {
-    if (typeof notes !== "string" || notes.length > 1_050 || !(expected.publicKey instanceof KeyObject) ||
-        expected.publicKey.type !== "public" || expected.publicKey.asymmetricKeyType !== "ed25519") return invalid();
+    if (typeof notes !== "string" || notes.length > 1_050 || !(trust.publicKey instanceof KeyObject) ||
+        trust.publicKey.type !== "public" || trust.publicKey.asymmetricKeyType !== "ed25519") return invalid();
     const lines = notes.split("\n");
     if (lines.length !== 5 || lines[1] !== header || lines[4] !== instruction) return invalid();
     const fields: unknown = JSON.parse(lines[2]!);
@@ -70,12 +70,26 @@ export function verifyFinancialBookingObservation(notes: unknown, expected: Read
       actionRef: fields[0]!, financialActionRef: fields[1]!, intentRecallRef: fields[2]!, intentDigest: fields[3]!,
       bookingActionRef: fields[4]!, targetRef: fields[5]!, observedAt: fields[6]!, producerKeyRef: fields[7]!,
     };
-    if (formatFinancialBookingObservation(value, lines[3]!) !== notes ||
-        value.financialActionRef !== expected.intent.actionRef || value.intentRecallRef !== expected.intentRecallRef ||
-        value.intentDigest !== financialIntentDigest(expected.intent) || value.bookingActionRef !== expected.intent.booking.actionRef ||
-        value.producerKeyRef !== expected.producerKeyRef || value.observedAt < expected.intent.createdAt ||
-        !value.targetRef.startsWith(expected.intent.booking.kind === "book" ? "cliniko:appointment:" : "cliniko:attendee:") ||
-        !verify(null, financialBookingObservationMessage(lines[2]!), expected.publicKey, Buffer.from(lines[3]!, "base64url"))) return invalid();
+    if (formatFinancialBookingObservation(value, lines[3]!) !== notes || value.producerKeyRef !== trust.producerKeyRef ||
+        !verify(null, financialBookingObservationMessage(lines[2]!), trust.publicKey, Buffer.from(lines[3]!, "base64url"))) return invalid();
     return ok(Object.freeze(value));
+  } catch { return invalid(); }
+}
+
+/** The trusted owner supplies current producer trust and exact expected private
+ * intent/record. Successful verification authenticates only that observation;
+ * it does not grant ownership, current financial permission or an effect. */
+export function verifyFinancialBookingObservation(notes: unknown, expected: Readonly<{
+  intent: ClinikoFinancialIntent; intentRecallRef: string; producerKeyRef: string; publicKey: KeyObject;
+}>): Result<ClinikoFinancialBookingObservation, Failure> {
+  try {
+    const authenticated = authenticateFinancialBookingCitation(notes, expected);
+    if (!authenticated.ok) return invalid();
+    const value = authenticated.value;
+    if (value.financialActionRef !== expected.intent.actionRef || value.intentRecallRef !== expected.intentRecallRef ||
+        value.intentDigest !== financialIntentDigest(expected.intent) || value.bookingActionRef !== expected.intent.booking.actionRef ||
+        value.observedAt < expected.intent.createdAt || Object.values(expected.intent.effects).includes(value.actionRef) ||
+        !value.targetRef.startsWith(expected.intent.booking.kind === "book" ? "cliniko:appointment:" : "cliniko:attendee:")) return invalid();
+    return authenticated;
   } catch { return invalid(); }
 }

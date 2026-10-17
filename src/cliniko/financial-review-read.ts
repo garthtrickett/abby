@@ -16,7 +16,7 @@ export type ClinikoFinancialReviewBinding = Readonly<{ recallRef: string; action
  * Permission binds the configured location/account/type and exact native record.
  * The record's own note cannot establish this permission or location ownership. */
 export type ClinikoFinancialReviewPermission = Readonly<{
-  allows(query: ClinikoFinancialReviewSelection & ClinikoFinancialReviewBinding, signal: AbortSignal): Promise<boolean>;
+  allows(query: ClinikoFinancialReviewSelection & ClinikoFinancialReviewBinding & Readonly<{ includeArchived?: true }>, signal: AbortSignal): Promise<boolean>;
 }>;
 export type ClinikoFinancialReviewFailure = Readonly<{
   kind: "invalidConfig" | "invalidQuery" | "forbidden" | "rateLimited" | "unavailable" | "malformed" | "mismatched";
@@ -74,15 +74,17 @@ export class ClinikoFinancialReviewReader {
 
   selection(): ClinikoFinancialReviewSelection { return this.#selection; }
 
-  async read(binding: ClinikoFinancialReviewBinding, external: AbortSignal):
+  async read(binding: ClinikoFinancialReviewBinding, external: AbortSignal, options?: Readonly<{ includeArchived?: true }>):
     Promise<Result<ClinikoFinancialReviewContext, ClinikoFinancialReviewFailure>> {
     const wanted = Object.freeze({ recallRef: binding?.recallRef, actionRef: binding?.actionRef });
+    const includeArchived = options?.includeArchived === true;
+    if (options?.includeArchived !== undefined && options.includeArchived !== true) return err({ kind: "invalidQuery" });
     const nativeId = typeof wanted.recallRef === "string" ? /^cliniko:recall:([1-9][0-9]{0,18})$/.exec(wanted.recallRef)?.[1] : undefined;
     if (!nativeId || !validRecallMarker(wanted.actionRef)) return err({ kind: "invalidQuery" });
     if (!(external instanceof AbortSignal) || external.aborted) return err({ kind: "unavailable" });
     const deadline = new AbortController(), timer = setTimeout(() => deadline.abort(), this.#deadlineMs);
     const signal = AbortSignal.any([external, deadline.signal]), started = performance.now();
-    const query = Object.freeze({ ...this.#selection, ...wanted });
+    const query = Object.freeze({ ...this.#selection, ...wanted, ...(includeArchived ? { includeArchived: true as const } : {}) });
     let ownedResponse: Response | undefined, bodyOwned = false;
     const wait = async <T>(task: Promise<T>): Promise<T> => {
       const value = await awaitUntilAbort(task, signal);
@@ -99,7 +101,7 @@ export class ClinikoFinancialReviewReader {
       // Quota admission may have waited. An earlier permission cannot authorize
       // the subsequent protected read after financial access has been withdrawn.
       await permit();
-      const response = await wait(this.#fetch(`${this.#base}/recalls/${nativeId}`, { method: "GET", redirect: "error", signal,
+      const response = await wait(this.#fetch(`${this.#base}/recalls/${nativeId}${includeArchived ? "?q%5B%5D=archived_at%3A*" : ""}`, { method: "GET", redirect: "error", signal,
         headers: { Accept: "application/json", Authorization: this.#authorization, "User-Agent": this.#agent } }).then(value => {
         ownedResponse = value;
         if (signal.aborted) discardBody(value);
