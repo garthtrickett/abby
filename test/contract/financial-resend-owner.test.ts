@@ -64,3 +64,28 @@ test("another explicitly approved request needs fresh action approval and effect
   assert.notEqual(next.request.effectRef, f.selected.request.effectRef); assert.equal(value(await f.resend(next)).kind, "accepted");
   assert.equal(f.messages.length, 3); assert.equal(f.requests.filter(r => r.method === "POST").length, 1);
 });
+for (const mode of ["abort", "deadline"] as const)
+  test(`held independent resend approval respects ${mode} without later dispatch`, { timeout: 4_000 }, async t => {
+    let began!: () => void, release!: () => void;
+    const reading = new Promise<void>(resolve => { began = resolve; }), held = new Promise<void>(resolve => { release = resolve; });
+    const controller = new AbortController(), f = await financialResendFixture({ message: { deadlineMs: 1_000 },
+      authority: { allows: async () => { began(); await held; return true; } } });
+    const timer = setTimeout(release, 2_000); t.after(() => clearTimeout(timer)); t.after(release);
+    const running = f.resend(f.selected, controller.signal); await reading; if (mode === "abort") controller.abort();
+    assert.equal((await running).ok, false); assert.equal(f.messages.length, 0);
+    assert.equal(f.burned.has(f.selected.request.approvalRef), false); assert.equal(f.burned.has(f.selected.request.effectRef), false);
+    release(); await new Promise<void>(resolve => setImmediate(resolve)); assert.equal(f.messages.length, 0);
+  });
+test("known sender acceptance survives later financial and request withdrawal", async () => {
+  let f!: Awaited<ReturnType<typeof financialResendFixture>>;
+  f = await financialResendFixture({ message: { send: async (_mail, _signal, messageRef) => {
+    f.denyFinancial(); f.denyResend(); return { kind: "accepted", messageRef };
+  } } });
+  assert.deepEqual(value(await f.resend()), { kind: "accepted" }); assert.equal(f.burned.has(f.selected.request.effectRef), true);
+});
+test("missing headroom capability refuses instead of manufacturing account admission", async () => {
+  const f = await financialResendFixture(); Reflect.deleteProperty(f.resendConfig.cliniko.rateBudget, "checkHeadroom");
+  const owner = value(f.makeResend());
+  assert.equal((await owner.sendOnce(f.binding, f.selected.request.purpose, f.selected.binding, new AbortController().signal)).ok, false);
+  assert.equal(f.messages.length, 0); assert.equal(f.burned.has(f.selected.request.approvalRef), false);
+});
