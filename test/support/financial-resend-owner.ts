@@ -35,10 +35,12 @@ export async function financialResendFixture(options: { message?: Parameters<typ
   const make = () => ClinikoFinancialResendOwner.create(config, f.authority, authority, f.recordsAuthority, f.barrier, f.delivery, f.nativePort, f.stripePort);
   const owner = value(make());
   const createRequest = async (purpose: FinancialMessagePurpose = "linkDelivery", patch: Partial<FinancialResendRequest> = {}) => {
+    const booking = value(await f.retainer.readBookingObservation({ recallRef: f.binding.observationRecallRef,
+      actionRef: f.binding.observationActionRef, intentRecallRef: f.binding.intentRecallRef }, f.intent, stop()));
     const request = resendRequestValue(f.intent, { actionRef: randomUUID(), effectRef: randomUUID(), approvalRef: randomUUID(), purpose,
       intentRecallRef: f.binding.intentRecallRef, observationRecallRef: f.binding.observationRecallRef, observationActionRef: f.binding.observationActionRef,
       checkoutAttemptRecallRef: f.binding.checkoutAttemptRecallRef, checkoutAttemptActionRef: f.binding.checkoutAttemptActionRef,
-      checkoutRef: f.binding.checkoutRef, selectionDigest: financialMessageSelectionDigest(f.delivery.selection())!, ...patch });
+      checkoutRef: f.binding.checkoutRef, targetRef: booking.observation.targetRef, selectionDigest: financialMessageSelectionDigest(f.delivery.selection())!, ...patch });
     effects.add(request.effectRef); const retained = value(await records.retainRequestOnce(request, f.intent, "2026-11-02", stop()));
     if (retained.kind !== "accepted") throw new Error("Synthetic explicit request unavailable");
     approved.set(request.approvalRef, financialResendRequestDigest(request)!);

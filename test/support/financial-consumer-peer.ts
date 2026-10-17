@@ -1,3 +1,4 @@
+import type { FinancialResendQuery } from "../../src/standalone/cliniko-financial-resend-owner.ts";
 import type { Result } from "../../src/core/model.ts";
 import type { FinancialRecordRetention, FinancialRecordFailure } from "../../src/cliniko/financial-record-retention.ts";
 import type { FinancialCaseClassExpiryQuery, FinancialCaseClassApproval } from "../../src/standalone/cliniko-financial-case-class-expiry.ts";
@@ -16,8 +17,12 @@ export type FinancialConsumerPeerFixture = Readonly<{ config: FinancialConsumerC
   dependencies: Readonly<{ native: typeof fetch; stripe: typeof fetch }>; approved: Set<string>; receipts: CheckoutCreationReceipt[] }>;
 export type FinancialConsumerPeerOptions = Readonly<{ now?: string; enableCheckoutExpiry?: boolean; enableClinicalExpiry?: boolean; producerAdmitted?(): boolean;
   allows?(purpose: string, query: unknown): boolean; holdExpiryReply?: boolean; onExpirySubmitted?(): void;
+  resend?: FinancialConsumerProcessSetup["resend"];
+  resendAuthorized?(query: FinancialResendQuery): boolean | Promise<boolean>;
+  resendFinancialAuthorized?(query: FinancialResendQuery): boolean | Promise<boolean>;
   resendRequestRetention?: FinancialConsumerProcessSetup["resendRequestRetention"];
   holdResendRequestReply?: boolean; onResendRequestSubmitted?(): void;
+  holdResendAttemptReply?: boolean; onResendAttemptSubmitted?(): void;
   classClinicalExpiry?: FinancialConsumerClassExpirySetup;
   caseClassClinicalExpiry?: FinancialConsumerClassExpirySetup & Readonly<{ maximumAuthorityRequests: number }>;
   caseClassClinicalApproval?(query: FinancialCaseClassExpiryQuery): FinancialCaseClassApproval | null | Promise<FinancialCaseClassApproval | null>;
@@ -56,12 +61,16 @@ export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smt
           { method: request.method, redirect: "error", headers: request.headers, signal: AbortSignal.timeout(30_000), ...(request.body === undefined ? {} : { body: request.body }) });
         if (options.holdExpiryReply && request.method === "POST" && request.input.endsWith("/expire")) { options.onExpirySubmitted?.(); return; }
         if (options.holdClinicalReply && request.method === "PATCH" && /\/(?:individual_appointments|attendees)\/[1-9][0-9]*\/cancel$/.test(request.input)) { options.onClinicalSubmitted?.(); return; }
+        if (options.holdResendAttemptReply && request.method === "POST" && request.input.endsWith("/v1/recalls") &&
+            String(request.body).includes("Abby financial resend attempt v1")) { options.onResendAttemptSubmitted?.(); return; }
         if (options.holdResendRequestReply && request.method === "POST" && request.input.endsWith("/v1/recalls") &&
             String(request.body).includes("Abby financial resend request v1")) { options.onResendRequestSubmitted?.(); return; }
         data = { body: await response.text(), status: response.status };
       } else if (m.kind === "grant") {
         const grant = m.data as { purpose: string; query: { checkoutRef?: string; binding?: { checkoutRef: string } } };
-        data = grant.purpose === "producer" ? (options.producerAdmitted?.() ?? true) : grant.purpose === "providerBinding" || grant.purpose === "messageBinding" || grant.purpose === "clinicalBinding" || grant.purpose === "classClinicalBinding" || grant.purpose === "caseClassClinicalBinding"
+        data = grant.purpose === "resendRequest" ? (options.allows?.(grant.purpose, grant.query) ?? true) && await options.resendAuthorized?.(grant.query as FinancialResendQuery) === true
+          : grant.purpose === "resendFinancial" ? (options.allows?.(grant.purpose, grant.query) ?? true) && await options.resendFinancialAuthorized?.(grant.query as FinancialResendQuery) === true
+          : grant.purpose === "producer" ? (options.producerAdmitted?.() ?? true) : grant.purpose === "providerBinding" || grant.purpose === "messageBinding" || grant.purpose === "clinicalBinding" || grant.purpose === "classClinicalBinding" || grant.purpose === "caseClassClinicalBinding"
           ? f.approved.has(grant.query.checkoutRef ?? grant.query.binding?.checkoutRef ?? "") : options.allows?.(grant.purpose, grant.query) ?? true;
       } else if (m.kind === "clinicalApproval") data = await options.clinicalApproval?.(m.data as FinancialClinicalExpiryQuery) ?? null;
       else if (m.kind === "classClinicalApproval") data = await options.classClinicalApproval?.(m.data as FinancialUnlinkedClassExpiryQuery) ?? null;
@@ -76,7 +85,7 @@ export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smt
   });
   const { producer, rateBudget: _budget, clock: _nativeClock, ...cliniko } = f.config.checkout.cliniko;
   const { clock: _stripeClock, ...stripe } = f.config.checkout.stripe, { clock: _webhookClock, ...webhook } = f.config.webhook;
-  const start: FinancialConsumerProcessSetup = { kind: "start", ...(options.resendRequestRetention ? { resendRequestRetention: options.resendRequestRetention } : {}), now: options.now ?? now, ...(f.config.checkout.cliniko.rateBudget.checkHeadroom ? { supportsHeadroom: true } : {}), ...(options.enableCheckoutExpiry ? { enableCheckoutExpiry: true } : {}), ...(options.enableClinicalExpiry ? { enableClinicalExpiry: true } : {}), ...(options.classClinicalExpiry ? { classClinicalExpiry: options.classClinicalExpiry } : {}), ...(options.caseClassClinicalExpiry ? { caseClassClinicalExpiry: options.caseClassClinicalExpiry } : {}), smtp: { ...smtp, ...(smtp.ca ? { ca: Buffer.from(smtp.ca).toString() } : {}) },
+  const start: FinancialConsumerProcessSetup = { kind: "start", ...(options.resend ? { resend: options.resend } : {}), ...(options.resendRequestRetention ? { resendRequestRetention: options.resendRequestRetention } : {}), now: options.now ?? now, ...(f.config.checkout.cliniko.rateBudget.checkHeadroom ? { supportsHeadroom: true } : {}), ...(options.enableCheckoutExpiry ? { enableCheckoutExpiry: true } : {}), ...(options.enableClinicalExpiry ? { enableClinicalExpiry: true } : {}), ...(options.classClinicalExpiry ? { classClinicalExpiry: options.classClinicalExpiry } : {}), ...(options.caseClassClinicalExpiry ? { caseClassClinicalExpiry: options.caseClassClinicalExpiry } : {}), smtp: { ...smtp, ...(smtp.ca ? { ca: Buffer.from(smtp.ca).toString() } : {}) },
     config: { ...f.config, checkout: { ...f.config.checkout, cliniko: { ...cliniko,
       producer: { keyRef: producer.keyRef, pem: producer.publicKey.export({ type: "spki", format: "pem" }).toString() } }, stripe }, webhook } };
   child.send(start);

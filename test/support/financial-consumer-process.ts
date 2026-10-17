@@ -23,7 +23,7 @@ import type { SmtpMailConfig } from "../../src/standalone/smtp-text-mail-transpo
 import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 
 export type FinancialConsumerClassExpirySetup = Readonly<{ path: string; directoryPath: string; binding: ClassPolicyBinding }>;
-export type FinancialConsumerProcessSetup = Readonly<{ kind: "start"; now: string; resendRequestRetention?: Readonly<{ request: FinancialResendRequest; intent: ClinikoFinancialIntent; reviewDate: string }>; supportsHeadroom?: boolean; enableCheckoutExpiry?: boolean; enableClinicalExpiry?: boolean; classClinicalExpiry?: FinancialConsumerClassExpirySetup; caseClassClinicalExpiry?: FinancialConsumerClassExpirySetup & Readonly<{ maximumAuthorityRequests: number }>; smtp: SmtpMailConfig;
+export type FinancialConsumerProcessSetup = Readonly<{ kind: "start"; now: string; resend?: Readonly<{ maximumAuthorityRequests: number }>; resendRequestRetention?: Readonly<{ request: FinancialResendRequest; intent: ClinikoFinancialIntent; reviewDate: string }>; supportsHeadroom?: boolean; enableCheckoutExpiry?: boolean; enableClinicalExpiry?: boolean; classClinicalExpiry?: FinancialConsumerClassExpirySetup; caseClassClinicalExpiry?: FinancialConsumerClassExpirySetup & Readonly<{ maximumAuthorityRequests: number }>; smtp: SmtpMailConfig;
   config: Omit<FinancialConsumerConfig, "checkout" | "webhook"> & {
     checkout: Omit<FinancialConsumerConfig["checkout"], "cliniko" | "stripe"> & {
       cliniko: Omit<FinancialConsumerConfig["checkout"]["cliniko"], "producer" | "rateBudget" | "clock"> & { producer: { keyRef: string; pem: string } };
@@ -85,6 +85,9 @@ process.on("message", async (raw: unknown) => {
       message: { sourceAuthorized: q => grant("record", q), attemptScanAuthorized: q => grant("history", q),
         providerBindingAuthorized: q => grant("messageBinding", q), messageAuthorized: q => grant("message", q),
         producerAdmitted: q => grant("producer", q), current },
+      ...(setup.resend ? { resend: { maximumAuthorityRequests: setup.resend.maximumAuthorityRequests, authority: {
+        allows: q => grant("resendRequest", q), financialAuthorized: q => grant("resendFinancial", q), current,
+      } } } : {}),
       ...(setup.enableCheckoutExpiry ? { checkoutExpiry: {
         sources: { allows: q => grant("record", q), allowsHistory: q => grant("history", q), current },
         referenceAuthorized: q => grant("expiryReference", q), providerBindingAuthorized: q => grant("providerBinding", q),
