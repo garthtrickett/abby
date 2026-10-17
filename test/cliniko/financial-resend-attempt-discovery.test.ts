@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { encodeFinancialResendRequest } from "../../src/cliniko/financial-resend-request.ts";
 import { encodeFinancialResendAttempt } from "../../src/cliniko/financial-resend-attempt.ts";
-import { resendAttemptValue } from "../support/financial-resend.ts";
+import { resendRequestValue, resendAttemptValue } from "../support/financial-resend.ts";
 import { resendDiscoveryFixture, resendDiscoveryWindow as window } from "../support/financial-resend-discovery.ts";
 import { value, base, now, stop, uuid } from "../support/financial-retention.ts";
 function setup(cold = false) {
@@ -38,4 +38,20 @@ test("two native possible records for the same send effect refuse the complete r
   const f = setup(); f.rows.set("35", { ...f.possible, id: "35", links: { self: `${base}/recalls/35` },
     notes: value(encodeFinancialResendAttempt({ ...f.attempt, actionRef: uuid(201) })) });
   assert.equal((await f.scanner.scan(window, stop())).ok, false); assert.equal(f.burned.size, 0);
+});
+
+test("separate historical request reads share the original fifty-lookup bound without partial success", { timeout: 10_000 }, async () => {
+  const f = resendDiscoveryFixture(), older = "2026-11-01T09:29:59.000Z";
+  for (const ref of ["30", "31", "33"]) f.rows.get(ref)!.created_at = older;
+  for (let i = 0; i < 50; i++) {
+    const ref = String(1000+i), request = resendRequestValue(f.intent, { actionRef: uuid(1000+i), effectRef: uuid(2000+i),
+      approvalRef: uuid(3000+i), requestedAt: older });
+    f.rows.set(ref, { ...f.native, id: ref, links: { self: `${base}/recalls/${ref}` }, notes: value(encodeFinancialResendRequest(request)) });
+    const id = String(2000+i), attempt = resendAttemptValue(request, `cliniko:recall:${ref}`, { actionRef: uuid(4000+i) });
+    f.rows.set(id, { ...f.source, id, links: { self: `${base}/recalls/${id}` }, created_at: now,
+      notes: value(encodeFinancialResendAttempt(attempt)) });
+  }
+  assert.deepEqual(await f.scanner.scan(window, stop()), { ok: false, error: { kind: "unavailable" } });
+  assert.equal(f.methods.length, 51, "one complete list and at most fifty combined intent/request lookups");
+  assert.equal(f.methods.includes("POST"), false); assert.equal(f.burned.size, 0);
 });
