@@ -15,10 +15,12 @@ import { clinikoWorkflowVoiceFixture, voiceUntil } from "./cliniko-workflow-voic
 import { withDisposablePostgres } from "./disposable-postgres.ts";
 import { fixture, intentValue, keys, keyRef, value } from "./financial-retention.ts";
 import { withRetainedFinancialCaller } from "./financial-caller-context.ts";
+import type { FinancialCallerActor } from "./financial-caller-context.ts";
 import { runPaidFinancialCaller } from "./financial-class-caller-chain.ts";
 import { runUnpaidFinancialCaller } from "./financial-class-unpaid-chain.ts";
 
-export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid", stage: (value: number) => void): Promise<void> {
+export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid", stage: (value: number) => void,
+  afterBooking?: (context: FinancialCallerActor, original: Awaited<ReturnType<typeof bookingCallFlowFixture>>) => Promise<void>, approvedTerms?: string): Promise<void> {
   stage(1); const callerBegan = performance.now();
   await withDisposablePostgres(async (db, connectionString) => {
     const budget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-session-au5", maxPerMinute: 180 });
@@ -51,8 +53,8 @@ export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid"
       sourceAuthorized: declareClinikoRequestCost(async () => true, binding, 0),
       authority: { ...funding.authority, allows: declareClinikoRequestCost(funding.authority.allows.bind(funding.authority), binding, 0),
         producerAdmitted: declareClinikoRequestCost(funding.authority.producerAdmitted.bind(funding.authority), binding, 0) },
-      policy: { quote: async selection => ({ kind: "required", payment: { amount: 5000, currency: "gbp", policyVersion: "fee-policy-1", termsVersion: "financial-terms-1", deadline: "2026-10-05T04:00:00.000Z" },
-        recipient: { kind: "email", address: "financial-recipient@example.invalid" }, approvedTerms: "The clinic will review late payment; no automatic refund is promised.", reviewDate: "2026-10-05", expiresAt: selection.expiresAt }),
+      policy: { quote: async selection => ({ kind: "required", payment: { amount: 5000, currency: "gbp", policyVersion: "fee-policy-1", termsVersion: approvedTerms ? "financial-cancel-terms-1" : "financial-terms-1", deadline: "2026-10-05T04:00:00.000Z" },
+        recipient: { kind: "email", address: "financial-recipient@example.invalid" }, approvedTerms: approvedTerms ?? "The clinic will review late payment; no automatic refund is promised.", reviewDate: "2026-10-05", expiresAt: selection.expiresAt }),
         current: declareClinikoRequestCost(async () => true, binding, 0), currentForSend: () => true },
       presentation: { play: async () => { assert.fail("the actual admitted caller must supply financial playback"); } } };
     const seen: string[] = [];
@@ -102,8 +104,9 @@ export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid"
       assert.equal(observation.targetRef, "cliniko:appointment:91"); assert.equal(observation.classCreationRequest, undefined); assert.ok(observation.financialConsent);
       await call.close(); call = undefined; stage(2);
       await withRetainedFinancialCaller({ native: funding, observation, expected: { targetRef: "cliniko:appointment:91", amount: 5000, currency: "gbp" },
+        ...(afterBooking ? { clinicalNative: provider } : {}),
         clock: () => readClock(), setTime: f.setTime, clinicalWrites: () => requests, reviews: () => f.recalls },
-        db, connectionString, stage, context => outcome === "paid" ? runPaidFinancialCaller(context, stage, { exerciseQuotaWindows: true }) : runUnpaidFinancialCaller(context, stage));
+        db, connectionString, stage, context => afterBooking ? afterBooking(context, f) : outcome === "paid" ? runPaidFinancialCaller(context, stage, { exerciseQuotaWindows: true }) : runUnpaidFinancialCaller(context, stage));
     } finally { if (call) await call.close(); financialLife.abort(); await f.close(); }
   });
 }

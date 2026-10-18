@@ -20,6 +20,7 @@ export type FinancialCallerActor = Readonly<{
 }>;
 type Source = Readonly<{
   native: RetainedFinancialBooking["native"]; observation: ClinikoFinancialBookingObservation;
+  clinicalNative?: typeof fetch;
   expected: Readonly<{ targetRef: string; amount: number; currency: string }>;
   clock(): string; setTime(instant: string): void; clinicalWrites(): readonly unknown[]; reviews(): readonly Record<string, unknown>[];
 }>;
@@ -47,6 +48,7 @@ export async function withRetainedFinancialCaller(source: Source, db: FinancialC
     let actor: Awaited<ReturnType<typeof financialConsumerFixture>> | undefined, timer: ReturnType<typeof setInterval> | undefined;
     try {
       actor = await financialConsumerFixture({ checkout: { retained: { native: source.native, intent,
+        ...(source.clinicalNative ? { otherNative: source.clinicalNative } : {}),
         binding: { intentRecallRef: observation.intentRecallRef, financialActionRef: intent.actionRef,
           observationRecallRef: `cliniko:recall:${observationRow.id}`, observationActionRef: observation.actionRef, reviewDate: "2026-10-05" },
         otherReviews: () => source.reviews().map(row => ({ ...row, recalled_at: null, archived_at: null,

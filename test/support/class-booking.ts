@@ -20,6 +20,7 @@ import type { PatientVerificationBudget } from "../../src/standalone/email-patie
 import type { FinancialBookingPreparationConfig } from "../../src/standalone/cliniko-financial-booking-preparation.ts";
 import { declareClinikoRequestCost } from "../../src/cliniko/request-cost.ts";
 export async function classBookingFixture(options: { passes?: boolean; fetchAround?: (port: typeof fetch) => typeof fetch;
+  caseCancellation?: Readonly<{ version: string; releaseOne: string; unchanged: string; consumeOne: string }>;
   scope?: LocationScope; folder?: string; budget?: ClinikoRequestBudget; budgetLimit?: 180 | 200; verificationBudget?: PatientVerificationBudget;
   financialFor?: (native: import("../../src/cliniko/class-attendance-write.ts").ClinikoAttendanceConfig, port: typeof fetch) => FinancialBookingPreparationConfig } = {}) {
   let sourceTime = verificationNow;
@@ -41,7 +42,7 @@ export async function classBookingFixture(options: { passes?: boolean; fetchArou
   const costBinding = { scope: f.scope, credentialFingerprint: clinikoCredentialFingerprint(native.config.apiKey), budget };
   const permit = async () => permitted;
   const classPermission = { allows: options.financialFor ? declareClinikoRequestCost(permit, costBinding, 0) : permit };
-  const recalls: Record<string, unknown>[] = [], writes: Record<string, unknown>[] = [];
+  const recalls: Record<string, unknown>[] = [], writes: Record<string, unknown>[] = [], cancellations: Record<string, unknown>[] = [];
   const lifetime = new AbortController(), path = join(f.folder, "class.json");
   const caseId = "811222333444555666", entitlementRef = "synthetic-private-pass-entitlement";
   const caseRows: Record<string, unknown>[] = [{ ...classAttendee("601", "81", verificationCanaries[2]!), arrived: true, patient_case: classLink("patient_cases", caseId) }];
@@ -64,7 +65,7 @@ export async function classBookingFixture(options: { passes?: boolean; fetchArou
     serviceRef: "mat-pilates", className: "Mat Pilates", practitionerName: "Demo Instructor", locationName: "Demo Clinic", durationMinutes: 60,
     bookingTerms: { version: "class-terms-1", approvedText: "This class costs 12 pounds. Your pass or payment must be checked by the clinic." }, minNoticeMinutes: 60, maxAdvanceDays: 30, offerTtlSeconds: 120 };
   if (options.passes) approval = { ...approval, membership: "nativeCaseSessions", caseSessions: { attendanceStatus: "arrivedFalseIsDna", counting: "allLinkedNonArchivedAttendees",
-    dates: "inclusiveClinicDate", consumption: "onePerAttendance", financialAuthority: "independentHost" },
+    dates: "inclusiveClinicDate", consumption: "onePerAttendance", financialAuthority: "independentHost", ...(options.caseCancellation ? { cancellation: options.caseCancellation } : {}) },
     bookingTerms: { version: "class-pass-terms-1", approvedText: "This booking uses one session from your approved class pass. Cancellation rules still apply." } };
   await writeFile(path, JSON.stringify(approval), { mode: 0o600 });
   const policy = resultValue(await OwnerFileClassPolicy.capture({ path, scope: f.scope, policyVersion: f.sessionConfig.policyVersion, businessId: "11", practitionerId: "22", appointmentTypeId: "33",
@@ -110,6 +111,18 @@ export async function classBookingFixture(options: { passes?: boolean; fetchArou
       if (lostWrite)
         throw new Error("synthetic lost class attendee response");
       return Response.json(row, { status: 201 });
+    }
+    if (url.pathname === "/v1/attendees/401/cancel") {
+      assert.equal(method, "PATCH"); const row = native.attendees.find(row => row.id === "401");
+      assert.ok(row, "cancel only the actual acknowledged attendee"); const body = JSON.parse(String(init?.body));
+      assert.deepEqual(body, { cancellation_reason: 50, apply_to_repeats: false });
+      cancellations.push(body); Object.assign(row, { cancelled_at: sourceTime, cancellation_reason: 50 });
+      return new Response(null, { status: 204 });
+    }
+    if (url.pathname === "/v1/attendees" && method === "GET" && url.searchParams.getAll("q[]").includes("patient_case_id:!?")) {
+      const q = url.searchParams.getAll("q[]"); assert.ok(q.includes("id:=401") && q.includes("booking_id:=94"));
+      const rows = native.attendees.filter(row => row.id === "401" && !("patient_case" in row && row.patient_case != null));
+      return Response.json({ attendees: rows, total_entries: rows.length });
     }
     if (url.pathname === "/v1/attendees/401") {
       assert.equal(method, "GET");
@@ -160,7 +173,7 @@ export async function classBookingFixture(options: { passes?: boolean; fetchArou
     callerApprovalPath: f.config.path, classApprovalPath: path, operation: "book" as const,
     classPermission, ...(options.passes ? { classPassAuthority: passAuthority } : {}), cliniko: { ...native.config, timeZone: approval.timeZone, countryCallingCode: "61", recallTypeId: "7" },
     signal: lifetime.signal, fetchPort, clock: () => sourceTime };
-  return { ...f, mail, verificationDelivered: delivery, classSessionConfig: { ...classSessionConfig, ...(financial ? { financial } : {}) }, bindNativeCall: (read: typeof callState) => { callState = read; }, native, host, reception, agent, recalls, writes, policy, path, turn, play, verify, propose, confirm,
+  return { ...f, mail, verificationDelivered: delivery, classSessionConfig: { ...classSessionConfig, ...(financial ? { financial } : {}) }, bindNativeCall: (read: typeof callState) => { callState = read; }, native, host, reception, agent, recalls, writes, cancellations, policy, path, turn, play, verify, propose, confirm,
     pause: async (seconds: number) => {
       while (seconds > 0) { const step = Math.min(15, seconds); sourceTime = new Date(Date.parse(sourceTime) + step * 1000).toISOString(); f.setTime(sourceTime);
         resultValue(await f.runtime.renewSession(f.callId, f.sessionId, (await f.state()).sessionLease!.version, sourceTime)); seconds -= step; }

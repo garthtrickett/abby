@@ -10,6 +10,7 @@ type Row = Record<string, unknown>;
 export type RetainedFinancialBooking = Readonly<{
   native: ReturnType<typeof fixture>; intent: ReturnType<typeof fixture>["intent"]; binding: CheckoutOwnerBinding;
   otherReviews?: () => readonly Row[];
+  otherNative?: typeof fetch;
 }>;
 export async function checkoutFixture(options: {
   retained?: RetainedFinancialBooking; native?: Parameters<typeof fixture>[0]; authority?: Partial<CheckoutOwnerAuthority>; config?: Partial<CheckoutOwnerConfig>;
@@ -63,6 +64,7 @@ export async function checkoutFixture(options: {
   };
   const nativePort: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
+    if (!url.pathname.startsWith("/v1/recalls") && retained?.otherNative) return retained.otherNative(input, init);
     if (url.pathname === "/v1/recalls" && init?.method === "GET") {
       const from = url.searchParams.getAll("q[]").find(q => q.startsWith("created_at:>="))?.slice(13);
       const through = url.searchParams.getAll("q[]").find(q => q.startsWith("created_at:<="))?.slice(13);

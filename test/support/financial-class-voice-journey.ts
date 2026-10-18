@@ -16,12 +16,18 @@ export type FinancialClassVoiceBooking = Readonly<{
   booking: Awaited<ReturnType<typeof financialClassBookingFixture>>;
   db: FinancialVoiceResource[0]; connectionString: FinancialVoiceResource[1];
 }>;
+export type FinancialClassCallerOptions = Readonly<{ approvedTerms?: string;
+  caseCancellation?: NonNullable<Parameters<typeof financialClassBookingFixture>[0]>["caseCancellation"]; clinical?: true }>;
 export async function financialClassVoiceJourney(passes: boolean,
-  afterBooking?: (context: FinancialClassVoiceBooking) => Promise<void>): Promise<void> {
+  afterBooking?: (context: FinancialClassVoiceBooking) => Promise<void>, options: FinancialClassCallerOptions = {}): Promise<void> {
   const callerBegan = performance.now();
   await withDisposablePostgres(async (db, connectionString) => {
     const budget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-class-au5", maxPerMinute: 180 });
-    const f = await financialClassBookingFixture({ passes, budget, barrierFor: native => new PostgresFinancialEffectBarrier(db, native.scope, resultValue(financialRecordOwnerBinding(native))) });
+    const f = await financialClassBookingFixture({ passes, budget,
+      ...(options.caseCancellation ? { caseCancellation: options.caseCancellation } : {}),
+      ...(options.approvedTerms ? { quote: (_selection, quote) => quote.kind === "required" ? { ...quote,
+        payment: { ...quote.payment, termsVersion: "class-financial-cancel-terms-1" }, approvedTerms: options.approvedTerms! } : quote } : {}),
+      barrierFor: native => new PostgresFinancialEffectBarrier(db, native.scope, resultValue(financialRecordOwnerBinding(native))) });
     f.host.dispose(); f.session.dispose();
     // A legacy/shared callback cannot stand in for this admitted call's actual
     // private played receipt; the real host must replace it with the call port.

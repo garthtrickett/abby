@@ -30,6 +30,7 @@ export async function standaloneBookingFixture(options: { activate?: boolean; sc
   const apiKey = "synthetic-session-au5", base = "https://api.au5.cliniko.com/v1";
   const traffic: string[] = [], mail: { email: string; code: string }[] = [], recalls: Record<string, unknown>[] = [];
   let stored: Record<string, unknown> | undefined, posts = 0, claims = 0, conflict = "clear", inspected = "exact", authorityPermitted = true;
+  const cancellations: Record<string, unknown>[] = [];
   let onRecall: () => Promise<void> = async () => undefined, onBooking: () => Promise<void> = async () => undefined;
   let onConflict: () => Promise<void> = async () => undefined;
   let evidence: ClinikoBookingEvidence = { scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion,
@@ -67,6 +68,13 @@ export async function standaloneBookingFixture(options: { activate?: boolean; sc
         practitioner: { links: { self: `${base}/practitioners/22` } }, appointment_type: { links: { self: `${base}/appointment_types/33` } } };
       await onBooking(); if (options.lostBooking) throw new Error("synthetic lost booking response");
       return Response.json(stored, { status: 201 });
+    }
+    if (url.pathname === "/v1/individual_appointments/91/cancel") {
+      assert.equal(method, "PATCH"); assert.equal(stored?.id, "91", "cancel only the actual acknowledged creation");
+      const body = JSON.parse(String(init?.body));
+      assert.deepEqual(body, { cancellation_note: null, cancellation_reason: 50, apply_to_repeats: false });
+      cancellations.push(body); stored!.cancelled_at = f.sessionConfig.clock(); stored!.cancellation_reason = 50;
+      return new Response(null, { status: 204 });
     }
     if (url.pathname === "/v1/individual_appointments/91") {
       if (inspected === "unavailable") return new Response(null, { status: 503 });
@@ -117,7 +125,7 @@ export async function standaloneBookingFixture(options: { activate?: boolean; sc
       }
       return reception.affirm(f.scope, turn("affirm", "Yes"), action.key, action.digest, verificationNow);
     }
-    return { ...f, session, host, writer, authority, evidence, traffic, mail, recalls, sourceQueries, verify, confirm, reception, agent, turn,
+    return { ...f, session, host, writer, authority, evidence, traffic, mail, recalls, cancellations, sourceQueries, verify, confirm, reception, agent, turn,
       propose: (verificationRef: string, turnId = "proposal", offerRef = "selected-offer") => agent.submit({ kind: "booking.propose.v2", turn: turn(turnId), verificationRef, offerRef, now: verificationNow }),
       drain: () => reception.drain(f.scope, f.callId, verificationNow),
       discovery: async () => resultValue(await resultValue(ClinikoRecallReader.create(writerConfig, fetchPort)).discoverPendingReviews(f.scope, "7")),
