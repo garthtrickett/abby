@@ -21,9 +21,11 @@ export type FinancialVoiceProvision = Omit<FinancialBookingPreparationConfig, "p
 const policyMethods = (policy: FinancialBookingPolicy | undefined) => !!policy &&
   [policy.quote, policy.current, policy.currentForSend].every(method => typeof method === "function");
 function policySnapshot(policy: FinancialBookingPolicy): FinancialBookingPolicy {
-  return Object.freeze({ ...(policy.ownership ? { ownership: policy.ownership } : {}),
-    quote: inheritClinikoRequestCost(policy.quote.bind(policy), policy.quote),
-    current: inheritClinikoRequestCost(policy.current.bind(policy), policy.current), currentForSend: policy.currentForSend.bind(policy) });
+  const { ownership, quote, current, currentForSend } = policy;
+  if (![quote, current, currentForSend].every(method => typeof method === "function") || ownership !== undefined && ownership !== "call") throw new RangeError("clinical financial policy unavailable");
+  return Object.freeze({ ...(ownership ? { ownership } : {}),
+    quote: inheritClinikoRequestCost(quote.bind(policy), quote),
+    current: inheritClinikoRequestCost(current.bind(policy), current), currentForSend: currentForSend.bind(policy) });
 }
 type CallOwned = "receipt" | "inbound" | "sessionId" | "ledger" | "signal" | "clock";
 export type ClinikoVoiceClinicalHostConfig = Omit<ClinikoCallFlowConfig, CallOwned | "intake" | "correction" | "resend" | "financial"> & Readonly<{
@@ -157,12 +159,14 @@ export class ClinikoVoiceClinicalHost {
             sessionId: context.sessionId, signal: context.signal, clock: context.clock });
           if (!(callContext.signal instanceof AbortSignal) || callContext.signal.aborted || typeof callContext.clock !== "function") throw new RangeError("clinical voice admission mismatch");
           let policy: FinancialBookingPolicy | undefined;
-          try { policy = policyForCall ? policyForCall(callContext) : sharedPolicy; }
-          catch { throw new RangeError("clinical financial policy unavailable"); }
-          if (!policyMethods(policy) || policyForCall && usedPolicies.has(policy!)) throw new RangeError("clinical financial policy unavailable");
-          if (policyForCall) usedPolicies.add(policy!);
-          provision = { ...common, native: { ...common.native, clock: context.clock }, policy: policySnapshot(policy!),
-            presentation: Object.freeze({ play: context.financialPresentation!.play.bind(context.financialPresentation) }) };
+          try {
+            policy = policyForCall ? policyForCall(callContext) : sharedPolicy;
+            if (!policyMethods(policy) || policyForCall && usedPolicies.has(policy!)) throw new RangeError("clinical financial policy unavailable");
+            const snapshot = policySnapshot(policy!);
+            if (policyForCall) usedPolicies.add(policy!);
+            provision = { ...common, native: { ...common.native, clock: context.clock }, policy: snapshot,
+              presentation: Object.freeze({ play: context.financialPresentation!.play.bind(context.financialPresentation) }) };
+          } catch { throw new RangeError("clinical financial policy unavailable"); }
         }
         const flow = ClinikoCallFlow.create({ ...base, ...context, policyVersion: c.policyVersion,
           ...(provision ? { financial: provision } : {}),

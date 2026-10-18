@@ -79,12 +79,13 @@ test("call-owned financial policy cannot be installed as a shared voice policy",
   assert.throws(() => new ClinikoVoiceClinicalHost({ ...f.config, scope: f.f.scope, greeting: f.host.greeting,
     intent: () => async () => ok({ kind: "model" as const }), financial: { ...financial, policy: { ...financial.policy, ownership: "call" } } }), /policy ownership/);
 });
-for (const failure of ["throw", "invalid", "aborted", "wrong-call"] as const)
+for (const failure of ["throw", "invalid", "getter", "aborted", "wrong-call"] as const)
 test(`financial per-call factory refuses ${failure} without provider or listener effects`, async t => {
   const f = await fixture(); t.after(f.f.close); const { policy, ...common } = f.config.financial!; let calls = 0;
   const host = new ClinikoVoiceClinicalHost({ ...f.config, scope: f.f.scope, greeting: f.host.greeting,
     intent: () => async () => ok({ kind: "model" as const }), financial: { ...common, policyForCall() {
       calls++; if (failure === "throw") throw new Error("private-upstream-error-must-not-escape");
+      if (failure === "getter") return { ...policy, get quote() { throw new Error("private-upstream-error-must-not-escape"); } };
       return failure === "invalid" ? {} as never : { ...policy };
     } } });
   const context = { ...f.context, financialPresentation: { play: async () => undefined } };
