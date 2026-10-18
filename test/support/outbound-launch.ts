@@ -37,6 +37,6 @@ export async function outboundLaunchFixture(options:{deadlineMs?:number;response
     return options.response?options.response(row,method):Response.json(row,{status:method==="POST"?201:200});
   };
   const make=()=>ClinikoOutboundLaunchRecords.create(config,authority,barrier,port),records=value(make());
-  return {attempt,config,binding,barrier,burned,rows,queries,calls,authority,port,make,records,get claims(){return claims;},deny:()=>{allowed=false;},denyProducer:()=>{producer=false;},retire:()=>{live=false;},setNow:(at:string)=>{now=at;},
+  return {request:seed.request,attempt,config,binding,barrier,burned,rows,queries,calls,authority,port,make,records,get claims(){return claims;},deny:()=>{allowed=false;},denyProducer:()=>{producer=false;},retire:()=>{live=false;},setNow:(at:string)=>{now=at;},
     retain:(signal=new AbortController().signal)=>records.retainPossibleAttemptOnce(attempt,outboundReviewDate,signal)};
 }

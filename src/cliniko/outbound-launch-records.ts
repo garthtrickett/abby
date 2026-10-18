@@ -1,24 +1,15 @@
-import { createHash } from "node:crypto";
 import { err, ok } from "../core/model.ts";
-import type { Result, LocationScope } from "../core/model.ts";
+import type { Result } from "../core/model.ts";
 import type { OutboundEffectBarrier } from "../core/outbound-effect-barrier.ts";
-import { clinikoCredentialFingerprint } from "./read-budget.ts";
-import type { ClinikoRequestBudget } from "./read-budget.ts";
-import { outboundConfigShard } from "./internal/outbound-record-context.ts";
 import { NativeOutboundRecords } from "./internal/outbound-native-record.ts";
 import type { NativeOutboundFailure, NativeOutboundRetention, NativeOutboundReadBinding, NativeOutboundReadAuthority } from "./internal/outbound-native-record.ts";
 import { encodeOutboundLaunchAttempt, decodeOutboundLaunchAttempt, outboundLaunchAttemptDigest } from "./outbound-launch-attempt.ts";
 import type { OutboundLaunchAttempt } from "./outbound-launch-attempt.ts";
+import { outboundLaunchConfigShard, outboundLaunchRecordSelection, outboundLaunchRecordOwnerBinding } from "./internal/outbound-launch-record-context.ts";
+import type { OutboundLaunchRecordConfig, OutboundLaunchRecordSelection } from "./internal/outbound-launch-record-context.ts";
+export type { OutboundLaunchRecordConfig, OutboundLaunchRecordSelection } from "./internal/outbound-launch-record-context.ts";
+export { outboundLaunchRecordSelection, outboundLaunchRecordOwnerBinding } from "./internal/outbound-launch-record-context.ts";
 
-/** Explicit independent possible-attempt type/content selection. A request or
- * financial record configuration cannot activate this adapter by spreading. */
-export type OutboundLaunchRecordConfig = Readonly<{
-  scope: LocationScope; apiKey: string; contactEmail: string; businessId: string;
-  outboundAttemptRecallTypeId: string; attemptPolicyDigest: string;
-  rateBudget: ClinikoRequestBudget; clock?: () => string; deadlineMs?: number;
-}>;
-export type OutboundLaunchRecordSelection = Readonly<{ scope: LocationScope; businessId: string; credentialFingerprint: string;
-  outboundAttemptRecallTypeId: string; attemptPolicyDigest: string }>;
 export type OutboundLaunchRecordQuery = OutboundLaunchRecordSelection & Readonly<{ ownerBinding: string;
   operation: "retainPossibleLaunch" | "readPossibleLaunch"; actionRef: string; patientId: string; recallRef?: string; recallAt?: string;
   attempt?: OutboundLaunchAttempt; attemptDigest?: string }>;
@@ -27,21 +18,6 @@ export type OutboundLaunchRecordAuthority = OutboundLaunchReadAuthority & Readon
 export type OutboundLaunchRecord = Readonly<{ kind: "possibleLaunchContext"; recallRef: string; attempt: OutboundLaunchAttempt;
   recallAt: string; createdAt: string; updatedAt: string; recalled: boolean; recalledAt: string|null; archivedAt: string|null }>;
 export type OutboundLaunchRecordFailure = NativeOutboundFailure;
-export function outboundLaunchRecordSelection(config: OutboundLaunchRecordConfig): OutboundLaunchRecordSelection {
-  return Object.freeze({scope:Object.freeze({...config.scope}),businessId:config.businessId,credentialFingerprint:clinikoCredentialFingerprint(config.apiKey),
-    outboundAttemptRecallTypeId:config.outboundAttemptRecallTypeId,attemptPolicyDigest:config.attemptPolicyDigest});
-}
-function shard(config: OutboundLaunchRecordConfig,port: typeof fetch): string|undefined {
-  return outboundConfigShard({...config,outboundRecallTypeId:config.outboundAttemptRecallTypeId,recordPolicyDigest:config.attemptPolicyDigest},port);
-}
-/** Non-patient native record configuration binding, never the private attempt digest. */
-export function outboundLaunchRecordOwnerBinding(config: OutboundLaunchRecordConfig): string|undefined {
-  try {
-    if(!shard(config,fetch))return undefined;const s=outboundLaunchRecordSelection(config);
-    return createHash("sha256").update(JSON.stringify(["abby.outbound-launch-record-owner.v1",s.scope.tenantId,s.scope.clinicId,s.scope.locationId,
-      s.businessId,s.credentialFingerprint,s.outboundAttemptRecallTypeId,s.attemptPolicyDigest])).digest("hex");
-  }catch{return undefined;}
-}
 /** Retains possible-attempt evidence only. An acknowledged record is never a
  * launch/delivery/terminal receipt. The owning launcher independently consumes
  * approval/effect before possible-attempt retention and independently admits a call. */
@@ -59,7 +35,7 @@ export class ClinikoOutboundLaunchRecords {
   }
   static create(config: OutboundLaunchRecordConfig,authority: OutboundLaunchRecordAuthority,barrier: OutboundEffectBarrier,port: typeof fetch=fetch):Result<ClinikoOutboundLaunchRecords,NativeOutboundFailure> {
     try {
-      const sourceShard=shard(config,port),owner=outboundLaunchRecordOwnerBinding(config);
+      const sourceShard=outboundLaunchConfigShard(config,port),owner=outboundLaunchRecordOwnerBinding(config);
       if(!sourceShard||!owner||[authority?.allows,authority?.current,authority?.producerAdmitted,barrier?.matches,barrier?.claimOnce].some(f=>typeof f!=="function")||
         barrier.matches(config.scope,owner)!==true)return err({kind:"invalidConfig"});
       return ok(new ClinikoOutboundLaunchRecords(config,sourceShard,owner,authority,port,{producer:authority.producerAdmitted.bind(authority),barrier}));
@@ -67,7 +43,7 @@ export class ClinikoOutboundLaunchRecords {
   }
   static createReadOnly(config: OutboundLaunchRecordConfig,authority:OutboundLaunchReadAuthority,port:typeof fetch=fetch):Result<Pick<ClinikoOutboundLaunchRecords,"readPossibleAttempt">,NativeOutboundFailure> {
     try {
-      const sourceShard=shard(config,port),owner=outboundLaunchRecordOwnerBinding(config);
+      const sourceShard=outboundLaunchConfigShard(config,port),owner=outboundLaunchRecordOwnerBinding(config);
       if(!sourceShard||!owner||typeof authority?.allows!=="function"||typeof authority.current!=="function")return err({kind:"invalidConfig"});
       return ok(new ClinikoOutboundLaunchRecords(config,sourceShard,owner,authority,port));
     }catch{return err({kind:"invalidConfig"});}
