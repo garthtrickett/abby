@@ -800,3 +800,59 @@ proves received money. Concrete deploying-host integration, independently curren
 financial/clinical/producer/complete-restore grants and actual clinic/type/content/
 provider/sender acceptance remain open. No listener, poller, SQL migration, local
 private queue, payment, mail or native write starts during construction.
+
+## Explicit clinic fee policy and native payment recipient,18October2026
+
+`OwnerFileFinancialFeePolicy` supplies a concrete non-patient source for the
+booking requirement: exact clinic/location, current voice policy, native account,
+business, practitioner, service, timezone, individual/class kind and selected-pass
+category. A pass does not supply financial coverage. Required fees bind integer
+minor units, a supported currency, payment-policy/terms versions, approved text,
+a 31–1440-minute payment window and the explicit
+`reviewDatePolicy: "paymentDeadlineClinicDate"` decision. Only an explicit
+versioned `notRequired` approval permits no deposit; unknown, changed, withdrawn,
+expired or mismatched policy refuses. It is not a patient fee waiver or paid state.
+
+Owner-only bounded JSON and unchanged current clinic-admin membership use the
+existing approval framework. No patient, appointment, recipient, payable,
+producer/restore grant or financial effect belongs in this file. Captured owner
+approval remains inactive until an embedding host supplies it.
+
+`ClinikoFinancialBookingRecipient` reads only the exact registered patient's
+current email, under independent `bookingPaymentRecipient` purpose permission
+bound to the actual financial/native/Stripe selection and full private booking
+selection. It shares the actual physical native budget, rechecks permission after
+quota admission and before disclosing the bounded returned body, and refuses
+archive/mismatch/malformed email, late response, expired offer, cancellation or
+clock reversal. It performs no patient search, guardian selection, caller-address
+fallback or marketing-consent inference. A caller OTP cannot supply this grant.
+
+A new call-private `ApprovedFinancialBookingPolicy` composes those sources into
+the existing preparation interface. It freezes the complete quote/selection,
+requires unchanged terms and a fresh independently admitted native recipient
+read at each asynchronous continuation, and invalidates superseded quotes. The
+synchronous send method is a continuation fence after `current()`; it is not a
+fresh native/file read. Native and host lifecycle owners keep their separate
+send grants. Public source/admin and independent authority callbacks may perform
+native I/O, so this composition declares no fabricated zero-cost or inherited
+request ceiling. A host must review/declare the complete transitive cost before
+using a bounded native phase plan.
+
+Deadlines use whole seconds and the approved full window. A window extending
+past source approval or the selected appointment refuses instead of silently
+shortening the approved terms. Quote validity closes when only 30 minutes remain;
+the actual existing Checkout owner still independently checks its own >30min/
+<=24h window at creation, with no reservation or successful-Checkout guarantee.
+The expressly approved review-date mapping uses the clinic's selected IANA
+timezone, not UTC or an unapproved default.
+
+This is an explicit composition API with source-level actual booking-host
+qualification. Construction starts no service/listener, activates no CLI default
+and makes no actual provider call. Deploying-host current permission and financial
+source composition, manual-paid/waiver decisions, consumer provisioning, complete
+producer/restore admission and actual clinic/provider/sender acceptance remain
+required. New compiled serving/SQL evidence is not claimed by the source-host
+checks; the running combined6d01 regression excludes this follow-up. Gap11 and
+gaps12/13 remain open.
+
+Qualification: 110/110 source/native/actual-host controls (work1792313063723); final standalone full TypeScript on a338e8e (work1792313109332) passed, peak1,546,977,280B/2GiB, CPU100%/heap1536MiB/Swap0/OOM0. All1790 frozen source hashes were independently rechecked after natural terminal; own wrapper was absent and paired wait reaped. No actual provider or SQL job was part of these checks.

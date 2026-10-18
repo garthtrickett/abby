@@ -4865,3 +4865,59 @@ follow-up. Explicit deploying-host composition, actual clinic content/type
 approval, financial requirement/quote/current recipient/manual-paid/waiver
 decisions and real provider/sender/producer/restore/acoustic/deployment acceptance
 remain distinct. All thirteen gaps remain in scope; this is not complete gap11.
+
+## Concrete approved fee quotes and native financial recipient,18October2026
+
+The next gap11 patch replaces an otherwise injected fee/recipient decision in the
+existing booking preparation contract with explicit composition APIs. Public
+owner-file approval binds exact service/practitioner/account/voice-policy/timezone,
+individual/class and selected-pass category; selected pass is not paid coverage.
+Approved amount/currency/terms and a versioned no-deposit choice remain separate
+from every patient, clinical, financial, collection, producer and restore grant.
+A new native adapter reads one exact current patient's registered email under a
+separate financial-contact-purpose permission, sharing actual native quota and
+rechecking after quota and before private disclosure. The call-private composed
+policy rereads current terms/recipient for each async stage, fences stale quotes
+and preserves private selection, recipient and money outside SAM/local storage.
+
+Initial c107 source controls passed40/40; work1792312340607 full TypeScript failed
+one new fixture assigning an optional field to undefined. ab58 composition passed
+61/61 controls, work1792312614811. d2ddb09 then passed98/98 owning source/native/
+actual-host controls, work1792312798976; full TSC1792312854958 found three readonly
+mutation errors in the new adversarial test copy. Those fixture errors are fixed
+with a writable copy; no strict setting, assertion or application deadline changed.
+
+Readonly provider-boundary probe1792312949916 reproduced three quote defects:
+unsupported short payment window, fractional-second deadline and silent shortening
+of approved duration to the clinical start. The correction requires31–1440min
+source windows, whole-second expiry and the complete approved window fitting
+source/appointment boundaries; no silent terms shortening. Quote validity ends
+with30min remaining and actual Checkout creation still independently applies its
+existing native bounds. An expressly approved paymentDeadlineClinicDate mapping
+uses the selected clinic timezone for the review date. This does not promise a
+reserved Checkout or money/financial coverage.
+
+Current a338e8ed63f0f097310d20da9a8f7539f895d0ce passes110/110 focused controls
+in work1792313063723, zero skipped/cancelled. Peak94216192B/256MiB, CPU100%,
+heap192MiB/Swap0/OOM0. The exact five test files are:
+`test/contract/financial-fee-policy.test.ts`,
+`test/contract/approved-financial-booking-policy.test.ts`,
+`test/cliniko/financial-booking-recipient.test.ts`,
+`test/cliniko/approved-financial-booking-host.test.ts` and
+`test/cliniko/financial-booking-host.test.ts`.
+They cover actual source-level host consent then separate clinical ACK, current
+fee/recipient withdrawal before a write, exact registered recipient/private state,
+provider-window and local-date bounds, stale/superseded quote, expiry after quota,
+held-body deadline and the original financial-host regression. Synthetic provider
+ports and temporary owner-only files are used; no actual provider/contact occurs.
+
+Full standalone TypeScript work1792313109332 passed on that exact source. Peak
+1,546,977,280B/2GiB, CPU100%/heap1536MiB/Swap0/OOM0. All 1790 source hashes were
+independently rechecked after natural terminal, own wrapper2299577 was absent and
+paired wait76756 reaped. The new modules are optional composition APIs, not imported by the default
+serving graph, so no new compiled-serving/SQL acceptance is claimed. Full combined
+6d01 work1792310102336 remains independent/live and excludes this patch and533.
+Deploying-host financial-source/grant composition, actual approved clinic policies,
+manual-paid/waiver decisions, consumer/producer/restore provisioning, remaining
+outbound/writeback engineering and real provider/sender/acoustic/cloud/deployment
+acceptance remain open. All13 gaps remain in scope, no merge or activation.

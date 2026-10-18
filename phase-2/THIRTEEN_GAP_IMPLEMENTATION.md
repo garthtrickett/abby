@@ -4817,3 +4817,19 @@ caller and external gates are recorded in
 [execution progress](EXECUTION_PROGRESS.md#original-caller-quota-failures-and-correction18october2026).
 Full strict/build, all ten actual caller cases and current combined regression
 remain required. All thirteen gaps remain active; no live activation or merge.
+
+
+## Gap 11 current fee and registered financial-recipient composition, 18 October 2026
+
+Explicit clinic-owned public fee approval, an independently admitted exact native
+patient email reader and a call-private quote policy now compose the existing
+booking preparation interface. Current qualification is 110 focused source/native/
+actual-host checks plus full TypeScript on a338e8e; review-date mapping, provider
+window and permission/privacy constraints are detailed in the
+[financial contract](STRIPE_FINANCIAL_CONTRACT.md#explicit-clinic-fee-policy-and-native-payment-recipient18october2026)
+and [execution evidence](EXECUTION_PROGRESS.md). This is an inactive-by-default
+composition API, not actual clinic financial provisioning or complete gap 11.
+The separate 6d01 combined regression remains running and excludes this follow-up.
+Current manual-paid/waiver decisions, complete deploying-host consumer/grants and
+producer/restore provisioning, gaps 12/13 and real clinic/provider/sender/acoustic/
+cloud/deployment acceptance remain open. No merge, deployment or provider action.
