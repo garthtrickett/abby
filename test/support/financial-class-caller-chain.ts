@@ -11,13 +11,14 @@ import { financialResendRequestDigest } from "../../src/cliniko/financial-resend
 import { resendRequestValue } from "./financial-resend.ts";
 import { financialMessageSelectionDigest } from "../../src/standalone/smtp-financial-message-delivery.ts";
 import { ClinikoFinancialPendingDiscovery } from "../../src/cliniko/financial-pending-discovery.ts";
+import { withClinikoReservation } from "../../src/cliniko/read-budget.ts";
 import { secret } from "./financial-webhook-handoff.ts";
 import { value, stop } from "./financial-retention.ts";
 
 export async function financialClassCallerChain(passes: boolean, stage: (value: number) => void): Promise<void> {
   await withClassFinancialCaller(passes, stage, context => runPaidFinancialCaller(context, stage));
 }
-export async function runPaidFinancialCaller({ actor: c, observation, clock, directory, connectionString }: FinancialCallerActor, stage: (value: number) => void, options: Readonly<{ saturateBeforePaid?: true }> = {}): Promise<void> {
+export async function runPaidFinancialCaller({ actor: c, observation, clock, directory, connectionString }: FinancialCallerActor, stage: (value: number) => void, options: Readonly<{ exerciseQuotaWindows?: true }> = {}): Promise<void> {
     const intent = c.intent;
     let peer: Awaited<ReturnType<typeof financialConsumerPeer>> | undefined;
     const output: string[] = [], approvals = new Map<string, string>();
@@ -38,6 +39,15 @@ export async function runPaidFinancialCaller({ actor: c, observation, clock, dir
             await peer!.nextCycle();
           }
         };
+        const saturateReadBudget = async () => {
+          const reader = value(ClinikoFinancialPendingDiscovery.create(c.config.checkout.cliniko, c.authority.pending, c.dependencies.native));
+          const signal = AbortSignal.timeout(10_000); let limited = false;
+          for (let i = 0; i <= 180; i++) {
+            const read = await reader.scanPending(signal);
+            if (!read.ok) { assert.equal(read.error.kind, "rateLimited"); limited = true; break; }
+          }
+          assert.ok(limited, "real protected reads must reach the unchanged native quota");
+        };
         peer = await launch();
         await until(() => smtp.messages.length === 1 && c.receipts.length === 1, "original caller Checkout and link");
         stage(3);
@@ -45,15 +55,31 @@ export async function runPaidFinancialCaller({ actor: c, observation, clock, dir
         assert.ok(smtp.messages[0]!.includes("checkout.stripe.com"));
         const receipt = c.receipts[0]!;
         const records = value(ClinikoFinancialResendRecords.create(c.config.checkout.cliniko, c.authority.records, c.barrier, c.dependencies.native));
-        const request = async (purpose: "linkDelivery" | "receiptDelivery") => {
+        const request = async (purpose: "linkDelivery" | "receiptDelivery", expectQuotaDenial = false) => {
           const selected = resendRequestValue(intent, { actionRef: randomUUID(), effectRef: randomUUID(), approvalRef: randomUUID(), purpose,
             intentRecallRef: observation.intentRecallRef, observationRecallRef: c.binding.observationRecallRef,
             observationActionRef: observation.actionRef, targetRef: observation.targetRef,
             checkoutAttemptRecallRef: receipt.attemptRecallRef, checkoutAttemptActionRef: receipt.attemptActionRef,
             checkoutRef: receipt.checkoutRef, requestedAt: clock(), expiresAt: new Date(Date.parse(clock()) + 300_000).toISOString(),
             selectionDigest: financialMessageSelectionDigest({ sender: smtp.config.from, template: "clinicFinancial.v1", timeZone: "Australia/Sydney" })! });
-          assert.equal(value(await records.retainRequestOnce(selected, intent, "2026-10-05", stop())).kind, "accepted");
-          return selected;
+          const deadline = performance.now() + 95_000; let submissions = 0, first = true;
+          while (true) {
+            // This fixture's independent grants perform no native reads. Reserve
+            // its one POST before consuming the one-use record action; a denied
+            // allocation cannot invoke the write, and no invoked write is retried.
+            const admitted = await withClinikoReservation(c.config.checkout.cliniko.rateBudget, 1, stop(), () => {
+              submissions++; return records.retainRequestOnce(selected, intent, "2026-10-05", stop());
+            });
+            if (first && expectQuotaDenial) assert.equal(admitted.kind, "denied"); first = false;
+            if (admitted.kind === "completed") {
+              assert.equal(submissions, 1); assert.equal(value(admitted.value).kind, "accepted"); return selected;
+            }
+            assert.equal(admitted.kind, "denied");
+            if (admitted.kind !== "denied") assert.fail("an interrupted record write cannot be retried");
+            assert.equal(submissions, 0); assert.equal(admitted.denial.kind, "rateLimited");
+            assert.ok(performance.now() < deadline, "same account must admit the first resend record write");
+            await peer!.nextCycle();
+          }
         };
         const link = await request("linkDelivery");
         // Discovery of the request is not independent approval.
@@ -65,17 +91,11 @@ export async function runPaidFinancialCaller({ actor: c, observation, clock, dir
         await peer.kill(); output.push(...peer.output); peer = undefined;
         // The native provider and approval registry survive actual worker loss.
         peer = await launch(); await peer.nextCycle(); assert.equal(smtp.messages.length, 2); assert.equal(c.sessions.length, 1);
-        if (options.saturateBeforePaid) {
+        if (options.exerciseQuotaWindows) {
           // Competing authorized reads share the actual physical SQL budget.
           // Fill it while the original link is already consumed and money is
           // still unpaid, before a new receipt effect can start.
-          const reader = value(ClinikoFinancialPendingDiscovery.create(c.config.checkout.cliniko, c.authority.pending, c.dependencies.native));
-          const signal = AbortSignal.timeout(10_000); let limited = false;
-          for (let i = 0; i <= 180; i++) {
-            const read = await reader.scanPending(signal);
-            if (!read.ok) { assert.equal(read.error.kind, "rateLimited"); limited = true; break; }
-          }
-          assert.ok(limited, "real protected reads must reach the unchanged native quota");
+          await saturateReadBudget();
         }
         c.paid();
         const timestamp = String(Math.floor(Date.parse(clock()) / 1000));
@@ -86,7 +106,7 @@ export async function runPaidFinancialCaller({ actor: c, observation, clock, dir
         const deliverReference = () => fetch(`http://127.0.0.1:${peer!.port}/stripe/webhook`, { method: "POST",
           headers: { "content-type": "application/json", "stripe-signature": signature }, body: raw });
         let event = await deliverReference();
-        if (options.saturateBeforePaid) assert.equal(event.status, 503, "an exhausted native account cannot acknowledge handoff");
+        if (options.exerciseQuotaWindows) assert.equal(event.status, 503, "an exhausted native account cannot acknowledge handoff");
         if (event.status === 503) {
           assert.equal(await event.text(), '{"ok":false}');
           const budget = c.config.checkout.cliniko.rateBudget; assert.ok(budget.checkHeadroom);
@@ -107,7 +127,8 @@ export async function runPaidFinancialCaller({ actor: c, observation, clock, dir
         assert.equal(event.status, 200); assert.equal(await event.text(), '{"ok":true}');
         await until(() => smtp.messages.length === 3, "original current-money hosted receipt");
         assert.ok(smtp.messages[2]!.includes("pay.stripe.com/receipts/")); stage(5);
-        const resend = await request("receiptDelivery");
+        if (options.exerciseQuotaWindows) await saturateReadBudget();
+        const resend = await request("receiptDelivery", options.exerciseQuotaWindows === true);
         approvals.set(resend.approvalRef, financialResendRequestDigest(resend)!); financialApproved = false;
         await until(() => seenFinancial.has(resend.actionRef), "exact native receipt request reached current financial approval");
         assert.equal(smtp.messages.length, 3, "old receipt permission cannot replace current financial approval");
