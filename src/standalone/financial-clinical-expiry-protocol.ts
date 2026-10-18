@@ -171,10 +171,12 @@ export class FinancialClinicalExpiryProtocol<Target, Approval extends FinancialE
       if (!isDeepStrictEqual(prepared, renewed)) throw new FinancialClinicalExpiryRefusal("mismatched");
       if (this.#nativeTarget.beforeClaim) {
         const denied = await op.wait(this.#nativeTarget.beforeClaim(q.target, op));
-        if (denied) {
-          if (denied.kind === "rateLimited" && Number.isSafeInteger(denied.retryAfterMs) &&
-              denied.retryAfterMs! > 0 && denied.retryAfterMs! <= 8_640_000_000)
-            return err({ kind: "rateLimited", retryAfterMs: denied.retryAfterMs! });
+        if (denied !== null) {
+          const retry = denied.kind === "rateLimited" ? denied.retryAfterMs : undefined;
+          // Retry timing is returned only before the irreversible effect claim.
+          // Malformed admission and any later attempt keep their refusal rules.
+          if (typeof retry === "number" && Number.isSafeInteger(retry) && retry > 0 && retry <= 8_640_000_000)
+            return err({ kind: "rateLimited", retryAfterMs: retry });
           throw new FinancialClinicalExpiryRefusal("unavailable");
         }
       }

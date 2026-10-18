@@ -98,7 +98,7 @@ export class ClinikoFinancialCaseClassExpiryOwner {
           const remaining = 2 * (classRead + 1 + caseRead) + 1 + 1 + caseRead + 20 + config.maximumAuthorityRequests;
           const denied = await op.wait(checkClinikoHeadroom(config.cliniko.rateBudget, remaining));
           // The next poll must repeat discovery and all preparation before it
-          // reaches this check. Waiting for only the remaining64-style quantum
+          // reaches this check. Waiting only for the slots needed after preparation
           // can consume those newly freed slots and starve the operation again.
           // Leave one whole physical rolling-minute window quiet instead; any
           // longer account/provider cooldown still wins. Every retry is fresh.
