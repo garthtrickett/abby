@@ -17,7 +17,9 @@ export function outboundLaunchValue() {
 }
 export async function outboundLaunchFixture(options:{deadlineMs?:number;response?(row:Record<string,unknown>,method:string):Response|Promise<Response>;
   barrierFactory?(config:OutboundLaunchRecordConfig):OutboundEffectBarrier;attempt?:OutboundLaunchAttempt}={}) {
-  const apiKey="synthetic-outbound-au5",seed=outboundLaunchValue(),attempt={...(options.attempt??seed.attempt),credentialFingerprint:clinikoCredentialFingerprint(apiKey)};
+  const apiKey="synthetic-outbound-au5",seed=outboundLaunchValue();
+  const request={...seed.request,credentialFingerprint:clinikoCredentialFingerprint(apiKey)};
+  const attempt={...(options.attempt??{...seed.attempt,requestDigest:outboundRecipientRequestDigest(request)!}),credentialFingerprint:request.credentialFingerprint};
   let now=outboundNow,allowed=true,producer=true,live=true,claims=0,next=40;
   const config:OutboundLaunchRecordConfig={scope:attempt.scope,apiKey,contactEmail:"clinic@example.invalid",businessId:attempt.businessId,outboundAttemptRecallTypeId:"62",attemptPolicyDigest:"f".repeat(64),
     clock:()=>now,...(options.deadlineMs===undefined?{}:{deadlineMs:options.deadlineMs}),rateBudget:{claim:async()=>{claims++;return null;},observe429:async()=>({kind:"rateLimited"})}};
@@ -37,6 +39,6 @@ export async function outboundLaunchFixture(options:{deadlineMs?:number;response
     return options.response?options.response(row,method):Response.json(row,{status:method==="POST"?201:200});
   };
   const make=()=>ClinikoOutboundLaunchRecords.create(config,authority,barrier,port),records=value(make());
-  return {request:seed.request,attempt,config,binding,barrier,burned,rows,queries,calls,authority,port,make,records,get claims(){return claims;},deny:()=>{allowed=false;},denyProducer:()=>{producer=false;},retire:()=>{live=false;},setNow:(at:string)=>{now=at;},
+  return {request,attempt,config,binding,barrier,burned,rows,queries,calls,authority,port,make,records,get claims(){return claims;},deny:()=>{allowed=false;},denyProducer:()=>{producer=false;},retire:()=>{live=false;},setNow:(at:string)=>{now=at;},
     retain:(signal=new AbortController().signal)=>records.retainPossibleAttemptOnce(attempt,outboundReviewDate,signal)};
 }
