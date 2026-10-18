@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ClinikoFinancialInvoiceReader } from "../../src/cliniko/financial-invoice-read.ts";
 import type { FinancialInvoiceAuthority, FinancialInvoiceBinding } from "../../src/cliniko/financial-invoice-read.ts";
+import type { ClinikoFinancialReviewConfig } from "../../src/cliniko/internal/financial-record-context.ts";
 import { fixture as retained, value, uuid, base, now, stop } from "../support/financial-retention.ts";
 
 function fixture() {
@@ -25,7 +26,7 @@ function fixture() {
     state.reads++; return Response.json(row);
   };
   return { config, binding, row, state, authority, port, queries, signals,
-    create: (transport = port, grants = authority, settings = config) => value(ClinikoFinancialInvoiceReader.create(settings, grants, transport)) };
+    create: (transport = port, grants = authority, settings: ClinikoFinancialReviewConfig = config) => value(ClinikoFinancialInvoiceReader.create(settings, grants, transport)) };
 }
 
 test("exact invoice read preserves current financial mapping and only bounded native state", async () => {
