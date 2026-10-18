@@ -93,7 +93,7 @@ export async function financialClassCallerChain(passes: boolean, stage: (value: 
         peer = await launch(); await peer.nextCycle(); assert.equal(smtp.messages.length, 2); assert.equal(c.sessions.length, 1);
         c.paid();
         const timestamp = String(Math.floor(Date.parse(clock()) / 1000));
-        const raw = JSON.stringify({ id: "evt_class_caller", object: "event", type: "checkout.session.completed", created: Number(timestamp),
+        const raw = JSON.stringify({ id: "evt_classCaller", object: "event", type: "checkout.session.completed", created: Number(timestamp),
           account: intent.stripe.accountRef, livemode: false, api_version: c.config.webhook.apiVersion,
           data: { object: { object: "checkout.session", id: receipt.checkoutRef, payment_status: "paid" } } });
         const signature = `t=${timestamp},v1=${createHmac("sha256", secret).update(timestamp + ".").update(raw).digest("hex")}`;
