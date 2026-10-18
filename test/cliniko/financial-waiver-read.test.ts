@@ -43,6 +43,18 @@ test("withdrawal during actual physical quota wait prevents the private GET", as
   const config = { ...f.config, rateBudget: { ...f.config.rateBudget, claim: async () => { await f.withdraw(); return null; } } };
   assert.equal((await f.create(f.port, f.authority, config).read(f.binding, signal())).ok, false); assert.equal(f.state.gets, 0);
 });
+test("financial permission withdrawn during the last issuer lookup prevents private dispatch", async t => {
+  const f = await nativeWaiverFixture(); t.after(f.close); let entered!: () => void, release!: () => void;
+  const ready = new Promise<void>(r => { entered = r; }), gate = new Promise<void>(r => { release = r; }), original = f.directory.findByRef;
+  t.after(() => release?.());
+  f.directory.findByRef = async ref => { if (f.state.quota > 0) { entered(); await gate; } return original(ref); };
+  const definition = value(await OwnerFileFinancialSource.capture({ path: f.path, scope: f.intent.scope, directory: f.directory,
+    clock: () => f.sourceState.now }, signal()));
+  const issuer = value(ApprovedFinancialWaiverIssuer.create(f.config, issuerKey, definition));
+  const reader = value(ClinikoFinancialWaiverReader.create(f.config, issuer, f.authority, f.port));
+  const pending = reader.read(f.binding, signal()); await ready; f.state.current = false; release();
+  assert.equal((await pending).ok, false); assert.equal(f.state.gets, 0, "withdrawn financial read permission must prevent native GET");
+});
 test("native body completion rechecks independent permission and issuer approval", async t => {
   const f = await nativeWaiverFixture(); t.after(f.close);
   const reader = f.create(async () => { await f.withdraw(); return Response.json(f.row); });

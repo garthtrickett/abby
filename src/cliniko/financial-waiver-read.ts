@@ -74,7 +74,8 @@ export class ClinikoFinancialWaiverReader {
         return value !== undefined && now && now >= began && !signal.aborted && performance.now() - start <= ms ? value : undefined;
       };
       const permit = async () => await wait(Promise.resolve().then(() => this.#authority.allows(query, signal))) === true &&
-        this.#authority.current(query, signal) === true && await wait(this.#issuer.current(signal)) === true;
+        this.#authority.current(query, signal) === true && await wait(this.#issuer.current(signal)) === true &&
+        this.#authority.current(query, signal) === true;
       if (!await permit()) return err({ kind: "forbidden" });
       if (await wait(claimClinikoBudget(this.#config.rateBudget)) !== null) return err({ kind: "unavailable" });
       if (!await permit()) return err({ kind: "forbidden" });
