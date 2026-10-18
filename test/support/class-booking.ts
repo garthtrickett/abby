@@ -26,7 +26,8 @@ export async function classBookingFixture(options: { passes?: boolean; fetchArou
   const nativeBudget = options.budget ?? new ClinikoReadBudget(options.budgetLimit ?? 200, () => Date.parse(sourceTime));
   let claims = 0;
   const budget = { claim: () => { claims++; return nativeBudget.claim(); }, observe429: nativeBudget.observe429.bind(nativeBudget),
-    ...(nativeBudget.checkHeadroom ? { checkHeadroom: nativeBudget.checkHeadroom.bind(nativeBudget) } : {}) };
+    ...(nativeBudget.checkHeadroom ? { checkHeadroom: nativeBudget.checkHeadroom.bind(nativeBudget) } : {}),
+    ...(nativeBudget.withReservation ? { withReservation: nativeBudget.withReservation.bind(nativeBudget) } : {}) };
   const mail: { email: string; code: string }[] = [];
   let delivered!: () => void; const delivery = new Promise<void>(resolve => { delivered = resolve; });
   const f = await callerVerificationFixture({ apiKey: "synthetic-class-au5", bookingExecute: true, operation: "appointments.book", rateBudget: budget,

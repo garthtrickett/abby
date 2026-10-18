@@ -107,21 +107,23 @@ export async function runPaidFinancialCaller({ actor: c, observation, clock, dir
           headers: { "content-type": "application/json", "stripe-signature": signature }, body: raw });
         let event = await deliverReference();
         if (options.exerciseQuotaWindows) assert.equal(event.status, 503, "an exhausted native account cannot acknowledge handoff");
-        if (event.status === 503) {
+        const referenceDeadline = performance.now() + 95_000;
+        while (event.status === 503) {
           assert.equal(await event.text(), '{"ok":false}');
           const budget = c.config.checkout.cliniko.rateBudget; assert.ok(budget.checkHeadroom);
           const headroom = budget.checkHeadroom.bind(budget);
           assert.equal((await headroom(1))?.kind, "rateLimited", "only an observed quota refusal permits reference redelivery");
-          const deadline = performance.now() + 95_000;
           while (true) {
-            // Room for this bounded fixture's overlapping poll/reference scans;
-            // this read-only check is not a reservation or a quota increase.
-            const current = await headroom(100); if (current === null) break;
-            assert.equal(current.kind, "rateLimited"); assert.ok(performance.now() < deadline, "same account must recover headroom");
+            // Admission of a request is not a reservation for both scans. A
+            // competing periodic scan may consume it; only an observed quota
+            // refusal permits another delivery of this same read-only reference.
+            const current = await headroom(1); if (current === null) break;
+            assert.equal(current.kind, "rateLimited"); assert.ok(performance.now() < referenceDeadline, "same account must recover headroom");
             await peer.nextCycle();
           }
           // This is the same authenticated, read-only reference, not a retry of
           // Checkout, mail, a native POST or any consumed financial effect.
+          assert.ok(performance.now() < referenceDeadline, "authenticated reference redelivery remains bounded");
           event = await deliverReference();
         }
         assert.equal(event.status, 200); assert.equal(await event.text(), '{"ok":true}');
