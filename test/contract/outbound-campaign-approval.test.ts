@@ -65,9 +65,36 @@ test("captured directory methods remain bound and replacing them cannot recover 
   const f=await fixture();t.after(f.close);const original=f.account;f.setAccount(undefined);
   f.config.directory.findByRef=async()=>({ok:true,value:original});assert.deepEqual(await f.current(),{ok:true,value:undefined});
 });
-test("held current membership respects cancellation and cannot disclose policy after abort",{timeout:3000},async t=>{
+test("held current membership respects the whole-operation deadline",{timeout:3000},async t=>{
   const f=await fixture();t.after(f.close);let hold=false;const original=f.config.directory.findByRef;
   f.config.directory.findByRef=async ref=>hold?new Promise(()=>{}):original(ref);
   const policy=value(await OwnerFileOutboundCampaign.capture(f.config,new AbortController().signal));hold=true;
   assert.deepEqual(await policy.currentFor(f.selection,f.request,new AbortController().signal),{ok:false,error:{kind:"unavailable"}});
+});
+
+for(const change of ["audienceKind","recordDigest","typeId","timezone","weekdays","effectiveWindow"] as const)
+ test(`campaign ${change} cannot become an approved source or contact schedule`,async t=>{
+  const f=await fixture();t.after(f.close);
+  if(change==="audienceKind")await f.replace({audience:{...f.approval.audience,kind:"allPhoneMatches"}});
+  if(change==="recordDigest")await f.replace({audience:{...f.approval.audience,recordPolicyDigest:"unreviewed"}});
+  if(change==="typeId")await f.replace({audience:{...f.approval.audience,outboundRecallTypeId:"0"}});
+  if(change==="timezone")await f.replace({schedule:{...f.approval.schedule,timeZone:"Unknown/Clinic"}});
+  if(change==="weekdays")await f.replace({schedule:{...f.approval.schedule,weekdays:[2,1]}});
+  if(change==="effectiveWindow")await f.replace({schedule:{...f.approval.schedule,expiresAt:"2026-11-05T00:00:00.000Z"}});
+  assert.equal((await OwnerFileOutboundCampaign.capture(f.config,new AbortController().signal)).ok,false);
+ });
+test("external cancellation during current membership lookup cannot disclose campaign policy",{timeout:3000},async t=>{
+  const f=await fixture();t.after(f.close);let hold=false,entered!:()=>void;const ready=new Promise<void>(resolve=>{entered=resolve;});
+  const original=f.config.directory.findByRef;f.config.directory.findByRef=async ref=>{if(hold){entered();return new Promise(()=>{});}return original(ref);};
+  const policy=value(await OwnerFileOutboundCampaign.capture(f.config,new AbortController().signal));hold=true;
+  const controller=new AbortController(),pending=policy.currentFor(f.selection,f.request,controller.signal);await ready;controller.abort();
+  assert.deepEqual(await pending,{ok:false,error:{kind:"unavailable"}});
+});
+test("source selection is snapshotted before a held fresh membership lookup",{timeout:3000},async t=>{
+  const f=await fixture();t.after(f.close);let hold=false,entered!:()=>void,release!:()=>void;
+  const ready=new Promise<void>(resolve=>{entered=resolve;}),original=f.config.directory.findByRef;
+  f.config.directory.findByRef=async ref=>{if(hold){entered();await new Promise<void>(resolve=>{release=resolve;});}return original(ref);};
+  const policy=value(await OwnerFileOutboundCampaign.capture(f.config,new AbortController().signal));hold=true;
+  const selection={...f.selection,outboundRecallTypeId:"62"},pending=policy.currentFor(selection,f.request,new AbortController().signal);
+  await ready;selection.outboundRecallTypeId="61";hold=false;release();assert.deepEqual(await pending,{ok:true,value:undefined});
 });
