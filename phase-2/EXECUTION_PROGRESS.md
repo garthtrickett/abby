@@ -4692,3 +4692,13 @@ fairness handoff. All thirteen gaps, current combined qualification, independent
 review/cloud execution and clinic/provider/sender/restore/acoustic/deployment
 acceptance remain open. No merge, deployment, live action or Aeva deletion is
 claimed.
+
+The source-only expiry contract cohort on `3926517` has now passed125/125,
+with zero failures/cancellations/skips: work `1792305415093`, natural terminal
+06:37:42.089916 UTC, peak184,803,328 bytes/256 MiB/CPU100%/heap192MiB/Swap0,
+no OOM. All six individual/unlinked/pass protocol and consumer contract files
+ran, including the new quiet-window, fresh-permission and long-delay shutdown
+controls. Source/dependencies stayed pinned and wait99972 was reaped. This
+small no-database check does not qualify serving artifacts or original-caller
+PostgreSQL expiry; those validations remain pending. The one-start Gust fairness
+handoff still precedes further large build/PostgreSQL backfill.
