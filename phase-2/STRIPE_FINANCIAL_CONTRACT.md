@@ -953,3 +953,26 @@ prerequisites; dynamic imports cannot silently skip compilation. Original 95s st
 remain unchanged. No local private retry queue or production feature is added.
 The earlier 6d01 full 4428/1/1 stays negative until a new complete candidate finishes;
 stronger diagnostics do not retroactively identify that timeout's cause.
+
+## Staff-recorded payments and waivers: owner selection, 18 October 2026
+
+The owner selected Cliniko financial records as the authoritative source for
+payments recorded outside Stripe, plus explicit clinic-approved waiver decisions.
+Dedicated pending financial reviews remain work context, not money or waiver proof.
+
+Use the documented exact invoice GET under an independent financial-read grant.
+Bind the native account/business, patient, booking and class attendee where
+applicable, exact invoice and approved total/currency interpretation to the
+financial action. Do not infer these links from a nearest appointment, invoice
+notes or a shared patient account. Native invoice status20 is recorded paid;
+status30 is closed, not paid. Open/credit/unknown states do not prove the absence
+of partial/manual payments or waivers. Missing currency in the native schema
+requires a separately approved current account/obligation currency binding.
+
+An invoice read is transient evidence only. It cannot create a Stripe receipt,
+refund, waiver, collection/cancellation grant or restoration authority. Explicit
+waiver decision source/withdrawal and complete original financial-owner
+composition still need their own evidence before any automatic effect.
+
+API reference reviewed18October2026: [Cliniko invoices](https://docs.api.cliniko.com/openapi/invoice).
+No live provider was accessed; only public API documentation was read.
