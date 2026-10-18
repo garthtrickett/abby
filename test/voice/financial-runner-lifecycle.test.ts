@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { fork } from "node:child_process";
+import { request as httpRequest } from "node:http";
 import { once } from "node:events";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
@@ -19,6 +20,15 @@ type Mode = "active" | "foreignScope" | "foreignBudget" | "invalid" | "alreadySt
 type Message = { kind: string; port?: number; reason?: string; aborted?: boolean; closed?: boolean; closeCalls?: number;
   creationAcknowledged?: number; messageAccepted?: number; sessions?: number; messages?: number };
 const options = { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 40_000 };
+async function exitWithin(terminal: Promise<unknown[]>): Promise<unknown[]> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([terminal, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("financial runner terminal deadline")), 10_000);
+    })]);
+  } finally { if (timer) clearTimeout(timer); }
+}
+
 async function runner(mode: Mode, run: (context: { child: ReturnType<typeof fork>; messages: Message[];
   terminal: Promise<unknown[]>; output: string[]; db: ReturnType<typeof connectPostgres> }) => Promise<void>) {
   await withDisposablePostgres(async (admin, connectionString) => {
@@ -81,7 +91,7 @@ test("compiled owning runner starts independent finance, authenticates raw event
     const refused = await fetch(`${base}/stripe/webhook`, { method: "POST", headers: { "content-type": "application/json", "stripe-signature": signed.signature }, body: signed.raw });
     assert.equal(refused.status, 503); assert.equal(await refused.text(), '{"ok":false}');
     assert.ok(messages.filter(m => m.kind === "cycle").every(m => m.sessions === 1));
-    child.kill("SIGTERM"); assert.deepEqual(await terminal, [0, null]);
+    child.kill("SIGTERM"); assert.deepEqual(await exitWithin(terminal), [0, null]);
     assert.ok(messages.some(m => m.kind === "stopped" && m.aborted === true && m.closed === true));
     await assert.rejects(fetch(`${base}/healthz`, { signal: AbortSignal.timeout(1_000) }));
   });
@@ -89,8 +99,42 @@ test("compiled owning runner starts independent finance, authenticates raw event
 for (const mode of ["foreignScope", "foreignBudget", "invalid", "alreadyStarted"] as const)
   test(`compiled financial runner refuses ${mode} before starting money or a listener`, options, async () => {
     await runner(mode, async ({ messages, terminal }) => {
-      assert.deepEqual(await terminal, [1, null]);
+      assert.deepEqual(await exitWithin(terminal), [1, null]);
       assert.deepEqual(messages.filter(m => m.kind === "refused"), [{ kind: "refused", reason: mode === "invalid" ? "invalidConsumer" : mode === "alreadyStarted" ? "startRejected" : "accountMismatch", closeCalls: 0, sessions: 0, messages: 0 }]);
-      assert.equal(messages.some(m => m.kind === "listenerReady" || m.kind === "cycle"), false);
+      assert.equal(messages.some(m => m.kind === "listenerReady"), false);
+      // A consumer started by another owner may already report zero-money cycles.
+      // Rejection must neither start our listener nor close that existing owner.
+      assert.ok(messages.filter(m => m.kind === "cycle").every(m =>
+        mode === "alreadyStarted" && m.sessions === 0 && m.messages === 0));
     });
   });
+
+
+test("compiled financial shutdown retires an unfinished raw webhook before closing the listener", options, async () => {
+  await runner("active", async ({ child, messages, terminal }) => {
+    await voiceUntil(() => messages.some(m => m.kind === "listenerReady") || child.exitCode !== null, "financial shutdown listener");
+    const port = messages.find(m => m.kind === "listenerReady")?.port; assert.ok(port);
+    const signed = signWebhook("{}");
+    const request = httpRequest({ host: "127.0.0.1", port, path: "/stripe/webhook", method: "POST",
+      headers: { "content-type": "application/json", "stripe-signature": signed.signature,
+        "content-length": Buffer.byteLength(signed.raw), expect: "100-continue" } });
+    const reply = new Promise<{ status: number | undefined; body: string }>((resolve, reject) => {
+      request.once("error", reject);
+      request.once("response", response => {
+        const chunks: Buffer[] = []; response.on("data", chunk => chunks.push(Buffer.from(chunk)));
+        response.once("error", reject);
+        response.once("end", () => resolve({ status: response.statusCode, body: Buffer.concat(chunks).toString("utf8") }));
+      });
+    });
+    void reply.catch(() => undefined); // Cleanup may retire the client before an assertion awaits it.
+    const continued = once(request, "continue"); request.flushHeaders();
+    try {
+      await continued; request.write("{");
+      await new Promise<void>(resolve => setTimeout(resolve, 40));
+      child.kill("SIGTERM");
+      const [exit, response] = await Promise.all([exitWithin(terminal), reply]);
+      assert.deepEqual(exit, [0, null]); assert.deepEqual(response, { status: 503, body: '{"ok":false}' });
+      assert.ok(messages.some(m => m.kind === "stopped" && m.aborted === true && m.closed === true));
+    } finally { request.destroy(); }
+  });
+});
