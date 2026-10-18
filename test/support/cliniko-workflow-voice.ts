@@ -21,6 +21,7 @@ import type { IntentResolver } from "../../src/voice/voice-session.ts";
 import type { TranscriptEvent } from "../../src/voice/turn-assembler.ts";
 import { callIdFor } from "../../src/voice/admission.ts";
 import { approvedSyntheticPolicy, syntheticSpeech } from "./approved-voice.ts";
+import { retainedNativeAppointments } from "./retained-native-appointments.ts";
 import { SyntheticPlaybackReceipts } from "./synthetic-playback-receipts.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 import { verificationCanaries, verificationNow } from "./caller-verification.ts";
@@ -320,7 +321,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       const resumeChunk = chunk; await voiceUntil(() => processedChunk >= resumeChunk, "fresh private-audio quiet interval");
     };
     await mark();
-    return { callId, currentTime: now, sent, spoken, transcripts, privateTranscripts, modelTurns, transitionTrace, writes, writeRequests, close, mark, media, sendEvent, privateQuiet,
+    return { callId, currentTime: now, retainedNative: retainedNativeAppointments(nativeRows, now, port), sent, spoken, transcripts, privateTranscripts, modelTurns, transitionTrace, writes, writeRequests, close, mark, media, sendEvent, privateQuiet,
       get workflowStarted() { return flow !== undefined; },
       get flow() { assert.ok(flow); return flow; }, get transcriptionFrames() { return transcriptionFrames; },
       get closed() { return closed; }, get closeCode() { return closeCode; },

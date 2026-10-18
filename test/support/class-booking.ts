@@ -101,7 +101,7 @@ export async function classBookingFixture(options: { passes?: boolean; fetchArou
       assert.equal((await callState()).presentations[action.presentationId]!.status, "played");
       const body = JSON.parse(String(init?.body));
       writes.push(body);
-      const row = { ...classAttendee("401", body.booking_id, body.patient_id), notes: body.notes };
+      const row = { ...classAttendee("401", body.booking_id, body.patient_id), arrived: null, notes: body.notes };
       if (body.patient_case_id !== undefined) {
         Object.assign(row, { arrived: null, patient_case: classLink("patient_cases", body.patient_case_id) });
         caseRows.push(row); (caseRecord.attendee_ids as string[]).push("401");

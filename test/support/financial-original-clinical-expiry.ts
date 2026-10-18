@@ -22,7 +22,7 @@ type Original = Readonly<{ cancellations: readonly unknown[]; timeZone: string;
 export async function financialOriginalClinicalExpiry(kind: OriginalClinicalKind, stage: (value: number) => void): Promise<void> {
   if (kind === "individual" || kind === "reviewTerms") {
     await financialIndividualCaller("closedUnpaid", stage, (context, f) => run(context, kind, stage,
-      { cancellations: f.cancellations, timeZone: f.config.cliniko.timeZone }), kind === "individual" ? approvedTerms(kind) : undefined);
+      { cancellations: f.cancellations, timeZone: f.timeZone }), kind === "individual" ? approvedTerms(kind) : undefined);
   } else {
     await withClassFinancialCaller(kind === "passClass", stage, (context, f) => run(context, kind, stage,
       { cancellations: f.cancellations, timeZone: f.classSessionConfig.cliniko.timeZone, classBooking: f,

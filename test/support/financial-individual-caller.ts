@@ -20,7 +20,7 @@ import { runPaidFinancialCaller } from "./financial-class-caller-chain.ts";
 import { runUnpaidFinancialCaller } from "./financial-class-unpaid-chain.ts";
 
 export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid", stage: (value: number) => void,
-  afterBooking?: (context: FinancialCallerActor, original: Awaited<ReturnType<typeof bookingCallFlowFixture>>) => Promise<void>, approvedTerms?: string): Promise<void> {
+  afterBooking?: (context: FinancialCallerActor, original: Readonly<{ cancellations: readonly unknown[]; timeZone: string }>) => Promise<void>, approvedTerms?: string): Promise<void> {
   stage(1); const callerBegan = performance.now();
   await withDisposablePostgres(async (db, connectionString) => {
     const budget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-session-au5", maxPerMinute: 180 });
@@ -102,11 +102,12 @@ export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid"
       const noted = [...funding.rows.values()].find(row => String(row.notes).includes("financial booking observation"))!;
       const observation = value(verifyFinancialBookingObservation(noted.notes, { intent, intentRecallRef: `cliniko:recall:${row.id}`, producerKeyRef: keyRef, publicKey: keys.publicKey }));
       assert.equal(observation.targetRef, "cliniko:appointment:91"); assert.equal(observation.classCreationRequest, undefined); assert.ok(observation.financialConsent);
+      const originalNative = call.retainedNative;
       await call.close(); call = undefined; stage(2);
       await withRetainedFinancialCaller({ native: funding, observation, expected: { targetRef: "cliniko:appointment:91", amount: 5000, currency: "gbp" },
-        ...(afterBooking ? { clinicalNative: provider } : {}),
+        ...(afterBooking ? { clinicalNative: originalNative.fetchPort } : {}),
         clock: () => readClock(), setTime: f.setTime, clinicalWrites: () => requests, reviews: () => f.recalls },
-        db, connectionString, stage, context => afterBooking ? afterBooking(context, f) : outcome === "paid" ? runPaidFinancialCaller(context, stage, { exerciseQuotaWindows: true }) : runUnpaidFinancialCaller(context, stage));
+        db, connectionString, stage, context => afterBooking ? afterBooking(context, { cancellations: originalNative.cancellations, timeZone: f.config.cliniko.timeZone }) : outcome === "paid" ? runPaidFinancialCaller(context, stage, { exerciseQuotaWindows: true }) : runUnpaidFinancialCaller(context, stage));
     } finally { if (call) await call.close(); financialLife.abort(); await f.close(); }
   });
 }
