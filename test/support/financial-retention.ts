@@ -52,7 +52,7 @@ function fixture(options: { intent?: ClinikoFinancialIntent; barrierFactory?: (c
       assert.deepEqual(Object.keys(body).sort(), ["notes", "patient_id", "recall_at", "recall_type_id", "recalled"]);
       const id = String(next++); row = { id, links: { self: `${base}/recalls/${id}` }, patient: { links: { self: `${base}/patients/${body.patient_id}` } },
         recall_type: { links: { self: `${base}/recall_types/${body.recall_type_id}` } }, notes: body.notes, recall_at: body.recall_at,
-        recalled: false, archived_at: null, created_at: now, updated_at: now, private_unknown: "private-native-record-canary" };
+        recalled: false, recalled_at: null, archived_at: null, created_at: now, updated_at: now, private_unknown: "private-native-record-canary" };
       rows.set(id, row);
     } else { assert.equal(method, "GET"); row = rows.get(url.pathname.split("/").at(-1)!)!; }
     return options.response ? options.response(row, method) : Response.json(row, { status: method === "POST" ? 201 : 200 });
@@ -61,7 +61,7 @@ function fixture(options: { intent?: ClinikoFinancialIntent; barrierFactory?: (c
     if (rows.has("30")) return;
     rows.set("30", { id: "30", links: { self: `${base}/recalls/30` }, patient: { links: { self: `${base}/patients/${intent.patientId}` } },
       recall_type: { links: { self: `${base}/recall_types/${config.recallTypeId}` } }, notes: value(encodeClinikoFinancialIntent(intent)), recall_at: reviewDate,
-      recalled: false, archived_at: null, created_at: now, updated_at: now });
+      recalled: false, recalled_at: null, archived_at: null, created_at: now, updated_at: now });
     next = Math.max(next, 31);
   };
   const made = ClinikoFinancialRecordRetainer.create(config, authority, barrier, port);

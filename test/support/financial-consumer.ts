@@ -10,7 +10,7 @@ export async function financialConsumerFixture(options: {
   onAcknowledged?(receipt: CheckoutCreationReceipt): Promise<void>;
 } = {}) {
   const response = options.checkout?.native?.response;
-  const f = await checkoutFixture({ ...options.checkout, native: { ...options.checkout?.native, response: async (row, method) => {
+  const f = await checkoutFixture(options.checkout?.retained ? options.checkout : { ...options.checkout, native: { ...options.checkout?.native, response: async (row, method) => {
     if (method === "POST") row.recalled_at = null;
     return response ? response(row, method) : Response.json(row, { status: method === "POST" ? 201 : 200 });
   } } });
@@ -18,7 +18,7 @@ export async function financialConsumerFixture(options: {
   const nativePort: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
     if (init?.method === "GET" && url.pathname === "/v1/recalls" && url.searchParams.getAll("q[]").includes("recalled_at:!?")) {
-      const rows = [...f.rows.values()].filter(row => row.recalled_at === null && row.archived_at === null).sort((a, b) => Number(a.id) - Number(b.id));
+      const rows = [...f.rows.values(), ...(options.checkout?.retained?.otherReviews?.() ?? [])].filter(row => row.recalled_at === null && row.archived_at === null).sort((a, b) => Number(a.id) - Number(b.id));
       const page = Number(url.searchParams.get("page")); return Response.json({ total_entries: rows.length, recalls: rows.slice((page - 1) * 100, page * 100) });
     }
     return f.nativePort(input, init);
@@ -52,7 +52,7 @@ export async function financialConsumerFixture(options: {
     webhook: { allowsReferenceRead: async () => true, acceptsExistingPending: async () => true, current: () => live }, ...options.authority,
   };
   const config = { checkout: f.config, pollEveryMs: 1_000, cycleDeadlineMs: 5_000,
-    webhook: { endpointSecret: secret, accountRef: f.config.stripe.accountRef, livemode: false, apiVersion: f.config.stripe.apiVersion, clock: () => Date.parse(now) } };
+    webhook: { endpointSecret: secret, accountRef: f.config.stripe.accountRef, livemode: false, apiVersion: f.config.stripe.apiVersion, clock: () => Date.parse(f.config.cliniko.clock?.() ?? now) } };
   const dependencies = { barrier: f.barrier, native: nativePort, stripe: stripePort,
     delivery: { selection: () => ({ sender: "clinic@example.test", template: "clinicFinancial.v1" as const, timeZone: "Australia/Sydney" }),
       send: async (mail: unknown, _signal: AbortSignal, ref: string) => { messages.push({ mail, ref }); return { kind: "accepted" as const, messageRef: ref }; } },
