@@ -50,8 +50,9 @@ export class OwnerFileOutboundCampaign {
   readonly #clock: () => string;
   readonly #deadlineMs: number;
   readonly #capturedAt: number;
-  private constructor(source: OwnerFileClinicApproval<OutboundCampaignApproval>, clock: () => string, deadlineMs: number, capturedAt: number) {
-    this.#source=source;this.#clock=clock;this.#deadlineMs=deadlineMs;this.#capturedAt=capturedAt;
+  readonly #scope: LocationScope;
+  private constructor(source: OwnerFileClinicApproval<OutboundCampaignApproval>, clock: () => string, deadlineMs: number, capturedAt: number, scope: LocationScope) {
+    this.#source=source;this.#clock=clock;this.#deadlineMs=deadlineMs;this.#capturedAt=capturedAt;this.#scope=Object.freeze({...scope});
   }
   static async capture(config: Config, signal: AbortSignal): Promise<Result<OwnerFileOutboundCampaign,ClinicApprovalFailure>> {
     try {
@@ -63,28 +64,36 @@ export class OwnerFileOutboundCampaign {
       const captured=Object.freeze({path:config.path,scope:Object.freeze({...config.scope}),directory,decode,clock});
       const source=await bounded(signal,ms,()=>OwnerFileClinicApproval.capture(captured));
       const end=approvalInstant(clock());if(!source?.ok||signal.aborted||end===undefined||end<at)return err({kind:"unavailable"});
-      return ok(new OwnerFileOutboundCampaign(source.value,clock,ms,at));
+      return ok(new OwnerFileOutboundCampaign(source.value,clock,ms,at,captured.scope));
     }catch{return err({kind:"unavailable"});}
   }
   /** Non-patient binding of exact decoded configuration and approver membership.
    * A request must cite it, but citing it is not an independent action grant. */
   bindingFingerprint(): string {return createHash("sha256").update(JSON.stringify(["abby.outbound-campaign-policy.v1",this.#source.bindingFingerprint()])).digest("hex");}
-  async currentFor(selection: OutboundRecordSelection, input: OutboundRecipientRequest, signal: AbortSignal): Promise<Result<OutboundCampaignApproval|undefined,ClinicApprovalFailure>> {
+  /** Read current non-patient campaign policy before loading any audience. */
+  async current(signal: AbortSignal): Promise<Result<OutboundCampaignApproval|undefined,ClinicApprovalFailure>> {
     try {
       const began=approvalInstant(this.#clock());if(began===undefined||began<this.#capturedAt)return err({kind:"unavailable"});
+      const found=await bounded(signal,this.#deadlineMs,()=>this.#source.current(this.#scope));if(!found)return err({kind:"unavailable"});if(!found.ok||!found.value)return found;
+      const policy=found.value,end=approvalInstant(this.#clock());
+      if(signal.aborted||end===undefined||end<began)return err({kind:"unavailable"});
+      if(end<Date.parse(policy.effectiveFrom)||end>=Date.parse(policy.effectiveUntil))return ok(undefined);
+      return ok(Object.freeze({...policy,scope:Object.freeze({...policy.scope}),audience:Object.freeze({...policy.audience}),
+        schedule:Object.freeze({...policy.schedule,weekdays:Object.freeze([...policy.schedule.weekdays])})}));
+    }catch{return err({kind:"unavailable"});}
+  }
+  async currentFor(selection: OutboundRecordSelection, input: OutboundRecipientRequest, signal: AbortSignal): Promise<Result<OutboundCampaignApproval|undefined,ClinicApprovalFailure>> {
+    try {
       const bound=Object.freeze({...selection,scope:Object.freeze({...selection.scope})});
       const encoded=encodeOutboundRecipientRequest(input);if(!encoded.ok)return ok(undefined);
       const decoded=decodeOutboundRecipientRequest(encoded.value);if(!decoded.ok)return ok(undefined);const request=decoded.value;
-      const found=await bounded(signal,this.#deadlineMs,()=>this.#source.current(request.scope));if(!found)return err({kind:"unavailable"});if(!found.ok||!found.value)return found;
-      const policy=found.value,a=policy.audience,end=approvalInstant(this.#clock());
-      if(signal.aborted||end===undefined||end<began)return err({kind:"unavailable"});
-      if(end<Date.parse(policy.effectiveFrom)||end>=Date.parse(policy.effectiveUntil))return ok(undefined);
+      const found=await this.current(signal);if(!found.ok||!found.value)return found;const policy=found.value,a=policy.audience;
       if(Object.keys(bound).sort().join(",")!=="businessId,credentialFingerprint,outboundRecallTypeId,recordPolicyDigest,scope" ||
         !sameScope(bound.scope,policy.scope)||!sameScope(request.scope,policy.scope)||request.campaignRef!==policy.campaignRef||request.purpose!==policy.purpose||
         bound.businessId!==a.businessId||bound.credentialFingerprint!==a.credentialFingerprint||bound.outboundRecallTypeId!==a.outboundRecallTypeId||bound.recordPolicyDigest!==a.recordPolicyDigest||
         request.businessId!==a.businessId||request.credentialFingerprint!==a.credentialFingerprint||request.policy.version!==policy.revision||request.policy.digest!==this.bindingFingerprint()||
         scheduleKey(request.schedule)!==scheduleKey(policy.schedule))return ok(undefined);
-      return ok(Object.freeze({...policy,scope:Object.freeze({...policy.scope}),audience:Object.freeze({...a}),schedule:Object.freeze({...policy.schedule,weekdays:Object.freeze([...policy.schedule.weekdays])})}));
+      return ok(policy);
     }catch{return err({kind:"unavailable"});}
   }
 }

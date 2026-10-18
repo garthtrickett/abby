@@ -98,3 +98,15 @@ test("source selection is snapshotted before a held fresh membership lookup",{ti
   const selection={...f.selection,outboundRecallTypeId:"62"},pending=policy.currentFor(selection,f.request,new AbortController().signal);
   await ready;selection.outboundRecallTypeId="61";hold=false;release();assert.deepEqual(await pending,{ok:true,value:undefined});
 });
+
+test("global campaign approval can be checked before loading any patient request",async t=>{
+  const f=await fixture();t.after(f.close);const current=value(await f.policy.current(new AbortController().signal));assert.ok(current);
+  assert.equal(current.campaignRef,f.request.campaignRef);assert.equal(Object.hasOwn(current,"patientId"),false);assert.equal(Object.hasOwn(current,"recipient"),false);
+  await f.replace({enabled:false});assert.deepEqual(await f.policy.current(new AbortController().signal),{ok:true,value:undefined});
+});
+test("capture snapshots path and scope before any asynchronous directory or file observation",async t=>{
+  const f=await fixture();t.after(f.close);const config={...f.config,scope:{...f.config.scope}};
+  const pending=OwnerFileOutboundCampaign.capture(config,new AbortController().signal);config.path+=".missing";config.scope.locationId="foreign";
+  const policy=value(await pending);assert.ok(value(await policy.current(new AbortController().signal)));
+  assert.ok(value(await policy.currentFor(f.selection,f.request,new AbortController().signal)));
+});
