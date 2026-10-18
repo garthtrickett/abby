@@ -99,7 +99,7 @@ If a required receipt needs native attachment support, bring forward only that a
 
 Use the roadmap's [gap 12 requirements](THIRTEEN_GAP_IMPLEMENTATION.md#requirements-and-evidence-needed) with audit [R20](AEVA_TO_ABBY_REUSE_AUDIT.md#r20-build-outbound-campaigns-separately-from-recall-requests) and [R21](AEVA_TO_ABBY_REUSE_AUDIT.md#r21-pin-the-exact-sick-day-or-callback-appointment-end-to-end).
 
-Define approved audience and contact policy, then build opt-out, quiet-hours/timezone handling, scheduling, cancellation, capacity limits and per-action recovery. Bind each callback/sick-day action to the exact fresh appointment and independently verified authority. Existing recall requests do not establish campaign support; a shared phone or campaign record does not establish patient permission.
+The owner selected separate clinic-approved Cliniko contact reviews for voice consent and opt-out/DNC, distinct from financial reviews; marketing flags are not voice consent. Qualify that concrete source and its current grants. Define approved audience and contact policy, then build opt-out, quiet-hours/timezone handling, scheduling, cancellation, capacity limits and per-action recovery. Bind each callback/sick-day action to the exact fresh appointment and independently verified authority. Existing recall requests do not establish campaign support; a shared phone or campaign record does not establish patient permission.
 
 **Exit:** Patient-free end-to-end campaign/sick-day cases cover stale targets, changed appointments, opt-out, duplicate delivery and interruption. Actual outbound contact and carrier admission require their applicable acceptance; do not add a local patient-bearing campaign database.
 
