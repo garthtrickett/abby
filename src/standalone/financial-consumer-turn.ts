@@ -32,6 +32,7 @@ export type FinancialConsumerAuthority = Readonly<{
 }>;
 export type FinancialConsumerTurnResult = "clinicalExpiryCancelled" | "creationAcknowledged" | "checkoutExpiryAcknowledged" | "checkoutClosedUnpaid" | "messageAccepted" | "alreadyAttempted" | "reviewRequired";
 type Ports = Readonly<{
+  deferNativePolling?(retryAfterMs: number): void;
   ownerBinding: string; authority: FinancialConsumerAuthority; checkout: ClinikoStripeCheckoutOwner;
   discovery: StripeCheckoutDiscovery; money: StripeCheckoutReader; messages: ClinikoFinancialMessageOwner; expiry?: ClinikoCheckoutExpiryOwner; clinicalExpiry?: ClinikoFinancialClinicalExpiryOwner; classClinicalExpiry?: ClinikoFinancialUnlinkedClassExpiryOwner; caseClassClinicalExpiry?: ClinikoFinancialCaseClassExpiryOwner;
 }>;
@@ -108,6 +109,7 @@ export async function consumeFinancialPair(pair: FinancialConsumerPair, attempts
     if (clinicalExpiry && money.value.kind === "unpaid" && money.value.paymentClosed && Date.parse(money.value.observedAt) >= Date.parse(intent.payment.deadline)) {
       await permit();
       const expired = await clinicalExpiry.expireOnce(binding, signal);
+      if (!expired.ok && expired.error.kind === "rateLimited") ports.deferNativePolling?.(expired.error.retryAfterMs);
       return expired.ok && expired.value.kind === "cancelled" && !expired.value.reviewRequired ? "clinicalExpiryCancelled" : "reviewRequired";
     }
     if (ports.expiry && money.value.kind === "unpaid" && Date.parse(money.value.observedAt) >= Date.parse(intent.payment.deadline)) {

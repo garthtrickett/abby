@@ -63,11 +63,15 @@ type Dependencies = Readonly<{
   /** Counts only. No error strings, references, recipient or provider context. */
   onCycle?(cycle: FinancialConsumerCycle): void;
 }>;
-function delay(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise(resolve => {
-    const done = () => { clearTimeout(timer); signal.removeEventListener("abort", done); resolve(); };
-    const timer = setTimeout(done, ms); signal.addEventListener("abort", done, { once: true }); if (signal.aborted) done();
-  });
+async function delay(ms: number, signal: AbortSignal): Promise<void> {
+  while (ms > 0 && !signal.aborted) {
+    const part = Math.min(ms, 2_147_483_647);
+    await new Promise<void>(resolve => {
+      const done = () => { clearTimeout(timer); signal.removeEventListener("abort", done); resolve(); };
+      const timer = setTimeout(done, part); signal.addEventListener("abort", done, { once: true }); if (signal.aborted) done();
+    });
+    ms -= part;
+  }
 }
 
 /** Explicitly provisioned periodic owner and raw webhook route. Construction
@@ -95,6 +99,9 @@ export class ClinikoFinancialConsumer {
   #done: Promise<void> | undefined;
   #lifetime: AbortSignal | undefined;
   #running = false;
+  // Physical-account admission only: no target, grant or private work survives
+  // a cycle. The next cycle must rediscover and reauthorize everything.
+  #nativeRetryAfterMs = 0;
   #route: ReturnType<typeof stripeFinancialWebhookHandler> | undefined;
   private constructor(config: FinancialConsumerConfig, authority: FinancialConsumerAuthorities, dependencies: Dependencies,
     ownerBinding: string, pending: ClinikoFinancialPendingDiscovery, checkout: ClinikoStripeCheckoutOwner, messages: ClinikoFinancialMessageOwner, expiry: ClinikoCheckoutExpiryOwner | undefined, clinicalExpiry: ClinikoFinancialClinicalExpiryOwner | undefined, classClinicalExpiry: ClinikoFinancialUnlinkedClassExpiryOwner | undefined, caseClassClinicalExpiry: ClinikoFinancialCaseClassExpiryOwner | undefined, resends: ClinikoFinancialResendOwner | undefined) {
@@ -213,6 +220,7 @@ export class ClinikoFinancialConsumer {
         if (!await this.#admitted(signal)) return Object.freeze({ kind: "unavailable", ...counts });
         const authority = this.#authority.work;
         const result = await consumeFinancialPair(work, pending.value.attempts, {
+          deferNativePolling: ms => { this.#nativeRetryAfterMs = Math.max(this.#nativeRetryAfterMs, ms); },
           ...(this.#clinicalExpiry ? { clinicalExpiry: this.#clinicalExpiry } : {}), ...(this.#classClinicalExpiry ? { classClinicalExpiry: this.#classClinicalExpiry } : {}), ...(this.#caseClassClinicalExpiry ? { caseClassClinicalExpiry: this.#caseClassClinicalExpiry } : {}), ...(this.#expiry ? { expiry: this.#expiry } : {}), ownerBinding: this.#query.ownerBinding, checkout: this.#checkout, messages: this.#messages, discovery: this.#discovery, money: this.#money,
           authority: { ...authority, authorizeWork: (q, stop) => authority.authorizeWork(q, stop),
             providerBindingAuthorized: (q, stop) => authority.providerBindingAuthorized(q, stop),
@@ -220,6 +228,7 @@ export class ClinikoFinancialConsumer {
             current: (q, stop) => this.#current(stop) && authority.current(q, stop) === true },
         }, signal);
         counts[result]++;
+        if (this.#nativeRetryAfterMs > 0) return Object.freeze({ kind: "observed", ...counts });
       }
       if (this.#resends) for (const context of pending.value.resendRequests ?? []) {
         if (!await this.#admitted(signal)) return Object.freeze({ kind: "unavailable", ...counts });
@@ -242,7 +251,9 @@ export class ClinikoFinancialConsumer {
     while (!signal.aborted) {
       const cycle = await this.#cycle(signal);
       try { this.#onCycle?.(cycle); } catch { /* Counts observer cannot replay effects or disclose failure payloads. */ }
-      await delay(this.#config.pollEveryMs, signal);
+      const pause = Math.max(this.#config.pollEveryMs, this.#nativeRetryAfterMs);
+      this.#nativeRetryAfterMs = 0;
+      await delay(pause, signal);
     }
   }
 }

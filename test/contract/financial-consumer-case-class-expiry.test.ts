@@ -43,3 +43,40 @@ for (const gate of ["financialAuthorized", "producerAdmitted", "clinicalApproval
     t.after(async () => { await f.consumer.close(); await f.close(); }); const pending = f.cycle(); value(f.consumer.start(stop()));
     const result = await pending; assert.equal(result.reviewRequired, 1); assert.equal(result.clinicalExpiryCancelled, 0); assert.equal(f.cancellations.length, 0);
   });
+
+for (const changedPermission of [false, true])
+  test(`case expiry waits for native headroom and rechecks financial permission (${changedPermission})`, { timeout: 8_000 }, async t => {
+    let allowed = true, first = true;
+    const f = await composed({ authority: { financialAuthorized: async () => allowed } });
+    t.after(async () => { await f.consumer.close(); await f.close(); });
+    const budget = f.config.cliniko.rateBudget, currentHeadroom = budget.checkHeadroom!.bind(budget);
+    Object.assign(budget, { checkHeadroom: (requests: number) => {
+      if (first) { first = false; return { kind: "rateLimited", retryAfterMs: 2_500 } as const; }
+      return currentHeadroom(requests);
+    } });
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const pending = f.cycle(); value(f.consumer.start(stop()));
+    assert.equal((await pending).reviewRequired, 1); assert.equal(first, false);
+    assert.equal(f.burned.has(f.intent.effects.clinicalExpiry), false);
+    assert.equal(f.cancellations.length, 0); assert.equal(f.posts.length, 0);
+    const claims = f.claims, reads = f.caseReads;
+    if (changedPermission) allowed = false;
+    t.mock.timers.tick(59_999);
+    assert.equal(f.claims, claims, "periodic discovery must not consume the recovering account quota");
+    assert.equal(f.caseReads, reads); assert.equal(f.cancellations.length, 0);
+    const next = f.cycle(); t.mock.timers.tick(1);
+    const resumed = await next;
+    assert.equal(resumed.clinicalExpiryCancelled, changedPermission ? 0 : 1);
+    assert.equal(f.cancellations.length, changedPermission ? 0 : 1);
+    assert.equal(f.messages.length, 0);
+    if (changedPermission) assert.equal(f.burned.has(f.intent.effects.clinicalExpiry), false);
+  });
+
+test("closing a consumer aborts a long native admission delay without claiming clinical permission", { timeout: 4_000 }, async t => {
+  const f = await composed(); t.after(async () => { await f.consumer.close(); await f.close(); });
+  Object.assign(f.config.cliniko.rateBudget, { checkHeadroom: () => ({ kind: "rateLimited", retryAfterMs: 8_640_000_000 }) });
+  const pending = f.cycle(); value(f.consumer.start(stop())); await pending;
+  const began = performance.now(); await f.consumer.close();
+  assert.ok(performance.now() - began < 1_000);
+  assert.equal(f.burned.has(f.intent.effects.clinicalExpiry), false); assert.equal(f.cancellations.length, 0);
+});

@@ -96,7 +96,14 @@ export class ClinikoFinancialCaseClassExpiryOwner {
           // own native and complete-case inspection, financial source/retention
           // reads, and the explicitly provisioned authority bound. Not a hold.
           const remaining = 2 * (classRead + 1 + caseRead) + 1 + 1 + caseRead + 20 + config.maximumAuthorityRequests;
-          return await op.wait(checkClinikoHeadroom(config.cliniko.rateBudget, remaining)) === null;
+          const denied = await op.wait(checkClinikoHeadroom(config.cliniko.rateBudget, remaining));
+          // The next poll must repeat discovery and all preparation before it
+          // reaches this check. Waiting for only the remaining64-style quantum
+          // can consume those newly freed slots and starve the operation again.
+          // Leave one whole physical rolling-minute window quiet instead; any
+          // longer account/provider cooldown still wins. Every retry is fresh.
+          return denied?.kind === "rateLimited" && denied.retryAfterMs !== undefined
+            ? { ...denied, retryAfterMs: Math.max(60_000, denied.retryAfterMs) } : denied;
         },
         request(target, approval) {
           const terms = target.policy.caseSessions?.cancellation;

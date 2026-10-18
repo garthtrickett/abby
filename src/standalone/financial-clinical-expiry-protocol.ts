@@ -17,6 +17,7 @@ import type { FinancialEffectBarrier } from "./financial-effect-barrier.ts";
 import { FinancialLifecycleSourceReader, financialLifecycleSourceData, freezeFinancialContext, validFinancialLifecycleBinding } from "./financial-lifecycle-sources.ts";
 import type { FinancialLifecycleBinding, FinancialLifecycleSources, FinancialLifecycleSourceAuthority, FinancialLifecycleOperation } from "./financial-lifecycle-sources.ts";
 import { financialConsentReadback, financialConsentDigest } from "./financial-consent-readback.ts";
+import type { ClinikoBudgetDenial } from "../cliniko/read-budget.ts";
 
 export type FinancialClinicalReferenceQuery = Readonly<{
   purpose: "inspectFinancialClinicalExpiry"; ownerBinding: string; binding: FinancialLifecycleBinding; sources: FinancialLifecycleSources;
@@ -45,13 +46,14 @@ export type FinancialExpiryAuthority<Target, Approval extends FinancialExpiryApp
 export type FinancialClinicalExpiryConfig = Readonly<{ cliniko: FinancialRecordRetentionConfig; stripe: StripeReadConfig; deadlineMs?: number }>;
 export type FinancialClinicalExpiryOutcome = Readonly<{ kind: "cancelled" | "uncertain"; money: StripeCheckoutEvidence["kind"] | "unknown"; reviewRequired: boolean }>;
 type FailureKind = "invalidConfig" | "invalidQuery" | "forbidden" | "mismatched" | "alreadyClaimed" | "attemptUncertain" | "unavailable";
-export type FinancialClinicalExpiryFailure = Readonly<{ kind: FailureKind }>;
+export type FinancialClinicalExpiryFailure = Readonly<{ kind: FailureKind }> |
+  Readonly<{ kind: "rateLimited"; retryAfterMs: number }>;
 export class FinancialClinicalExpiryRefusal extends Error { readonly kind: FailureKind; constructor(kind: FailureKind) { super("Clinical expiry unavailable"); this.kind = kind; } }
 type Prepared<Target, Approval, Request> = Readonly<{ query: FinancialExpiryQuery<Target>; approval: Approval; request: Request; payloadDigest: string }>;
 /** Internal native strategy. Concrete owners construct it; callers and notes
  * cannot supply native truth or turn read authority into cancellation authority. */
 export type FinancialClinicalTarget<Target, Approval extends FinancialExpiryApproval, Request> = Readonly<{
-  beforeClaim?(target: Target, op: FinancialLifecycleOperation): Promise<boolean>;
+  beforeClaim?(target: Target, op: FinancialLifecycleOperation): Promise<ClinikoBudgetDenial | null>;
   read(sources: FinancialLifecycleSources, op: FinancialLifecycleOperation, permit: () => Promise<void>): Promise<Target>;
   request(target: Target, approval: Approval): Request | undefined;
   cancelOnce(request: Request, signal: AbortSignal, beforeSend: (signal: AbortSignal) => Promise<boolean>, afterSendRead: (signal: AbortSignal) => Promise<boolean>):
@@ -167,7 +169,15 @@ export class FinancialClinicalExpiryProtocol<Target, Approval extends FinancialE
       if (history.expiryAttempts?.some(a => a.attempt.effectRef === effect || a.attempt.financialActionRef === b.financialActionRef && a.attempt.purpose === "clinicalExpiry")) throw new FinancialClinicalExpiryRefusal("alreadyClaimed");
       const renewed = await this.#prepare(q, op);
       if (!isDeepStrictEqual(prepared, renewed)) throw new FinancialClinicalExpiryRefusal("mismatched");
-      if (this.#nativeTarget.beforeClaim && await op.wait(this.#nativeTarget.beforeClaim(q.target, op)) !== true) throw new FinancialClinicalExpiryRefusal("unavailable");
+      if (this.#nativeTarget.beforeClaim) {
+        const denied = await op.wait(this.#nativeTarget.beforeClaim(q.target, op));
+        if (denied) {
+          if (denied.kind === "rateLimited" && Number.isSafeInteger(denied.retryAfterMs) &&
+              denied.retryAfterMs! > 0 && denied.retryAfterMs! <= 8_640_000_000)
+            return err({ kind: "rateLimited", retryAfterMs: denied.retryAfterMs! });
+          throw new FinancialClinicalExpiryRefusal("unavailable");
+        }
+      }
       const attempt: FinancialExpiryAttempt = freezeFinancialContext({ actionRef: randomUUID(), financialActionRef: b.financialActionRef, effectRef: effect, purpose: "clinicalExpiry",
         intentRecallRef: b.intentRecallRef, intentDigest: financialIntentDigest(q.sources.intent.intent)!, observationRecallRef: b.observationRecallRef,
         observationActionRef: b.observationActionRef, targetRef: q.sources.booking.observation.targetRef, checkoutRef: b.checkoutRef,
