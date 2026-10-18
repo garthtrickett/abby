@@ -1,3 +1,9 @@
+import { CallerVerificationSession } from "../../src/standalone/caller-verification-session.ts";
+import { ClinikoConfirmationEvidenceReader } from "../../src/standalone/cliniko-confirmation-evidence.ts";
+import { ClinikoConfirmationResendSession } from "../../src/standalone/cliniko-confirmation-resend-session.ts";
+import { ClinikoSamConfirmationResendHost } from "../../src/standalone/cliniko-sam-confirmation-resend-host.ts";
+import { MemoryLedger } from "../../src/core/ledger.ts";
+import { VoiceSession } from "../../src/voice/voice-session.ts";
 import { observeSyntheticWire } from "./synthetic-wire-observer.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresConfirmationResendJournal } from "../../src/storage/postgres-confirmation-resend-journal.ts";
@@ -21,6 +27,7 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION !== "confirmationResend" || apiKey !== "synthetic-key-au5" ||
     !url?.includes("/abby_test_voice_") || process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}`) throw new Error("isolated synthetic resend fixture required");
 const db = connectPostgres(url);
+const restoreStageObservers: (() => void)[] = [];
 try {
   await withSmtpVerificationServer(async smtp => {
     const content = process.env.ABBY_SYNTHETIC_RESEND_CONTENT;
@@ -29,19 +36,60 @@ try {
       content ? { template: "appointmentDetails.v2", contentKinds: ["activeInPerson", "activeTelehealth", "cancelled"] } : undefined);
     // Aggregate fixed stage names only. Arguments, IDs, paths, notes and private
     // values never enter these diagnostics. Real source calls still execute.
+    let observationId = 0;
+    const activeStarts = new Map<string, Map<number, number>>();
     const sourceCalls = new Map<string, { count: number; pending: number; totalMs: number; maximumMs: number }>();
     const observe = <Args extends unknown[], Value>(name: string, run: (...args: Args) => Value | Promise<Value>) => async (...args: Args): Promise<Value> => {
       const row = sourceCalls.get(name) ?? { count: 0, pending: 0, totalMs: 0, maximumMs: 0 };
-      sourceCalls.set(name, row); row.count++; row.pending++; const start = performance.now();
+      sourceCalls.set(name, row); row.count++; row.pending++; const start = performance.now(), id = ++observationId;
+      const active = activeStarts.get(name) ?? new Map<number,number>(); activeStarts.set(name,active); active.set(id,start);
       try { return await run(...args); }
-      finally { const elapsed = performance.now() - start; row.pending--; row.totalMs += elapsed; row.maximumMs = Math.max(row.maximumMs, elapsed); }
+      finally { active.delete(id); const elapsed = performance.now() - start; row.pending--; row.totalMs += elapsed; row.maximumMs = Math.max(row.maximumMs, elapsed); }
     };
+    // Synthetic process only: preserve every receiver, argument, result and
+    // exception. Fixed stage counts/durations disclose no argument or outcome.
+    const verifiedSubjectMethod = CallerVerificationSession.prototype.verifiedSubject;
+    CallerVerificationSession.prototype.verifiedSubject = function(this: CallerVerificationSession, ...args: Parameters<typeof verifiedSubjectMethod>) {
+      return observe("verifiedSubject", verifiedSubjectMethod.bind(this))(...args);
+    };
+    restoreStageObservers.unshift(() => { CallerVerificationSession.prototype.verifiedSubject = verifiedSubjectMethod; });
+    const exactEvidenceMethod = ClinikoConfirmationEvidenceReader.prototype.read;
+    ClinikoConfirmationEvidenceReader.prototype.read = function(this: ClinikoConfirmationEvidenceReader, ...args: Parameters<typeof exactEvidenceMethod>) {
+      return observe("exactEvidence", exactEvidenceMethod.bind(this))(...args);
+    };
+    restoreStageObservers.unshift(() => { ClinikoConfirmationEvidenceReader.prototype.read = exactEvidenceMethod; });
+    const recipientSessionMethod = ClinikoConfirmationResendSession.prototype.prepare;
+    ClinikoConfirmationResendSession.prototype.prepare = function(this: ClinikoConfirmationResendSession, ...args: Parameters<typeof recipientSessionMethod>) {
+      return observe("recipientSession", recipientSessionMethod.bind(this))(...args);
+    };
+    restoreStageObservers.unshift(() => { ClinikoConfirmationResendSession.prototype.prepare = recipientSessionMethod; });
+    const selectedEvidenceMethod = ClinikoSamConfirmationResendHost.prototype.prepare;
+    ClinikoSamConfirmationResendHost.prototype.prepare = function(this: ClinikoSamConfirmationResendHost, ...args: Parameters<typeof selectedEvidenceMethod>) {
+      return observe("selectedEvidence", selectedEvidenceMethod.bind(this))(...args);
+    };
+    restoreStageObservers.unshift(() => { ClinikoSamConfirmationResendHost.prototype.prepare = selectedEvidenceMethod; });
+    const ledgerReadMethod = MemoryLedger.prototype.read;
+    MemoryLedger.prototype.read = function(this: MemoryLedger, ...args: Parameters<typeof ledgerReadMethod>) {
+      return observe("ledgerRead", ledgerReadMethod.bind(this))(...args);
+    };
+    restoreStageObservers.unshift(() => { MemoryLedger.prototype.read = ledgerReadMethod; });
+    const directPrivatePlaybackMethod = VoiceSession.prototype.presentPrivateResend;
+    VoiceSession.prototype.presentPrivateResend = function(this: VoiceSession, ...args: Parameters<typeof directPrivatePlaybackMethod>) {
+      return observe("directPrivatePlayback", directPrivatePlaybackMethod.bind(this))(...args);
+    };
+    restoreStageObservers.unshift(() => { VoiceSession.prototype.presentPrivateResend = directPrivatePlaybackMethod; });
+    const ownedPrivatePlaybackMethod = VoiceSession.prototype.presentOwnedPrivateResend;
+    VoiceSession.prototype.presentOwnedPrivateResend = function(this: VoiceSession, ...args: Parameters<typeof ownedPrivatePlaybackMethod>) {
+      return observe("ownedPrivatePlayback", ownedPrivatePlaybackMethod.bind(this))(...args);
+    };
+    restoreStageObservers.unshift(() => { VoiceSession.prototype.presentOwnedPrivateResend = ownedPrivatePlaybackMethod; });
     const observedDirectory = <Directory extends Pick<OwnerFileAdminDirectory, "findByRef">>(directory: Directory, name: string): Directory => {
       if (!Reflect.set(directory, "findByRef", observe(name, directory.findByRef.bind(directory)))) throw new Error("synthetic membership observation unavailable");
       return directory;
     };
     const diagnostic = () => Object.fromEntries([...sourceCalls].map(([name, row]) => [name, { ...row,
-      totalMs: Math.round(row.totalMs), maximumMs: Math.round(row.maximumMs) }]));
+      totalMs: Math.round(row.totalMs), maximumMs: Math.round(row.maximumMs),
+      pendingMaximumMs: Math.round(Math.max(0,...[...(activeStarts.get(name)?.values() ?? [])].map(at => performance.now()-at))) }]));
     const inputs: string[] = []; let denied = false, loseMail = false;
     f.setChoices([{ id: "81", starts_at: "2026-10-08T04:00:00.000Z", ends_at: "2026-10-08T04:30:00.000Z" },
       { id: "82", starts_at: "2026-10-09T04:00:00.000Z", ends_at: "2026-10-09T04:30:00.000Z" }]);
@@ -156,4 +204,4 @@ try {
   });
 } catch {
   process.send?.({ kind: "fixtureFailure", stage: "runnerStartupUnavailable" }); process.stderr.write("synthetic resend runner unavailable\n"); process.exitCode = 1;
-} finally { await db.destroy(); if (process.connected) process.disconnect(); }
+} finally { for (const restore of restoreStageObservers) restore(); await db.destroy(); if (process.connected) process.disconnect(); }
