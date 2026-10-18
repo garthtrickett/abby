@@ -2,6 +2,51 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { financialMessageFixture, value, stop, now } from "../support/financial-message-owner.ts";
 import { decodeFinancialMessageAttempt } from "../../src/cliniko/financial-message-attempt.ts";
+import { ClinikoReadBudget } from "../../src/cliniko/read-budget.ts";
+
+test("original message quota denial before its permanent claim permits fresh recovery without replay", async () => {
+  let clock = Date.now();
+  const budget = new ClinikoReadBudget(180, () => clock);
+  const f = await financialMessageFixture({ checkout: { native: { config: { rateBudget: budget } } } });
+  f.paid();
+  // Leave enough for source/history preparation, but fewer than the complete
+  // message's ten observed native requests. Every read claims the real budget.
+  while (budget.checkHeadroom(10) === null) assert.equal(budget.claim(), null);
+  const before = f.nativeCalls.filter(r => r.method === "POST").length;
+  assert.equal((await f.send("receiptDelivery")).ok, false);
+  assert.equal(f.messages.length, 0); assert.equal(f.burned.has(f.intent.effects.receiptDelivery), false);
+  assert.equal(f.nativeCalls.filter(r => r.method === "POST").length, before);
+  clock += 60_001;
+  assert.deepEqual(value(await f.send("receiptDelivery")), { kind: "accepted" });
+  assert.equal(f.messages.length, 1); assert.equal(f.burned.has(f.intent.effects.receiptDelivery), true);
+  assert.equal((await f.send("receiptDelivery")).ok, false); assert.equal(f.messages.length, 1);
+});
+
+test("original message quota lost after claim remains consumed and cannot be replayed", async () => {
+  let clock = Date.now(), drain = false;
+  const budget = new ClinikoReadBudget(180, () => clock);
+  const f = await financialMessageFixture({ checkout: { native: { config: { rateBudget: budget }, response(row, method) {
+    if (drain && method === "POST" && String(row.notes).includes("financial message attempt")) {
+      while (budget.claim() === null) { /* A competing actor consumes remaining capacity. */ }
+    }
+    return Response.json(row, { status: method === "POST" ? 201 : 200 });
+  } } } });
+  f.paid(); drain = true;
+  assert.equal((await f.send("receiptDelivery")).ok, false);
+  assert.equal(f.burned.has(f.intent.effects.receiptDelivery), true); assert.equal(f.messages.length, 0);
+  clock += 60_001; drain = false;
+  assert.equal((await f.send("receiptDelivery")).ok, false); assert.equal(f.messages.length, 0);
+  assert.equal(f.nativeCalls.filter(r => r.method === "POST").length, 1);
+});
+
+for (const headroom of [undefined, () => undefined, () => false, () => ({ kind: "rateLimited", retryAfterMs: 0 })])
+test("missing or malformed original message headroom cannot consume its delivery claim", async () => {
+  const f = await financialMessageFixture(); f.paid();
+  Reflect.set(f.config.cliniko.rateBudget, "checkHeadroom", headroom);
+  assert.equal((await f.send("receiptDelivery")).ok, false);
+  assert.equal(f.burned.has(f.intent.effects.receiptDelivery), false); assert.equal(f.messages.length, 0);
+  assert.equal(f.nativeCalls.filter(r => r.method === "POST").length, 0);
+});
 
 test("one exact financial link is retained before SMTP and never reconstructed from a local retry payload", async () => {
   const f = await financialMessageFixture(); assert.deepEqual(value(await f.send()), { kind: "accepted" });

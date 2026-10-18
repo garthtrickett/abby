@@ -3,6 +3,7 @@ import type { Result } from "../core/model.ts";
 import { ClinikoClassAttendanceWriter } from "../cliniko/class-attendance-write.ts";
 import type { ClinikoAttendanceRequest } from "../cliniko/class-attendance-write.ts";
 import type { FinancialRecordAuthority } from "../cliniko/financial-record-retention.ts";
+import { checkClinikoHeadroom } from "../cliniko/read-budget.ts";
 import { OwnerFileClassPolicy } from "./owner-file-class-policy.ts";
 import { sameScope } from "./appointment-change-authority.ts";
 import type { FinancialEffectBarrier } from "./financial-effect-barrier.ts";
@@ -54,6 +55,14 @@ export class ClinikoFinancialUnlinkedClassExpiryOwner {
           await permit();
           if (!unlinked.ok || !unlinked.value || !await currentPolicy(target, op.signal)) return refuse("mismatched");
           return target;
+        },
+        async beforeClaim(target, op) {
+          const classRead = 2 * (target.nativeWorkload.metadataRequests + 1 + Math.max(1, Math.ceil(target.nativeWorkload.attendanceRecords / 100)));
+          // Two renewed class observations (each includes exact unlinked
+          // attendance), cancellation and its inspection, plus the shared
+          // financial source/possible-attempt reads. Own I/O only, never a hold.
+          const remaining = 2 * (classRead + 1) + 2 + 20;
+          return op.wait(checkClinikoHeadroom(config.cliniko.rateBudget, remaining));
         },
         request(target, approval) {
           if (Object.keys(approval).sort().join(",") !== "approvedTerms,cancellationReason,classPolicyVersion,kind,policyVersion,termsVersion,timeZone" ||

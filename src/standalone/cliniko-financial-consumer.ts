@@ -4,6 +4,7 @@ import { err, ok } from "../core/model.ts";
 import type { Result, LocationScope } from "../core/model.ts";
 import type { ClinikoRequestBudget } from "../cliniko/read-budget.ts";
 import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
+import { financialNativeBudget } from "./financial-native-budget.ts";
 import { sameScope } from "./appointment-change-authority.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { ClinikoFinancialPendingDiscovery } from "../cliniko/financial-pending-discovery.ts";
@@ -127,23 +128,26 @@ export class ClinikoFinancialConsumer {
             authority?.work?.onCheckoutAcknowledged, authority?.work?.current, authority?.webhook?.allowsReferenceRead,
             authority?.webhook?.acceptsExistingPending, authority?.webhook?.current].some(v => typeof v !== "function") ||
           dependencies.onCycle !== undefined && typeof dependencies.onCycle !== "function") return err({ kind: "invalidConfig" });
-      const pending = ClinikoFinancialPendingDiscovery.create(config.checkout.cliniko, authority.pending, dependencies.native);
-      const checkout = ClinikoStripeCheckoutOwner.create(config.checkout, authority.checkout, authority.records, dependencies.barrier, dependencies.native, dependencies.stripe);
-      const messages = ClinikoFinancialMessageOwner.create({ cliniko: config.checkout.cliniko, stripe: config.checkout.stripe }, authority.message,
+      let deferPolling: (ms: number) => void = () => {};
+      const cliniko = { ...config.checkout.cliniko,
+        rateBudget: financialNativeBudget(config.checkout.cliniko.rateBudget, ms => deferPolling(ms)) };
+      const pending = ClinikoFinancialPendingDiscovery.create(cliniko, authority.pending, dependencies.native);
+      const checkout = ClinikoStripeCheckoutOwner.create({ ...config.checkout, cliniko }, authority.checkout, authority.records, dependencies.barrier, dependencies.native, dependencies.stripe);
+      const messages = ClinikoFinancialMessageOwner.create({ cliniko, stripe: config.checkout.stripe }, authority.message,
         authority.records, dependencies.barrier, dependencies.delivery, dependencies.native, dependencies.stripe);
       if (!pending.ok || !checkout.ok || !messages.ok) return err({ kind: "invalidConfig" });
-      const expiry = authority.checkoutExpiry === undefined ? undefined : ClinikoCheckoutExpiryOwner.create({ cliniko: config.checkout.cliniko, stripe: config.checkout.stripe },
+      const expiry = authority.checkoutExpiry === undefined ? undefined : ClinikoCheckoutExpiryOwner.create({ cliniko, stripe: config.checkout.stripe },
         authority.checkoutExpiry, authority.records, dependencies.barrier, dependencies.native, dependencies.stripe);
       if (expiry && !expiry.ok) return err({ kind: "invalidConfig" });
-      const clinicalExpiry = authority.clinicalExpiry === undefined ? undefined : ClinikoFinancialClinicalExpiryOwner.create({ cliniko: config.checkout.cliniko, stripe: config.checkout.stripe },
+      const clinicalExpiry = authority.clinicalExpiry === undefined ? undefined : ClinikoFinancialClinicalExpiryOwner.create({ cliniko, stripe: config.checkout.stripe },
         authority.clinicalExpiry, authority.records, dependencies.barrier, dependencies.native, dependencies.stripe);
       if (clinicalExpiry && !clinicalExpiry.ok) return err({ kind: "invalidConfig" });
       const classClinicalExpiry = authority.classClinicalExpiry === undefined ? undefined : ClinikoFinancialUnlinkedClassExpiryOwner.create({
-        cliniko: config.checkout.cliniko, stripe: config.checkout.stripe, classPolicy: authority.classClinicalExpiry.classPolicy },
+        cliniko, stripe: config.checkout.stripe, classPolicy: authority.classClinicalExpiry.classPolicy },
         authority.classClinicalExpiry.authority, authority.records, dependencies.barrier, dependencies.native, dependencies.stripe);
       if (classClinicalExpiry && !classClinicalExpiry.ok) return err({ kind: "invalidConfig" });
       const caseClassClinicalExpiry = authority.caseClassClinicalExpiry === undefined ? undefined : ClinikoFinancialCaseClassExpiryOwner.create({
-        cliniko: config.checkout.cliniko, stripe: config.checkout.stripe, classPolicy: authority.caseClassClinicalExpiry.classPolicy,
+        cliniko, stripe: config.checkout.stripe, classPolicy: authority.caseClassClinicalExpiry.classPolicy,
         maximumAuthorityRequests: authority.caseClassClinicalExpiry.maximumAuthorityRequests }, authority.caseClassClinicalExpiry.authority,
         authority.records, dependencies.barrier, dependencies.native, dependencies.stripe);
       if (caseClassClinicalExpiry && !caseClassClinicalExpiry.ok) return err({ kind: "invalidConfig" });
@@ -153,7 +157,7 @@ export class ClinikoFinancialConsumer {
       const messageCurrent = message.current.bind(message), recordsCurrent = financialRecords.current.bind(financialRecords);
       const resendAllows = resendGrant?.allows.bind(resendGrant), resendFinancial = resendGrant?.financialAuthorized.bind(resendGrant), resendCurrent = resendGrant?.current.bind(resendGrant);
       const resends = authority.resend === undefined ? undefined : ClinikoFinancialResendOwner.create({
-        cliniko: config.checkout.cliniko, stripe: config.checkout.stripe, maximumAuthorityRequests: authority.resend.maximumAuthorityRequests }, {
+        cliniko, stripe: config.checkout.stripe, maximumAuthorityRequests: authority.resend.maximumAuthorityRequests }, {
         sourceAuthorized: message.sourceAuthorized.bind(message), attemptScanAuthorized: message.attemptScanAuthorized.bind(message),
         providerBindingAuthorized: message.providerBindingAuthorized.bind(message), messageAuthorized: message.messageAuthorized.bind(message),
         producerAdmitted: message.producerAdmitted.bind(message), current: (q, stop) => activeResend(stop) && messageCurrent(q, stop) === true,
@@ -166,6 +170,7 @@ export class ClinikoFinancialConsumer {
       }, dependencies.barrier, dependencies.delivery, dependencies.native, dependencies.stripe);
       if (resends && !resends.ok) return err({ kind: "invalidConfig" });
       const consumer = new ClinikoFinancialConsumer(config, authority, dependencies, binding.value, pending.value, checkout.value, messages.value, expiry?.ok ? expiry.value : undefined, clinicalExpiry?.ok ? clinicalExpiry.value : undefined, classClinicalExpiry?.ok ? classClinicalExpiry.value : undefined, caseClassClinicalExpiry?.ok ? caseClassClinicalExpiry.value : undefined, resends?.ok ? resends.value : undefined);
+      deferPolling = ms => { consumer.#nativeRetryAfterMs = Math.max(consumer.#nativeRetryAfterMs, ms); };
       activeResend = stop => consumer.#current(stop);
       const webhook = Object.freeze({ allowsReferenceRead: authority.webhook.allowsReferenceRead.bind(authority.webhook),
         acceptsExistingPending: authority.webhook.acceptsExistingPending.bind(authority.webhook), current: authority.webhook.current.bind(authority.webhook) });
@@ -242,6 +247,7 @@ export class ClinikoFinancialConsumer {
           checkoutAttemptRecallRef: request.checkoutAttemptRecallRef, checkoutAttemptActionRef: request.checkoutAttemptActionRef,
           checkoutRef: request.checkoutRef }, request.purpose, { recallRef: context.recallRef, actionRef: request.actionRef }, signal);
         if (result.ok && result.value.kind === "accepted") counts.messageAccepted++; else counts.reviewRequired++;
+        if (this.#nativeRetryAfterMs > 0) return Object.freeze({ kind: "observed", ...counts });
       }
       return Object.freeze({ kind: "observed", ...counts });
     } catch { return Object.freeze({ kind: "unavailable", ...counts }); }

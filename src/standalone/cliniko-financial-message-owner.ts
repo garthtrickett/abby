@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
+import { checkClinikoHeadroom } from "../cliniko/read-budget.ts";
 import { encodeFinancialMessageAttempt } from "../cliniko/financial-message-attempt.ts";
 import type { FinancialMessageAttempt, FinancialMessagePurpose } from "../cliniko/financial-message-attempt.ts";
 import { financialIntentDigest } from "../cliniko/financial-booking-observation.ts";
@@ -21,10 +22,16 @@ export class ClinikoFinancialMessageOwner {
   private constructor(protocol: FinancialMessageProtocol) { this.#protocol = protocol; }
   static create(config: FinancialMessageOwnerConfig, authority: FinancialMessageAuthority, recordsAuthority: FinancialRecordAuthority,
     barrier: FinancialEffectBarrier, delivery: FinancialMessageDelivery, native: typeof fetch = fetch, stripe: typeof fetch = fetch): Result<ClinikoFinancialMessageOwner, FinancialMessageFailure> {
+    const budget = config?.cliniko?.rateBudget;
     const mode: FinancialMessageMode = {
       query: async q => q,
       hasPrior: (history, q) => history.messageAttempts?.some(r => r.attempt.effectRef === q.effectRef ||
         r.attempt.financialActionRef === q.sources.intent.intent.actionRef && r.attempt.purpose === q.message.purpose) ?? false,
+      // Own remaining native I/O: one possible-attempt POST, three fresh source
+      // reads and its exact attempt reread. Refuse known insufficiency before
+      // consuming the permanent message claim. This minimum is not a hold or a
+      // bound on additional authority I/O; every request still claims normally.
+      beforeClaim: async (_query, op) => budget !== undefined && await op.wait(checkClinikoHeadroom(budget, 5)) === null,
       plan(q, records, at) {
         const b = q.binding, sources = q.sources;
         const attempt: FinancialMessageAttempt = Object.freeze({ actionRef: randomUUID(), financialActionRef: b.financialActionRef,

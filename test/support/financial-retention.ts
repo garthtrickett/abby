@@ -34,7 +34,8 @@ function fixture(options: { intent?: ClinikoFinancialIntent; barrierFactory?: (c
   let allowed = true, admitted = true, current = true, next = 30;
   const config: FinancialRecordRetentionConfig = { scope: intent.scope, apiKey, contactEmail: "clinic@example.invalid", businessId: "11", recallTypeId: "40",
     stripe: intent.stripe, producer: { keyRef, publicKey: keys.publicKey }, clock: () => now,
-    rateBudget: { claim: async () => { events.push("quota"); return options.quota ? options.quota() : null; }, observe429: async () => ({ kind: "rateLimited" as const }) }, ...options.config };
+    rateBudget: { claim: async () => { events.push("quota"); return options.quota ? options.quota() : null; },
+      checkHeadroom: async () => null, observe429: async () => ({ kind: "rateLimited" as const }) }, ...options.config };
   const binding = value(financialRecordOwnerBinding(config));
   const barrier: FinancialEffectBarrier = options.barrierFactory?.(config) ?? { matches: (s, b) => JSON.stringify(s) === JSON.stringify(scope) && b === binding,
     claimOnce: async ref => { events.push("claim"); if (options.claim) return options.claim(); const claimed = !burned.has(ref); burned.add(ref); return { ok: true, value: { claimed } }; } };

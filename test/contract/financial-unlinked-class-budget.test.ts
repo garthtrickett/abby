@@ -4,6 +4,27 @@ import { unlinkedClassExpiryFixture } from '../support/financial-unlinked-class-
 import { classAttendee, classLink } from '../support/class-attendance.ts';
 import { ClinikoReadBudget } from '../../src/cliniko/read-budget.ts';
 import { financialRecordOwnerBinding } from '../../src/cliniko/financial-record-retention.ts';
+test('known insufficient ordinary class expiry quota refuses before its clinical claim and recovers freshly', async () => {
+  let clock = Date.parse('2026-11-01T10:00:00.000Z');
+  const budget = new ClinikoReadBudget(180, () => clock), burned = new Set<string>();
+  const f = await unlinkedClassExpiryFixture({ barrierFor(config) {
+    Object.assign(config.rateBudget, { claim: budget.claim.bind(budget), observe429: budget.observe429.bind(budget), checkHeadroom: budget.checkHeadroom.bind(budget) });
+    const owner = financialRecordOwnerBinding(config); assert.ok(owner.ok); const binding = owner.value;
+    return { matches: (scope, current) => JSON.stringify(scope) === JSON.stringify(config.scope) && current === binding,
+      claimOnce: async ref => { const claimed = !burned.has(ref); burned.add(ref); return { ok: true, value: { claimed } }; } };
+  }, beforeCancel() { assert.ok(burned.has(f.intent.effects.clinicalExpiry)); } });
+  try {
+    clock = Date.parse(f.config.cliniko.clock!());
+    while (budget.checkHeadroom(36) === null) assert.equal(budget.claim(), null);
+    assert.equal((await f.expireClass()).ok, false);
+    assert.equal(burned.has(f.intent.effects.clinicalExpiry), false);
+    assert.equal(f.cancellations.length, 0);
+    clock += 60_001;
+    const recovered = await f.expireClass();
+    assert.ok(recovered.ok && recovered.value.kind === 'cancelled');
+    assert.equal(f.cancellations.length, 1);
+  } finally { await f.close(); }
+});
 test('the complete maximum native unlinked class expiry fits the shared physical180 account budget', { timeout: 10_000 }, async () => {
 let clock = Date.parse('2026-11-01T10:00:00.000Z'), claims = 0; let atCancel: number | undefined;
 const budget = new ClinikoReadBudget(180, () => clock), burned = new Set<string>();
