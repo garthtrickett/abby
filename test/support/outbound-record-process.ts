@@ -1,5 +1,10 @@
 /** Compiled one-operation synthetic recorder. Private IPC only; no launcher,
  * listener or retry file. Provider fixtures and current grants outlive us. */
+import { ClinikoOutboundLaunchHistory } from "../../src/cliniko/outbound-launch-history.ts";
+import type { OutboundLaunchHistoryQuery } from "../../src/cliniko/outbound-launch-history.ts";
+import { ClinikoOutboundLaunchRecords, outboundLaunchRecordOwnerBinding } from "../../src/cliniko/outbound-launch-records.ts";
+import type { OutboundLaunchRecordConfig, OutboundLaunchRecordQuery } from "../../src/cliniko/outbound-launch-records.ts";
+import type { OutboundLaunchAttempt } from "../../src/cliniko/outbound-launch-attempt.ts";
 import { ClinikoOutboundPendingDiscovery } from "../../src/cliniko/outbound-pending-discovery.ts";
 import type { OutboundPendingAccountQuery } from "../../src/cliniko/outbound-pending-discovery.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
@@ -8,9 +13,14 @@ import { ClinikoOutboundRecipientRecords, outboundRecordOwnerBinding } from "../
 import type { OutboundRecordConfig, OutboundRecordQuery } from "../../src/cliniko/outbound-recipient-records.ts";
 import type { OutboundRecipientRequest } from "../../src/cliniko/outbound-recipient-request.ts";
 import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
-export type OutboundRecorderSetup = Readonly<{ kind: "start"; now: string; config: Omit<OutboundRecordConfig, "clock" | "rateBudget">;
+type RecipientRecorderSetup = Readonly<{ kind: "start"; now: string; config: Omit<OutboundRecordConfig, "clock" | "rateBudget">;
 }> & (Readonly<{ mode: "retain"; request: OutboundRecipientRequest; recallAt: string }> |
   Readonly<{ mode: "read"; request: OutboundRecipientRequest; recallRef: string }> | Readonly<{ mode: "pending" }>);
+export type OutboundLaunchRecorderSetup = Readonly<{ kind:"start"; now:string; config:Omit<OutboundLaunchRecordConfig,"clock"|"rateBudget"> }> &
+  (Readonly<{mode:"retainPossible";attempt:OutboundLaunchAttempt;recallAt:string}> |
+   Readonly<{mode:"readPossible";attempt:OutboundLaunchAttempt;recallRef:string}> |
+   Readonly<{mode:"history";request:OutboundRecipientRequest;requestRecallRef:string}>);
+export type OutboundRecorderSetup = RecipientRecorderSetup | OutboundLaunchRecorderSetup;
 let id = 0, started = false;
 const replies = new Map<number, (data: unknown) => void>();
 const rpc = (kind: string, data: unknown): Promise<unknown> => new Promise(resolve => { const requestId = ++id; replies.set(requestId, resolve); process.send?.({ kind, id: requestId, data }); });
@@ -25,6 +35,28 @@ process.on("message", async (raw: unknown) => {
   const setup = raw as OutboundRecorderSetup; if (setup?.kind !== "start" || started) return; started = true;
   let db: ReturnType<typeof connectPostgres> | undefined;
   try {
+    if(setup.mode === "retainPossible" || setup.mode === "readPossible" || setup.mode === "history") {
+      const config:OutboundLaunchRecordConfig={...setup.config,clock:()=>setup.now,
+        rateBudget:{claim:()=>rpc("claim",null) as ReturnType<ClinikoRequestBudget["claim"]>,
+          observe429:reset=>rpc("observe429",reset) as ReturnType<ClinikoRequestBudget["observe429"]>}};
+      const read={allows:async(query:OutboundLaunchRecordQuery)=>await rpc("grant",{purpose:"record",query})===true,current:()=>process.connected};
+      const signal=new AbortController().signal;process.send?.({kind:"ready"});
+      if(setup.mode === "history") {
+        const history=ClinikoOutboundLaunchHistory.create(config,{allowsHistoryRead:async(query:OutboundLaunchHistoryQuery)=>await rpc("historyGrant",query)===true,
+          allowsRecordRead:read.allows,current:()=>process.connected},port);
+        if(!history.ok)throw new Error("Synthetic history unavailable");
+        process.send?.({kind:"result",data:await history.value.readForRequest({recallRef:setup.requestRecallRef,request:setup.request},signal)});return;
+      }
+      if(setup.mode === "readPossible") {
+        const reader=ClinikoOutboundLaunchRecords.createReadOnly(config,read,port);if(!reader.ok)throw new Error("Synthetic possible reader unavailable");
+        process.send?.({kind:"result",data:await reader.value.readPossibleAttempt({recallRef:setup.recallRef,actionRef:setup.attempt.actionRef,patientId:setup.attempt.patientId},signal)});return;
+      }
+      db=connectPostgres(process.env.DATABASE_URL!);const owner=outboundLaunchRecordOwnerBinding(config);if(!owner)throw new Error("Synthetic possible owner unavailable");
+      const records=ClinikoOutboundLaunchRecords.create(config,{...read,producerAdmitted:async query=>await rpc("grant",{purpose:"producer",query})===true},
+        new PostgresOutboundEffectBarrier(db,config.scope,owner),port);
+      if(!records.ok)throw new Error("Synthetic possible recorder unavailable");
+      process.send?.({kind:"result",data:await records.value.retainPossibleAttemptOnce(setup.attempt,setup.recallAt,signal)});return;
+    }
     const config: OutboundRecordConfig = { ...setup.config, clock: () => setup.now,
       rateBudget: { claim: () => rpc("claim", null) as ReturnType<ClinikoRequestBudget["claim"]>,
         observe429: reset => rpc("observe429", reset) as ReturnType<ClinikoRequestBudget["observe429"]> } };

@@ -4,7 +4,7 @@ import type { OutboundLaunchHistoryAuthority, OutboundLaunchHistoryQuery } from 
 import type { OutboundLaunchRecordQuery } from "../../src/cliniko/outbound-launch-records.ts";
 import { outboundLaunchFixture } from "./outbound-launch.ts";
 import { value } from "./outbound-records.ts";
-export async function outboundLaunchHistoryFixture(options: { deadlineMs?: number } = {}) {
+export async function outboundLaunchHistoryFixture(options: { deadlineMs?: number; request?: import("../../src/cliniko/outbound-recipient-request.ts").OutboundRecipientRequest } = {}) {
   const f = await outboundLaunchFixture(options); value(await f.retain()); f.calls.length = 0;
   let accountAllowed = true, recordAllowed = true, live = true;
   const accountQueries: OutboundLaunchHistoryQuery[] = [], recordQueries: OutboundLaunchRecordQuery[] = [];

@@ -8,16 +8,16 @@ import type { OutboundLaunchRecordConfig, OutboundLaunchRecordAuthority, Outboun
 import type { OutboundEffectBarrier } from "../../src/core/outbound-effect-barrier.ts";
 import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 import { value, outboundNow, outboundReviewDate } from "./outbound-records.ts";
-export function outboundLaunchValue() {
-  const request=outboundRequestValue(),attempt:OutboundLaunchAttempt={actionRef:randomUUID(),requestRecallRef:"cliniko:recall:30",requestActionRef:request.actionRef,
+export function outboundLaunchValue(request=outboundRequestValue()) {
+  const attempt:OutboundLaunchAttempt={actionRef:randomUUID(),requestRecallRef:"cliniko:recall:30",requestActionRef:request.actionRef,
     requestDigest:outboundRecipientRequestDigest(request)!,campaignRef:request.campaignRef,approvalRef:request.approvalRef,effectRef:request.effectRef,
     scope:request.scope,businessId:request.businessId,credentialFingerprint:request.credentialFingerprint,patientId:request.patientId,
     provider:{ref:"synthetic-voice",bindingDigest:"e".repeat(64)},attemptedAt:outboundNow,dispatchNotAfter:"2026-11-01T10:01:00.000Z"};
   return {request,attempt};
 }
 export async function outboundLaunchFixture(options:{deadlineMs?:number;response?(row:Record<string,unknown>,method:string):Response|Promise<Response>;
-  barrierFactory?(config:OutboundLaunchRecordConfig):OutboundEffectBarrier;attempt?:OutboundLaunchAttempt}={}) {
-  const apiKey="synthetic-outbound-au5",seed=outboundLaunchValue();
+  barrierFactory?(config:OutboundLaunchRecordConfig):OutboundEffectBarrier;attempt?:OutboundLaunchAttempt;request?:ReturnType<typeof outboundRequestValue>}={}) {
+  const apiKey="synthetic-outbound-au5",seed=outboundLaunchValue(options.request);
   const request={...seed.request,credentialFingerprint:clinikoCredentialFingerprint(apiKey)};
   const attempt={...(options.attempt??{...seed.attempt,requestDigest:outboundRecipientRequestDigest(request)!}),credentialFingerprint:request.credentialFingerprint};
   let now=outboundNow,allowed=true,producer=true,live=true,claims=0,next=40;
