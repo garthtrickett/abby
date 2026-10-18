@@ -791,7 +791,7 @@ standalone full TypeScript (work1792310666747, peak1525198848B/2GiB/CPU100%/
 heap1536MiB/Swap0/OOM0). The later native composition initially passed43 controls;
 the added operation-context test reproduced an altered signal (44/45), which was
 corrected. Current semantics pass45/45 (work1792311377266), peak122429440B/
-256MiB/CPU100%/heap192MiB/Swap0/OOM0. Its current full typecheck is still required.
+256MiB/CPU100%/heap192MiB/Swap0/OOM0. Current e9e3076 then passed standalone full TypeScript in work1792311572459, terminal08:22:28.341515UTC, peak1546960896B/2GiB/CPU100%/heap1536MiB/Swap0/OOM0;1782 source pins were independently rechecked after terminal.
 
 This is an explicit composition API, not default serving-host provisioning or a
 financial requirement/quote/manual-paid/waiver decision source. The content-policy

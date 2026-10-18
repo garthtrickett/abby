@@ -4855,9 +4855,12 @@ CPU100%/heap192MiB/Swap0/OOM0. These use real temporary owner-only files, curren
 admin membership and actual native reader/retainer/discovery adapters with
 synthetic provider ports. No actual provider call or SQL is involved.
 
-The new modules are not imported by the serving graph; current full TypeScript
-is still required, and no fresh serving-build/compiled-host/SQL qualification is
-claimed for them. The separate running complete regression6d01e1f excludes this
+Current e9e3076695f4473d964e2323d6660ef227e7c74a then passed standalone full
+TypeScript, work1792311572459, natural terminal08:22:28.341515UTC. Peak1546960896B/
+2GiB/CPU100%/heap1536MiB/Swap0/OOM0;1782 source pins were independently
+rechecked after terminal, wrapper2261694 was absent and wait57292 reaped.
+The new modules are not imported by the serving graph. No fresh serving-build,
+compiled-host or SQL qualification is claimed for these unwired modules. The separate running complete regression6d01e1f excludes this
 follow-up. Explicit deploying-host composition, actual clinic content/type
 approval, financial requirement/quote/current recipient/manual-paid/waiver
 decisions and real provider/sender/producer/restore/acoustic/deployment acceptance
