@@ -7,16 +7,16 @@
 | Execution stage | Current evidence and next action |
 | --- | --- |
 | 1 Aeva preservation | Independently retrieved and hash-checked 113 explicit source/test/map references at the audited revision through GitHub. All four original planning documents were published and independently retrieved at Abby `229a3596696d8ebb9bf263e58457f412898c1327`. Local-only material still requires owner selection and preservation before deletion. |
-| 2 Delivery baseline | Work remains stacked and unmerged through530 and the current individual-caller follow-up. Completed integrated bee6 full 1792294936052 is 4,406 passed / 1 failed / 1 skipped; ordered follow-ups unrun. Its class paid/pass stage 5 failure remains red; all 6 confirmation-resend cases passed without proving an intermittent repair. It excludes530/current individual source. Previously inspected cloud heads were rejected before execution by account billing/spending limits; current exact-head qualification remains separate. |
+| 2 Delivery baseline | Work is stacked and unmerged through draft531 plus the current original-caller expiry/quota correction. Frozen through531 combined0f2b382 passed4411/0/1 plus6 ordered followups. Later original-caller expiry/quota source705bca0 passes full strict/build and all10 actual caller cases; its prepared combined candidate still needs a new full regression. Earlier red runs remain recorded below. Exact-head cloud execution remains rejected before startup for account billing/spending limits. |
 | 3 Exact receipt foundation | Implemented and locally qualified in `codex/abby-provider-ack-receipt`, stacked on the published plans and integrated candidate. The full interval is captured, sent and validated. The later individual/class changes consume this exact receipt; post-create observations cannot erase an established creation acknowledgement. Independent review and exact-head CI remain outstanding. |
 | 4 Individual booking | Published in draft [PR #460](https://github.com/garthtrickett/abby/pull/460), `codex/abby-provider-ack-individual`, based on receipt correction `92a16e5`. Final online/roster availability follows preparation; exact acknowledgement survives host/review/worker cancellation. Focused, isolated database/process/compiled-location and complete local `npm test` checks passed. Independent review and cloud qualification remain open; cloud jobs have not started because of billing. |
 | 5 Native class creation | Draft [PR #461](https://github.com/garthtrickett/abby/pull/461) supplies exact attendee acknowledgement and final double capacity ordering for ordinary/approved-pass creation. Focused process-loss/privacy and movement/cancellation preservation evidence is retained below. Later staged caller work composes these creation semantics; acknowledgement of replacement creation alone never completes a move. Current whole-graph and authoritative cloud qualification remain open. |
-| 6 Earlier-gap qualification | Historical36b5285c passed 3,225main/0fail/1skip plus6ordered. Current bee6 full 1792294936052 is 4,406 passed / 1 failed / 1 skipped, ordered unrun. All six E2E-375 private confirmation-resend cases passed in this run; the earlier intermittent ordinary-turn failure is not proven repaired. The sole current failure is the financial class paid/pass stage 5 case. Gaps1–9 retain clinic, mail, operator, acoustic and public-route acceptance. |
+| 6 Earlier-gap qualification | Frozen through531 combined0f2b382 passed4411/0/1 plus6 ordered followups, including all six E2E-375 cases and all six financial caller chains. It supersedes bee6 for that source scope without establishing the sole cause of its historical redacted failures. New original-expiry/quota source still needs its combined full. Gaps1–9 retain their recorded clinic, mail, operator, acoustic and public-route limits. |
 | 7 Class/pass completion | Drafts465–473 and487 include staged caller/SAM/private renewal, separate played consent, bounded native/proposal cost admission, cold staff observation, signed uncertainty-to-staff recovery and same/cross-case date/ordinal/pass journeys. Their current composed cohorts also ran in the passing36b5285c complete clinical graph. Broader operator acceptance, original/replacement recovery obligations and separate financial provisioning remain explicit; no blanket cohort or clinic activation follows. |
-| 8 Payments | Stripe and dedicated Cliniko financial reviews remain selected. Per-call presentation/owning lifecycle and original class paid/unpaid evidence remain. Current individual follow-up qualifies actual signed original appointment/intent/consent through paid and naturally closed-unpaid financial owners; all 6 emitted individual/ordinary/pass paid/unpaid cases and strict/build598 artifacts pass. Deliberate native quota pressure proves bounded read-only reference redelivery and admission before the first one-use resend-record write. SQL 180, caller 120s and no write replay remain. Current completed full bee6 is 4,406 passed / 1 failed / 1 skipped and excludes530/this follow-up. Overall gap11, real acceptance and default activation remain open. |
+| 8 Payments | Stripe and dedicated Cliniko financial reviews remain selected. Current705bca0 passed full strict/build with602 artifacts,38 owning/facts controls and10 actual compiled PostgreSQL caller cases: six paid/unpaid individual/ordinary/pass journeys plus individual,ordinary,pass-linked and review-only original expiry. Known insufficient own native work is refused before receipt/ordinary-clinical claims; polling observes the same physical budget and leaves a quiet recovery window. Later possible effects stay consumed. Native180, caller120s and stage95s remain. Current combined-full, concrete deploying-host financial provisioning and real acceptance remain open; no default activation. |
 | 9 Outbound | Contact foundation524/reader525 add canonical consent/DNC history and current independent clinic-admin source/patient/collection/record/head/reconsent grants:355 semantic controls, strict/build and65 compiled contact/SQL/privacy cases. Marketing flags and financial reviews grant no voice consent. Owning-host provisioning, audience/scheduler/capacity/cancellation/one-shot launch/results/opt-out and exact verified callback integration remain open. Earlier independent engineering is addressed before new outbound features. |
 | 10 Writeback | Pending gap 13, exact permissions/content/storage decisions and audit R08/R22. |
-| 11 Combined qualification | Completed bee6 full 1792294936052 is 4,406 passed / 1 failed / 1 skipped out of 4,408 tests; ordered follow-ups unrun. All six E2E-375 pass in this run, without proving intermittent repair. Sole class paid/pass stage 5 failure remains red. Later unpaid/individual caller changes are excluded; focused6/6 is not whole-graph evidence. Historical515 green retains only its frozen scope. Combined qualification, independent review, authoritative cloud and real clinic/provider/sender/restore/acoustic/deployment acceptance remain open. |
+| 11 Combined qualification | Frozen through531 combined0f2b382 passed4411/0/1 plus6 ordered followups. It excludes the later original-caller expiry/quota correction705bca0, whose strict/build and all10 focused caller cases passed. Prepared combined8c853c3 is source-only so far. Earlier red results remain preserved. Current combined regression, independent review, authoritative cloud and real clinic/provider/sender/restore/acoustic/deployment acceptance remain open. |
 
 The three detailed plans retain the requirements and acceptance matrices. No source merge, deployment, real provider mutation, mail send or Aeva deletion is established by this ledger.
 
@@ -4795,3 +4795,37 @@ remain unchanged. Current full strict/build and all ten actual caller cases
 remain required before publication or any new combined-full qualification.
 All thirteen gaps and real clinic/provider/sender/producer/restore/acoustic,
 independent review/cloud and deployment acceptance remain open.
+
+## Corrected original caller cohort passed,18October2026
+
+Frozen705bca0028db43f4c6310c46cdc467031e1794d1 passed full strict TypeScript,
+serving emission and38 owning case/facts/retained-context controls in
+work1792308866140, natural terminal07:39:32.181657UTC. Peak1530093568B/2GiB,
+CPU100%/heap1536MiB/Swap0/OOM0. All1777 source files and602 emitted artifacts
+were independently pinned before the actual caller run.
+
+Disposable-PostgreSQL work1792309266303 then passed10/10, zero failures,
+cancellations or skips, natural terminal07:51:05.387370UTC. Exact command after
+migration: `ABBY_LEDGER=postgres node --test --test-concurrency=2 test/voice/compiled-class-financial-chain.test.ts test/voice/compiled-class-unpaid-chain.test.ts test/voice/compiled-individual-financial-chain.test.ts test/voice/compiled-original-clinical-expiry.test.ts`.
+The six original paid/unpaid individual/ordinary/pass journeys and all four
+original clinical-expiry cases passed together. This includes original native
+rows, separate permission denials, exact inspected cancellation, pass counters
+and associations, original review-only terms refusing upgrade, cold no-replay,
+fixed output/worker-directory emptiness and SQL/unfiltered-backup privacy.
+
+Node peak325242880B/1GiB and aggregate database231067648B/512MiB, CPU100%each,
+Swap0/allOOMhighmax0. After terminal,1777 source and602 artifact hashes were
+independently rechecked; wrapper2226809 was absent, own DB containers absent,
+owned slice inactive and pairedwait42397 reaped. The earlier9/1 and4/2 cohorts
+remain negative historical evidence; the corrections and new result do not
+retroactively change their outcomes.
+
+Prepared combined8c853c38939f5c62a1e171d0cd0762d980a625b6 preserves the three
+qualified527 diagnostic files from green through531 source0f2b382. Its production
+and financial caller files otherwise match705bca0. Facts1/1passed; no combined
+full has started yet. A new source-pinned complete regression remains required.
+Current documentation-only qualification updates do not change the tested code.
+Concrete clinic/host financial-source provisioning, independent review and
+exact-head cloud execution, remaining outbound/writeback engineering and real
+clinic/provider/sender/producer/restore/acoustic/deployment acceptance remain
+open. All thirteen gaps remain in scope; no live activation, merge or deletion.

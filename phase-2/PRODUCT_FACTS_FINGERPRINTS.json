@@ -1,7 +1,7 @@
 {
   "verifiedDate": "2026-10-18",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "d8fb831b33fb649752e17e97b192692353ebb4db3133c76161b164032f3ebb65",
+  "factsSha256": "9c90660f0d34c4dd6a6e35fd07c5b6b35bb9670a8b04111be13242d9ff6d2932",
   "sources": {
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
     "docs/adr/0003-class-movement-staff-resolution.md": "683bdd10660afc00309bac21e32ceda976573aa5e29aca4106fb1cddcb71b62f",
