@@ -5011,3 +5011,46 @@ Disposable PostgreSQL migration then `ABBY_LEDGER=postgres node --test --test-co
 Qualification history remains explicit: initial mixed control run1792315530899 had36 pass/1 missing-DATABASE_URL failure in the retained compiled resend case; it was moved to its required PostgreSQL qualification, without changing its assertion. First strict/build1792315574387 passed but did not emit the dynamically addressed observer; explicit tsconfig entry corrected that coverage gap. Second strict/build1792315857881 passed; subsequent adversarial1792316070438 reproduced unhandled async-sink rejection in the new observer helper. The nonawaited Promise catch and IPC-send callback fixed that diagnostic defect; 38 controls and the final build/composed cases above qualify the correction. None identifies the earlier full-suite timeout's cause.
 
 Historical6d01 full regression remains4428 passed/1 failed/1 existing skipped; its ordered followups did not run. The source/artifact-preserving isolated1/1 and default-four-file10/10 diagnostic passes do not repair or explain that failure. A new complete combined candidate including533–535 and these diagnostics still requires full qualification. All13 gaps, clinic/provider/sender/producer/restore/acoustic/cloud/deployment acceptance and remaining financial-decision, outbound and writeback engineering remain open. No merge or activation.
+
+## Cliniko recorded-payment source, 18 October 2026
+
+The owner selected Cliniko financial records for staff-recorded payments plus
+explicit clinic-approved waiver decisions. A new optional exact-invoice reader
+uses current independently approved invoice/obligation/currency mapping and
+financial-read permission. It snapshots exact native business/patient/booking,
+requires the own attendee for a class binding, and accepts no notes/nearest-match
+or numeric aliases as mapping authority. The native invoice API does not expose
+currency; the current independent owner must explicitly establish that binding.
+
+One native GET consumes the existing physical account budget. Current permission
+is rechecked after quota and private-body completion. Exact decimal minor units,
+archive/deletion/target/total/timestamp mismatches, contradictory status fields,
+withdrawal, expiry/backwards time, held bodies and aborts refuse. Results expose
+only native recorded state/total/approved currency/timestamps, never invoice notes,
+patient addresses, online-payment URLs or error text. No SQL, local private queue,
+provider write or default serving activation is added.
+
+Recorded paid, open, closed and open-credit remain distinct. This observation
+is not Stripe settlement, an unreversed-payment proof, a receipt, fee waiver or
+effect permission. An open invoice cannot prove no partial/manual payment or
+waiver. Complete independent manual-payment/waiver decisions and actual financial
+consumer/collection/expiry composition remain required.
+
+Source6ac7da9 passed46/46 owning controls, no skips/failures,
+work1792317334311, peak80,097,280B/256MiB CPU100%/heap192MiB/Swap0/OOM0;
+wait70783 reaped. Earlier44 controls passed1792317282234 before the explicit
+class-kind and contradictory-status refinements. The first launcher1792317270695
+failed before Node/tests because external_slice=None was invalid for the shared
+admission helper; its prospective argument was corrected without changing tests.
+Initial full TypeScript1792317347642 failed only the new quota-fixture settings
+parameter inferred as successful-quota-only. Explicit actual config typing on
+1003797 corrected that without runtime changes or weakened settings/assertions.
+Full standalone TypeScript work1792317535152 passed, peak1529008128B/2GiB
+CPU100%/heap1536MiB/Swap0/OOM0. All1799 frozen inputs independently unchanged,
+wrapper2367825 absent and paired wait40386 reaped. This source API is not imported
+by default serving, so no compiled-host/SQL or real-provider acceptance is claimed.
+
+The separate combined29c373d full work1792316922473 remains live and excludes
+this followup. Older6d01 remains4428/1/1 with ordered followups not run. All13
+gaps, remaining waiver/host/outbound/writeback engineering and clinic/provider/
+sender/producer/restore/acoustic/cloud/deployment acceptance remain open.

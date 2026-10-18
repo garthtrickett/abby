@@ -1,7 +1,7 @@
 {
   "verifiedDate": "2026-10-18",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "664577bc058245f12f1c90df67478653d1545e1b07554d4b4d81fac6ab139585",
+  "factsSha256": "ced92617685ae88ae2479d25530d1edd2cb307f6f028deb0e14455b8ed278e2e",
   "sources": {
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
     "docs/adr/0003-class-movement-staff-resolution.md": "683bdd10660afc00309bac21e32ceda976573aa5e29aca4106fb1cddcb71b62f",
@@ -18,6 +18,7 @@
     "src/cliniko/financial-booking-recipient.ts": "56ca83f60617c4d1a5e791482fb89a3c2b0352ac2d2780da9a3244ccb7f78f32",
     "src/cliniko/financial-checkout-attempt.ts": "0a1df8f8521359b65e3de39ac3d9efd5d1f941db01eb2c600b269d63c2d34e97",
     "src/cliniko/financial-expiry-attempt.ts": "c866844341d5ca6fb1de8696d82ee43eab6c9dc1aebc89a91d054ed15907aa77",
+    "src/cliniko/financial-invoice-read.ts": "6a117a1da7de170473a03537d8abee51d318f3264e0890625f96c55993dc232a",
     "src/cliniko/financial-message-attempt.ts": "fd1567a0322d6e332906a47ca78303e081d2b4618487ffae47e70dc91eddc79c",
     "src/cliniko/financial-pending-discovery.ts": "110f97b880f0c1d53361c8315cad5101ca56f1fb77a4e9f1ef18e127d455a472",
     "src/cliniko/financial-record-retention.ts": "c97efa589b9ecdec4ace95cb9c92ccb4464e5dfe412ffe9e4c0772037309d06a",
@@ -159,6 +160,7 @@
     "test/cliniko/financial-class-origin.test.ts": "810b225c3a9a85634b962d351180bb9625fd2297a681746bf13a0ac58a95ba96",
     "test/cliniko/financial-consent-observation.test.ts": "ad37e42b7bf48a9daf393400e628d5d2889c7fa1e207afbc54bf083c63a2920b",
     "test/cliniko/financial-expiry-attempt.test.ts": "1ebf7ddba0c5c845abfae308e9af3b6a504be332e5eb31a8a1f9f0a0c0a78d89",
+    "test/cliniko/financial-invoice-read.test.ts": "571df6ec34b14da23c230a31edcfe1a175a1c9ca8571474296ea62af4e3d1026",
     "test/cliniko/financial-pending-discovery.test.ts": "00b0371a3cec9e72805d4066921234c8ee8aaa1a2dd3022f1ab8b0b53a647f17",
     "test/cliniko/financial-resend-attempt-discovery.test.ts": "6fef4e9842e0cee59feb80cd6cf98bcb682a1c7e614c4de2d01981bf65d3ae7a",
     "test/cliniko/financial-resend-discovery.test.ts": "5353beb3c82e685d2d71f52684a93a853ae643b22af1190b455b34e128ec3032",
