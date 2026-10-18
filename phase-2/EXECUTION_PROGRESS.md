@@ -4829,3 +4829,36 @@ Concrete clinic/host financial-source provisioning, independent review and
 exact-head cloud execution, remaining outbound/writeback engineering and real
 clinic/provider/sender/producer/restore/acoustic/deployment acceptance remain
 open. All thirteen gaps remain in scope; no live activation, merge or deletion.
+
+## Current clinic-owned financial source foundation,18October2026
+
+The selected dedicated financial-review source now has an explicit non-patient
+owner-file definition and a composition API for the existing native grants.
+Definition117bed7 passes36 semantic controls (work1792310533992) and standalone
+full TypeScript (work1792310666747); its Node peak was1525198848B/2GiB,
+CPU100%/heap1536MiB/Swap0/OOM0. This does not qualify the later grant composition.
+
+The composition requires source approval alongside independent record/patient,
+pending collection, complete archived-history and producer grants. Source
+approval is rechecked around asynchronous permission, after native quota waits
+and before disclosing a returned private context through the existing adapters.
+Known native record acknowledgement survives later source withdrawal. Query and
+operation-signal identities remain the original owner's. Unknown extra admin
+lookup cost cannot inherit an upstream callback's smaller native ceiling.
+
+Initial native cases passed43/43 in work1792311161568; the extra quota-declaration
+control then passed44/44 in1792311283403. Added operation-context reproduction
+1792311340376 failed1of45 because the new wrapper substituted its private signal.
+The corrected wrapper bounds its wait while passing the original signal upstream.
+Current1792311377266 passes45/45, zero skipped/cancelled, peak122429440B/256MiB,
+CPU100%/heap192MiB/Swap0/OOM0. These use real temporary owner-only files, current
+admin membership and actual native reader/retainer/discovery adapters with
+synthetic provider ports. No actual provider call or SQL is involved.
+
+The new modules are not imported by the serving graph; current full TypeScript
+is still required, and no fresh serving-build/compiled-host/SQL qualification is
+claimed for them. The separate running complete regression6d01e1f excludes this
+follow-up. Explicit deploying-host composition, actual clinic content/type
+approval, financial requirement/quote/current recipient/manual-paid/waiver
+decisions and real provider/sender/producer/restore/acoustic/deployment acceptance
+remain distinct. All thirteen gaps remain in scope; this is not complete gap11.

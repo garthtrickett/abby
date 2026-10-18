@@ -6,7 +6,7 @@ import { OwnerFileFinancialSource, financialSourceSelection } from "../../src/st
 import type { FinancialSourceApproval } from "../../src/standalone/owner-file-financial-source.ts";
 import type { AdminAccount, AdminDirectory } from "../../src/standalone/identity/magic-link.ts";
 export async function financialSourceApprovalFixture() {
-  const native = fixture().config, selection = value(financialSourceSelection(native, { version: "financial-records-v1", digest: "a".repeat(64) }));
+  const retained = fixture(), native = retained.config, selection = value(financialSourceSelection(native, { version: "financial-records-v1", digest: "a".repeat(64) }));
   const folder = await mkdtemp(join(tmpdir(), "abby-financial-source-")), path = join(folder, "source.json");
   const state = { now: "2026-11-02T00:00:00.000Z", account: { email: "financial-admin@example.invalid", membershipVersion: "1",
     actor: { actorRef: "financial-admin", role: "clinicAdmin", scope: selection.scope } } as AdminAccount | undefined };
@@ -18,7 +18,7 @@ export async function financialSourceApprovalFixture() {
     await writeFile(path, JSON.stringify(approval), { mode: 0o600 });
     const config = { path, scope, directory, clock: () => state.now };
     const definition = value(await OwnerFileFinancialSource.capture(config, new AbortController().signal));
-    return { native, selection, approval, config, definition, directory, state, path,
+    return { retained, native, selection, approval, config, definition, directory, state, path,
       replace: (patch: Record<string, unknown>) => writeFile(path, JSON.stringify({ ...approval, ...patch })),
       close: () => rm(folder, { recursive: true, force: true }) };
   } catch (error) { await rm(folder, { recursive: true, force: true }); throw error; }

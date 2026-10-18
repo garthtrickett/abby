@@ -763,3 +763,40 @@ The shared compiled process fixture now serves both individual and class cases. 
 Qualification:38/38 focused controls on d533098 (`work1792244928964`); strict TypeScript/serving build on977a43d (`work1792245059223`), peak1,496,727,552B/2GiB, CPU100%, heap1536MiB/Swap0;16/16 actual compiled SQL/TLS cases (`work1792245299261`), Node310,136,832B/1GiB and PostgreSQL109,404,160B/512MiB, CPU100% each/Swap0/OOM0. All generated504 artifacts and all production sources are identical to the qualified515 parent. Own database cleaned and tracked waits reaped. The initial prospective SQL runner's extra quote failed its prelaunch Python syntax check; corrected before any SQL job and not counted as a test result. Review updated facts and their exact cited fingerprints; assertions, application quotas and deadlines were not weakened.
 
 Frozen draft515 head8e9fa7b full regression work1792244823795 remains running in an independent checkout; it is not green and excludes these later test files/docs, while its production/runtime bytes match this test-only candidate. Frozen386525b prior full graph remains3,849main/0fail/1existing skip plus6ordered. Required cloud execution, complete real caller class-resend journey, remaining gap11 integration/clinic configuration, real provider/sender/recipient/restore/acoustic/deployment acceptance and gaps12/13 remain open. Synthetic host qualification enables no live contact, payment, clinical action or deployment.
+
+## Clinic-owned financial source approval and native grant composition,18October2026
+
+The source-definition foundation selects the exact non-patient clinic/location,
+native business/credential/dedicated financial recall type, Stripe account/mode,
+producer public-key fingerprint and approved record-content policy version/digest.
+An owner-only bounded JSON file and current unchanged clinic-admin membership
+establish that definition. Disabled/unapproved, changed, expired, backwards-time,
+foreign selection, unsafe file or unavailable lookup refuses. Patient IDs,
+recipients, payable references, money/waiver decisions and effect/restore grants
+are rejected from this local source file.
+
+`bindFinancialSourceGrants` composes that current definition with separately
+supplied native review, record, pending-collection and archived-history grants.
+It checks source approval before and after each independent asynchronous grant;
+existing native adapters repeat these permits after quota waits and private body
+reads. It preserves the original grant query and operation signal. Independent
+record/collection/patient permission and producer admission remain necessary;
+read-only access does not acquire a producer requirement. An exact native record
+acknowledgement survives subsequent source withdrawal. No base callback ceiling
+is inherited across the extra source/admin lookups: the deploying host must
+review and declare the cost of the complete composed port when a bound is needed.
+
+Definition117bed7 passed36 owner-file/selection/withdrawal/timeout controls and
+standalone full TypeScript (work1792310666747, peak1525198848B/2GiB/CPU100%/
+heap1536MiB/Swap0/OOM0). The later native composition initially passed43 controls;
+the added operation-context test reproduced an altered signal (44/45), which was
+corrected. Current semantics pass45/45 (work1792311377266), peak122429440B/
+256MiB/CPU100%/heap192MiB/Swap0/OOM0. Its current full typecheck is still required.
+
+This is an explicit composition API, not default serving-host provisioning or a
+financial requirement/quote/manual-paid/waiver decision source. The content-policy
+approval is distinct from each intent's payment-policy/terms version and never
+proves received money. Concrete deploying-host integration, independently current
+financial/clinical/producer/complete-restore grants and actual clinic/type/content/
+provider/sender acceptance remain open. No listener, poller, SQL migration, local
+private queue, payment, mail or native write starts during construction.
