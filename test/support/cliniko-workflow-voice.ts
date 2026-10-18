@@ -10,6 +10,8 @@ import { ok } from "../../src/core/model.ts";
 import { ReferenceNumberRoutingHost } from "../../src/reference/clinic-number-routing.ts";
 import type { ClinicNumberRoutingHost } from "../../src/reference/clinic-number-routing.ts";
 import type { OwnerFileServiceCatalogue } from "../../src/standalone/owner-file-service-catalogue.ts";
+import { ClinikoVoiceClinicalHost } from "../../src/standalone/cliniko-voice-clinical-host.ts";
+import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 import { ClinikoCallFlow, clinikoStaffPreparationDeadlineMs } from "../../src/standalone/cliniko-call-flow.ts";
 import type { ClinikoCallFlowConfig } from "../../src/standalone/cliniko-call-flow.ts";
 import { createStandaloneTransientVoiceCall } from "../../src/standalone/transient-voice-composition.ts";
@@ -36,6 +38,8 @@ export async function voiceUntil(check: () => boolean, label: string, timeoutMs 
  * Cliniko HTTP, clear-final transcription and speech synthesis are explicitly synthetic. */
 export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: ClinikoCallFlowConfig,
   intent: (flow: ClinikoCallFlow) => IntentResolver, options: { lostWrite?: boolean;
+    /** Exercise the real reusable clinical host instead of fixture-owned wiring. */
+    clinicalHost?: true;
     maximumWrites?: 2; classMove?: true;
     routingHost?: (accountSid: string) => ClinicNumberRoutingHost;
     locationServiceSources?: readonly Parameters<typeof OwnerFileServiceCatalogue.capture>[0][];
@@ -174,6 +178,15 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     }
     return port(value, init);
   });
+  const realHost = options.clinicalHost ? new ClinikoVoiceClinicalHost({ ...config, policies: policy, scope,
+    greeting: resultValue(await policy.read(scope)).greeting!, fetchPort: provider, intent,
+    ...(config.financial ? { financial: { ...config.financial, native: { ...config.financial.native, clock: now }, fetchPort: provider } } : {}) }) : undefined;
+  const realWorkflow = realHost?.workflow({ scope,
+    route: { accountRef: accountSid, dialedNumber: config.inbound.dialedNumber, routeVersion: "workflow-voice" },
+    selection: { businessId: config.cliniko.businessId, practitionerId: config.cliniko.practitionerId,
+      appointmentTypeId: config.cliniko.appointmentTypeId, policyVersion: config.policyVersion }, alternatives: [],
+    businessTimeZone: config.cliniko.timeZone, credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey),
+    catalogueObservedAt: now(), approvedAt: now(), approvedBy: "synthetic-admin", patientActionMode: "unavailable", patientRequestMode: "unavailable" });
   const server = createTwilioIngressServer({ ingress, createCall: async (stream, send, close) => {
     const composed = resultValue(await createStandaloneTransientVoiceCall({ db,
       routingHost: options.routingHost?.(accountSid) ?? new ReferenceNumberRoutingHost([{ accountRef: accountSid, dialedNumber: config.inbound.dialedNumber, ...scope, routeVersion: "workflow-voice" }]),
@@ -209,7 +222,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
           }
           const callLedger = ledger, dispose = callLedger.dispose.bind(callLedger);
           callLedger.dispose = () => { disposedState ??= callLedger.read(callId, scope); dispose(); };
-          flow = resultValue(ClinikoCallFlow.create({ ...config, ...context,
+          flow = realWorkflow ? realWorkflow.create(context) : resultValue(ClinikoCallFlow.create({ ...config, ...context,
           policyVersion: config.policyVersion, fetchPort: provider,
           ...(config.financial && context.financialPresentation ? { financial: { ...config.financial,
             native: { ...config.financial.native, clock: now }, fetchPort: provider, presentation: context.financialPresentation } } : {}),

@@ -15,6 +15,9 @@ for (const passes of [false, true]) test(`signed HTTP/WS class financial readbac
     const budget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-class-au5", maxPerMinute: 180 });
     const f = await financialClassBookingFixture({ passes, budget, barrierFor: native => new PostgresFinancialEffectBarrier(db, native.scope, resultValue(financialRecordOwnerBinding(native))) });
     f.host.dispose(); f.session.dispose();
+    // A legacy/shared callback cannot stand in for this admitted call's actual
+    // private played receipt; the real host must replace it with the call port.
+    assert.equal(Reflect.set(f.flowConfig.financial!.presentation, "play", async () => { assert.fail("shared financial playback must not be used"); }), true);
     let call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined;
     const modelInputs: string[] = [];
     try {
@@ -27,7 +30,7 @@ for (const passes of [false, true]) test(`signed HTTP/WS class financial readbac
         else assert.fail("Unexpected classifier request; financial resume must stay local");
         return Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [{ type: "output_text", text: JSON.stringify(decision) }] }] });
       };
-      call = await clinikoWorkflowVoiceFixture(db, f.flowConfig, owner => createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-key", model: "synthetic-model", clinicDate: () => "2026-10-04", fetch: model }));
+      call = await clinikoWorkflowVoiceFixture(db, f.flowConfig, owner => createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-key", model: "synthetic-model", clinicDate: () => "2026-10-04", fetch: model }), { clinicalHost: true });
       f.bindNativeCall(() => call!.state());
       await call.turn("I would like a place in Mat Pilates."); await call.mark(); await f.verificationDelivered; await call.verify(f.mail[0]!.code);
       await call.turn("Show class times on October 8."); await call.mark(); await call.turn("The first time please."); await call.mark();
