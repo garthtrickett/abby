@@ -66,7 +66,7 @@ export class OwnerFileOutboundCampaign {
       return ok(new OwnerFileOutboundCampaign(source.value,clock,ms,at));
     }catch{return err({kind:"unavailable"});}
   }
-  /** Non-patient binding of exact approved bytes and current approver membership.
+  /** Non-patient binding of exact decoded configuration and approver membership.
    * A request must cite it, but citing it is not an independent action grant. */
   bindingFingerprint(): string {return createHash("sha256").update(JSON.stringify(["abby.outbound-campaign-policy.v1",this.#source.bindingFingerprint()])).digest("hex");}
   async currentFor(selection: OutboundRecordSelection, input: OutboundRecipientRequest, signal: AbortSignal): Promise<Result<OutboundCampaignApproval|undefined,ClinicApprovalFailure>> {
