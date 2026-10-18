@@ -48,6 +48,25 @@ export async function runPaidFinancialCaller({ actor: c, observation, clock, dir
           }
           assert.ok(limited, "real protected reads must reach the unchanged native quota");
         };
+        const observeProviderCooldown = async () => {
+          // A nearly expired local window may recover before the next allocation.
+          // Inject an actual read-only native429 instead: the real SQL limiter
+          // observes its provider cooldown, without editing quota state or time.
+          let observed = false;
+          const reader = value(ClinikoFinancialPendingDiscovery.create(c.config.checkout.cliniko, c.authority.pending, async (input, init) => {
+            assert.equal(new URL(String(input)).pathname, "/v1/recalls"); assert.equal(init?.method, "GET");
+            observed = true; return new Response(null, { status: 429 });
+          }));
+          const signal = AbortSignal.timeout(95_000), deadline = performance.now() + 95_000;
+          while (true) {
+            const read = await reader.scanPending(signal); assert.equal(read.ok, false);
+            if (read.ok) assert.fail("the controlled native read cannot succeed");
+            assert.equal(read.error.kind, "rateLimited");
+            if (observed) return;
+            assert.ok(performance.now() < deadline, "same account must admit the controlled native429 read");
+            await peer!.nextCycle();
+          }
+        };
         peer = await launch();
         await until(() => smtp.messages.length === 1 && c.receipts.length === 1, "original caller Checkout and link");
         stage(3);
@@ -129,7 +148,7 @@ export async function runPaidFinancialCaller({ actor: c, observation, clock, dir
         assert.equal(event.status, 200); assert.equal(await event.text(), '{"ok":true}');
         await until(() => smtp.messages.length === 3, "original current-money hosted receipt");
         assert.ok(smtp.messages[2]!.includes("pay.stripe.com/receipts/")); stage(5);
-        if (options.exerciseQuotaWindows) await saturateReadBudget();
+        if (options.exerciseQuotaWindows) await observeProviderCooldown();
         const resend = await request("receiptDelivery", options.exerciseQuotaWindows === true);
         approvals.set(resend.approvalRef, financialResendRequestDigest(resend)!); financialApproved = false;
         await until(() => seenFinancial.has(resend.actionRef), "exact native receipt request reached current financial approval");
