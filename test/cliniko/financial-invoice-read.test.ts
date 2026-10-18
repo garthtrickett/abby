@@ -10,7 +10,7 @@ function fixture() {
     claim: async () => { state.quota++; return null; }, checkHeadroom: async () => null,
     observe429: async () => { state.cooldown++; return { kind: "rateLimited" as const }; },
   } };
-  const binding: FinancialInvoiceBinding = { financialActionRef: uuid(1), invoiceRef: "71", patientId: "21", bookingId: "91",
+  const binding: FinancialInvoiceBinding = { financialActionRef: uuid(1), invoiceRef: "71", patientId: "21", bookingId: "91", bookingKind: "book",
     expectedTotalMinor: 5000, currency: "gbp", expiresAt: "2026-11-01T10:01:00.000Z" };
   const row = { id: "71", links: { self: `${base}/invoices/71` }, patient: { links: { self: `${base}/patients/21` } },
     business: { links: { self: `${base}/businesses/11` } }, booking: { links: { self: `${base}/bookings/91` } },
@@ -65,8 +65,18 @@ test("wrong, archived, deleted, changed, unknown or future invoice evidence refu
 });
 test("class payment binding needs the independently selected exact attendee, not a shared occurrence", async () => {
   const f = fixture(), reader = f.create();
-  assert.equal((await reader.read({ ...f.binding, attendeeId: "81" }, stop())).ok, true);
-  assert.equal((await reader.read({ ...f.binding, attendeeId: "82" }, stop())).ok, false);
+  assert.equal((await reader.read({ ...f.binding, bookingKind: "classBook", attendeeId: "81" }, stop())).ok, true);
+  assert.equal((await reader.read({ ...f.binding, bookingKind: "classBook", attendeeId: "82" }, stop())).ok, false);
+});
+test("a declared class obligation cannot omit its own attendee or alias an individual binding", async () => {
+  const f = fixture(), reader = f.create();
+  assert.equal((await reader.read({ ...f.binding, bookingKind: "classBook" }, stop())).ok, false);
+  assert.equal((await reader.read({ ...f.binding, attendeeId: "81" }, stop())).ok, false);
+  assert.equal(f.state.reads, 0); assert.equal(f.state.quota, 0);
+});
+test("conflicting native status text cannot publish a paid observation", async () => {
+  const f = fixture(), reader = f.create(async () => Response.json({ ...f.row, status_description: "Open" }));
+  assert.equal((await reader.read(f.binding, stop())).ok, false);
 });
 test("invoice permission withdrawn during quota wait prevents GET", async () => {
   const f = fixture(), config = { ...f.config, rateBudget: { ...f.config.rateBudget, claim: async () => { f.state.allowed = false; return null; } } };

@@ -11,7 +11,7 @@ import { validRecallMarker } from "./recall-note.ts";
 /** Supplied by the independent financial owner, never discovered by matching
  * notes, nearest appointments or numeric aliases between native resources. */
 export type FinancialInvoiceBinding = Readonly<{
-  financialActionRef: string; invoiceRef: string; patientId: string; bookingId: string;
+  financialActionRef: string; invoiceRef: string; patientId: string; bookingId: string; bookingKind: "book" | "classBook";
   attendeeId?: string; expectedTotalMinor: number; currency: string; expiresAt: string;
 }>;
 export type FinancialInvoiceQuery = Readonly<{
@@ -40,10 +40,10 @@ function minor(value: unknown): number | undefined {
 }
 function binding(value: FinancialInvoiceBinding): FinancialInvoiceBinding | undefined {
   const b = structuredClone(value), fields = Object.keys(b).sort().join(",");
-  if (fields !== "bookingId,currency,expectedTotalMinor,expiresAt,financialActionRef,invoiceRef,patientId" &&
-      fields !== "attendeeId,bookingId,currency,expectedTotalMinor,expiresAt,financialActionRef,invoiceRef,patientId") return undefined;
+  if (fields !== "bookingId,bookingKind,currency,expectedTotalMinor,expiresAt,financialActionRef,invoiceRef,patientId" &&
+      fields !== "attendeeId,bookingId,bookingKind,currency,expectedTotalMinor,expiresAt,financialActionRef,invoiceRef,patientId") return undefined;
   if (!validRecallMarker(b.financialActionRef) || ![b.invoiceRef, b.patientId, b.bookingId].every(validClinikoId) ||
-      b.attendeeId !== undefined && !validClinikoId(b.attendeeId) || !currencies.includes(b.currency) ||
+      !["book", "classBook"].includes(b.bookingKind) || (b.bookingKind === "classBook" ? !validClinikoId(b.attendeeId) : b.attendeeId !== undefined) || !currencies.includes(b.currency) ||
       !Number.isSafeInteger(b.expectedTotalMinor) || Math.abs(b.expectedTotalMinor) > 99_999_999 ||
       !financialRecordInstant(b.expiresAt)) return undefined;
   return Object.freeze(b);
@@ -104,11 +104,13 @@ export class ClinikoFinancialInvoiceReader {
       const bytes = await ownedBodyBytes(received.body, 1_000_000, signal), row: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
       if (!await permit()) return err({ kind: "forbidden" });
       const states = { 10: "open", 20: "recordedPaid", 30: "closed", 40: "openCredit" } as const;
+      const descriptions = { 10: "Open", 20: "Paid", 30: "Closed", 40: "Open credit" } as const;
       if (!object(row) || row.id !== selected.invoiceRef || link({ links: row.links }) !== `${this.#base}/invoices/${selected.invoiceRef}` ||
           link(row.patient) !== `${this.#base}/patients/${selected.patientId}` || link(row.business) !== `${this.#base}/businesses/${this.#source.businessId}` ||
           link(row.booking) !== `${this.#base}/bookings/${selected.bookingId}` || selected.attendeeId !== undefined && link(row.attendee) !== `${this.#base}/attendees/${selected.attendeeId}` ||
           row.archived_at !== null || row.deleted_at !== null || minor(row.total_amount) !== selected.expectedTotalMinor ||
-          typeof row.status !== "number" || !Object.hasOwn(states, row.status)) return err({ kind: "mismatched" });
+          typeof row.status !== "number" || !Object.hasOwn(states, row.status) ||
+          row.status_description !== undefined && row.status_description !== null && row.status_description !== descriptions[row.status as keyof typeof descriptions]) return err({ kind: "mismatched" });
       const updated = financialRecordInstant(row.updated_at), created = financialRecordInstant(row.created_at);
       const observed = financialRecordInstant(this.#config.clock?.() ?? new Date().toISOString());
       if (!updated || !created || updated < created || !observed || updated > observed || !active() || this.#authority.current(query, signal) !== true) return err({ kind: "unavailable" });
