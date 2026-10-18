@@ -914,3 +914,42 @@ SQL and unfiltered backup privacy; no source-only substitute is claimed. Real cl
 restore/acoustic/deployment acceptance, independent manual-paid/waiver decisions,
 consumer/source/grant provisioning, remaining gap12/13 and a green combined full
 candidate remain open. No merge, activation or live provider action.
+
+## Bounded original-expiry failure evidence, 18 October 2026
+
+The isolated original-expiry test now observes real native expiry outcomes and
+SQL quota/claim activity through an explicitly compiled test-only observer. The
+same actual protocol, Postgres budget and permanent financial barrier methods
+run unchanged. Observation adds no current authority, timing allowance, quota,
+provider result or retry. It is not imported by product serving code.
+
+The child IPC permits only a strict fixed numeric snapshot: result-kind code,
+successful financial-barrier claim count, observed SQL budget-claim attempts,
+maximum requested headroom, quota-denial count and maximum completed-operation
+elapsed milliseconds. Counts accumulate with saturation into one immutable
+snapshot. SQL claim attempts are not dispatched native-request receipts or a
+complete transitive request-cost declaration. Zero observations do not prove
+quiescence, absence, no effect or a reusable claim.
+
+Result codes are 0 unknown, 1 cancelled, 2 uncertain, 3 invalidConfig, 4 invalidQuery,
+5 forbidden, 6 unavailable, 7 alreadyClaimed, 8 mismatched, 9 attemptUncertain and
+10 rateLimited.
+They explain the observed protocol result only; none establishes money, financial
+coverage, current permission, provider quiescence or restore admission. A cancelled
+result may still need separate financial/case-effect review.
+
+No patient/action/record/provider reference, amount, address, note, grant,
+exception message, stack or provider body can enter this metadata. Unknown keys,
+invalid integer bounds and metadata attached to a passing parent result refuse.
+An observer-sink failure preserves the original operation result/exception. The
+first failure's exact Error identity/stack remains private; only existing fixed
+module/source-line information and validated numeric observation cross to the
+outer failed-test report. The original failure remains a failure.
+
+The actual composed expiry cases require real observation delivery on successful
+cancellation and consent refusal. The SQL voice fixture and emitted observer are
+prerequisites; dynamic imports cannot silently skip compilation. Original 95s stage,
+10s peer observation, 120s caller, 570s parent, 600s test and 180 physical SQL budget
+remain unchanged. No local private retry queue or production feature is added.
+The earlier 6d01 full 4428/1/1 stays negative until a new complete candidate finishes;
+stronger diagnostics do not retroactively identify that timeout's cause.
