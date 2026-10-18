@@ -102,10 +102,18 @@ export class ClinikoOutboundContactSource {
     const definition = async () => {
       const found = await wait(this.#definition.currentFor(s, signal)); if (!found.ok) throw new Failure("unavailable"); if (!found.value) throw new Failure("forbidden");
     };
-    const permit = async (q: OutboundContactQuery) => {
-      await definition(); current(q);
-      if (await wait(Promise.resolve().then(() => this.#authority.allows(q, signal))) !== true) throw new Failure("forbidden");
-      await definition(); current(q); grants.set(JSON.stringify(q), q);
+    const permit = async (...queries: readonly OutboundContactQuery[]) => {
+      await definition(); for (const q of queries) current(q);
+      for (const q of queries) {
+        if (await wait(Promise.resolve().then(() => this.#authority.allows(q, signal))) !== true) throw new Failure("forbidden");
+        // The fresh check after one grant is also the check before the next:
+        // there is no intervening wait. Every grant remains independent.
+        await definition(); for (const bound of queries) current(bound);
+        const key = JSON.stringify([q.operation, "recallRef" in q ? q.recallRef : null]), previous = grants.get(key);
+        // Once decoded, retain the stronger exact-context grant for final
+        // revalidation; never downgrade it to its preliminary fetch query.
+        if (!(q.operation === "readContactReview" && !q.review && previous?.operation === "readContactReview" && previous.review)) grants.set(key, q);
+      }
     };
     const get = async (url: string, q: OutboundContactQuery) => {
       await permit(q); const limited = await wait(claimClinikoBudget(this.#config.rateBudget));
@@ -152,7 +160,7 @@ export class ClinikoOutboundContactSource {
       const history = await scan(), reviews: OutboundContactReview[] = [], nativeRows = new Map<string, PatientRecallRow>();
       const native = new NativeOutboundRecords<OutboundContactReview, OutboundContactQuery>({ ...this.#config, credentialFingerprint: s.credentialFingerprint,
         typeId: s.contactReviewRecallTypeId }, this.#base.split(".")[1]!, this.#owner, {
-        allows: async q => { try { await permit(collection); await permit(q); return true; } catch (error) { if (error instanceof Failure && error.kind === "forbidden") return false; throw error; } },
+        allows: async q => { try { await permit(collection, q); return true; } catch (error) { if (error instanceof Failure && error.kind === "forbidden") return false; throw error; } },
         current: q => { try { current(collection); current(q); return true; } catch { return false; } },
       }, this.#fetch, { encode: encodeOutboundContactReview, decode: decodeOutboundContactReview, recordedAt: r => r.reviewedAt, expiresAt: r => r.effectiveUntil },
       q => Object.freeze({ ...base, operation: "readContactReview", includeArchived: true, recallRef: q.recallRef!, actionRef: q.actionRef,

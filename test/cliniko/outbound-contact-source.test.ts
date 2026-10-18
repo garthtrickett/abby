@@ -105,3 +105,27 @@ for (const mergedAt of [undefined, "2026-11-01T00:00:00.000Z", "unknown"])
     const f = await outboundContactSourceFixture(); t.after(f.close); f.controls.patient.merged_at = mergedAt;
     assert.equal((await f.read()).ok, false);
   });
+test("decoded exact-record authority is never downgraded to a preliminary query during final revalidation", async t => {
+  const f = await outboundContactSourceFixture(); t.after(f.close); const decoded = new Set<string>();
+  f.controls.allow = q => {
+    if (q.operation === "readContactReview") {
+      if (q.review) decoded.add(q.actionRef); else if (decoded.has(q.actionRef)) return false;
+    }
+    return true;
+  };
+  assert.equal(value(await f.read()).disposition, "eligibleEvidence");
+});
+test("withdrawal at the exact-read budget wait still prevents dispatch after grouped independent grants", async t => {
+  const f = await outboundContactSourceFixture(); t.after(f.close); let count = 0, historyAllowed = true;
+  f.controls.allow = q => q.operation !== "readContactHistory" || historyAllowed;
+  const config = { ...f.config, rateBudget: { ...f.config.rateBudget, claim: () => { if (++count === 3) historyAllowed = false; return null; } } };
+  const { ClinikoOutboundContactSource } = await import("../../src/cliniko/outbound-contact-source.ts");
+  const source = value(ClinikoOutboundContactSource.create(config, f.definition, f.authority, f.port));
+  assert.deepEqual(await source.readCurrentForRequest(f.request, signal()), { ok: false, error: { kind: "forbidden" } });
+  assert.equal(f.calls.some(u => /^\/v1\/recalls\/[0-9]+$/.test(u.pathname)), false);
+});
+test("current exact decoded grant withdrawal at final revalidation denies private evidence", async t => {
+  const f = await outboundContactSourceFixture(); t.after(f.close); let decoded = 0;
+  f.controls.allow = q => q.operation !== "readContactReview" || !q.review || ++decoded === 1;
+  assert.deepEqual(await f.read(), { ok: false, error: { kind: "forbidden" } }); assert.equal(decoded, 2);
+});
