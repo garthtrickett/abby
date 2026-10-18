@@ -12,7 +12,7 @@ export { outboundRecordOwnerBinding } from "./internal/outbound-record-context.t
 
 export type OutboundRecordQuery = OutboundRecordSelection & Readonly<{
   ownerBinding: string; operation: "retainRecipientRequest" | "readRecipientRequest";
-  actionRef: string; patientId: string; recallRef?: string; recallAt?: string;
+  actionRef: string; patientId: string; recallRef?: string; recallAt?: string; includeArchived?: true;
   request?: OutboundRecipientRequest; requestDigest?: string;
 }>;
 /** Independent native-record grants. These grant no audience/contact/DNC,
@@ -38,7 +38,7 @@ export class ClinikoOutboundRecipientRecords {
       ...(config.clock?{clock:config.clock.bind(config)}:{})},shard,owner,read,port,
       {encode:encodeOutboundRecipientRequest,decode:decodeOutboundRecipientRequest,recordedAt:r=>r.requestedAt,expiresAt:r=>r.schedule.expiresAt},
       input=>Object.freeze({...selection,ownerBinding:owner,operation:input.method==="POST"?"retainRecipientRequest":"readRecipientRequest",
-        actionRef:input.actionRef,patientId:input.patientId,...(input.recallRef?{recallRef:input.recallRef}:{}),...(input.recallAt?{recallAt:input.recallAt}:{}),
+        actionRef:input.actionRef,patientId:input.patientId,...(input.method==="GET"?{includeArchived:true as const}:{}),...(input.recallRef?{recallRef:input.recallRef}:{}),...(input.recallAt?{recallAt:input.recallAt}:{}),
         ...(input.record?{request:input.record,requestDigest:outboundRecipientRequestDigest(input.record)!}:{})}),write);
   }
   static create(config: OutboundRecordConfig, authority: OutboundRecordAuthority, barrier: OutboundEffectBarrier,

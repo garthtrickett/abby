@@ -40,7 +40,7 @@ export async function outboundRecordsFixture(options: {
         recall_type: { links: { self: `${base}/recall_types/${body.recall_type_id}` } }, notes: body.notes, recall_at: body.recall_at,
         recalled: false, recalled_at: null, archived_at: null, created_at: now, updated_at: now, private_unknown: "discard-native-outbound-private" };
       rows.set(id, row);
-    } else { assert.equal(method, "GET"); row = rows.get(url.pathname.split("/").at(-1)!)!; }
+    } else { assert.equal(method, "GET");assert.deepEqual(url.searchParams.getAll("q[]"),["archived_at:*"]);assert.deepEqual([...url.searchParams.keys()],["q[]"]); row = rows.get(url.pathname.split("/").at(-1)!)!; }
     return options.response ? options.response(row, method) : Response.json(row, { status: method === "POST" ? 201 : 200 });
   };
   const make = () => ClinikoOutboundRecipientRecords.create(config, authority, barrier, port), records = value(make());

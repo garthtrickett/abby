@@ -11,7 +11,7 @@ export type { OutboundLaunchRecordConfig, OutboundLaunchRecordSelection } from "
 export { outboundLaunchRecordSelection, outboundLaunchRecordOwnerBinding } from "./internal/outbound-launch-record-context.ts";
 
 export type OutboundLaunchRecordQuery = OutboundLaunchRecordSelection & Readonly<{ ownerBinding: string;
-  operation: "retainPossibleLaunch" | "readPossibleLaunch"; actionRef: string; patientId: string; recallRef?: string; recallAt?: string;
+  operation: "retainPossibleLaunch" | "readPossibleLaunch"; actionRef: string; patientId: string; recallRef?: string; recallAt?: string; includeArchived?: true;
   attempt?: OutboundLaunchAttempt; attemptDigest?: string }>;
 export type OutboundLaunchReadAuthority = NativeOutboundReadAuthority<OutboundLaunchRecordQuery>;
 export type OutboundLaunchRecordAuthority = OutboundLaunchReadAuthority & Readonly<{ producerAdmitted(query: OutboundLaunchRecordQuery,signal: AbortSignal): Promise<boolean> }>;
@@ -30,7 +30,7 @@ export class ClinikoOutboundLaunchRecords {
       ...(config.clock?{clock:config.clock.bind(config)}:{})},sourceShard,owner,read,port,
       {encode:encodeOutboundLaunchAttempt,decode:decodeOutboundLaunchAttempt,recordedAt:a=>a.attemptedAt,expiresAt:a=>a.dispatchNotAfter},
       input=>Object.freeze({...selection,ownerBinding:owner,operation:input.method==="POST"?"retainPossibleLaunch":"readPossibleLaunch",
-        actionRef:input.actionRef,patientId:input.patientId,...(input.recallRef?{recallRef:input.recallRef}:{}),...(input.recallAt?{recallAt:input.recallAt}:{}),
+        actionRef:input.actionRef,patientId:input.patientId,...(input.method==="GET"?{includeArchived:true as const}:{}),...(input.recallRef?{recallRef:input.recallRef}:{}),...(input.recallAt?{recallAt:input.recallAt}:{}),
         ...(input.record?{attempt:input.record,attemptDigest:outboundLaunchAttemptDigest(input.record)!}:{})}),write);
   }
   static create(config: OutboundLaunchRecordConfig,authority: OutboundLaunchRecordAuthority,barrier: OutboundEffectBarrier,port: typeof fetch=fetch):Result<ClinikoOutboundLaunchRecords,NativeOutboundFailure> {

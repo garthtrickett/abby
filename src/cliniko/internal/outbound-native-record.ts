@@ -124,7 +124,8 @@ export class NativeOutboundRecords<T extends NativeOutboundIdentity, Q> {
       if (input.method === "POST" && this.#barrier?.matches(this.#selection.scope, this.#owner) !== true) throw new Failure("forbidden");
       current();
       const id = input.method === "GET" ? recallId(input.binding.recallRef)! : undefined;
-      const url = `${this.#base}/recalls${id ? `/${id}` : ""}`;
+      // Exact archived evidence must remain reachable after closure/archive.
+      const url = `${this.#base}/recalls${id ? `/${id}?q%5B%5D=archived_at%3A*` : ""}`;
       const init: RequestInit = { method: input.method, redirect: "error", signal,
         headers: { Accept: "application/json", Authorization: this.#authorization, "Content-Type": "application/json", "User-Agent": this.#agent },
         ...(input.method === "POST" ? { body: JSON.stringify({ patient_id: input.record.patientId, recall_type_id: this.#typeId,

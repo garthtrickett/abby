@@ -35,7 +35,7 @@ export async function outboundLaunchFixture(options:{deadlineMs?:number;response
       assert.equal(url.pathname,"/v1/recalls");const body=JSON.parse(String(init?.body));assert.deepEqual(Object.keys(body).sort(),["notes","patient_id","recall_at","recall_type_id","recalled"]);
       assert.equal(body.recall_type_id,config.outboundAttemptRecallTypeId);const id=String(next++);row={id,links:{self:`${base}/recalls/${id}`},patient:{links:{self:`${base}/patients/${body.patient_id}`}},
         recall_type:{links:{self:`${base}/recall_types/${body.recall_type_id}`}},notes:body.notes,recall_at:body.recall_at,recalled:false,recalled_at:null,archived_at:null,created_at:now,updated_at:now,private_unknown:"discard-native-possible-launch-private"};rows.set(id,row);
-    }else{assert.equal(method,"GET");row=rows.get(url.pathname.split("/").at(-1)!)!;}
+    }else{assert.equal(method,"GET");assert.deepEqual(url.searchParams.getAll("q[]"),["archived_at:*"]);assert.deepEqual([...url.searchParams.keys()],["q[]"]);row=rows.get(url.pathname.split("/").at(-1)!)!;}
     return options.response?options.response(row,method):Response.json(row,{status:method==="POST"?201:200});
   };
   const make=()=>ClinikoOutboundLaunchRecords.create(config,authority,barrier,port),records=value(make());

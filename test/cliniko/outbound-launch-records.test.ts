@@ -26,3 +26,11 @@ test("request-shaped configuration cannot activate possible-launch record storag
   const f=await outboundLaunchFixture();const {outboundAttemptRecallTypeId:_id,attemptPolicyDigest:_digest,...base}=f.config;
   assert.equal(ClinikoOutboundLaunchRecords.create({...base,outboundRecallTypeId:"61",recordPolicyDigest:"a".repeat(64)} as unknown as typeof f.config,f.authority,f.barrier,f.port).ok,false);
 });
+test("exact cold possible-attempt GET requests archive inclusion under its independent current record grant",async()=>{
+ const f=await outboundLaunchFixture(),retained=value(await f.retain());if(retained.kind!=="accepted")assert.fail();f.rows.get("40")!.archived_at=outboundNow;
+ const reader=value(ClinikoOutboundLaunchRecords.createReadOnly(f.config,{allows:async q=>q.operation==="readPossibleLaunch"&&q.includeArchived===true,current:()=>true},f.port));
+ const result=value(await reader.readPossibleAttempt({recallRef:retained.recallRef,actionRef:f.attempt.actionRef,patientId:f.attempt.patientId},new AbortController().signal));
+ assert.equal(result.archivedAt,outboundNow);
+ const denied=value(ClinikoOutboundLaunchRecords.createReadOnly(f.config,{allows:async q=>q.includeArchived!==true,current:()=>true},f.port)),before=f.calls.length;
+ assert.deepEqual(await denied.readPossibleAttempt({recallRef:retained.recallRef,actionRef:f.attempt.actionRef,patientId:f.attempt.patientId},new AbortController().signal),{ok:false,error:{kind:"forbidden"}});assert.equal(f.calls.length,before);
+});

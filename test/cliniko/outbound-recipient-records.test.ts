@@ -111,3 +111,10 @@ test("headers without a complete exact native body remain uncertain and consumed
   assert.deepEqual(value(await f.retain()), { kind: "uncertain" }); assert.equal(cancelled, 1);
   assert.deepEqual([...f.burned], [f.request.actionRef]); assert.equal(f.calls.length, 1);
 });
+test("exact cold recipient GET requests archive inclusion under independently current read permission",async()=>{
+ const f=await outboundRecordsFixture(),retained=value(await f.retain());if(retained.kind!=="accepted")assert.fail();f.rows.get(retained.recallRef.split(":").at(-1)!)!.archived_at="2026-11-01T10:00:00.000Z";
+ const reader=value(ClinikoOutboundRecipientRecords.createReadOnly(f.config,{allows:async q=>q.operation==="readRecipientRequest"&&q.includeArchived===true,current:()=>true},f.port));
+ assert.equal(value(await reader.readRequest(binding(f,retained.recallRef),new AbortController().signal)).archivedAt,"2026-11-01T10:00:00.000Z");
+ const denied=value(ClinikoOutboundRecipientRecords.createReadOnly(f.config,{allows:async q=>q.includeArchived!==true,current:()=>true},f.port)),before=f.calls.length;
+ assert.deepEqual(await denied.readRequest(binding(f,retained.recallRef),new AbortController().signal),{ok:false,error:{kind:"forbidden"}});assert.equal(f.calls.length,before);
+});

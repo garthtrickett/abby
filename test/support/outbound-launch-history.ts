@@ -24,6 +24,7 @@ export async function outboundLaunchHistoryFixture(options: { deadlineMs?: numbe
       const page = Number(url.searchParams.get("page")), rows = controls.rows.slice((page-1)*100,page*100);
       return controls.page ? controls.page(rows,page) : Response.json({ recalls: rows, total_entries: controls.total ?? controls.rows.length });
     }
+    assert.deepEqual(url.searchParams.getAll("q[]"),["archived_at:*"]);assert.deepEqual([...url.searchParams.keys()],["q[]"]);
     const row = f.rows.get(url.pathname.split("/").at(-1)!)!;
     return controls.get ? controls.get(row) : Response.json(row);
   };
