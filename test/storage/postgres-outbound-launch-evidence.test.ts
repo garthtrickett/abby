@@ -41,7 +41,7 @@ test("compiled possible-attempt recorder consumes SQL once and cold read preserv
  const first=await outboundLaunchPeer(f,dir);t.after(first.kill);const retained=value(await first.nextResult());await first.kill();assert.equal(retained.kind,"accepted");if(retained.kind!=="accepted")assert.fail();
  const cold=await outboundLaunchPeer(f,dir);t.after(cold.kill);assert.deepEqual(await cold.nextResult(),{ok:false,error:{kind:"alreadyClaimed"}});await cold.kill();
  const row=f.rows.get("40")!;row.recalled=true;row.recalled_at=outboundNow;row.archived_at=outboundNow;f.setNow("2026-11-03T10:00:00.000Z");
- const reader=await outboundLaunchPeer(f,dir,{mode:"readPossible",recallRef:retained.recallRef,denied:"producer"});t.after(reader.kill);
+ const reader=await outboundLaunchPeer(f,dir,{mode:"readPossible",withoutDatabase:true,recallRef:retained.recallRef,denied:"producer"});t.after(reader.kill);
  const found=value(await reader.nextResult());await reader.kill();assert.equal(found.kind,"possibleLaunchContext");if(found.kind!=="possibleLaunchContext")assert.fail();
  assert.deepEqual(found.attempt,f.attempt);assert.equal(found.recalled,true);assert.equal(found.archivedAt,outboundNow);
  assert.equal(f.calls.filter(c=>c.method==="POST").length,1);assert.deepEqual([...first.output,...cold.output,...reader.output],[]);assert.deepEqual(await readdir(dir),[]);await privacy(f);
@@ -70,7 +70,7 @@ for(const mode of ["closedHistory","accountDenied","recordDenied","changed"] as 
  for(const row of [f.controls.rows[0]!,f.f.rows.get("40")!]){row.recalled=true;row.recalled_at=outboundNow;row.archived_at=outboundNow;}
  if(mode==="accountDenied")f.denyAccount();if(mode==="recordDenied")f.denyRecord();if(mode==="changed")f.controls.get=r=>Response.json({...r,archived_at:null});f.f.port=f.port;
  const dir=await mkdtemp(join(tmpdir(),"abby-possible-history-"));t.after(()=>rm(dir,{recursive:true,force:true}));
- const peer=await outboundLaunchPeer(f.f,dir,{mode:"history",historyAuthority:f.authority});t.after(peer.kill);const result=await peer.nextResult();await peer.kill();
+ const peer=await outboundLaunchPeer(f.f,dir,{mode:"history",withoutDatabase:true,historyAuthority:f.authority});t.after(peer.kill);const result=await peer.nextResult();await peer.kill();
  if(mode==="closedHistory"){const found=value(result);assert.equal(found.kind,"possibleLaunchHistory");if(found.kind!=="possibleLaunchHistory")assert.fail();assert.equal(found.records.length,1);assert.deepEqual(found.records[0]!.attempt,f.f.attempt);assert.equal(found.records[0]!.archivedAt,outboundNow);}
  else assert.deepEqual(result,{ok:false,error:{kind:mode==="changed"?"mismatched":"forbidden"}});
  assert.equal((await claims(f.f,f.f.attempt.actionRef)).length,0);assert.deepEqual(peer.output,[]);assert.deepEqual(await readdir(dir),[]);await privacy(f.f);

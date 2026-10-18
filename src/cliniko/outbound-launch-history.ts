@@ -36,10 +36,11 @@ class Failure extends Error {
 function discard(response: Response | undefined): void { try { void response?.body?.cancel().catch(() => {}); } catch { /* Owned body only. */ } }
 type Listed = Readonly<{ id: string; patientId: string; notes: string; recallAt: string; createdAt: string; updatedAt: string; recalled: boolean; recalledAt: string|null; archivedAt: string|null }>;
 
-/** Complete bounded, archived-inclusive patient evidence, never a launch grant.
+/** Bounded, archived-inclusive patient evidence, never a launch grant.
  * At most500 patient rows/50 attempt records. Unknown, changed or conflicting
  * evidence refuses. Closure, archival and dispatch-window expiry cannot erase a
- * possible attempt. All physical GETs use the existing account budget. */
+ * possible attempt. This is not an atomic snapshot or absence proof.
+ * All physical GETs use the existing account budget. */
 export class ClinikoOutboundLaunchHistory {
   readonly #config: OutboundLaunchRecordConfig;
   readonly #selection: OutboundLaunchRecordSelection;

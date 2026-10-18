@@ -11,9 +11,9 @@ import type { OutboundLaunchRecorderSetup } from "./outbound-record-process.ts";
 type Fixture = Awaited<ReturnType<typeof outboundLaunchFixture>>;
 type Outcome = Result<NativeOutboundRetention | OutboundLaunchRecord | OutboundLaunchHistoryResult, OutboundLaunchRecordFailure>;
 export async function outboundLaunchPeer(f: Fixture, directory: string, options: { mode?: "retainPossible" | "readPossible" | "history"; historyAuthority?: OutboundLaunchHistoryAuthority; recallRef?: string;
-  denied?: "record" | "producer"; holdPostReply?: boolean; onSubmitted?(): void } = {}) {
+  denied?: "record" | "producer"; withoutDatabase?: true; holdPostReply?: boolean; onSubmitted?(): void } = {}) {
   const child = fork(new URL("../../dist/runtime/test/support/outbound-record-process.js", import.meta.url), [], {
-    cwd: directory, stdio: ["ignore", "pipe", "pipe", "ipc"], env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=256" } });
+    cwd: directory, stdio: ["ignore", "pipe", "pipe", "ipc"], env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=256",...(options.withoutDatabase?{DATABASE_URL:"intentionally-not-a-database-url"}:{}) } });
   const terminal = new Promise<NodeJS.Signals | null>(resolve => child.once("exit", (_code, signal) => resolve(signal)));
   const output: string[] = []; child.stdout?.on("data", d => output.push(String(d))); child.stderr?.on("data", d => output.push(String(d)));
   let resolveReady!: () => void, rejectReady!: (error: Error) => void;

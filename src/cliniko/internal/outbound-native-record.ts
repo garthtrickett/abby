@@ -127,7 +127,7 @@ export class NativeOutboundRecords<T extends NativeOutboundIdentity, Q> {
       const url = `${this.#base}/recalls${id ? `/${id}` : ""}`;
       const init: RequestInit = { method: input.method, redirect: "error", signal,
         headers: { Accept: "application/json", Authorization: this.#authorization, "Content-Type": "application/json", "User-Agent": this.#agent },
-        ...(input.method === "POST" ? { body: JSON.stringify({ patient_id: (input.method === "POST" ? input.record.patientId : input.binding.patientId), recall_type_id: this.#typeId,
+        ...(input.method === "POST" ? { body: JSON.stringify({ patient_id: input.record.patientId, recall_type_id: this.#typeId,
           recall_at: input.recallAt, notes: input.notes, recalled: false }) } : {}) };
       current(); dispatched = input.method === "POST";
       const response = await wait(this.#fetch(url, init).then(r => { responseOwned = r; if (signal.aborted) discard(r); return r; }));
