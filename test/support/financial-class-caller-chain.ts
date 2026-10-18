@@ -10,13 +10,14 @@ import { ClinikoFinancialResendRecords } from "../../src/cliniko/financial-resen
 import { financialResendRequestDigest } from "../../src/cliniko/financial-resend-request.ts";
 import { resendRequestValue } from "./financial-resend.ts";
 import { financialMessageSelectionDigest } from "../../src/standalone/smtp-financial-message-delivery.ts";
+import { ClinikoFinancialPendingDiscovery } from "../../src/cliniko/financial-pending-discovery.ts";
 import { secret } from "./financial-webhook-handoff.ts";
 import { value, stop } from "./financial-retention.ts";
 
 export async function financialClassCallerChain(passes: boolean, stage: (value: number) => void): Promise<void> {
   await withClassFinancialCaller(passes, stage, context => runPaidFinancialCaller(context, stage));
 }
-export async function runPaidFinancialCaller({ actor: c, observation, clock, directory, connectionString }: FinancialCallerActor, stage: (value: number) => void): Promise<void> {
+export async function runPaidFinancialCaller({ actor: c, observation, clock, directory, connectionString }: FinancialCallerActor, stage: (value: number) => void, options: Readonly<{ saturateBeforePaid?: true }> = {}): Promise<void> {
     const intent = c.intent;
     let peer: Awaited<ReturnType<typeof financialConsumerPeer>> | undefined;
     const output: string[] = [], approvals = new Map<string, string>();
@@ -64,14 +65,45 @@ export async function runPaidFinancialCaller({ actor: c, observation, clock, dir
         await peer.kill(); output.push(...peer.output); peer = undefined;
         // The native provider and approval registry survive actual worker loss.
         peer = await launch(); await peer.nextCycle(); assert.equal(smtp.messages.length, 2); assert.equal(c.sessions.length, 1);
+        if (options.saturateBeforePaid) {
+          // Competing authorized reads share the actual physical SQL budget.
+          // Fill it while the original link is already consumed and money is
+          // still unpaid, before a new receipt effect can start.
+          const reader = value(ClinikoFinancialPendingDiscovery.create(c.config.checkout.cliniko, c.authority.pending, c.dependencies.native));
+          const signal = AbortSignal.timeout(10_000); let limited = false;
+          for (let i = 0; i <= 180; i++) {
+            const read = await reader.scanPending(signal);
+            if (!read.ok) { assert.equal(read.error.kind, "rateLimited"); limited = true; break; }
+          }
+          assert.ok(limited, "real protected reads must reach the unchanged native quota");
+        }
         c.paid();
         const timestamp = String(Math.floor(Date.parse(clock()) / 1000));
         const raw = JSON.stringify({ id: "evt_classCaller", object: "event", type: "checkout.session.completed", created: Number(timestamp),
           account: intent.stripe.accountRef, livemode: false, api_version: c.config.webhook.apiVersion,
           data: { object: { object: "checkout.session", id: receipt.checkoutRef, payment_status: "paid" } } });
         const signature = `t=${timestamp},v1=${createHmac("sha256", secret).update(timestamp + ".").update(raw).digest("hex")}`;
-        const event = await fetch(`http://127.0.0.1:${peer.port}/stripe/webhook`, { method: "POST",
+        const deliverReference = () => fetch(`http://127.0.0.1:${peer!.port}/stripe/webhook`, { method: "POST",
           headers: { "content-type": "application/json", "stripe-signature": signature }, body: raw });
+        let event = await deliverReference();
+        if (options.saturateBeforePaid) assert.equal(event.status, 503, "an exhausted native account cannot acknowledge handoff");
+        if (event.status === 503) {
+          assert.equal(await event.text(), '{"ok":false}');
+          const budget = c.config.checkout.cliniko.rateBudget; assert.ok(budget.checkHeadroom);
+          const headroom = budget.checkHeadroom.bind(budget);
+          assert.equal((await headroom(1))?.kind, "rateLimited", "only an observed quota refusal permits reference redelivery");
+          const deadline = performance.now() + 95_000;
+          while (true) {
+            // Room for this bounded fixture's overlapping poll/reference scans;
+            // this read-only check is not a reservation or a quota increase.
+            const current = await headroom(100); if (current === null) break;
+            assert.equal(current.kind, "rateLimited"); assert.ok(performance.now() < deadline, "same account must recover headroom");
+            await peer.nextCycle();
+          }
+          // This is the same authenticated, read-only reference, not a retry of
+          // Checkout, mail, a native POST or any consumed financial effect.
+          event = await deliverReference();
+        }
         assert.equal(event.status, 200); assert.equal(await event.text(), '{"ok":true}');
         await until(() => smtp.messages.length === 3, "original current-money hosted receipt");
         assert.ok(smtp.messages[2]!.includes("pay.stripe.com/receipts/")); stage(5);

@@ -103,7 +103,7 @@ export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid"
       await call.close(); call = undefined; stage(2);
       await withRetainedFinancialCaller({ native: funding, observation, expected: { targetRef: "cliniko:appointment:91", amount: 5000, currency: "gbp" },
         clock: () => readClock(), setTime: f.setTime, clinicalWrites: () => requests, reviews: () => f.recalls },
-        db, connectionString, stage, context => (outcome === "paid" ? runPaidFinancialCaller : runUnpaidFinancialCaller)(context, stage));
+        db, connectionString, stage, context => outcome === "paid" ? runPaidFinancialCaller(context, stage, { saturateBeforePaid: true }) : runUnpaidFinancialCaller(context, stage));
     } finally { if (call) await call.close(); financialLife.abort(); await f.close(); }
   });
 }
