@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { setImmediate } from "node:timers/promises";
 import { financialExpiryObservation, FinancialExpiryObservations, attachFinancialExpiryObservation, financialExpiryFailureObservation, financialExpiryResultCode, financialExpiryProbeResult } from "../support/financial-expiry-observation.ts";
 import { observeFinancialExpiry, expiryObservationCounts } from "../support/observe-financial-expiry.ts";
 const sample = { code: 6, claims: 2, requests: 64, quotaRequired: 64, quotaDenials: 1, elapsedMs: 30_000 };
@@ -70,4 +71,17 @@ test("failure result channel preserves legacy results and rejects malformed sour
   assert.deepEqual(financialExpiryProbeResult({ kind: "result", passed: true, file: 0, line: 0 }), { kind: "result", passed: true, file: 0, line: 0 });
   assert.equal(financialExpiryProbeResult({ kind: "result", passed: false, file: 4, line: 0 }), undefined);
   assert.equal(financialExpiryProbeResult({ kind: "result", passed: false, file: 1, line: 4097 }), undefined);
+});
+
+test("asynchronous observer rejection cannot fail a known acknowledgement", async () => {
+  const actual = { ok: true, value: { kind: "cancelled" } };
+  assert.equal(await observeFinancialExpiry(async () => actual, async () => { throw new Error("private-sink-error"); }), actual);
+  await setImmediate();
+});
+test("asynchronous and unsettled observation sinks cannot replace or delay the original failure or result", async () => {
+  const original = new Error("private-operation-error");
+  await assert.rejects(observeFinancialExpiry(async () => { throw original; }, async () => { throw new Error("private-sink-error"); }), error => error === original);
+  const actual = { ok: true, value: { kind: "cancelled" } };
+  assert.equal(await observeFinancialExpiry(async () => actual, () => new Promise(() => {})), actual);
+  await setImmediate();
 });

@@ -9,7 +9,7 @@ if (process.argv[1]?.endsWith("/financial-consumer-process.js") && process.env.A
   const expire = FinancialClinicalExpiryProtocol.prototype.expireOnce;
   FinancialClinicalExpiryProtocol.prototype.expireOnce = function (...args: Parameters<typeof expire>) {
     return observeFinancialExpiry(() => expire.apply(this, args), observation => {
-      if (process.connected) process.send?.({ kind: "expiryObservation", observation });
+      if (process.connected) process.send?.({ kind: "expiryObservation", observation }, () => {});
     });
   };
   const claim = PostgresFinancialEffectBarrier.prototype.claimOnce;
