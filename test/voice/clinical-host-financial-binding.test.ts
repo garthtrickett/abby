@@ -85,7 +85,7 @@ test(`financial per-call factory refuses ${failure} without provider or listener
   const host = new ClinikoVoiceClinicalHost({ ...f.config, scope: f.f.scope, greeting: f.host.greeting,
     intent: () => async () => ok({ kind: "model" as const }), financial: { ...common, policyForCall() {
       calls++; if (failure === "throw") throw new Error("private-upstream-error-must-not-escape");
-      if (failure === "getter") return { ...policy, get quote() { throw new Error("private-upstream-error-must-not-escape"); } };
+      if (failure === "getter") return { ...policy, get quote(): import("../../src/standalone/cliniko-financial-booking-preparation.ts").FinancialBookingPolicy["quote"] { throw new Error("private-upstream-error-must-not-escape"); } };
       return failure === "invalid" ? {} as never : { ...policy };
     } } });
   const context = { ...f.context, financialPresentation: { play: async () => undefined } };
