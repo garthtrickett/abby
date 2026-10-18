@@ -42,7 +42,7 @@ export async function outboundContactSourceFixture() {
     page?: (rows: Record<string, unknown>[], page: number) => Response | Promise<Response>;
     get?: (row: Record<string, unknown>) => Response | Promise<Response>;
     phone?: () => Response | Promise<Response>; allow?: (q: OutboundContactQuery) => boolean | Promise<boolean> } = {
-    rows: [row(first)], patient: { id: request.patientId, archived_at: null, updated_at: "2026-11-01T00:00:00.000Z", links: { self: `${base}/patients/${request.patientId}` },
+    rows: [row(first)], patient: { id: request.patientId, archived_at: null, merged_at: null, updated_at: "2026-11-01T00:00:00.000Z", links: { self: `${base}/patients/${request.patientId}` },
       patient_phone_numbers: [{ number: request.recipient.number, phone_type: "Mobile" }] } };
   const queries: OutboundContactQuery[] = [], calls: URL[] = [];
   const authority: OutboundContactAuthority = { allows: async q => { queries.push(q); return controls.allow ? controls.allow(q) : true; }, current: () => state.live };

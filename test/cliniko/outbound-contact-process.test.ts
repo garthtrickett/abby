@@ -78,3 +78,8 @@ test("compiled maximum native history stays within actual unchanged180 physical 
   const found = value(await compiled(f)); assert.equal(found.disposition, "eligibleEvidence"); assert.equal(found.head?.review.revision, 50);
   assert.equal(f.state.claims, 62); assert.equal(f.state.claims, f.calls.length);
 });
+
+test("compiled merged native patient refuses old contact evidence", { timeout: 30000 }, async t => {
+  const f = await outboundContactSourceFixture(); t.after(f.close); f.controls.patient.merged_at = "2026-11-01T00:00:00.000Z";
+  assert.equal((await compiled(f)).ok, false);
+});

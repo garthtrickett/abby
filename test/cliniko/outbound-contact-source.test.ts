@@ -30,11 +30,12 @@ test("reconsent requires its independent current approval for the exact predeces
   f.controls.allow = () => true; const found = value(await f.read()); assert.equal(found.disposition, "eligibleEvidence");
   assert.ok(f.queries.some(q => q.operation === "approveContactReconsent" && q.approvalRef === renew.reconsentApprovalRef && q.review.predecessor?.actionRef === stop.actionRef));
 });
-for (const change of ["empty", "fax", "differentPhone", "DNC", "unknownConsent", "unknownDNC", "archivedHead", "closedHead", "expired", "differentPurpose"] as const)
+for (const change of ["empty", "fax", "faxWhitespace", "differentPhone", "DNC", "unknownConsent", "unknownDNC", "archivedHead", "closedHead", "expired", "differentPurpose"] as const)
   test(`native ${change} is blocked rather than inferring contact authority`, async t => {
     const f = await outboundContactSourceFixture(); t.after(f.close);
     if (change === "empty") f.controls.rows = [];
     if (change === "fax") f.controls.patient.patient_phone_numbers = [{ number: f.request.recipient.number, phone_type: "Fax" }];
+    if (change === "faxWhitespace") f.controls.patient.patient_phone_numbers = [{ number: f.request.recipient.number, phone_type: " fax " }];
     if (change === "differentPhone") f.controls.patient.patient_phone_numbers = [{ number: "+6145550199", phone_type: "Mobile" }];
     if (change === "DNC") f.controls.rows = [f.row({ ...f.first, doNotCall: "blocked" })];
     if (change === "unknownConsent") f.controls.rows = [f.row({ ...f.first, consent: "unknown" })];
@@ -98,3 +99,9 @@ test("shared physical rate denial and provider429 preserve reset evidence", asyn
   const reader = value(ClinikoOutboundContactSource.create({ ...f.config, rateBudget: { ...f.config.rateBudget, claim: () => ({ kind: "rateLimited" as const }) } }, f.definition, f.authority, f.port));
   f.calls.length = 0; assert.deepEqual(await reader.readCurrentForRequest(f.request, signal()), { ok: false, error: { kind: "rateLimited" } }); assert.equal(f.calls.length, 0);
 });
+
+for (const mergedAt of [undefined, "2026-11-01T00:00:00.000Z", "unknown"])
+  test("merged or unproven current patient identity cannot reuse an old contact decision", async t => {
+    const f = await outboundContactSourceFixture(); t.after(f.close); f.controls.patient.merged_at = mergedAt;
+    assert.equal((await f.read()).ok, false);
+  });

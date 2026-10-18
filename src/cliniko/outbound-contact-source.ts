@@ -113,13 +113,13 @@ export class ClinikoOutboundContactSource {
       let response: Response | undefined, bodyOwned = false;
       try {
         clock(); current(q);
-        response = await wait(this.#fetch(url, { method: "GET", redirect: "error", signal, headers: { Accept: "application/json",
+        const found = await wait<Response>(this.#fetch(url, { method: "GET", redirect: "error", signal, headers: { Accept: "application/json",
           Authorization: `Basic ${Buffer.from(`${this.#config.apiKey}:`).toString("base64")}`, "User-Agent": `Abby (${this.#config.contactEmail})` } }).then(r => {
           response = r; if (signal.aborted) discard(r); return r;
         }));
-        if (response.status === 429) throw Object.assign(new Failure("rateLimited"), await wait(observeCliniko429(this.#config.rateBudget, response.headers.get("X-RateLimit-Reset"))));
-        if ([401, 403].includes(response.status)) throw new Failure("forbidden"); if (response.status !== 200) throw new Failure("unavailable");
-        bodyOwned = true; const bytes = await wait(ownedBodyBytes(response.body, 1_000_000, signal));
+        if (found.status === 429) throw Object.assign(new Failure("rateLimited"), await wait(observeCliniko429(this.#config.rateBudget, found.headers.get("X-RateLimit-Reset"))));
+        if ([401, 403].includes(found.status)) throw new Failure("forbidden"); if (found.status !== 200) throw new Failure("unavailable");
+        bodyOwned = true; const bytes = await wait(ownedBodyBytes(found.body, 1_000_000, signal));
         let value: unknown; try { value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); } catch { throw new Failure("malformed"); }
         await permit(q); return value;
       } finally { if (!bodyOwned) discard(response); }
@@ -134,13 +134,13 @@ export class ClinikoOutboundContactSource {
     const phone = async () => {
       const raw = object(await get(`${this.#base}/patients/${request.patientId}`, patient));
       const updatedAt = outboundNativeInstant(raw?.updated_at), link = object(raw?.links)?.self;
-      if (!raw || raw.id !== request.patientId || raw.archived_at !== null || link !== `${this.#base}/patients/${request.patientId}` ||
+      if (!raw || raw.id !== request.patientId || raw.archived_at !== null || raw.merged_at !== null || link !== `${this.#base}/patients/${request.patientId}` ||
         !updatedAt || Date.parse(updatedAt) > Date.parse(clock()) + 30000 || !Array.isArray(raw.patient_phone_numbers) || raw.patient_phone_numbers.length > 20) throw new Failure("malformed");
       const numbers: string[] = [];
       for (const item of raw.patient_phone_numbers) {
         const row = object(item);
         if (!row || row.number !== null && typeof row.number !== "string" || row.phone_type !== null && row.phone_type !== undefined && typeof row.phone_type !== "string") throw new Failure("malformed");
-        if (String(row.phone_type).toLowerCase() === "fax" || row.number === null) continue;
+        if (String(row.phone_type).trim().toLowerCase() === "fax" || row.number === null) continue;
         const normalized = normalizePatientPhone(row.number as string, s.countryCallingCode); if (!normalized) throw new Failure("malformed"); numbers.push(normalized);
       }
       return Object.freeze({ key: JSON.stringify([updatedAt, [...numbers].sort()]), matches: numbers.includes(request.recipient.number) });
