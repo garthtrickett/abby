@@ -1,6 +1,7 @@
 /** One original signed caller booking followed by separately owned finance.
  * Provider state and independent approvals outlive each compiled money worker. */
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createHmac, randomUUID } from "node:crypto";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -24,17 +25,17 @@ export async function financialClassCallerChain(passes: boolean, stage: (value: 
     stage(2);
     const observation = f.proof();
     assert.equal(observation.targetRef, "cliniko:attendee:401");
-    assert.deepEqual(observation.classCreationRequest, { sessionId: "91", ...(passes ? { patientCaseId: f.pass.caseId } : {}) });
+    assert.deepEqual(observation.classCreationRequest, { sessionId: "94", ...(passes ? { patientCaseId: f.pass.caseId } : {}) });
     const intentRow = f.funding.rows.get(observation.intentRecallRef.split(":").at(-1)!)!;
     const intent = value(decodeClinikoFinancialIntent(intentRow.notes));
     const observationRow = [...f.funding.rows.values()].find(row => String(row.notes).includes("financial booking observation"))!;
     assert.notEqual(intent.actionRef, f.funding.intent.actionRef, "use the caller record, never the fixture's old template");
     assert.equal(intent.payment.amount, 1200); assert.equal(intent.payment.currency, "gbp");
-    const originalNotes = [intentRow.notes, observationRow.notes];
+    const originalNotes = [intentRow.notes, observationRow.notes], originalWrites = structuredClone(f.writes);
+    assert.equal(originalWrites.length, 1); assert.equal(originalWrites[0]!.booking_id, "94");
     const began = performance.now(), anchor = Math.max(Date.parse(f.classSessionConfig.clock()), Date.parse(observation.observedAt));
     const clock = () => new Date(anchor + performance.now() - began).toISOString();
     const tick = () => f.setTime(clock()); tick();
-    const timer = setInterval(tick, 25);
     const directory = await mkdtemp(join(tmpdir(), "abby-caller-finance-"));
     const c = await financialConsumerFixture({ checkout: { retained: { native: f.funding, intent,
       binding: { intentRecallRef: observation.intentRecallRef, financialActionRef: intent.actionRef,
@@ -45,13 +46,15 @@ export async function financialClassCallerChain(passes: boolean, stage: (value: 
     let peer: Awaited<ReturnType<typeof financialConsumerPeer>> | undefined;
     const output: string[] = [], approvals = new Map<string, string>();
     let financialApproved = true;
+    const seenRequests = new Set<string>(), seenFinancial = new Set<string>();
+    const timer = setInterval(tick, 25);
     try {
       await withSmtpVerificationServer(async smtp => {
         const launch = async () => financialConsumerPeer(c, smtp.config, directory, {
           connectionString, voiceRunner: true, advancingClock: true, now: clock(), reviewDate: "2026-10-05",
           resend: { maximumAuthorityRequests: 0 },
-          resendAuthorized: q => approvals.get(q.resend.request.approvalRef) === financialResendRequestDigest(q.resend.request),
-          resendFinancialAuthorized: () => financialApproved,
+          resendAuthorized: q => { seenRequests.add(q.resend.request.actionRef); return approvals.get(q.resend.request.approvalRef) === financialResendRequestDigest(q.resend.request); },
+          resendFinancialAuthorized: q => { seenFinancial.add(q.resend.request.actionRef); return financialApproved; },
         });
         const until = async (predicate: () => boolean, label: string) => {
           const deadline = performance.now() + 95_000;
@@ -80,9 +83,8 @@ export async function financialClassCallerChain(passes: boolean, stage: (value: 
         };
         const link = await request("linkDelivery");
         // Discovery of the request is not independent approval.
-        let denied = false;
-        for (let i = 0; i < 4 && !denied; i++) denied = (await peer.nextCycle()).reviewRequired > 0;
-        assert.ok(denied); assert.equal(smtp.messages.length, 1);
+        await until(() => seenRequests.has(link.actionRef), "exact native link request reached independent approval");
+        assert.equal(smtp.messages.length, 1);
         approvals.set(link.approvalRef, financialResendRequestDigest(link)!);
         await until(() => smtp.messages.length === 2, "independently approved link resend");
         stage(4);
@@ -102,16 +104,15 @@ export async function financialClassCallerChain(passes: boolean, stage: (value: 
         assert.ok(smtp.messages[2]!.includes("pay.stripe.com/receipts/")); stage(5);
         const resend = await request("receiptDelivery");
         approvals.set(resend.approvalRef, financialResendRequestDigest(resend)!); financialApproved = false;
-        denied = false;
-        for (let i = 0; i < 4 && !denied; i++) denied = (await peer.nextCycle()).reviewRequired > 0;
-        assert.ok(denied); assert.equal(smtp.messages.length, 3, "old receipt permission cannot replace current financial approval");
+        await until(() => seenFinancial.has(resend.actionRef), "exact native receipt request reached current financial approval");
+        assert.equal(smtp.messages.length, 3, "old receipt permission cannot replace current financial approval");
         financialApproved = true;
         await until(() => smtp.messages.length === 4, "independently approved receipt resend"); stage(6);
         await peer.kill(); output.push(...peer.output); peer = await launch();
         await peer.nextCycle(); await peer.nextCycle();
         assert.equal(smtp.messages.length, 4); assert.equal(c.sessions.length, 1); assert.equal(c.receipts.length, 1);
         assert.deepEqual([intentRow.notes, observationRow.notes], originalNotes);
-        assert.deepEqual(f.writes, ["POST /v1/attendees"]);
+        assert.deepEqual(f.writes, originalWrites);
         await peer.kill(); output.push(...peer.output); peer = undefined;
       });
       assert.ok(output.every(line => /^Abby voice local listener ready on 127\.0\.0\.1:\d+; calls disabled\n$/.test(line)));
@@ -119,9 +120,11 @@ export async function financialClassCallerChain(passes: boolean, stage: (value: 
       const budgets = await db.selectFrom("cliniko_request_budgets").selectAll().execute();
       assert.equal(budgets.length, 1); assert.equal(budgets[0]!.max_per_minute, 180);
       assert.ok(Array.isArray(budgets[0]!.sent_at_ms) && budgets[0]!.sent_at_ms.length <= 180);
-      assert.deepEqual(value(await scanPatientDataCanaries(db, [intent.recipient.address, observation.financialConsent!.presentationDigest,
-        observation.intentDigest, "cs_test_owner", "private-checkout-token", "private-consumer", ...originalNotes.map(String)]
-        .map((value, i) => ({ label: `chain_${i}`, value })))), []);
+      const canaries = [intent.recipient.address, observation.financialConsent!.presentationDigest,
+        observation.intentDigest, "cs_test_owner", "private-checkout-token", "private-consumer", ...originalNotes.map(String)];
+      assert.deepEqual(value(await scanPatientDataCanaries(db, canaries.map((value, i) => ({ label: `chain_${i}`, value })))), []);
+      const dump = execFileSync("pg_dump", [connectionString, "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 8_000_000 }).toString();
+      for (const canary of canaries) assert.equal(dump.includes(canary), false);
       stage(7);
     } finally {
       clearInterval(timer); await peer?.kill(); await c.consumer.close(); await rm(directory, { recursive: true, force: true });
