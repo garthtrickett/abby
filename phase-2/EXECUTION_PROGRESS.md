@@ -4640,3 +4640,55 @@ Current source `b658447d64b848e4d90942631e0ad73c9ed6744d` qualification (the pri
 Current completed integrated full 1792294936052 on frozen bee6c12 is 4,406 passed / 1 failed / 1 skipped out of 4,408 tests; ordered follow-ups did not run. All six E2E-375 confirmation-resend cases passed in that run, without proving the earlier intermittent failure repaired. Its sole failure was the class paid/pass chain after stage 5. It excludes the unpaid/individual follow-ups and remains red. Node peak 1,538,904,064 B/2 GiB and database610,643,968 B/1 GiB, CPU 200% each/Swap 0/OOM 0; source and 596 generated artifacts preserved, own cleanup verified and wait23622 reaped. A future combined candidate must include current caller changes and separately qualified527 diagnostics; no unchanged full retry or current green claim follows.
 
 Provider/model/money/clinic-grant endpoints remain synthetic; signed HTTP/WS, cryptography, PostgreSQL, TLS SMTP and process loss are real. All 13 gaps remain in scope. Captured clinical-cancellation policy/permission, concrete deploying-host financial grants, real clinic/provider/sender/producer/restore/acoustic/deployment acceptance, independent review and authoritative cloud execution remain distinct. No default activation, merge, live provider action, deployment or Aeva deletion.
+
+## Original-caller clinical expiry: qualification in progress — 18 October 2026
+
+The next synthetic matrix preserves each original signed caller's actual intent,
+played financial terms and acknowledged native appointment/attendee. Individual,
+ordinary-class and pass-class cancellation require separately current financial
+permission and exact clinical approval; original clinic-review terms must refuse
+later cancellation approval. A pass cancellation must also inspect its actual
+counter consequence. No clinic cancellation policy or default activation is
+inferred from this test configuration.
+
+Initial source `936431f` passed strict TypeScript and serving emission in work
+`1792302444490`. Actual PostgreSQL work `1792302749323` finished with all six
+existing paid/unpaid caller chains passing and all four new expiry cases failing.
+This is failure evidence, not completed expiry qualification. The first diagnostic
+`1792303598207` failed in its observer's module import before exercising expiry;
+it establishes no application defect. Subsequent immutable-source probes showed
+that the individual test read the lower fixture rather than the voice fixture's
+actual created appointment, and ordinary-class inspection rejected a creation
+response that omitted arrival status. Correction `3bfaca2` retains the original
+native row objects and supplies the native null arrival field. Its strict/build
+work `1792304424111` passed at 06:25:02 UTC, with 601 emitted artifacts and a
+1,560,608,768-byte peak under 2 GiB/CPU100%/Swap0, without OOM. That build does
+not qualify later runtime changes or establish a passing expiry journey.
+
+Pass probes `1792304135190` and `1792304391705` reached both independent
+permission-denial stages and then timed out during approved cancellation.
+Actual SQL/history probe `1792304621051` finished at 06:26:57 UTC and measured
+a refusal of the 64 requests needed after preparation. Repeated periodic native
+reads consumed recovering quota; later history/rate-limit refusals followed.
+No quota, original caller120s, operation30s, stage95s or parent570s/test600s
+deadline was changed to get past this failure.
+
+Runtime correction `5bac25f` is committed but **not yet qualified**. Only a
+preclaim quota refusal carries bounded retry timing. The polling consumer leaves
+one whole native rolling minute quiet, or a longer reported cooldown, before
+fresh discovery and permission checks. It retains no target, approval or private
+retry queue. The pause is abortable and longer delays are chunked within Node's
+timer range. New semantic controls cover no polling during recovery, a changed
+financial grant before resumption, successful recovery and prompt shutdown.
+Their execution, current strict/build, all four compiled expiry cases and the
+six preserved caller chains remain required; the older artifacts cannot prove
+this correction.
+
+The separate full regression `1792301748552` on frozen `0f2b382` remains running
+and excludes these expiry changes. Its successful partial output is not a green
+full result. The prepared corrected PostgreSQL cohort was not launched after
+the diagnostic's natural release, preserving the requested one-start Gust
+fairness handoff. All thirteen gaps, current combined qualification, independent
+review/cloud execution and clinic/provider/sender/restore/acoustic/deployment
+acceptance remain open. No merge, deployment, live action or Aeva deletion is
+claimed.
