@@ -4799,3 +4799,21 @@ Current source `b658447d64b848e4d90942631e0ad73c9ed6744d` qualification (the pri
 Current completed integrated full 1792294936052 on frozen bee6c12 is 4,406 passed / 1 failed / 1 skipped out of 4,408 tests; ordered follow-ups did not run. All six E2E-375 confirmation-resend cases passed in that run, without proving the earlier intermittent failure repaired. Its sole failure was the class paid/pass chain after stage 5. It excludes the unpaid/individual follow-ups and remains red. Node peak 1,538,904,064 B/2 GiB and database610,643,968 B/1 GiB, CPU 200% each/Swap 0/OOM 0; source and 596 generated artifacts preserved, own cleanup verified and wait23622 reaped. A future combined candidate must include current caller changes and separately qualified527 diagnostics; no unchanged full retry or current green claim follows.
 
 Provider/model/money/clinic-grant endpoints remain synthetic; signed HTTP/WS, cryptography, PostgreSQL, TLS SMTP and process loss are real. All 13 gaps remain in scope. Captured clinical-cancellation policy/permission, concrete deploying-host financial grants, real clinic/provider/sender/producer/restore/acoustic/deployment acceptance, independent review and authoritative cloud execution remain distinct. No default activation, merge, live provider action, deployment or Aeva deletion.
+
+### Original caller expiry and known-quota correction,18October2026
+
+The later through531 combined source0f2b382 passed4411 main tests with one
+existing skip and all six ordered followups. It excludes the new original-caller
+expiry work. That new work's initial ten-case PostgreSQL cohort was9/1 despite
+all four new expiry cases passing; an instrumented interaction cohort later
+reproduced paid receipt and ordinary expiry stage timeouts (4/2). Neither is a
+stable passing current combined qualification. Controlled physical-budget tests
+then reproduced irreversible message/clinical claims under known insufficient
+quota and discovery polling starving recovery. Correction ef658f0 adds preclaim
+own-I/O admission and observes the unchanged shared polling budget's denials to
+leave a quiet rolling minute before fresh discovery/permission. No private retry
+queue or effect replay is added. Source checks and the exact remaining build,
+caller and external gates are recorded in
+[execution progress](EXECUTION_PROGRESS.md#original-caller-quota-failures-and-correction18october2026).
+Full strict/build, all ten actual caller cases and current combined regression
+remain required. All thirteen gaps remain active; no live activation or merge.

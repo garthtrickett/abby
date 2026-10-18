@@ -99,13 +99,22 @@ for (const mode of ["abort", "deadline"] as const)
     release();
   });
 test("an overdue held case-effect inspection preserves its separately confirmed native cancellation", { timeout: 4_000 }, async t => {
-  let release!: () => void, blocked = false;
+  let release!: () => void, began!: () => void, blocked = false, elapsed = 0;
   const held = new Promise<void>(resolve => { release = resolve; });
+  const reading = new Promise<void>(resolve => { began = resolve; });
   let f!: Awaited<ReturnType<typeof caseClassExpiryFixture>>;
-  f = await caseClassExpiryFixture({ deadlineMs: 1_500, async caseRead() { if (f.cancellations.length) { blocked = true; await held; } } });
-  const timer = setTimeout(release, 3_000); t.after(() => clearTimeout(timer)); t.after(release); t.after(f.close);
-  const started = performance.now(), result = await f.expireCase();
-  assert.ok(performance.now() - started < 2_500); assert.equal(blocked, true);
+  f = await caseClassExpiryFixture({ deadlineMs: 1_500, async caseRead() { if (f.cancellations.length) { blocked = true; began(); await held; } } });
+  t.after(release); t.after(f.close);
+  // Reach the intended held post-cancellation inspection before exhausting the
+  // same 1500ms operation deadline. Shared CPU speed cannot choose an earlier
+  // failure point and accidentally turn this into a preparation-timeout test.
+  const realNow = performance.now.bind(performance);
+  t.mock.method(performance, "now", () => elapsed);
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const running = f.expireCase(); await reading;
+  const started = realNow(); elapsed = 1_501; t.mock.timers.tick(1_500);
+  const result = await running;
+  assert.ok(realNow() - started < 1_000); assert.equal(blocked, true);
   assert.deepEqual(value(result), { kind: "cancelled", money: "unknown", reviewRequired: true });
   assert.equal(f.cancellations.length, 1); release();
 });

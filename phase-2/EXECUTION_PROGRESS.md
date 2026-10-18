@@ -4741,3 +4741,57 @@ one original95s absolute stage deadline. Caller120s and parent570s/test600s
 remain unchanged, no worker/effect is restarted and child failure still fails.
 The affected helper graph needs fresh emission and all ten caller cases remain
 pending; no passing caller expiry or new combined-full claim is implied.
+
+## Original caller quota failures and correction,18October2026
+
+Observer emission `1792306208451` passed on781348c, preserving599 other
+artifacts. Actual ten-case PostgreSQL work `1792306367975` then completed
+9 passed/1 failed: all four new original clinical-expiry cases passed, but the
+preserved individual paid case failed after stage4. An unchanged-source paid
+probe `1792306932308` passed with HTTP503 then200; that pass did not identify or
+repair the earlier failure. All historical negative results remain preserved.
+
+Bounded fixed-module/line IPC observation was added oncb29c38. Its emission
+`1792307592004` passed, preserving600 other artifacts. Instrumented six-case
+interaction work `1792307723049` finished at07:21:49.763827UTC with4 passed and
+2 failed: individual paid exhausted its original95s receipt wait, and ordinary
+class expiry exhausted its original95s approved-cancellation stage. Individual,
+pass-class and original review-only expiry passed. This contradicts a stable
+current all-caller qualification claim; no new combined full was launched.
+Node peak340393984B/1GiB, database233594880B/512MiB, CPU100% each/Swap0/OOM0;
+source/artifact checks and owned cleanup passed, wrapper absent and wait reaped.
+
+Controlled message witness `1792308134180` showed five different remaining-quota
+windows consuming the receipt exclusion without SMTP. Regression
+`1792308231832` reproduced that defect with a real180-request in-memory budget;
+its postclaim race control retained no-replay. Ordinary class regression
+`1792308475023` likewise reproduced a consumed clinical claim under known
+insufficient physical quota. Discovery control `1792308359998` showed periodic
+reads consuming the recovering window (11 claims instead of2); its other mode
+was cancelled and supplies no passing evidence.
+
+Correction ef658f0 checks the original message owner's five remaining native
+requests and the ordinary class owner's observed remaining native plan before
+their permanent claims. These are own-I/O minimums, not reservations or promises
+about unknown authority work. Every actual request still claims the unchanged
+physical budget. A polling-only budget observer now carries valid discovery,
+preparation/message/resend quota refusals into the existing abortable quiet
+window. It preserves the underlying reservation context and original host budget
+identity, retains no private work or approval, and leaves the independent raw
+webhook handoff unchanged. Later possible attempts remain consumed and fenced.
+
+Initial affected source checks `1792308495648` passed69/69. Wider lifecycle work
+`1792308573263` completed289/290; the sole failure was a1500ms post-cancellation
+inspection deadline control that expired during preparation under shared CPU
+load. Its corrected deterministic control retains the same1500ms deadline,
+reaches the intended held inspection after separately confirmed cancellation,
+then exhausts virtual time and requires prompt real shutdown. Focused work
+`1792308731360` passed1/1. It does not relabel the earlier289/1 run green.
+
+The original paid caller observer now reobserves only the same connected live
+worker's10s IPC timeout within each original absolute95s stage. No worker/effect
+is restarted and caller120s, operation30s, parent570s/test600s and native180
+remain unchanged. Current full strict/build and all ten actual caller cases
+remain required before publication or any new combined-full qualification.
+All thirteen gaps and real clinic/provider/sender/producer/restore/acoustic,
+independent review/cloud and deployment acceptance remain open.

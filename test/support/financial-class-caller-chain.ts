@@ -4,7 +4,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { readdir } from "node:fs/promises";
 import { withClassFinancialCaller } from "./financial-class-caller-context.ts";
 import type { FinancialCallerActor } from "./financial-caller-context.ts";
-import { financialConsumerPeer } from "./financial-consumer-peer.ts";
+import { financialConsumerPeer, FinancialConsumerCycleWaitTimeout } from "./financial-consumer-peer.ts";
 import { withSmtpVerificationServer } from "./smtp-verification-server.ts";
 import { ClinikoFinancialResendRecords } from "../../src/cliniko/financial-resend-records.ts";
 import { financialResendRequestDigest } from "../../src/cliniko/financial-resend-request.ts";
@@ -32,11 +32,33 @@ export async function runPaidFinancialCaller({ actor: c, observation, clock, dir
           resendAuthorized: q => { seenRequests.add(q.resend.request.actionRef); return approvals.get(q.resend.request.approvalRef) === financialResendRequestDigest(q.resend.request); },
           resendFinancialAuthorized: q => { seenFinancial.add(q.resend.request.actionRef); return financialApproved; },
         });
+        const observeCycle = async (deadline: number) => {
+          const current = peer!;
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const observe = async () => {
+            while (performance.now() < deadline) {
+              try { return await current.nextCycle(); }
+              catch (error) {
+                if (error instanceof FinancialConsumerCycleWaitTimeout && peer === current && current.child.connected &&
+                    current.child.exitCode === null && current.child.signalCode === null) continue;
+                throw error;
+              }
+            }
+            throw new Error("Original financial cycle observation deadline");
+          };
+          try {
+            // Reobserve only the same live worker during native quota recovery,
+            // within this stage's original absolute95s; restart nothing.
+            return await Promise.race([observe(), new Promise<never>((_, reject) => {
+              timer = setTimeout(() => reject(new Error("Original financial cycle observation deadline")), Math.max(1, deadline - performance.now()));
+            })]);
+          } finally { if (timer) clearTimeout(timer); }
+        };
         const until = async (predicate: () => boolean, label: string) => {
           const deadline = performance.now() + 95_000;
           while (!predicate()) {
             assert.ok(performance.now() < deadline, label);
-            await peer!.nextCycle();
+            await observeCycle(deadline);
           }
         };
         const saturateReadBudget = async () => {
@@ -64,7 +86,7 @@ export async function runPaidFinancialCaller({ actor: c, observation, clock, dir
             assert.equal(read.error.kind, "rateLimited");
             if (observed) return;
             assert.ok(performance.now() < deadline, "same account must admit the controlled native429 read");
-            await peer!.nextCycle();
+            await observeCycle(deadline);
           }
         };
         peer = await launch();
@@ -97,7 +119,7 @@ export async function runPaidFinancialCaller({ actor: c, observation, clock, dir
             if (admitted.kind !== "denied") assert.fail("an interrupted record write cannot be retried");
             assert.equal(submissions, 0); assert.equal(admitted.denial.kind, "rateLimited");
             assert.ok(performance.now() < deadline, "same account must admit the first resend record write");
-            await peer!.nextCycle();
+            await observeCycle(deadline);
           }
         };
         const link = await request("linkDelivery");
@@ -138,7 +160,7 @@ export async function runPaidFinancialCaller({ actor: c, observation, clock, dir
             // refusal permits another delivery of this same read-only reference.
             const current = await headroom(1); if (current === null) break;
             assert.equal(current.kind, "rateLimited"); assert.ok(performance.now() < referenceDeadline, "same account must recover headroom");
-            await peer.nextCycle();
+            await observeCycle(referenceDeadline);
           }
           // This is the same authenticated, read-only reference, not a retry of
           // Checkout, mail, a native POST or any consumed financial effect.
