@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { ClinikoFinancialConsumer } from "../src/standalone/cliniko-financial-consumer.ts";
 import { sql } from "kysely";
 import { ClinikoAvailabilityReader } from "../src/cliniko/availability.ts";
 import { ok } from "../src/core/model.ts";
@@ -42,7 +43,7 @@ function bindingKey(): Buffer {
 }
 
 /** Provider ports and independently provisioned clinic/operational hosts. */
-type ClinicalHostContext = Readonly<{ db: ReturnType<typeof connectPostgres>; scope: LocationScope;
+export type ClinicalHostContext = Readonly<{ serviceSignal: AbortSignal; db: ReturnType<typeof connectPostgres>; scope: LocationScope;
   apiKey: string; contactEmail: string; rateBudget: PostgresClinikoRequestBudget;
   contactRevision: import("../src/storage/postgres-cliniko-contact-revision.ts").PostgresClinikoContactRevision }>;
 export type ClinicalRunnerLocation = Readonly<{ scope: LocationScope; spokenName: string; host: ClinikoVoiceClinicalHost }>;
@@ -68,6 +69,9 @@ export type VoiceRunnerPorts = Readonly<{
   /** Deployment host owns clinic approvals, verification delivery and permission.
    * No environment flag or catalogue setting can supply this authority. */
   clinicalHost?: (context: ClinicalHostContext) => ClinikoVoiceClinicalHost;
+  /** Independent clinic financial grants and provider/sender provisioning. No
+   * environment flag or clinical catalogue approval constructs this owner. */
+  financialConsumer?: (context: ClinicalHostContext) => ClinikoFinancialConsumer | Promise<ClinikoFinancialConsumer>;
   /** Independently provisioned locations of one clinic sharing the configured number.
    * Each host retains its own approval, caller permission and private input. */
   clinicalLocations?: (context: ClinicalHostContext) => readonly ClinicalRunnerLocation[];
@@ -113,6 +117,8 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
   const key = bindingKey();
   const db = connectPostgres(connectionString);
   const operationalCounters = ports.operationalCounters ?? new PostgresOperationalCounters(db);
+  const service = new AbortController();
+  let financialConsumer: ClinikoFinancialConsumer | undefined;
   let retentionTimer: NodeJS.Timeout | undefined;
   let retentionRun: Promise<void> | undefined;
   try {
@@ -131,7 +137,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
     const contactRevision = new PostgresClinikoContactRevision(db, scope.tenantId, ports.clinikoCredentialAliases ?? [credentialFingerprint],
       { scope, credentialFingerprint, budget: rateBudget });
     if (!contactRevision.matches(scope.tenantId, credentialFingerprint)) throw new RangeError("configured credential missing from account aliases");
-    const context = { db, scope: Object.freeze({ ...scope }), apiKey, contactEmail, rateBudget, contactRevision };
+    const context = { serviceSignal: service.signal, db, scope: Object.freeze({ ...scope }), apiKey, contactEmail, rateBudget, contactRevision };
     const clinicalHost = ports.clinicalHost?.(context);
     const locations = ports.clinicalLocations?.(context)?.map(row => ({ ...row, scope: Object.freeze({ ...row.scope }) }));
     if (locations && (!locations.length || locations.length > 32 ||
@@ -164,6 +170,14 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
           approvedText: required("ABBY_GREETING_APPROVED_TEXT") },
         sevenDayAvailabilityEnabled: weekMode === "1" };
     });
+    const provisionedFinancial = await ports.financialConsumer?.(context);
+    if (ports.financialConsumer && !(provisionedFinancial instanceof ClinikoFinancialConsumer)) {
+      throw new RangeError("financial consumer unavailable");
+    }
+    financialConsumer = provisionedFinancial;
+    if (financialConsumer && !financialConsumer.matchesAccount(scope, credentialFingerprint, rateBudget)) {
+      throw new RangeError("financial consumer account mismatch");
+    }
     const prepared = await createStandaloneClinikoVoiceServer({ db,
       activeCallClaims: new PostgresActiveCallClaims(connectionString, key),
       twilio: { accountSid,
@@ -191,6 +205,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
         event.dialedNumber === dialedNumber && event.presentedCallerNumber === testCaller && await healthy(),
       health: healthy,
       operationalCounters,
+      ...(financialConsumer ? { stripeWebhook: financialConsumer.handle } : {}),
       ...(operationalTokenHex ? { operationalRead: { tokenHex: operationalTokenHex, scope } } : {}),
     });
     if (!prepared.ok) throw new Error(`standalone storage unavailable: ${prepared.error.kind}`);
@@ -205,6 +220,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       retentionTimer.unref();
     }
     const server = prepared.value;
+    if (financialConsumer && !financialConsumer.start(service.signal).ok) throw new Error("financial consumer unavailable");
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
       server.listen(port, "127.0.0.1", () => { server.off("error", reject); resolve(); });
@@ -217,12 +233,18 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       process.once("SIGINT", resolve);
       process.once("SIGTERM", resolve);
     });
-    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    service.abort();
+    try { await financialConsumer?.close(); }
+    finally { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
   } finally {
-    if (retentionTimer) clearInterval(retentionTimer);
-    await retentionRun;
-    await operationalCounters.drain?.().catch(() => undefined);
-    await db.destroy();
+    service.abort();
+    try { await financialConsumer?.close(); }
+    finally {
+      if (retentionTimer) clearInterval(retentionTimer);
+      await retentionRun;
+      await operationalCounters.drain?.().catch(() => undefined);
+      await db.destroy();
+    }
   }
 }
 

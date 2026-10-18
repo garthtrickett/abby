@@ -1,7 +1,10 @@
 import { ClinikoFinancialResendOwner } from "./cliniko-financial-resend-owner.ts";
 import type { FinancialResendAuthority } from "./cliniko-financial-resend-owner.ts";
 import { err, ok } from "../core/model.ts";
-import type { Result } from "../core/model.ts";
+import type { Result, LocationScope } from "../core/model.ts";
+import type { ClinikoRequestBudget } from "../cliniko/read-budget.ts";
+import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
+import { sameScope } from "./appointment-change-authority.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { ClinikoFinancialPendingDiscovery } from "../cliniko/financial-pending-discovery.ts";
 import type { FinancialPendingAuthority } from "../cliniko/financial-pending-discovery.ts";
@@ -74,6 +77,7 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
  * the separate handoff grant. This is not a claim of complete clinic approval. */
 export class ClinikoFinancialConsumer {
   readonly #config: FinancialConsumerConfig;
+  readonly #hostBinding: Readonly<{ scope: LocationScope; credentialFingerprint: string; budget: ClinikoRequestBudget }>;
   readonly #authority: FinancialConsumerAuthorities;
   readonly #query: FinancialConsumerRunQuery;
   readonly #pending: ClinikoFinancialPendingDiscovery;
@@ -95,6 +99,8 @@ export class ClinikoFinancialConsumer {
   private constructor(config: FinancialConsumerConfig, authority: FinancialConsumerAuthorities, dependencies: Dependencies,
     ownerBinding: string, pending: ClinikoFinancialPendingDiscovery, checkout: ClinikoStripeCheckoutOwner, messages: ClinikoFinancialMessageOwner, expiry: ClinikoCheckoutExpiryOwner | undefined, clinicalExpiry: ClinikoFinancialClinicalExpiryOwner | undefined, classClinicalExpiry: ClinikoFinancialUnlinkedClassExpiryOwner | undefined, caseClassClinicalExpiry: ClinikoFinancialCaseClassExpiryOwner | undefined, resends: ClinikoFinancialResendOwner | undefined) {
     this.#config = Object.freeze({ ...config });
+    this.#hostBinding = Object.freeze({ scope: Object.freeze({ ...config.checkout.cliniko.scope }),
+      credentialFingerprint: clinikoCredentialFingerprint(config.checkout.cliniko.apiKey), budget: config.checkout.cliniko.rateBudget });
     this.#authority = Object.freeze({ ...authority,
       run: Object.freeze({ allows: authority.run.allows.bind(authority.run), current: authority.run.current.bind(authority.run) }),
       work: Object.freeze({ authorizeWork: authority.work.authorizeWork.bind(authority.work),
@@ -172,6 +178,12 @@ export class ClinikoFinancialConsumer {
   async #admitted(signal: AbortSignal): Promise<boolean> {
     if (!this.#current(signal)) return false;
     return await awaitUntilAbort(Promise.resolve().then(() => this.#authority.run.allows(this.#query, signal)), signal) === true && this.#current(signal);
+  }
+  /** Composition identity only; this does not grant financial work or start it.
+   * Capture at construction so later edits of the caller's config cannot rebind us. */
+  matchesAccount(scope: LocationScope, fingerprint: string, budget: ClinikoRequestBudget): boolean {
+    return sameScope(this.#hostBinding.scope, scope) && this.#hostBinding.credentialFingerprint === fingerprint &&
+      this.#hostBinding.budget === budget;
   }
   /** Host wires this exact raw route; no public listener is opened here. */
   get handle(): ReturnType<typeof stripeFinancialWebhookHandler>["handle"] { return this.#route!.handle; }

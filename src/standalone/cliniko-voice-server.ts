@@ -3,6 +3,7 @@ import type { OpenAIVoiceProfileConfig } from "../voice/openai-voice-profile.ts"
 import type { VoiceProfileRegistry } from "../core/voice-profile-registry.ts";
 import type { SpeechAdapterFactory } from "../voice/call-speech-binding.ts";
 import type { Server } from "node:http";
+import type { TwilioIngressServerConfig } from "../voice/twilio-ingress-server.ts";
 import type { Kysely } from "kysely";
 import { ClinikoAvailabilityReader } from "../cliniko/availability.ts";
 import { ClinikoApprovedAvailabilitySearch } from "../cliniko/approved-availability-search.ts";
@@ -80,6 +81,8 @@ function validKeypadGreeting(greeting: unknown, scope: LocationScope, sevenDayEn
 }
 
 export type ClinikoVoiceServerConfig = Readonly<{
+  /** Independent financial owner, provisioned explicitly rather than by call admission. */
+  stripeWebhook?: TwilioIngressServerConfig["stripeWebhook"];
   db: Kysely<Database>;
   /** Must use the same PostgreSQL database and key on every serving instance. */
   activeCallClaims: PostgresActiveCallClaims;
@@ -270,6 +273,7 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
   }
 
   return ok(createTwilioIngressServer({ ingress, activeCallClaims: config.activeCallClaims,
+    ...(config.stripeWebhook !== undefined ? { stripeWebhook: config.stripeWebhook } : {}),
     ...(operationalRead ? { operationalRead: { tokenHex: operationalRead.tokenHex,
       snapshot: () => operationalCounters.snapshot(operationalRead.scope),
       ...(operationalCounters.daily ? { daily: () => operationalCounters.daily!(operationalRead.scope) } : {}) } } : {}),

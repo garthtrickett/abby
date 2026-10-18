@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
-import type { IncomingMessage, Server } from "node:http";
+import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
 import type { AuthenticatedInboundCall } from "./admission.ts";
@@ -70,6 +70,8 @@ export type ActiveCallClaims = Readonly<{
 export type TwilioIngressServerConfig = Readonly<{
   ingress: TwilioSignedIngress;
   activeCallClaims?: ActiveCallClaims;
+  /** Explicit owning host only. Preserve raw bytes for independent Stripe authentication. */
+  stripeWebhook?: (request: IncomingMessage, response: ServerResponse) => void;
   /** Optional operational probe; it cannot authorize a call. */
   health?: () => Promise<boolean>;
   /** Checked after signature verification and before returning stream TwiML. */
@@ -183,6 +185,10 @@ function runStream(socket: WebSocket, request: IncomingMessage, config: TwilioIn
 
 /** Node HTTP/WebSocket transport; the caller supplies its privacy-safe voice call composition. */
 export function createTwilioIngressServer(config: TwilioIngressServerConfig): Server {
+  if (config.stripeWebhook !== undefined && typeof config.stripeWebhook !== "function") {
+    throw new RangeError("invalid financial webhook handler");
+  }
+  const stripeWebhook = config.stripeWebhook;
   if (config.operationalRead && !/^[a-f0-9]{64}$/i.test(config.operationalRead.tokenHex)) {
     throw new RangeError("invalid operational read token");
   }
@@ -192,6 +198,9 @@ export function createTwilioIngressServer(config: TwilioIngressServerConfig): Se
     perMessageDeflate: false });
   const server = createServer((request, response) => {
     void (async () => {
+      if (request.url === "/stripe/webhook" && stripeWebhook) {
+        stripeWebhook(request, response); return;
+      }
       if (request.url === "/internal/operations" || request.url === "/internal/operations/daily") {
         const daily = request.url === "/internal/operations/daily";
         const supplied = header(request.headers.authorization)?.match(/^Bearer ([a-f0-9]{64})$/i)?.[1];
