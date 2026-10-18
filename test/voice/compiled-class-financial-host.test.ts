@@ -8,8 +8,10 @@ import { join } from "node:path";
 const enabled = process.env.ABBY_ISOLATED_POSTGRES_PROBE === "1";
 for (const passes of [false, true]) test(`compiled real clinical host owns class financial played consent and privacy (pass=${passes})`, { skip: !enabled, timeout: 150_000 }, async () => {
   const folder = await mkdtemp(join(tmpdir(), "abby-financial-host-compiled-"));
+  const childEnv: NodeJS.ProcessEnv = { ...process.env, NODE_OPTIONS: "--max-old-space-size=256" };
+  delete childEnv.ABBY_TEST_MENU_TIMINGS; // Optional fixed diagnostics, not application timing.
   const child = fork(new URL("../../dist/runtime/test/support/financial-class-voice-process.js", import.meta.url), [], {
-    cwd: folder, stdio: ["ignore", "pipe", "pipe", "ipc"], env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=256" } });
+    cwd: folder, stdio: ["ignore", "pipe", "pipe", "ipc"], env: childEnv });
   const output: string[] = []; child.stdout?.on("data", d => output.push(String(d))); child.stderr?.on("data", d => output.push(String(d)));
   const terminal = once(child, "exit"); let timer: ReturnType<typeof setTimeout> | undefined;
   const result = new Promise<boolean>((resolve, reject) => {
