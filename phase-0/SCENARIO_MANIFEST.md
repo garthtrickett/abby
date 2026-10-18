@@ -1009,3 +1009,7 @@ Version1.242 retains419 stable IDs and planned full-call status. Current5d4e8e8 
 ## Read-only outbound pending discovery
 
 Version1.242 retains419 stable IDs and planned full-call states. Runtime17398cf passes133 discovery/record/context/time controls; fixtureaa1c075 passes strict TypeScript/serving build with514 artifacts and50 actual compiled SQL/process/backup/privacy/import/restore cases. The bounded account scan and exact record reread require separate current grants and refuse changed/unknown/partial/over-bound data. Four compiled cases cover pending context, collection/record denial and native mutation; no producer permission, SQL claim, native write, audience/contact/DNC approval, campaign launch or full outbound caller journey follows. Frozen519 full8ad remains separately pending and excludes discovery.
+
+## Current non-patient campaign-definition approval
+
+Version1.242 retains419 stable IDs and unchanged full-call states. Current4e4c114 passes151 campaign/discovery/context/time controls and standalone strict TypeScript. Actual owner-only temporary file and synthetic current clinic-admin membership tests cover global pre-audience policy reading, exact request/source matching, file/role/version/expiry revocation, held lookups, source/configuration snapshots and cancellation. This unwired module adds no serving entry, SQL operation, native audience/consent/DNC approval, local capacity claim, supported launcher or outbound caller journey. The prior520 build/50SQL cases remain separate; frozen519 full8ad is pending and excludes later source.
