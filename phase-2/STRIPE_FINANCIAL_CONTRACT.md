@@ -856,3 +856,61 @@ checks; the running combined6d01 regression excludes this follow-up. Gap11 and
 gaps12/13 remain open.
 
 Qualification: 110/110 source/native/actual-host controls (work1792313063723); final standalone full TypeScript on a338e8e (work1792313109332) passed, peak1,546,977,280B/2GiB, CPU100%/heap1536MiB/Swap0/OOM0. All1790 frozen source hashes were independently rechecked after natural terminal; own wrapper was absent and paired wait reaped. No actual provider or SQL job was part of these checks.
+
+## Per-call voice financial policy ownership, 18 October 2026
+
+The reusable voice host now accepts either its legacy shared stateless policy or
+an explicit `financial.policyForCall(context)` factory. The context contains only
+the admitted clinic scope, opaque call/session identity, lifetime signal and clock.
+The call supplies its private playback separately. A policy marked
+`ownership: "call"` cannot be installed as a shared policy; a factory must return
+a fresh owner and direct instance reuse is refused across workflows of the same
+host. Callback methods are snapshotted once, with existing request-cost metadata
+preserved only across zero-native-I/O forwarding. Malformed factories, reused
+instances, failed getters and constructor errors refuse without exposing upstream
+error messages. No new listener, caller verification or financial effect is
+created by policy construction.
+
+`approvedFinancialVoicePolicy({ fees, native, recipientAuthority, fetchPort })`
+returns that synchronous factory. Each admitted call receives a new approved
+quote owner and native financial-recipient reader. Public clinic approval and the
+same physical native quota remain shared; private quote/recipient observations
+are separate. Full scope/call/session and call-lifetime checks apply even to an
+explicit no-deposit policy. Aborting one call cannot close another call's quote.
+Recipient read permission remains independent of caller OTP, financial records,
+manual-paid/waiver decisions, collection and producer/restore grants. The factory
+creates no default consumer or public activation flag.
+
+A deploying host selects this factory explicitly in its financial provision:
+
+```ts
+financial: {
+  ...independentlyProvisionedFinancialPorts,
+  policyForCall: approvedFinancialVoicePolicy({
+    fees: currentClinicFeeSource,
+    native: actualFinancialNativeConfig,
+    recipientAuthority: independentFinancialContactGrant,
+    fetchPort: nativeTransport,
+  }),
+}
+```
+
+`independentlyProvisionedFinancialPorts` omits `policy`; the shared-policy and
+per-call-factory alternatives are exclusive. Real source/record permissions,
+matching producer key, barrier and independently owned retention lifetime remain
+mandatory. This example supplies no approvals or permissive grant callbacks.
+The complete policy cost remains unknown until reviewed: source/admin and
+independent authority ports may issue native requests. The synthetic compiled
+case alone can declare current() cost1 because its admin source is local-file-only,
+its independent grants make zero native calls and its native reader charges one
+exact patient GET. That fixture-specific declaration is not a production ceiling.
+
+Source/native/voice-host controls pass130 cases and full TypeScript plus serving
+emission pass on f0c27d4, with606 generated artifacts pinned. The new compiled
+signed individual case uses this actual factory, approved fee file and native
+recipient reader under the existing120s caller/570s parent/600s test deadlines and
+same180-request SQL budget. Its complete compiled result passed1/1 in work1792314646221, including all-column
+SQL and unfiltered backup privacy; no source-only substitute is claimed. Real clinic/provider/sender/producer/
+restore/acoustic/deployment acceptance, independent manual-paid/waiver decisions,
+consumer/source/grant provisioning, remaining gap12/13 and a green combined full
+candidate remain open. No merge, activation or live provider action.

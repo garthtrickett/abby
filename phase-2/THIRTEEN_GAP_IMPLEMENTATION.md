@@ -4833,3 +4833,23 @@ The separate 6d01 combined regression remains running and excludes this follow-u
 Current manual-paid/waiver decisions, complete deploying-host consumer/grants and
 producer/restore provisioning, gaps 12/13 and real clinic/provider/sender/acoustic/
 cloud/deployment acceptance remain open. No merge, deployment or provider action.
+
+
+## Gap 11 per-call financial quote ownership, 18 October 2026
+
+The reusable voice host now explicitly constructs independent mutable quote and
+native-recipient owners for admitted calls; public approvals and the actual
+physical budget stay shared.130 focused controls, full TypeScript/serving build
+and one compiled signed approved-fee/native-recipient paid lifecycle with SQL/
+unfiltered backup privacy pass. The original caller/application/test deadlines
+and180 native SQL quota remain unchanged. See the [financial ownership
+contract](STRIPE_FINANCIAL_CONTRACT.md#per-call-voice-financial-policy-ownership-18-october-2026)
+and [execution evidence](EXECUTION_PROGRESS.md). No default activation or new grant.
+
+Current complete6d01 regression ended4428/1/1: the original pass-class expiry
+95-second positive-cancellation wait failed. Isolated1/1 and the observed default
+four-file10/10 financial cohort pass on unchanged source/artifacts, which does
+not identify or fix that full failure. Stronger failure diagnostics precede the
+next complete qualification. Manual-paid/waiver decisions, actual clinic/host
+source/consumer/producer/restore provisioning, gaps12/13 and real acceptance remain
+open. All thirteen gaps remain in scope; no merge, deployment or live provider work.

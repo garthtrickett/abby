@@ -4921,3 +4921,81 @@ Deploying-host financial-source/grant composition, actual approved clinic polici
 manual-paid/waiver decisions, consumer/producer/restore provisioning, remaining
 outbound/writeback engineering and real provider/sender/acoustic/cloud/deployment
 acceptance remain open. All13 gaps remain in scope, no merge or activation.
+
+## Current combined regression failure, 18 October 2026
+
+Frozen6d01e1f0801f11088bdd177d5727da648c8df39f full regression
+work1792310102336 finished naturally at09:00:31.193425UTC after65m28s:
+4428 passed,1 failed,1 existing skipped of4430. The six ordered followups did
+not run because the main gate failed. Initial strict/builds completed. The sole
+failure was compiled original caller conditional clinical expiry(passClass),
+stage4/module1line51: its original95s wait for cancellation expired. The cause
+was not established by that timeout. The separate previous10-case focused pass
+and historical through531 full green do not erase this negative evidence.
+
+All1778 frozen source and605 generated artifact hashes were independently
+rechecked. Own wrapper2235953 was absent, own DB containers absent and external
+slice inactive; paired wait78674 reaped. Node peak1516093440B/2GiB and aggregate
+DB622931968B/1GiB, CPU200% each/Swap0/OOM0. No unchanged complete-suite retry.
+This source predates financial source/fee/call-owner followups533/534/later.
+
+Source/artifact-preserving one-case diagnostic1792314241244 then passed1/1.
+It used counts-only ESM observation, without changing assertions, application
+quotas or deadlines. Current independent denials refused before a claim. The
+positive attempt first deferred60s for quota before any claim, then claimed and
+cancelled exactly once; cold replay made no second mutation. Node167358464B/1GiB
+and DB153964544B/512MiB, CPU100% each/Swap0/OOM0. Source/artifacts and own cleanup
+were independently verified; wait36311 reaped. This isolated pass does not explain
+or fix the full failure.
+
+The next diagnostic mirrors the required four-file concurrency and full2GiB+
+1GiB/CPU200% budgets on the financial ten-case cohort, adding only fixed numeric
+refusal/claim/quota/timing observations. It is work1792314538208 on the same
+unchanged6d01 source/artifacts and completed10/10 at09:14:22.773206UTC, with Node672960512B/2GiB and
+DB392790016B/1GiB, CPU200% each/Swap0/OOM0. Source/artifact hashes and own cleanup
+were independently verified; paired wait57105 reaped. This cohort pass still does
+not explain or fix the full failure; stronger failure diagnostics are next. No private values, target IDs,
+error payloads, local patient retry queue or relaxed limits are introduced.
+
+
+## Per-call financial voice integration, 18 October 2026
+
+The reusable voice host now supports an explicit policyForCall factory for mutable
+quote/recipient state. Public approvals and actual native quota remain shared; a
+new native recipient reader and quote owner belong to each admitted call. The
+call-owned policy marker rejects installation as a shared policy. The host rejects
+direct owner reuse across workflows, malformed factory results, invalid admitted
+call bindings and private constructor/getter failures before effects. Legacy
+stateless policy remains supported. Scope/call/session/lifetime checks apply even
+to an explicit no-deposit decision; ending one caller preserves another's quote.
+
+130 source/native/real-voice-host controls passed on productiond26fd1b,
+work1792313789193, peak92778496B/256MiB/CPU100%/heap192MiB/Swap0/OOM0. New compiled
+caller fixture and getter return annotation do not change that production code.
+First strict/build1792314019279 failed only the new adversarial getter's inferred
+void return type; corrected with an explicit method return type, retaining its
+runtime failure and all strict settings/assertions. Current f0c27d4 full TypeScript
+and serving emission passed in1792314275679 after5m27s, peak1531883520B/2GiB/
+CPU100%/heap1536MiB/Swap0/OOM0;1792 source and606 artifacts independently pinned.
+
+Compiled signed individual case1792314646221 passed1/1, zero skipped/cancelled,
+natural terminal09:13:40.249667UTC. It uses the actual reusable voice host, per-call
+factory, current admin-approved fee file and an independently admitted native
+patient email read. Private financial playback/acceptance precedes separate
+clinical confirmation/ACK; independent paid/link/receipt/resend operations retain
+the original native context. Source and all606 artifacts remained unchanged.
+All-column SQL and unfiltered pg_dump scans, no private model/transcript/SAM
+financial content, exact native preservation, child output and directory privacy
+passed. Original120s caller/570s parent/600s test and shared180 physical SQL quota
+remain unchanged. The fixture alone declares current() cost1 after reviewing its
+local-file-only admin source, zero-native-request grants and one actual patient
+GET; no production ceiling is fabricated. Node185987072B/1GiB and aggregate
+DB155291648B/512MiB, CPU100% each/Swap0/OOM0; wrapper absent, own DB/slice cleaned,
+paired wait53870 reaped.
+
+This is conditional composed engineering, not actual clinic provisioning. Current
+manual-paid/waiver decisions, financial source/record/consumer/producer/restore
+grants, real clinic/provider/sender/acoustic/cloud/deployment acceptance and
+remaining outbound/writeback work remain open. The earlier complete6d01 regression
+is4428/1/1, not green; focused new/cold/concurrent passes do not replace that gate.
+All13 gaps remain active; no merge, deployment, live contact or payment.
