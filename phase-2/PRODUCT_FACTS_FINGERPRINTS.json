@@ -1,7 +1,7 @@
 {
   "verifiedDate": "2026-10-18",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "95ec4415ec5774b6db75580f3f61ba587ccf9ec6bbeeb31677170de9d32ef688",
+  "factsSha256": "5bb24075a39d1c83b0acb640e17c8672e122139744461e298fcc3c988f8f878b",
   "sources": {
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
     "docs/adr/0003-class-movement-staff-resolution.md": "683bdd10660afc00309bac21e32ceda976573aa5e29aca4106fb1cddcb71b62f",
@@ -228,7 +228,9 @@
     "test/support/class-move-recovery.ts": "1d0c1cedbb269c6fb6ffd3d0d42be995aedc91faec81865cdb7df4ea7b6ccbbc",
     "test/support/class-provider-proxy.ts": "8970ff5b3a3267fc84cd7276dbf0b72a7331d3b1887bac2a8709066fb447719f",
     "test/support/cliniko-workflow-voice.ts": "cd233936640a6d27c4a48540b1eb27015aa5d5ead72e740a1058fb518899ab7d",
-    "test/support/financial-class-caller-chain.ts": "635e72c1557fa31ad3bcfef23f5b692b1bac15a9e8050c85759c0c8b6195eca0",
+    "test/support/financial-class-caller-chain.ts": "0584597ed449cce93c1bcb8c0e634b8ff249fd7db6224e8ced5ece421639493b",
+    "test/support/financial-class-caller-context.ts": "77101d3369885d18ff2d4a35e9b99a34b51cbfc0423878f626ac9526e6726c23",
+    "test/support/financial-class-unpaid-chain.ts": "cc5ec8b2c2e04ab52633a669e7d075ac62d0432ded06f9d6fb6fdc34e02a96c9",
     "test/support/financial-class-voice-journey.ts": "c891365ce0b2b793b50c398ae4f42548fb6197800c5a6644359a13adf09aac6a",
     "test/support/financial-class-voice-process.ts": "914a01b16a70664fbcc91b239df869dd5639b51f3efc56dfff5e41f852e2388c",
     "test/support/financial-consumer-process.ts": "94a1bfe6291e3799617e4ea4728b8bf12a153527c0ad1002dc93bff70cad09e0",
@@ -257,6 +259,7 @@
     "test/voice/clinical-host-financial-binding.test.ts": "3252126f35041f1f3006483687e97b7f53176e128957291c7c7ff6bb9770dce8",
     "test/voice/compiled-class-financial-chain.test.ts": "65ca5481f3ff21484859dd7e4933bba4ac8d5dbac3f1e1b405c255a3f6d7de24",
     "test/voice/compiled-class-financial-host.test.ts": "f3e33707b0066a45e3cac890dcccb12aa0432e9de6dba1f8dc7c8c7746159f2e",
+    "test/voice/compiled-class-unpaid-chain.test.ts": "5269938fc6f8925844288e1122d1bbafa0cae2dae7bd76aa7eafccc1995a5c73",
     "test/voice/confirmation-resend-content-runner.test.ts": "9a4e2fd2cc30b3650693f05b3213f248492bdb8126058e1fdc8ce9f522cee04f",
     "test/voice/confirmation-resend-paging-runner.test.ts": "6cfab2f9ab5bb2686c53a30104c6eb4ac6ebeb73fac522b4ec8248e374cee07f",
     "test/voice/confirmation-resend-runner.test.ts": "35c5d0055b3b0f6dfbe5bca16c2da7005e3eb6d285f2e533f6c9c2caa3b24865",
