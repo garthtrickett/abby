@@ -174,8 +174,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
     if (ports.financialConsumer && !(provisionedFinancial instanceof ClinikoFinancialConsumer)) {
       throw new RangeError("financial consumer unavailable");
     }
-    financialConsumer = provisionedFinancial;
-    if (financialConsumer && !financialConsumer.matchesAccount(scope, credentialFingerprint, rateBudget)) {
+    if (provisionedFinancial && !provisionedFinancial.matchesAccount(scope, credentialFingerprint, rateBudget)) {
       throw new RangeError("financial consumer account mismatch");
     }
     const prepared = await createStandaloneClinikoVoiceServer({ db,
@@ -205,7 +204,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
         event.dialedNumber === dialedNumber && event.presentedCallerNumber === testCaller && await healthy(),
       health: healthy,
       operationalCounters,
-      ...(financialConsumer ? { stripeWebhook: financialConsumer.handle } : {}),
+      ...(provisionedFinancial ? { stripeWebhook: provisionedFinancial.handle } : {}),
       ...(operationalTokenHex ? { operationalRead: { tokenHex: operationalTokenHex, scope } } : {}),
     });
     if (!prepared.ok) throw new Error(`standalone storage unavailable: ${prepared.error.kind}`);
@@ -220,7 +219,16 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       retentionTimer.unref();
     }
     const server = prepared.value;
-    if (financialConsumer && !financialConsumer.start(service.signal).ok) throw new Error("financial consumer unavailable");
+    if (provisionedFinancial) {
+      const started = provisionedFinancial.start(service.signal);
+      if (!started.ok) {
+        // This listener never opened, and the supplied consumer still belongs
+        // to whoever started it. Retire only our unused transport.
+        await new Promise<void>(resolve => server.close(() => resolve()));
+        throw new Error("financial consumer unavailable");
+      }
+      financialConsumer = provisionedFinancial;
+    }
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
       server.listen(port, "127.0.0.1", () => { server.off("error", reject); resolve(); });

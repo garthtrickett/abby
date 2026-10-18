@@ -15,8 +15,8 @@ import { signWebhook } from "../support/financial-webhook-handoff.ts";
 import { now } from "../support/financial-retention.ts";
 import { voiceUntil } from "../support/cliniko-workflow-voice.ts";
 
-type Mode = "active" | "foreignScope" | "foreignBudget" | "invalid";
-type Message = { kind: string; port?: number; reason?: string; aborted?: boolean;
+type Mode = "active" | "foreignScope" | "foreignBudget" | "invalid" | "alreadyStarted";
+type Message = { kind: string; port?: number; reason?: string; aborted?: boolean; closed?: boolean; closeCalls?: number;
   creationAcknowledged?: number; messageAccepted?: number; sessions?: number; messages?: number };
 const options = { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 40_000 };
 async function runner(mode: Mode, run: (context: { child: ReturnType<typeof fork>; messages: Message[];
@@ -82,15 +82,15 @@ test("compiled owning runner starts independent finance, authenticates raw event
     assert.equal(refused.status, 503); assert.equal(await refused.text(), '{"ok":false}');
     assert.ok(messages.filter(m => m.kind === "cycle").every(m => m.sessions === 1));
     child.kill("SIGTERM"); assert.deepEqual(await terminal, [0, null]);
-    assert.ok(messages.some(m => m.kind === "stopped" && m.aborted === true));
+    assert.ok(messages.some(m => m.kind === "stopped" && m.aborted === true && m.closed === true));
     await assert.rejects(fetch(`${base}/healthz`, { signal: AbortSignal.timeout(1_000) }));
   });
 });
-for (const mode of ["foreignScope", "foreignBudget", "invalid"] as const)
+for (const mode of ["foreignScope", "foreignBudget", "invalid", "alreadyStarted"] as const)
   test(`compiled financial runner refuses ${mode} before starting money or a listener`, options, async () => {
     await runner(mode, async ({ messages, terminal }) => {
       assert.deepEqual(await terminal, [1, null]);
-      assert.deepEqual(messages.filter(m => m.kind === "refused"), [{ kind: "refused", reason: mode === "invalid" ? "invalidConsumer" : "accountMismatch", sessions: 0, messages: 0 }]);
+      assert.deepEqual(messages.filter(m => m.kind === "refused"), [{ kind: "refused", reason: mode === "invalid" ? "invalidConsumer" : mode === "alreadyStarted" ? "startRejected" : "accountMismatch", closeCalls: 0, sessions: 0, messages: 0 }]);
       assert.equal(messages.some(m => m.kind === "listenerReady" || m.kind === "cycle"), false);
     });
   });

@@ -11,9 +11,11 @@ import { intentValue, value } from "./financial-retention.ts";
 if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || !process.env.DATABASE_URL?.includes("/abby_test_financial_runner_") ||
     process.env.ABBY_CLINIKO_API_KEY !== "synthetic-key-au5") throw new Error("isolated financial runner required");
 const mode = process.env.ABBY_SYNTHETIC_FINANCIAL_RUNNER;
-if (!["active", "foreignScope", "foreignBudget", "invalid"].includes(mode ?? "")) throw new Error("invalid synthetic financial mode");
+if (!["active", "foreignScope", "foreignBudget", "invalid", "alreadyStarted"].includes(mode ?? "")) throw new Error("invalid synthetic financial mode");
 let fixture: Awaited<ReturnType<typeof financialConsumerFixture>> | undefined;
 let service: AbortSignal | undefined;
+let supplied: ClinikoFinancialConsumer | undefined;
+let closeCalls = 0;
 const receive = (raw: unknown) => {
   if (!raw || typeof raw !== "object" || !("kind" in raw) || !fixture) return;
   if (raw.kind === "paid") { fixture.paid(); process.send?.({ kind: "paidApplied" }); }
@@ -35,18 +37,23 @@ try {
         barrierFactory: native => new PostgresFinancialEffectBarrier(context.db, native.scope, value(financialRecordOwnerBinding(native))) } } });
       await fixture.consumer.close();
       const f = fixture;
-      return value(ClinikoFinancialConsumer.create(f.config, f.authority, { ...f.dependencies,
+      supplied = value(ClinikoFinancialConsumer.create(f.config, f.authority, { ...f.dependencies,
         onCycle(cycle) { f.dependencies.onCycle(cycle); process.send?.({ ...cycle, kind: "cycle", cycleKind: cycle.kind,
           sessions: f.sessions.length, messages: f.messages.length }); } }));
+      const close = supplied.close.bind(supplied);
+      Object.defineProperty(supplied, "close", { value: async () => { closeCalls++; await close(); } });
+      if (mode === "alreadyStarted") { f.denyRun(); value(supplied.start(new AbortController().signal)); }
+      return supplied;
     },
   });
-  process.send?.({ kind: "stopped", aborted: service?.aborted === true });
+  process.send?.({ kind: "stopped", aborted: service?.aborted === true, closed: closeCalls > 0 });
 } catch (error) {
   const reason = error instanceof RangeError && error.message === "financial consumer account mismatch" ? "accountMismatch" :
-    error instanceof RangeError && error.message === "financial consumer unavailable" ? "invalidConsumer" : "unavailable";
-  process.send?.({ kind: "refused", reason, sessions: fixture?.sessions.length ?? 0, messages: fixture?.messages.length ?? 0 });
+    error instanceof RangeError && error.message === "financial consumer unavailable" ? "invalidConsumer" :
+    error instanceof Error && error.message === "financial consumer unavailable" ? "startRejected" : "unavailable";
+  process.send?.({ kind: "refused", reason, closeCalls, sessions: fixture?.sessions.length ?? 0, messages: fixture?.messages.length ?? 0 });
   process.exitCode = 1;
 } finally {
-  process.off("message", receive); await fixture?.consumer.close();
+  process.off("message", receive); await supplied?.close(); await fixture?.consumer.close();
   if (process.connected) process.disconnect();
 }
