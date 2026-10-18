@@ -1,6 +1,11 @@
 /** Real individual signed caller; preserve its own native intent/ACK through
  * the same independently owned financial outcomes as native class callers. */
 import assert from "node:assert/strict";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { approvedFinancialVoicePolicy } from "../../src/standalone/approved-financial-voice-policy.ts";
+import { OwnerFileFinancialFeePolicy } from "../../src/standalone/owner-file-financial-fee-policy.ts";
+import { verificationCanaries } from "./caller-verification.ts";
 import { createOpenAIClinicalIntentResolver } from "../../src/standalone/openai-clinical-intent.ts";
 import type { FinancialBookingPreparationConfig } from "../../src/standalone/cliniko-financial-booking-preparation.ts";
 import { declareClinikoRequestCost } from "../../src/cliniko/request-cost.ts";
@@ -20,7 +25,7 @@ import { runPaidFinancialCaller } from "./financial-class-caller-chain.ts";
 import { runUnpaidFinancialCaller } from "./financial-class-unpaid-chain.ts";
 
 export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid", stage: (value: number) => void,
-  afterBooking?: (context: FinancialCallerActor, original: Readonly<{ cancellations: readonly unknown[]; timeZone: string }>) => Promise<void>, approvedTerms?: string): Promise<void> {
+  afterBooking?: (context: FinancialCallerActor, original: Readonly<{ cancellations: readonly unknown[]; timeZone: string }>) => Promise<void>, approvedTerms?: string, approvedPerCall = false): Promise<void> {
   stage(1); const callerBegan = performance.now();
   await withDisposablePostgres(async (db, connectionString) => {
     const budget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-session-au5", maxPerMinute: 180 });
@@ -57,6 +62,27 @@ export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid"
         recipient: { kind: "email", address: "financial-recipient@example.invalid" }, approvedTerms: approvedTerms ?? "The clinic will review late payment; no automatic refund is promised.", reviewDate: "2026-10-05", expiresAt: selection.expiresAt }),
         current: declareClinikoRequestCost(async () => true, binding, 0), currentForSend: () => true },
       presentation: { play: async () => { assert.fail("the actual admitted caller must supply financial playback"); } } };
+    let perCallPolicy: import("../../src/standalone/cliniko-voice-clinical-host.ts").FinancialVoiceProvision["policyForCall"];
+    let financialPolicyCalls = 0;
+    if (approvedPerCall) {
+      const path = join(f.folder, "financial-fees.json");
+      await writeFile(path, JSON.stringify({ scope: f.scope, revision: "fees-v1", approverRef: "synthetic-admin",
+        approvedAt: "2026-10-01T00:00:00.000Z", effectiveFrom: "2026-10-01T00:00:00.000Z", effectiveUntil: "2026-10-06T00:00:00.000Z", approved: true, enabled: true,
+        selection: { policyVersion: f.flowConfig.policyVersion, businessId: f.config.cliniko.businessId, credentialFingerprint: binding.credentialFingerprint,
+          practitionerId: f.config.cliniko.practitionerId, appointmentTypeId: f.config.cliniko.appointmentTypeId, timeZone: f.config.cliniko.timeZone, bookingKind: "book", passUse: "none" },
+        terms: { kind: "required", amount: 5000, currency: "gbp", policyVersion: "fee-policy-1", termsVersion: "financial-terms-1",
+          approvedTerms: "The clinic will review late payment; no automatic refund is promised.", paymentWindowMinutes: 1320, reviewDatePolicy: "paymentDeadlineClinicDate" } }), { mode: 0o600 });
+      const fees = value(await OwnerFileFinancialFeePolicy.capture({ path, scope: f.scope, directory: f.config.directory, clock: () => readClock() }, financialLife.signal));
+      const create = approvedFinancialVoicePolicy({ fees, native: funding.config, fetchPort: provider,
+        recipientAuthority: { allows: async q => q.booking.patientId === verificationCanaries[2], current: q => q.booking.patientId === verificationCanaries[2] } });
+      perCallPolicy = context => {
+        financialPolicyCalls++; const policy = create(context);
+        // Reviewed synthetic ports: admin approval is local-file-only and the
+        // independent grant makes no native requests; each current() adds one
+        // exact patient GET, charged to the same actual180 SQL account budget.
+        return { ...policy, current: declareClinikoRequestCost(policy.current.bind(policy), binding, 1) };
+      };
+    }
     const seen: string[] = [];
     const model: typeof fetch = async (_input, init) => {
       const request = JSON.parse(String(init?.body)), text = JSON.parse(request.input[1].content).callerText; seen.push(text);
@@ -72,7 +98,7 @@ export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid"
       try {
         await Promise.race([(async () => {
           call = await clinikoWorkflowVoiceFixture(db, { ...f.flowConfig, financial, fetchPort: provider }, owner =>
-            createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-key", model: "synthetic-model", clinicDate: () => "2026-10-04", fetch: model }), { clinicalHost: true });
+            createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-key", model: "synthetic-model", clinicDate: () => "2026-10-04", fetch: model }), { clinicalHost: true, ...(perCallPolicy ? { financialPolicyForCall: perCallPolicy } : {}) });
           readClock = call.currentTime;
           await call.turn("I need to book an appointment."); await call.mark();
           await voiceUntil(() => f.mail.length === 1, "actual individual verification mail"); await call.verify(f.mail[0]!.code);
@@ -92,7 +118,8 @@ export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid"
           await call.turn("Yes");
           assert.deepEqual(call.writes, ["POST /v1/individual_appointments"]);
           assert.equal(Object.values((await call.state()).actions).at(-1)?.status, "committed");
-          for (const secret of ["financial-recipient@example.invalid", "GBP 50.00"])
+          if (approvedPerCall) assert.equal(financialPolicyCalls, 1);
+          for (const secret of [approvedPerCall ? verificationCanaries[0]! : "financial-recipient@example.invalid", "GBP 50.00"])
             assert.equal(JSON.stringify([call.modelTurns, call.transcripts, seen, await call.state()]).includes(secret), false);
         })(), new Promise<never>((_, reject) => { callerTimer = setTimeout(() => { reject(new Error("original individual caller deadline")); void call?.close(); }, Math.max(1,120_000-(performance.now()-callerBegan))); })]);
       } finally { if (callerTimer) clearTimeout(callerTimer); }

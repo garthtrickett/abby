@@ -6,7 +6,8 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 const enabled = process.env.ABBY_ISOLATED_POSTGRES_PROBE === "1";
-for (const outcome of ["paid", "closedUnpaid"] as const) test(`compiled original individual caller owns exact financial lifecycle (${outcome})`, { skip: !enabled, timeout: 600_000 }, async () => {
+for (const { outcome, perCall } of [{ outcome: "paid", perCall: false }, { outcome: "closedUnpaid", perCall: false }, { outcome: "paid", perCall: true }] as const)
+  test(perCall ? "compiled approved per-call clinic fee and native recipient individual financial lifecycle" : `compiled original individual caller owns exact financial lifecycle (${outcome})`, { skip: !enabled, timeout: 600_000 }, async () => {
   const folder = await mkdtemp(join(tmpdir(), "abby-financial-chain-compiled-"));
   const child = fork(new URL("../../dist/runtime/test/support/financial-individual-caller-process.js", import.meta.url), [], {
     cwd: folder, stdio: ["ignore", "pipe", "pipe", "ipc"], env: { ...process.env,
@@ -29,7 +30,7 @@ for (const outcome of ["paid", "closedUnpaid"] as const) test(`compiled original
     // Whole caller-plus-finance journey only. The caller retains its own120s.
     timer = setTimeout(() => reject(new Error(`compiled caller chain deadline after stage${stages.at(-1) ?? 0}`)), 570_000);
   });
-  child.send({ kind: "start", passes: false, outcome });
+  child.send({ kind: "start", passes: false, outcome, ...(perCall ? { perCall: true } : {}) });
   try {
     assert.equal(await result, true, `compiled caller chain failed after stage${stages.at(-1) ?? 0}; fixed location ${JSON.stringify(location)}`);
     assert.deepEqual(await terminal, [0, null]); assert.deepEqual(stages, [1, 2, 3, 4, 5, 6, 7]);

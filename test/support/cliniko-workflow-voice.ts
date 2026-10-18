@@ -41,6 +41,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   intent: (flow: ClinikoCallFlow) => IntentResolver, options: { lostWrite?: boolean;
     /** Exercise the real reusable clinical host instead of fixture-owned wiring. */
     clinicalHost?: true;
+    financialPolicyForCall?: NonNullable<import("../../src/standalone/cliniko-voice-clinical-host.ts").FinancialVoiceProvision["policyForCall"]>;
     maximumWrites?: 2; classMove?: true;
     routingHost?: (accountSid: string) => ClinicNumberRoutingHost;
     locationServiceSources?: readonly Parameters<typeof OwnerFileServiceCatalogue.capture>[0][];
@@ -179,9 +180,12 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     }
     return port(value, init);
   });
+  if (options.financialPolicyForCall && (!options.clinicalHost || !config.financial)) throw new Error("per-call financial host required");
   const realHost = options.clinicalHost ? new ClinikoVoiceClinicalHost({ ...config, policies: policy, scope,
     greeting: resultValue(await policy.read(scope)).greeting!, fetchPort: provider, intent,
-    ...(config.financial ? { financial: { ...config.financial, native: { ...config.financial.native, clock: now }, fetchPort: provider } } : {}) }) : undefined;
+    ...(config.financial ? { financial: options.financialPolicyForCall
+      ? (({ policy: _, ...common }) => ({ ...common, policyForCall: options.financialPolicyForCall!, native: { ...common.native, clock: now }, fetchPort: provider }))(config.financial)
+      : { ...config.financial, native: { ...config.financial.native, clock: now }, fetchPort: provider } } : {}) }) : undefined;
   const realWorkflow = realHost?.workflow({ scope,
     route: { accountRef: accountSid, dialedNumber: config.inbound.dialedNumber, routeVersion: "workflow-voice" },
     selection: { businessId: config.cliniko.businessId, practitionerId: config.cliniko.practitionerId,
