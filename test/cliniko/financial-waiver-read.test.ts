@@ -81,3 +81,10 @@ test("abort bounds a held private waiver provider without leaking its eventual p
   const reader = f.create(async () => { entered(); return new Promise(() => {}); }), controller = new AbortController();
   const pending = reader.read(f.binding, controller.signal); await ready; controller.abort(); assert.equal((await pending).ok, false);
 });
+test("a held waiver body is bounded by the native reader deadline", { timeout: 3000 }, async t => {
+  const f = await nativeWaiverFixture(); t.after(f.close); let entered!: () => void;
+  const ready = new Promise<void>(r => { entered = r; });
+  const reader = f.create(async () => new Response(new ReadableStream({ start() { entered(); } })), f.authority, { ...f.config, deadlineMs: 1000 });
+  t.mock.timers.enable({ apis: ["setTimeout"] }); const pending = reader.read(f.binding, signal()); await ready; t.mock.timers.tick(1000);
+  assert.equal((await pending).ok, false);
+});
