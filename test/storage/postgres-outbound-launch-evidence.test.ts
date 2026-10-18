@@ -75,3 +75,25 @@ for(const mode of ["closedHistory","accountDenied","recordDenied","changed"] as 
  else assert.deepEqual(result,{ok:false,error:{kind:mode==="changed"?"mismatched":"forbidden"}});
  assert.equal((await claims(f.f,f.f.attempt.actionRef)).length,0);assert.deepEqual(peer.output,[]);assert.deepEqual(await readdir(dir),[]);await privacy(f.f);
 });
+test("compiled cold history survives removal of an actual SQL record claim after native retention",{timeout:35000},async t=>{
+ const f=await setup(),dir=await mkdtemp(join(tmpdir(),"abby-possible-sql-loss-"));t.after(()=>rm(dir,{recursive:true,force:true}));
+ const first=await outboundLaunchPeer(f,dir);t.after(first.kill);const retained=value(await first.nextResult());await first.kill();assert.equal(retained.kind,"accepted");
+ assert.equal((await claims(f,f.attempt.actionRef)).length,1);
+ // Deliberate loss in this disposable test database represents an older local
+ // restore. No production journal reset or replay interface is introduced.
+ await sql`delete from outbound_effect_barriers where tenant_id=${f.request.scope.tenantId} and effect_ref=${f.attempt.actionRef}::uuid`.execute(db);
+ assert.equal((await claims(f,f.attempt.actionRef)).length,0);
+ const native=f.port,row=f.rows.get("40")!;row.recalled=true;row.recalled_at=outboundNow;row.archived_at=outboundNow;f.setNow("2026-11-03T10:00:00.000Z");f.denyProducer();
+ f.port=async(input,init)=>{
+  const url=new URL(String(input));if(url.pathname!=="/v1/recalls")return native(input,init);
+  assert.equal(init?.method,"GET");assert.deepEqual(url.searchParams.getAll("q[]"),[`patient_id:=${f.request.patientId}`,"archived_at:*"]);
+  return Response.json({recalls:[row],total_entries:1});
+ };
+ const authority={allowsHistoryRead:async()=>true,allowsRecordRead:f.authority.allows,current:f.authority.current};
+ const reader=await outboundLaunchPeer(f,dir,{mode:"history",withoutDatabase:true,historyAuthority:authority});t.after(reader.kill);
+ const result=value(await reader.nextResult());await reader.kill();assert.equal(result.kind,"possibleLaunchHistory");if(result.kind!=="possibleLaunchHistory")assert.fail();
+ assert.equal(result.records.length,1);assert.deepEqual(result.records[0]!.attempt,f.attempt);assert.equal(result.records[0]!.archivedAt,outboundNow);
+ assert.equal((await claims(f,f.attempt.actionRef)).length,0);assert.equal(f.calls.filter(c=>c.method==="POST").length,1);
+ for(const ref of [f.attempt.effectRef,f.attempt.approvalRef])assert.equal((await claims(f,ref)).length,0);
+ assert.deepEqual([...first.output,...reader.output],[]);assert.deepEqual(await readdir(dir),[]);await privacy(f);
+});
