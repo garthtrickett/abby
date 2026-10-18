@@ -73,6 +73,16 @@ try {
       return observe("ledgerRead", ledgerReadMethod.bind(this))(...args);
     };
     restoreStageObservers.unshift(() => { MemoryLedger.prototype.read = ledgerReadMethod; });
+    const speechStartedMethod = VoiceSession.prototype.speechStarted;
+    VoiceSession.prototype.speechStarted = function(this: VoiceSession, ...args: Parameters<typeof speechStartedMethod>) {
+      return observe("voiceSpeechStarted", speechStartedMethod.bind(this))(...args);
+    };
+    restoreStageObservers.unshift(() => { VoiceSession.prototype.speechStarted = speechStartedMethod; });
+    const finishTurnMethod = VoiceSession.prototype.finishTurn;
+    VoiceSession.prototype.finishTurn = function(this: VoiceSession, ...args: Parameters<typeof finishTurnMethod>) {
+      return observe("voiceFinishTurn", finishTurnMethod.bind(this))(...args);
+    };
+    restoreStageObservers.unshift(() => { VoiceSession.prototype.finishTurn = finishTurnMethod; });
     const directPrivatePlaybackMethod = VoiceSession.prototype.presentPrivateResend;
     VoiceSession.prototype.presentPrivateResend = function(this: VoiceSession, ...args: Parameters<typeof directPrivatePlaybackMethod>) {
       return observe("directPrivatePlayback", directPrivatePlaybackMethod.bind(this))(...args);
@@ -122,11 +132,13 @@ try {
       return new Response(pcm, { headers: { "content-type": "audio/pcm" } });
     };
     const transcription = (sessionId: string) => ({
-      async accept() { process.send?.({ kind: "ordinaryFrame" }); return ok([]); },
+      async accept() { return observe("transcriptionAccept", async () => { process.send?.({ kind: "ordinaryFrame" }); return ok([]); })(); },
       async flush(generation: number) {
-        const text = inputs.shift(); if (!text) throw new Error("synthetic input missing");
-        process.send?.({ kind: "ordinaryFinal", text });
-        return ok([{ kind: "segmentFinal" as const, sessionId, generation, utteranceId: crypto.randomUUID(), text, quality: "clear" as const }]);
+        return observe("transcriptionFlush", async () => {
+          const text = inputs.shift(); if (!text) throw new Error("synthetic input missing");
+          process.send?.({ kind: "ordinaryFinal", text });
+          return ok([{ kind: "segmentFinal" as const, sessionId, generation, utteranceId: crypto.randomUUID(), text, quality: "clear" as const }]);
+        })();
       },
     });
     const now = f.sessionConfig.clock;

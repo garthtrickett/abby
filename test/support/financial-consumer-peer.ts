@@ -1,3 +1,4 @@
+import { FinancialExpiryObservations } from "./financial-expiry-observation.ts";
 import { existsSync } from "node:fs";
 import type { FinancialResendQuery } from "../../src/standalone/cliniko-financial-resend-owner.ts";
 import type { Result } from "../../src/core/model.ts";
@@ -28,6 +29,7 @@ export type FinancialConsumerPeerOptions = Readonly<{ now?: string; connectionSt
   caseClassClinicalExpiry?: FinancialConsumerClassExpirySetup & Readonly<{ maximumAuthorityRequests: number }>;
   caseClassClinicalApproval?(query: FinancialCaseClassExpiryQuery): FinancialCaseClassApproval | null | Promise<FinancialCaseClassApproval | null>;
   classClinicalApproval?(query: FinancialUnlinkedClassExpiryQuery): FinancialUnlinkedClassApproval | null | Promise<FinancialUnlinkedClassApproval | null>;
+  observeExpiry?: true;
   clinicalApproval?(query: FinancialClinicalExpiryQuery): FinancialClinicalApproval | null | Promise<FinancialClinicalApproval | null>;
   holdClinicalReply?: boolean; onClinicalSubmitted?(): void }>;
 /** A bounded observation wait is not proof that the outliving worker stopped. */
@@ -39,9 +41,11 @@ export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smt
   const entry = new URL(import.meta.url.endsWith(".js") ? "./financial-consumer-process.js" : "../../dist/runtime/test/support/financial-consumer-process.js", import.meta.url);
   assert.equal(existsSync(entry), true, "emitted financial worker required");
   const child = fork(entry, [], {
+    ...(options.observeExpiry ? { execArgv: [...process.execArgv, "--import", new URL("./financial-expiry-process-observer.js", entry).href] } : {}),
     cwd: directory, stdio: ["ignore", "pipe", "pipe", "ipc"], env: { ...process.env, ...(options.connectionString ? { DATABASE_URL: options.connectionString } : {}), NODE_OPTIONS: "--max-old-space-size=256" } });
   const terminal = new Promise<NodeJS.Signals | null>(resolve => child.once("exit", (_code, signal) => resolve(signal)));
   const counts: FinancialConsumerCycle[] = [], output: string[] = [];
+  const expiryObservations = new FinancialExpiryObservations();
   child.stdout?.on("data", data => output.push(String(data))); child.stderr?.on("data", data => output.push(String(data)));
   let waiting: { resolve(c: FinancialConsumerCycle): void; reject(e: Error): void } | undefined;
   let resolveReady!: (port: number) => void, rejectReady!: (error: Error) => void;
@@ -53,6 +57,10 @@ export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smt
   child.on("message", async (raw: unknown) => {
     const m = raw as { kind: string; id: number; port: number; cycle: FinancialConsumerCycle; data: unknown };
     try {
+      if (m.kind === "expiryObservation") {
+        if (!options.observeExpiry || !expiryObservations.accept(raw)) throw new Error("Invalid expiry observation");
+        return;
+      }
       if (m.kind === (options.voiceRunner ? "listenerReady" : "ready")) { resolveReady(m.port); return; }
       if (m.kind === "resendRetained") { const next = waitingRetention; waitingRetention = undefined; if (next) next.resolve(m.data as Retention); else retention = m.data as Retention; return; }
       if (m.kind === "cycle") {
@@ -116,7 +124,7 @@ export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smt
         waitingRetention = { resolve: value => { clearTimeout(timer); resolve(value); }, reject: error => { clearTimeout(timer); reject(error); } };
       });
     };
-    return { child, port, nextCycle, nextRetention, kill, output };
+    return { child, port, nextCycle, nextRetention, kill, output, get expiryObservation() { return expiryObservations.value; } };
   } catch (error) { await kill(); throw error; }
   finally { if (timer) clearTimeout(timer); }
 }

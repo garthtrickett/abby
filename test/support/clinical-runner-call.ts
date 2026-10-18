@@ -135,6 +135,7 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
     const count = (kind: string) => messages.filter(m => m.kind === kind).length;
     const wireDiagnostic = () => ({ socket: socket?.readyState, closeCode: transportCloseCode, childExit: child.exitCode,
       playback: { marks: playback.count, outstanding: playback.hasPendingAfter() },
+      turns: Object.fromEntries(["inputAccepted", "ordinaryFrame", "ordinaryFinal", "modelTurn", "speech"].map(kind => [kind, count(kind)])),
       results: ["privateMenuStarted", "privateMenuResult", "privateMenuPlayback", "privateChoiceStarted", "privateChoiceResult"].map(kind => ({ kind, count: count(kind), accepted: messages.filter(row => row.kind === kind).at(-1)?.accepted })),
       sources: messages.filter(row => row.kind === "resendSourceDiagnostic" || row.kind === "privateChoiceResult").at(-1)?.diagnostic,
       wire: messages.filter(row => row.kind === "wireProcessed").slice(-16).map(row => ({ event: row.event, sequence: row.sequence,
@@ -167,7 +168,16 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
         await voiceUntil(() => (count("speech") > beforeSpeech && playback.hasPendingAfter(beforeMarks)) || child.exitCode !== null ||
           (expectFailure && socket!.readyState === WebSocket.CLOSED), "clinical runner response", 20_000);
       } catch (error) {
-        if (!options.classQuotaStaging) throw new Error("Clinical response unavailable: " + JSON.stringify(wireDiagnostic()), { cause: error });
+        if (!options.classQuotaStaging) {
+          if (operation === "confirmationResend" && child.connected) {
+            // Request current counters after the original response deadline;
+            // a private-choice snapshot can predate this ordinary caller turn.
+            const before = count("resendSourceDiagnostic"); child.send({ kind: "resendDiagnostics" });
+            try { await voiceUntil(() => count("resendSourceDiagnostic") > before || child.exitCode !== null,
+              "current fixed resend stage diagnostic", 1_000); } catch { /* Missing diagnostic remains evidence. */ }
+          }
+          throw new Error("Clinical response unavailable: " + JSON.stringify(wireDiagnostic()), { cause: error });
+        }
         const probes = count("classDiagnostic"); child.send({ kind: "classDiagnostic" });
         try { await voiceUntil(() => count("classDiagnostic") > probes || child.exitCode !== null, "bounded class state diagnostic", 1000); } catch { /* absence is part of the diagnostic */ }
         const counts = Object.fromEntries([...new Set(messages.map(row => row.kind))].map(kind => [kind, count(kind)]));

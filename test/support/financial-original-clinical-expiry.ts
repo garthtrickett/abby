@@ -1,3 +1,4 @@
+import { attachFinancialExpiryObservation } from "./financial-expiry-observation.ts";
 /** Conditional expiry uses the actual caller's played terms and created target. */
 import assert from "node:assert/strict";
 import { readdir } from "node:fs/promises";
@@ -58,6 +59,7 @@ async function run({ actor: c, observation, clock, advanceTo, directory, connect
     try { return await Promise.race([observe(), new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error(label)), Math.max(1, deadline - performance.now()));
     })]); }
+    catch (error) { throw attachFinancialExpiryObservation(error, peer?.expiryObservation); }
     finally { if (timer) clearTimeout(timer); }
   };
   const stop = async () => { await peer!.kill(); output.push(...peer!.output); peer = undefined; };
@@ -71,7 +73,7 @@ async function run({ actor: c, observation, clock, advanceTo, directory, connect
       const baseApproval = () => ({ policyVersion: c.intent.payment.policyVersion, termsVersion: c.intent.payment.termsVersion,
         approvedTerms: approvedTerms(kind), timeZone: original.timeZone, cancellationReason: 50 as const });
       const launch = () => financialConsumerPeer(c, smtp.config, directory, {
-        connectionString, voiceRunner: true, advancingClock: true, now: clock(), reviewDate: "2026-10-05", enableCheckoutExpiry: true,
+        connectionString, voiceRunner: true, observeExpiry: true, advancingClock: true, now: clock(), reviewDate: "2026-10-05", enableCheckoutExpiry: true,
         ...(kind === "individual" || kind === "reviewTerms" ? { enableClinicalExpiry: true } : {}),
         ...(kind === "ordinaryClass" ? { classClinicalExpiry: original.classSetup! } : {}),
         ...(kind === "passClass" ? { caseClassClinicalExpiry: { ...original.classSetup!, maximumAuthorityRequests: 0 } } : {}),
