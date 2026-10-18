@@ -30,7 +30,7 @@ test("clinic fee source rejects implicit no-requirement and private or grant-bea
   const f = await financialFeePolicyFixture(); t.after(f.close); await f.replace(patch); assert.equal((await f.capture()).ok, false);
 });
 for (const patch of [{ amount: 0 }, { amount: 0.1 }, { amount: 100_000_000 }, { currency: "jpy" }, { approvedTerms: "bad\ntext" },
-  { approvedTerms: " " }, { approvedTerms: "x".repeat(351) }, { paymentWindowMinutes: 0 }, { paymentWindowMinutes: 10081 },
+  { approvedTerms: " " }, { approvedTerms: "x".repeat(351) }, { paymentWindowMinutes: 0 }, { paymentWindowMinutes: 30 }, { paymentWindowMinutes: 1441 }, { paymentWindowMinutes: 10081 }, { reviewDatePolicy: "utcDate" }, { reviewDatePolicy: undefined },
   { termsVersion: "" }, { policyVersion: "" }, { recipient: "private@example.invalid" }])
 test("clinic fee source rejects malformed approved payment terms", async t => {
   const f = await financialFeePolicyFixture(); t.after(f.close); await f.replace({ terms: { ...f.approval.terms, ...patch } });

@@ -74,3 +74,18 @@ test("abort bounds a held financial recipient response and keeps late bytes priv
   const reader = f.create(async () => { entered(); return new Promise(() => {}); }), controller = new AbortController();
   const pending = reader.read(f.selection, controller.signal); await ready; controller.abort(); assert.equal(await pending, undefined);
 });
+
+test("financial recipient refuses transport after the offer expires during quota wait", async t => {
+  const f = await fixture(); t.after(f.close); let reads = 0;
+  const config = { ...f.config, rateBudget: { ...f.config.rateBudget, claim: async () => { f.state.now = f.selection.expiresAt; return null; } } };
+  const reader = value(ClinikoFinancialBookingRecipient.create(config, f.authority, async () => { reads++; throw new Error("Must not read expired context"); }));
+  assert.equal(await reader.read(f.selection, signal()), undefined); assert.equal(reads, 0);
+});
+
+test("financial recipient deadline bounds a held body stream", { timeout: 3000 }, async t => {
+  const f = await fixture(); t.after(f.close); let entered!: () => void; const ready = new Promise<void>(r => { entered = r; });
+  const reader = value(ClinikoFinancialBookingRecipient.create({ ...f.config, deadlineMs: 1000 }, f.authority,
+    async () => new Response(new ReadableStream({ start() { entered(); } }))));
+  t.mock.timers.enable({ apis: ["setTimeout"] }); const pending = reader.read(f.selection, signal()); await ready; t.mock.timers.tick(1000);
+  assert.equal(await pending, undefined);
+});

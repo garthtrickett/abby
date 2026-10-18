@@ -29,7 +29,7 @@ test("approved fee and independently admitted current recipient produce exact pr
 for (const change of ["amount", "terms", "recipient", "patient", "offer", "verification", "time", "class"] as const)
 test(`composed fee quote refuses changed ${change}`, async t => {
   const f = await fixture(); t.after(f.close); const q = await f.policy.quote(f.selection, signal()); assert.ok(q?.kind === "required");
-  const selection = { ...f.selection }, changed = structuredClone(q);
+  const selection = { ...f.selection }, changed = { ...q, payment: { ...q.payment }, recipient: { ...q.recipient } };
   if (change === "amount") changed.payment.amount++;
   if (change === "terms") changed.approvedTerms = "Different terms";
   if (change === "recipient") changed.recipient = { kind: "email", address: "other@example.invalid" };
@@ -91,4 +91,47 @@ test("a new quote invalidates the prior send fence and an expired fresh recipien
   f.state.now = f.state.recipientUntil; assert.equal(f.policy.currentForSend(f.selection, q, signal()), false);
   const replacement = await f.policy.quote({ ...f.selection, offerRef: "new-offer" }, signal()); assert.equal(replacement, undefined);
   assert.equal(f.policy.currentForSend(f.selection, q, signal()), false);
+});
+
+test("approved fee quote uses whole-second deadline at a fractional clock", async t => {
+  const f = await fixture(); t.after(f.close); f.state.now = "2026-11-02T00:00:00.123Z";
+  const q = await f.policy.quote(f.selection, signal()); assert.ok(q?.kind === "required");
+  assert.equal(Date.parse(q.payment.deadline) % 1000, 0);
+});
+for (const boundary of ["appointment", "approval"] as const)
+test(`approved payment window is never silently shortened to ${boundary}`, async t => {
+  const f = await fixture(); t.after(f.close);
+  const selection = { ...f.selection };
+  if (boundary === "appointment") selection.startsAt = "2026-11-02T00:45:00.000Z";
+  else await f.replace({ effectiveUntil: "2026-11-02T00:45:00.000Z" });
+  const policy = boundary === "approval" ? new ApprovedFinancialBookingPolicy({ fees: value(await f.capture()), recipient: f.recipient, clock: () => f.state.now }) : f.policy;
+  assert.equal(await policy.quote(selection, signal()), undefined);
+});
+
+test("clinic approves local deadline date mapping explicitly across the UTC date boundary", async t => {
+  const f = await fixture(); t.after(f.close); f.state.now = "2026-11-02T11:00:00.000Z";
+  await f.replace({ selection: { ...f.approval.selection, timeZone: "Pacific/Auckland" } });
+  f.state.recipientUntil = "2026-11-02T11:05:00.000Z";
+  const policy = new ApprovedFinancialBookingPolicy({ fees: value(await f.capture()), recipient: f.recipient, clock: () => f.state.now });
+  const q = await policy.quote({ ...f.selection, timeZone: "Pacific/Auckland", expiresAt: f.state.recipientUntil }, signal()); assert.ok(q?.kind === "required");
+  assert.equal(q.payment.deadline, "2026-11-02T12:00:00.000Z"); assert.equal(q.reviewDate, "2026-11-03");
+});
+
+test("quote continuation closes before provider's thirty-minute creation floor", async t => {
+  const f = await fixture(); t.after(f.close);
+  await f.replace({ terms: { ...f.approval.terms, paymentWindowMinutes: 31 } });
+  const policy = new ApprovedFinancialBookingPolicy({ fees: value(await f.capture()), recipient: f.recipient, clock: () => f.state.now });
+  const q = await policy.quote(f.selection, signal()); assert.ok(q); assert.equal(q.expiresAt, "2026-11-02T00:01:00.000Z");
+  assert.equal(await policy.current(f.selection, q, signal()), true);
+  f.state.now = q.expiresAt; assert.equal(policy.currentForSend(f.selection, q, signal()), false);
+});
+
+test("late completion of a superseded quote cannot replace the newer call-private quote", async t => {
+  const f = await fixture(); t.after(f.close); let entered!: () => void, release!: () => void, calls = 0;
+  const ready = new Promise<void>(r => { entered = r; }), gate = new Promise<void>(r => { release = r; }); t.after(() => release?.());
+  const recipient: FinancialBookingRecipient = { ...f.recipient, read: async (s, stop) => { if (++calls === 1) { entered(); await gate; } return f.recipient.read(s, stop); } };
+  const policy = new ApprovedFinancialBookingPolicy({ fees: f.fees, recipient, clock: () => f.state.now });
+  const prior = policy.quote(f.selection, signal()); await ready;
+  const selected = { ...f.selection, offerRef: "new-offer" }, q = await policy.quote(selected, signal()); assert.ok(q);
+  release(); assert.equal(await prior, undefined); assert.equal(await policy.current(selected, q, signal()), true);
 });

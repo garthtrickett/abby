@@ -45,12 +45,16 @@ export class ApprovedFinancialBookingPolicy implements FinancialBookingPolicy {
         const until = destination && approvalInstant(destination.expiresAt), recipient = destination?.recipient;
         if (!recipient || recipient.kind !== "email" || !mailbox(recipient.address) || until === undefined || until <= began ||
             !this.#recipient.currentForSend(selection, recipient, signal)) return undefined;
-        const deadline = new Date(Math.min(began + terms.paymentWindowMinutes * 60_000, Date.parse(approval.effectiveUntil), start)).toISOString();
+        const deadlineMs = Math.floor((began + terms.paymentWindowMinutes * 60_000) / 1000) * 1000;
+        // Preserve the approved window rather than silently shortening terms.
+        // Native creation later rechecks its own >30min/<=24h requirement.
+        if (deadlineMs > Date.parse(approval.effectiveUntil) || deadlineMs > start || deadlineMs - began <= 1_800_000 || deadlineMs - began > 86_400_000) return undefined;
+        const deadline = new Date(deadlineMs).toISOString();
         const parts = new Intl.DateTimeFormat("en", { timeZone: selection.timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(deadline));
         const part = (name: string) => parts.find(p => p.type === name)!.value;
         assessment = { kind: "required", payment: { amount: terms.amount, currency: terms.currency, policyVersion: terms.policyVersion, termsVersion: terms.termsVersion, deadline },
           recipient: { kind: "email", address: recipient.address }, approvedTerms: terms.approvedTerms,
-          reviewDate: `${part("year")}-${part("month")}-${part("day")}`, expiresAt: new Date(Math.min(offerEnd, Date.parse(approval.effectiveUntil), until)).toISOString() };
+          reviewDate: `${part("year")}-${part("month")}-${part("day")}`, expiresAt: new Date(Math.min(offerEnd, Date.parse(approval.effectiveUntil), until, deadlineMs - 1_800_000)).toISOString() };
       }
       const again = await this.#fees.currentFor(selection, signal), end = approvalInstant(this.#clock());
       if (!again.ok || !again.value || key(again.value) !== key(approval) || signal.aborted || epoch !== this.#epoch || end === undefined || end < began || end >= Date.parse(assessment.expiresAt) || assessment.kind === "required" && !this.#recipient.currentForSend(selection, assessment.recipient, signal)) return undefined;

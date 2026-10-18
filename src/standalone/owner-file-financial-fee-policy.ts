@@ -11,7 +11,7 @@ import type { ClinicApproval, ClinicApprovalFailure } from "./owner-file-clinic-
  * waiver, evidence of received money or a grant for clinical/financial effects. */
 export type FinancialFeeTerms = Readonly<{ kind: "notRequired"; version: string }> | Readonly<{
   kind: "required"; amount: number; currency: "aud" | "gbp" | "nzd" | "cad" | "usd" | "eur";
-  policyVersion: string; termsVersion: string; approvedTerms: string; paymentWindowMinutes: number;
+  policyVersion: string; termsVersion: string; approvedTerms: string; paymentWindowMinutes: number; reviewDatePolicy: "paymentDeadlineClinicDate";
 }>;
 export type FinancialFeeApproval = ClinicApproval & Readonly<{
   selection: Readonly<{ policyVersion: string; businessId: string; credentialFingerprint: string;
@@ -33,11 +33,11 @@ function decode(value: unknown, scope: LocationScope): FinancialFeeApproval | un
   try { new Intl.DateTimeFormat("en", { timeZone: s.timeZone }); } catch { return undefined; }
   if (t.kind === "notRequired") {
     if (!exact(t, "kind,version") || !approvalRef(t.version)) return undefined;
-  } else if (t.kind !== "required" || !exact(t, "amount,approvedTerms,currency,kind,paymentWindowMinutes,policyVersion,termsVersion") ||
+  } else if (t.kind !== "required" || !exact(t, "amount,approvedTerms,currency,kind,paymentWindowMinutes,policyVersion,reviewDatePolicy,termsVersion") ||
       !Number.isSafeInteger(t.amount) || Number(t.amount) < 1 || Number(t.amount) > 99_999_999 ||
       !["aud", "gbp", "nzd", "cad", "usd", "eur"].includes(String(t.currency)) || !approvalRef(t.policyVersion) || !approvalRef(t.termsVersion) ||
       typeof t.approvedTerms !== "string" || !t.approvedTerms.trim() || t.approvedTerms.length > 350 || /[\u0000-\u001f\u007f]/.test(t.approvedTerms) ||
-      !Number.isSafeInteger(t.paymentWindowMinutes) || Number(t.paymentWindowMinutes) < 1 || Number(t.paymentWindowMinutes) > 10_080) return undefined;
+      !Number.isSafeInteger(t.paymentWindowMinutes) || Number(t.paymentWindowMinutes) < 31 || Number(t.paymentWindowMinutes) > 1440 || t.reviewDatePolicy !== "paymentDeadlineClinicDate") return undefined;
   return value as unknown as FinancialFeeApproval;
 }
 async function bounded<T>(signal: AbortSignal, ms: number, task: () => Promise<T>): Promise<T | undefined> {
