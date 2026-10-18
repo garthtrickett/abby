@@ -1,3 +1,4 @@
+import { serveClinikoVoice } from "../../scripts/serve-cliniko-voice.ts";
 import { ClinikoFinancialResendRecords } from "../../src/cliniko/financial-resend-records.ts";
 import type { FinancialResendRequest } from "../../src/cliniko/financial-resend-request.ts";
 import type { ClinikoFinancialIntent } from "../../src/cliniko/financial-review-intent.ts";
@@ -23,7 +24,7 @@ import type { SmtpMailConfig } from "../../src/standalone/smtp-text-mail-transpo
 import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 
 export type FinancialConsumerClassExpirySetup = Readonly<{ path: string; directoryPath: string; binding: ClassPolicyBinding }>;
-export type FinancialConsumerProcessSetup = Readonly<{ kind: "start"; now: string; resend?: Readonly<{ maximumAuthorityRequests: number }>; resendRequestRetention?: Readonly<{ request: FinancialResendRequest; intent: ClinikoFinancialIntent; reviewDate: string }>; supportsHeadroom?: boolean; enableCheckoutExpiry?: boolean; enableClinicalExpiry?: boolean; classClinicalExpiry?: FinancialConsumerClassExpirySetup; caseClassClinicalExpiry?: FinancialConsumerClassExpirySetup & Readonly<{ maximumAuthorityRequests: number }>; smtp: SmtpMailConfig;
+export type FinancialConsumerProcessSetup = Readonly<{ kind: "start"; now: string; voiceRunner?: true; advancingClock?: true; reviewDate?: string; resend?: Readonly<{ maximumAuthorityRequests: number }>; resendRequestRetention?: Readonly<{ request: FinancialResendRequest; intent: ClinikoFinancialIntent; reviewDate: string }>; supportsHeadroom?: boolean; enableCheckoutExpiry?: boolean; enableClinicalExpiry?: boolean; classClinicalExpiry?: FinancialConsumerClassExpirySetup; caseClassClinicalExpiry?: FinancialConsumerClassExpirySetup & Readonly<{ maximumAuthorityRequests: number }>; smtp: SmtpMailConfig;
   config: Omit<FinancialConsumerConfig, "checkout" | "webhook"> & {
     checkout: Omit<FinancialConsumerConfig["checkout"], "cliniko" | "stripe"> & {
       cliniko: Omit<FinancialConsumerConfig["checkout"]["cliniko"], "producer" | "rateBudget" | "clock"> & { producer: { keyRef: string; pem: string } };
@@ -47,15 +48,17 @@ process.on("message", async (raw: unknown) => {
   if (reply?.kind === "reply") { replies.get(reply.id)?.(reply.data); replies.delete(reply.id); return; }
   const setup = raw as FinancialConsumerProcessSetup;
   if (setup?.kind !== "start" || started) return; started = true;
+  const began = performance.now();
+  const clock = () => setup.advancingClock ? new Date(Date.parse(setup.now) + performance.now() - began).toISOString() : setup.now;
   const db = connectPostgres(process.env.DATABASE_URL!);
   try {
     const config: FinancialConsumerConfig = { ...setup.config, checkout: { ...setup.config.checkout,
-      cliniko: { ...setup.config.checkout.cliniko, clock: () => setup.now,
+      cliniko: { ...setup.config.checkout.cliniko, clock,
         producer: { keyRef: setup.config.checkout.cliniko.producer.keyRef, publicKey: createPublicKey(setup.config.checkout.cliniko.producer.pem) },
         rateBudget: { ...(setup.supportsHeadroom ? { checkHeadroom: (requests: number) => rpc("headroom", requests) as ReturnType<NonNullable<ClinikoRequestBudget["checkHeadroom"]>> } : {}), claim: () => rpc("claim", null) as ReturnType<ClinikoRequestBudget["claim"]>,
           observe429: reset => rpc("observe429", reset) as ReturnType<ClinikoRequestBudget["observe429"]> } },
-      stripe: { ...setup.config.checkout.stripe, clock: () => Date.parse(setup.now) } },
-      webhook: { ...setup.config.webhook, clock: () => Date.parse(setup.now) } };
+      stripe: { ...setup.config.checkout.stripe, clock: () => Date.parse(clock()) } },
+      webhook: { ...setup.config.webhook, clock: () => Date.parse(clock()) } };
     const binding = financialRecordOwnerBinding(config.checkout.cliniko); if (!binding.ok) throw new Error("Invalid synthetic owner");
     const barrier = new PostgresFinancialEffectBarrier(db, config.checkout.cliniko.scope, binding.value);
     const current = () => process.connected;
@@ -70,13 +73,13 @@ process.on("message", async (raw: unknown) => {
     }
     const capturedClass = setup.classClinicalExpiry ? await OwnerFileClassPolicy.capture({ ...setup.classClinicalExpiry.binding,
       path: setup.classClinicalExpiry.path, directory: new OwnerFileAdminDirectory(setup.classClinicalExpiry.directoryPath, setup.classClinicalExpiry.binding.scope),
-      clock: () => setup.now }) : undefined;
+      clock }) : undefined;
     if (capturedClass && !capturedClass.ok) throw new Error("Invalid synthetic class policy");
     const capturedCase = setup.caseClassClinicalExpiry ? await OwnerFileClassPolicy.capture({ ...setup.caseClassClinicalExpiry.binding,
       path: setup.caseClassClinicalExpiry.path, directory: new OwnerFileAdminDirectory(setup.caseClassClinicalExpiry.directoryPath, setup.caseClassClinicalExpiry.binding.scope),
-      clock: () => setup.now }) : undefined;
+      clock }) : undefined;
     if (capturedCase && !capturedCase.ok) throw new Error("Invalid synthetic case policy");
-    const consumer = ClinikoFinancialConsumer.create(config, {
+    const makeConsumer = (rateBudget?: ClinikoRequestBudget) => ClinikoFinancialConsumer.create(rateBudget ? { ...config, checkout: { ...config.checkout, cliniko: { ...config.checkout.cliniko, rateBudget } } } : config, {
       run: { allows: q => grant("run", q), current },
       pending: { allowsPendingRead: q => grant("pending", q), allowsRecordRead: q => grant("record", q), current },
       records: { allows: q => grant("record", q), producerAdmitted: q => grant("producer", q), current },
@@ -112,12 +115,41 @@ process.on("message", async (raw: unknown) => {
         financialAuthorized: q => grant("clinicalFinancial", q), clinicalApproval: async q => await rpc("clinicalApproval", q) as FinancialClinicalApproval | null,
         producerAdmitted: q => grant("producer", q), current,
       } } : {}),
-      work: { authorizeWork: async q => await grant("work", q) ? { reviewDate: "2026-11-02" } : null,
+      work: { authorizeWork: async q => await grant("work", q) ? { reviewDate: setup.reviewDate ?? "2026-11-02" } : null,
         providerBindingAuthorized: q => grant("providerBinding", q), current,
         onCheckoutAcknowledged: async receipt => { await rpc("acknowledged", receipt); } },
       webhook: { allowsReferenceRead: q => grant("webhookReference", q), acceptsExistingPending: q => grant("handoff", q), current },
     }, { barrier, delivery: new SmtpFinancialMessageDelivery(setup.smtp, "Australia/Sydney"), native: port, stripe: port,
       onCycle: cycle => process.send?.({ kind: "cycle", cycle }) });
+    if (setup.voiceRunner) {
+      if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || !config.checkout.cliniko.apiKey.startsWith("synthetic-"))
+        throw new Error("Isolated synthetic owning runner required");
+      for (const key of Object.keys(process.env)) if (key.startsWith("ABBY_") && key !== "ABBY_ISOLATED_POSTGRES_PROBE") delete process.env[key];
+      Object.assign(process.env, {
+        ABBY_VOICE_PORT: "0", ABBY_TENANT_ID: config.checkout.cliniko.scope.tenantId,
+        ABBY_CLINIC_ID: config.checkout.cliniko.scope.clinicId, ABBY_LOCATION_ID: config.checkout.cliniko.scope.locationId,
+        ABBY_CLINIKO_API_KEY: config.checkout.cliniko.apiKey, ABBY_CLINIKO_CONTACT_EMAIL: config.checkout.cliniko.contactEmail,
+        ABBY_TWILIO_TEST_NUMBER: "+6125550199", ABBY_TWILIO_FALLBACK_NUMBER: "+6125550188",
+        ABBY_TWILIO_ACCOUNT_SID: `AC${"1".repeat(32)}`, ABBY_TWILIO_AUTH_TOKEN: "synthetic-token",
+        ABBY_TWILIO_PUBLIC_WEBHOOK_URL: "https://calls.example.test/twilio/inbound",
+        ABBY_TWILIO_PUBLIC_STREAM_URL: "wss://calls.example.test/twilio/media/",
+        ABBY_TWILIO_BINDING_KEY_HEX: "66".repeat(32), ABBY_VOICE_ROUTE_VERSION: "financial-chain-test-v1",
+        ABBY_GREETING_VERSION: "test-v1", ABBY_GREETING_APPROVAL_OWNER_REF: "synthetic-owner",
+        ABBY_GREETING_APPROVED_TEXT: "This is Abby, an AI receptionist. Press 1 for possible times today. Press 2 for possible times tomorrow.",
+        ABBY_SEVEN_DAY_AVAILABILITY_ENABLED: "0", ABBY_OPENAI_API_KEY: "synthetic-openai", ABBY_OPENAI_INTENT_MODEL: "synthetic-model",
+      });
+      try {
+        await serveClinikoVoice({ clinikoFetch: port,
+          openaiFetch: async () => { throw new Error("No synthetic financial model configured"); },
+          financialConsumer: context => {
+            const consumer = makeConsumer(context.rateBudget);
+            if (!consumer.ok) throw new Error("Synthetic financial host unavailable");
+            return consumer.value;
+          } });
+      } finally { await db.destroy(); if (process.connected) process.disconnect(); }
+      return;
+    }
+    const consumer = makeConsumer();
     if (!consumer.ok) throw new Error("Synthetic financial host unavailable");
     const server = createServer(consumer.value.handle); server.listen(0, "127.0.0.1"); await once(server, "listening");
     const address = server.address(); if (!address || typeof address === "string") throw new Error("Synthetic listener unavailable");

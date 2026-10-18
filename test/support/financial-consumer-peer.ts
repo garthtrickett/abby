@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import type { FinancialResendQuery } from "../../src/standalone/cliniko-financial-resend-owner.ts";
 import type { Result } from "../../src/core/model.ts";
 import type { FinancialRecordRetention, FinancialRecordFailure } from "../../src/cliniko/financial-record-retention.ts";
@@ -15,7 +16,7 @@ import { now } from "./financial-retention.ts";
 
 export type FinancialConsumerPeerFixture = Readonly<{ config: FinancialConsumerConfig; intent: ClinikoFinancialIntent;
   dependencies: Readonly<{ native: typeof fetch; stripe: typeof fetch }>; approved: Set<string>; receipts: CheckoutCreationReceipt[] }>;
-export type FinancialConsumerPeerOptions = Readonly<{ now?: string; enableCheckoutExpiry?: boolean; enableClinicalExpiry?: boolean; producerAdmitted?(): boolean;
+export type FinancialConsumerPeerOptions = Readonly<{ now?: string; connectionString?: string; voiceRunner?: true; advancingClock?: true; reviewDate?: string; enableCheckoutExpiry?: boolean; enableClinicalExpiry?: boolean; producerAdmitted?(): boolean;
   allows?(purpose: string, query: unknown): boolean; holdExpiryReply?: boolean; onExpirySubmitted?(): void;
   resend?: FinancialConsumerProcessSetup["resend"];
   resendAuthorized?(query: FinancialResendQuery): boolean | Promise<boolean>;
@@ -33,8 +34,10 @@ export type FinancialConsumerPeerOptions = Readonly<{ now?: string; enableChecko
  * Private RPC payloads stay in volatile fixture memory, never operational logs or
  * a local retry file. Consumers receive only native discovery, not selected refs. */
 export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smtp: SmtpMailConfig, directory: string, options: FinancialConsumerPeerOptions = {}) {
-  const child = fork(new URL("../../dist/runtime/test/support/financial-consumer-process.js", import.meta.url), [], {
-    cwd: directory, stdio: ["ignore", "pipe", "pipe", "ipc"], env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=256" } });
+  const entry = new URL(import.meta.url.endsWith(".js") ? "./financial-consumer-process.js" : "../../dist/runtime/test/support/financial-consumer-process.js", import.meta.url);
+  assert.equal(existsSync(entry), true, "emitted financial worker required");
+  const child = fork(entry, [], {
+    cwd: directory, stdio: ["ignore", "pipe", "pipe", "ipc"], env: { ...process.env, ...(options.connectionString ? { DATABASE_URL: options.connectionString } : {}), NODE_OPTIONS: "--max-old-space-size=256" } });
   const terminal = new Promise<NodeJS.Signals | null>(resolve => child.once("exit", (_code, signal) => resolve(signal)));
   const counts: FinancialConsumerCycle[] = [], output: string[] = [];
   child.stdout?.on("data", data => output.push(String(data))); child.stderr?.on("data", data => output.push(String(data)));
@@ -48,7 +51,7 @@ export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smt
   child.on("message", async (raw: unknown) => {
     const m = raw as { kind: string; id: number; port: number; cycle: FinancialConsumerCycle; data: unknown };
     try {
-      if (m.kind === "ready") { resolveReady(m.port); return; }
+      if (m.kind === (options.voiceRunner ? "listenerReady" : "ready")) { resolveReady(m.port); return; }
       if (m.kind === "resendRetained") { const next = waitingRetention; waitingRetention = undefined; if (next) next.resolve(m.data as Retention); else retention = m.data as Retention; return; }
       if (m.kind === "cycle") {
         if (waiting) { const next = waiting; waiting = undefined; next.resolve(m.cycle); } else counts.push(m.cycle); return;
@@ -85,7 +88,7 @@ export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smt
   });
   const { producer, rateBudget: _budget, clock: _nativeClock, ...cliniko } = f.config.checkout.cliniko;
   const { clock: _stripeClock, ...stripe } = f.config.checkout.stripe, { clock: _webhookClock, ...webhook } = f.config.webhook;
-  const start: FinancialConsumerProcessSetup = { kind: "start", ...(options.resend ? { resend: options.resend } : {}), ...(options.resendRequestRetention ? { resendRequestRetention: options.resendRequestRetention } : {}), now: options.now ?? now, ...(f.config.checkout.cliniko.rateBudget.checkHeadroom ? { supportsHeadroom: true } : {}), ...(options.enableCheckoutExpiry ? { enableCheckoutExpiry: true } : {}), ...(options.enableClinicalExpiry ? { enableClinicalExpiry: true } : {}), ...(options.classClinicalExpiry ? { classClinicalExpiry: options.classClinicalExpiry } : {}), ...(options.caseClassClinicalExpiry ? { caseClassClinicalExpiry: options.caseClassClinicalExpiry } : {}), smtp: { ...smtp, ...(smtp.ca ? { ca: Buffer.from(smtp.ca).toString() } : {}) },
+  const start: FinancialConsumerProcessSetup = { kind: "start", ...(options.voiceRunner ? { voiceRunner: true } : {}), ...(options.advancingClock ? { advancingClock: true } : {}), ...(options.reviewDate ? { reviewDate: options.reviewDate } : {}), ...(options.resend ? { resend: options.resend } : {}), ...(options.resendRequestRetention ? { resendRequestRetention: options.resendRequestRetention } : {}), now: options.now ?? now, ...(f.config.checkout.cliniko.rateBudget.checkHeadroom ? { supportsHeadroom: true } : {}), ...(options.enableCheckoutExpiry ? { enableCheckoutExpiry: true } : {}), ...(options.enableClinicalExpiry ? { enableClinicalExpiry: true } : {}), ...(options.classClinicalExpiry ? { classClinicalExpiry: options.classClinicalExpiry } : {}), ...(options.caseClassClinicalExpiry ? { caseClassClinicalExpiry: options.caseClassClinicalExpiry } : {}), smtp: { ...smtp, ...(smtp.ca ? { ca: Buffer.from(smtp.ca).toString() } : {}) },
     config: { ...f.config, checkout: { ...f.config.checkout, cliniko: { ...cliniko,
       producer: { keyRef: producer.keyRef, pem: producer.publicKey.export({ type: "spki", format: "pem" }).toString() } }, stripe }, webhook } };
   child.send(start);
