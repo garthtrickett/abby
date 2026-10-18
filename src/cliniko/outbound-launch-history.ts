@@ -3,11 +3,11 @@ import type { Result } from "../core/model.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { OwnedBodyError, ownedBodyBytes } from "../shared/owned-body-bytes.ts";
 import { claimClinikoBudget, observeCliniko429 } from "./read-budget.ts";
-import { validRecallDate } from "./recall-note.ts";
 import { decodeOutboundLaunchAttempt, outboundLaunchAttemptDigest, outboundAttemptMatchesRequest } from "./outbound-launch-attempt.ts";
 import { ClinikoOutboundLaunchRecords } from "./outbound-launch-records.ts";
 import type { OutboundLaunchRecordConfig, OutboundLaunchRecordSelection, OutboundLaunchRecordQuery, OutboundLaunchRecordFailure, OutboundLaunchRecord } from "./outbound-launch-records.ts";
-import { outboundNativeId, outboundNativeInstant } from "./internal/outbound-record-context.ts";
+import { outboundNativeInstant } from "./internal/outbound-record-context.ts";
+import { readPatientRecallHistory, PatientRecallHistoryError } from "./internal/patient-recall-history.ts";
 import { outboundLaunchConfigShard, outboundLaunchRecordSelection, outboundLaunchRecordOwnerBinding } from "./internal/outbound-launch-record-context.ts";
 import { encodeOutboundRecipientRequest, decodeOutboundRecipientRequest } from "./outbound-recipient-request.ts";
 import type { OutboundRecipientRequest } from "./outbound-recipient-request.ts";
@@ -26,15 +26,13 @@ export type OutboundLaunchHistoryResult = Readonly<{
   kind: "possibleLaunchHistory"; scanned: number; observedAt: string; records: readonly OutboundLaunchRecord[];
 }>;
 type FailureKind = OutboundLaunchRecordFailure["kind"];
-type Row = Record<string, unknown>;
-const object = (v: unknown): Row | undefined => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Row : undefined;
-const self = (v: unknown) => object(object(v)?.links)?.self;
 class Failure extends Error {
   readonly kind: FailureKind;
+  readonly resetAt?: string;
+  readonly retryAfterMs?: number;
   constructor(kind: FailureKind) { super("Outbound possible-launch history unavailable"); this.kind = kind; }
 }
 function discard(response: Response | undefined): void { try { void response?.body?.cancel().catch(() => {}); } catch { /* Owned body only. */ } }
-type Listed = Readonly<{ id: string; patientId: string; notes: string; recallAt: string; createdAt: string; updatedAt: string; recalled: boolean; recalledAt: string|null; archivedAt: string|null }>;
 
 /** Bounded, archived-inclusive patient evidence, never a launch grant.
  * At most500 patient rows/50 attempt records. Unknown, changed or conflicting
@@ -103,51 +101,25 @@ export class ClinikoOutboundLaunchHistory {
       current(account); current(q); grants.set(q.recallRef!, q);
     };
     try {
-      clock(); let total: number | undefined, scanned = 0, previous = 0n;
-      const selected: Listed[] = [];
-      for (let page = 1; page <= 5; page++) {
-        await accountPermit(); const limited = await wait(claimClinikoBudget(this.#config.rateBudget)); if (limited) return err(limited); await accountPermit();
-        const query = new URLSearchParams({ page: String(page), per_page: "100", sort: "id:asc" });
-        // Only documented null DateTime filters; no notes/type filter exists.
-        query.append("q[]", `patient_id:=${request.patientId}`); query.append("q[]", "archived_at:*");
+      clock();
+      const history = await readPatientRecallHistory({ base: this.#base, patientId: request.patientId, typeId: account.outboundAttemptRecallTypeId }, async url => {
+        await accountPermit(); const limited = await wait(claimClinikoBudget(this.#config.rateBudget)); if (limited) throw Object.assign(new Failure(limited.kind), limited); await accountPermit();
         let response: Response | undefined, bodyOwned = false, raw: unknown;
         try {
           current(account); clock();
-          const found = await wait(this.#fetch(`${this.#base}/recalls?${query}`, { method: "GET", redirect: "error", signal,
+          const found = await wait(this.#fetch(url, { method: "GET", redirect: "error", signal,
             headers: { Accept: "application/json", Authorization: `Basic ${Buffer.from(`${this.#config.apiKey}:`).toString("base64")}`,
               "User-Agent": `Abby (${this.#config.contactEmail})` } }).then(r => { response = r; if (signal.aborted) discard(r); return r; }));
-          if (found.status === 429) return err(await wait(observeCliniko429(this.#config.rateBudget, found.headers.get("X-RateLimit-Reset"))));
+          if (found.status === 429) throw Object.assign(new Failure("rateLimited"), await wait(observeCliniko429(this.#config.rateBudget, found.headers.get("X-RateLimit-Reset"))));
           if (found.status === 401 || found.status === 403) throw new Failure("forbidden");
           if (found.status !== 200) throw new Failure("unavailable");
           bodyOwned = true; const bytes = await wait(ownedBodyBytes(found.body, 1_000_000, signal));
           try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); } catch { throw new Failure("malformed"); }
         } finally { if (!bodyOwned) discard(response); }
         await accountPermit();
-        const envelope = object(raw), count = envelope?.total_entries, rows = envelope?.recalls;
-        if (!Number.isSafeInteger(count) || Number(count) < 0 || Number(count) > 500 || !Array.isArray(rows) || total !== undefined && count !== total) throw new Failure("malformed");
-        total = count as number; if (rows.length !== Math.min(100,total-scanned)) throw new Failure("malformed");
-        const observedAt = clock();
-        for (const value of rows) {
-          const row = object(value), id = row?.id, createdAt = outboundNativeInstant(row?.created_at), updatedAt = outboundNativeInstant(row?.updated_at);
-          const patientLink = self(row?.patient), typeLink = self(row?.recall_type);
-          const patientId = typeof patientLink === "string" && patientLink.startsWith(`${this.#base}/patients/`) ? patientLink.slice(`${this.#base}/patients/`.length) : undefined;
-          const typeId = typeof typeLink === "string" && typeLink.startsWith(`${this.#base}/recall_types/`) ? typeLink.slice(`${this.#base}/recall_types/`.length) : undefined;
-          if (!row || !outboundNativeId(id) || BigInt(id) <= previous || self(row) !== `${this.#base}/recalls/${id}` || !outboundNativeId(patientId) || !outboundNativeId(typeId) ||
-              !createdAt || !updatedAt || createdAt > updatedAt || Date.parse(updatedAt) > Date.parse(observedAt)+30000 ||
-              patientId !== request.patientId || typeof row.recalled !== "boolean" ||
-              row.archived_at !== null && !outboundNativeInstant(row.archived_at) || row.recalled_at !== null && !outboundNativeInstant(row.recalled_at) ||
-              row.recalled !== (row.recalled_at !== null) ||
-              row.archived_at !== null && Date.parse(String(row.archived_at)) > Date.parse(updatedAt) ||
-              row.recalled_at !== null && Date.parse(String(row.recalled_at)) > Date.parse(updatedAt) || !validRecallDate(row.recall_at)) throw new Failure("malformed");
-          previous = BigInt(id); scanned++;
-          if (typeId !== account.outboundAttemptRecallTypeId) continue;
-          if (typeof row.notes !== "string" || row.notes.length > 1050 || selected.length >= 50) throw new Failure("malformed");
-          selected.push({ id, patientId, notes: row.notes, recallAt: row.recall_at, createdAt, updatedAt, recalled:row.recalled,
-            recalledAt:row.recalled_at === null ? null : outboundNativeInstant(row.recalled_at)!, archivedAt:row.archived_at === null ? null : outboundNativeInstant(row.archived_at)! });
-        }
-        if (scanned === total) break;
-        if (page === 5) throw new Failure("malformed");
-      }
+        return raw;
+      }, clock);
+      const selected = history.rows, scanned = history.scanned;
       const actions = new Set<string>(), records: OutboundLaunchRecord[] = [];
       const reader = ClinikoOutboundLaunchRecords.createReadOnly(this.#config, {
         allows: async q => {
@@ -177,7 +149,9 @@ export class ClinikoOutboundLaunchHistory {
       await accountPermit(); for (const q of grants.values()) await recordPermit(q);
       current(account); for (const q of grants.values()) current(q);
       return ok(Object.freeze({ kind: "possibleLaunchHistory", scanned, observedAt: clock(), records: Object.freeze(records) }));
-    } catch (error) { return err({ kind: error instanceof Failure || error instanceof OwnedBodyError ? error.kind : "unavailable" }); }
+    } catch (error) { return err({ kind: error instanceof Failure || error instanceof OwnedBodyError || error instanceof PatientRecallHistoryError ? error.kind : "unavailable",
+      ...(error instanceof Failure && error.resetAt ? { resetAt: error.resetAt } : {}),
+        ...(error instanceof Failure && error.retryAfterMs !== undefined ? { retryAfterMs: error.retryAfterMs } : {}) }); }
     finally { clearTimeout(timer); deadline.abort(); }
   }
 }

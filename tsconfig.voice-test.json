@@ -10,6 +10,7 @@
     "test/support/start-synthetic-queue-monitor.ts",
     "test/support/financial-consumer-process.ts",
     "test/support/outbound-record-process.ts",
+    "test/support/outbound-contact-process.ts",
     "test/support/start-synthetic-voice-runner.ts",
     "test/support/start-synthetic-clinical-runner.ts",
     "test/support/start-synthetic-class-runner.ts",
