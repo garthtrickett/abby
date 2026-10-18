@@ -10,7 +10,7 @@ export type FinancialBookingRecipient = Readonly<{
   read(selection: FinancialBookingSelection, signal: AbortSignal): Promise<Readonly<{ recipient: ClinikoFinancialIntent["recipient"]; expiresAt: string }> | undefined>;
   currentForSend(selection: FinancialBookingSelection, recipient: ClinikoFinancialIntent["recipient"], signal: AbortSignal): boolean;
 }>;
-type Pending = { selection: string; assessment: string; approval: string; expiresAt: number; notBefore: number; checkedUntil: number; ready: boolean };
+type Pending = { selection: string; assessment: string; approval: string; expiresAt: number; notBefore: number; checkedUntil: number; checkedAt: number; ready: boolean };
 const key = (v: unknown) => JSON.stringify(v);
 const mailbox = (v: unknown): v is string => typeof v === "string" && v.length <= 254 && /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(v);
 function freeze<T>(value: T): T { if (value && typeof value === "object") { for (const child of Object.values(value)) freeze(child); Object.freeze(value); } return value; }
@@ -53,9 +53,9 @@ export class ApprovedFinancialBookingPolicy implements FinancialBookingPolicy {
           reviewDate: `${part("year")}-${part("month")}-${part("day")}`, expiresAt: new Date(Math.min(offerEnd, Date.parse(approval.effectiveUntil), until)).toISOString() };
       }
       const again = await this.#fees.currentFor(selection, signal), end = approvalInstant(this.#clock());
-      if (!again.ok || !again.value || key(again.value) !== key(approval) || signal.aborted || epoch !== this.#epoch || end === undefined || end < began || end >= Date.parse(assessment.expiresAt)) return undefined;
+      if (!again.ok || !again.value || key(again.value) !== key(approval) || signal.aborted || epoch !== this.#epoch || end === undefined || end < began || end >= Date.parse(assessment.expiresAt) || assessment.kind === "required" && !this.#recipient.currentForSend(selection, assessment.recipient, signal)) return undefined;
       const result = freeze(assessment);
-      this.#pending = { selection: key(selection), assessment: key(result), approval: key(approval), expiresAt: Date.parse(result.expiresAt), notBefore: began, checkedUntil: began, ready: false };
+      this.#pending = { selection: key(selection), assessment: key(result), approval: key(approval), expiresAt: Date.parse(result.expiresAt), notBefore: began, checkedUntil: began, checkedAt: began, ready: false };
       return result;
     } catch { return undefined; }
   }
@@ -63,7 +63,7 @@ export class ApprovedFinancialBookingPolicy implements FinancialBookingPolicy {
     const epoch = ++this.#epoch, pending = this.#pending; if (pending) pending.ready = false;
     try {
       const selection = freeze(structuredClone(input)), assessment = freeze(structuredClone(raw)), began = approvalInstant(this.#clock());
-      if (!pending || signal.aborted || began === undefined || (began < pending.notBefore || began >= pending.expiresAt) || key(selection) !== pending.selection || key(assessment) !== pending.assessment) return false;
+      if (!pending || signal.aborted || began === undefined || (began < pending.checkedAt || began >= pending.expiresAt) || key(selection) !== pending.selection || key(assessment) !== pending.assessment) return false;
       const found = await this.#fees.currentFor(selection, signal); if (!found.ok || !found.value || key(found.value) !== pending.approval) return false;
       let checkedUntil = pending.expiresAt;
       if (assessment.kind === "required") {
@@ -74,8 +74,8 @@ export class ApprovedFinancialBookingPolicy implements FinancialBookingPolicy {
       }
       const again = await this.#fees.currentFor(selection, signal), end = approvalInstant(this.#clock());
       if (!again.ok || !again.value || key(again.value) !== pending.approval || signal.aborted || this.#pending !== pending || epoch !== this.#epoch ||
-          end === undefined || end < began || end >= checkedUntil) return false;
-      pending.checkedUntil = checkedUntil; pending.ready = true; return true;
+          end === undefined || end < began || end >= checkedUntil || assessment.kind === "required" && !this.#recipient.currentForSend(selection, assessment.recipient, signal)) return false;
+      pending.checkedAt = end; pending.checkedUntil = checkedUntil; pending.ready = true; return true;
     } catch { return false; }
   }
   /** Synchronous continuation fence after current(). It performs no fresh file
@@ -83,7 +83,7 @@ export class ApprovedFinancialBookingPolicy implements FinancialBookingPolicy {
   currentForSend(selection: FinancialBookingSelection, assessment: FinancialBookingAssessment, signal: AbortSignal): boolean {
     try {
       const pending = this.#pending, now = approvalInstant(this.#clock());
-      return !!pending?.ready && !signal.aborted && now !== undefined && now >= pending.notBefore && now < pending.checkedUntil && key(selection) === pending.selection && key(assessment) === pending.assessment &&
+      return !!pending?.ready && !signal.aborted && now !== undefined && now >= pending.checkedAt && now < pending.checkedUntil && key(selection) === pending.selection && key(assessment) === pending.assessment &&
         (assessment.kind === "notRequired" || this.#recipient.currentForSend(selection, assessment.recipient, signal));
     } catch { return false; }
   }

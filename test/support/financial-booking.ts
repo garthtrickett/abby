@@ -9,6 +9,7 @@ import { verifyFinancialBookingObservation } from "../../src/cliniko/financial-b
 
 export async function financialBookingFixture(options: { scope?: import("../../src/core/model.ts").LocationScope; barrierFor?: (native: FinancialBookingPreparationConfig["native"]) => FinancialBookingPreparationConfig["barrier"]; onObservation?: () => void; activate?: boolean; required?: boolean; play?: FinancialBookingPreparationConfig["presentation"]["play"];
   lostObservation?: boolean; lostIntent?: boolean; observationResponse?: (row: Record<string, unknown>) => Response;
+  policy?: import("../../src/standalone/cliniko-financial-booking-preparation.ts").FinancialBookingPolicy;
   quote?: (q: FinancialBookingAssessment) => FinancialBookingAssessment | undefined } = {}) {
   const rows = new Map<string, Record<string, unknown>>(), texts: string[] = [], events: string[] = [], burned = new Set<string>();
   const financialLife = new AbortController(); let allowed = true, live = true, next = 100;
@@ -46,7 +47,7 @@ export async function financialBookingFixture(options: { scope?: import("../../s
       authority: { allows: async () => allowed, producerAdmitted: async () => allowed, current: () => live },
       barrier: { matches: () => true, claimOnce: async ref => { const claimed = !burned.has(ref); burned.add(ref); return { ok: true, value: { claimed } }; } },
       financialSignal: financialLife.signal, fetchPort,
-      policy: { quote: async selection => {
+      policy: options.policy ?? { quote: async selection => {
         const q: FinancialBookingAssessment = options.required === false ? { kind: "notRequired", version: "fee-none-1", expiresAt: selection.expiresAt } : {
           kind: "required", payment: { amount: 5000, currency: "gbp", policyVersion: "fee-policy-1", termsVersion: "financial-terms-1", deadline: "2026-10-05T04:00:00.000Z" },
           recipient: { kind: "email", address: "financial-recipient@example.invalid" }, approvedTerms: "The clinic will review late payment; no automatic refund is promised.", reviewDate: "2026-10-05", expiresAt: selection.expiresAt };
