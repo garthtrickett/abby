@@ -22,8 +22,10 @@ test('actual synthetic private resend reports active fixed stages without privat
    assert.ok(Object.values(value).every(n=>typeof n==='number'&&Number.isFinite(n)&&n>=0),'finite nonnegative counters required');
    assert.ok(Number.isInteger(value.count)&&Number.isInteger(value.pending)&&value.pending<=value.count,'valid active stage counts required');
   }
-  for(const name of ['verifiedSubject','exactEvidence','recipientSession','selectedEvidence','ledgerRead','ownedPrivatePlayback','voiceSpeechStarted','voiceFinishTurn','transcriptionAccept','transcriptionFlush'])
-   assert.ok(diagnostic[name]?.count>0,`actual ${name} stage must be observed`);
+  for(const name of ['verifiedSubject','exactEvidence','recipientSession','selectedEvidence','ledgerRead','ownedPrivatePlayback','voiceSpeechStarted','voiceFinishTurn','transcriptionAccept','transcriptionFlush']) {
+   const row=Object.entries(diagnostic).find(([key])=>key===name)?.[1];
+   assert.ok(row!==null&&typeof row==='object'&&'count' in row&&typeof row.count==='number'&&row.count>0,`actual ${name} stage must be observed`);
+  }
   assert.equal(call.mutations.length,0);const mail=call.messages.find(m=>m.kind==='verificationEmail');assert.ok(mail?.code);
   await call.scan(['registered-session@example.test','private-session-chart',mail.code]);
  });
