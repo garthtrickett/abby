@@ -25,7 +25,8 @@ export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid"
     const f = await bookingCallFlowFixture({ budget }); f.flow.dispose();
     const financialLife = new AbortController();
     let call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined;
-    let readClock = f.config.clock;
+    assert.ok(f.config.clock);
+    let readClock: () => string = f.config.clock;
     const funding = fixture({ intent: { ...intentValue(), scope: f.scope },
       config: { scope: f.scope, apiKey: f.config.cliniko.apiKey, businessId: f.config.cliniko.businessId,
         contactEmail: f.config.cliniko.contactEmail, rateBudget: budget, clock: () => readClock() },
@@ -38,8 +39,8 @@ export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid"
       if (url.pathname === "/v1/recalls" && body?.recall_type_id === "40" ||
           url.pathname.startsWith("/v1/recalls/") && funding.rows.has(url.pathname.split("/").at(-1)!)) return funding.port(input, init);
       if (url.pathname === "/v1/recalls" && init?.method === "GET" && url.searchParams.getAll("q[]").some(q => q.startsWith("patient_id:="))) {
-        const rows = [...funding.rows.values(), ...f.recalls.map(row => ({ ...row, links: { self: `${url.origin}/v1/recalls/${row.id}` }, created_at: readClock(), updated_at: readClock() }))]
-          .sort((a, b) => Number(a.id) - Number(b.id));
+        const rows: Record<string, unknown>[] = [...funding.rows.values(), ...f.recalls.map(row => ({ ...row, links: { self: `${url.origin}/v1/recalls/${row.id}` }, created_at: readClock(), updated_at: readClock() }))];
+        rows.sort((a, b) => Number(a.id) - Number(b.id));
         const page = Number(url.searchParams.get("page") ?? 1); return Response.json({ total_entries: rows.length, recalls: rows.slice((page - 1) * 100, page * 100) });
       }
       return base(input, init);
@@ -76,7 +77,7 @@ export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid"
           await call.turn("What times are available on October 8?"); await call.mark(); await call.turn("The second time, please."); await call.mark();
           const input = call.flow.financialBookingInput; assert.ok(input); let parts = 0;
           while (input.inputAdmission()?.phase === "unplayed" && parts++ < 16) {
-            const frames = call.transcriptionFrames; await call.privateDigit("1");
+            const frames: number = call.transcriptionFrames; await call.privateDigit("1");
             call.media(true); for (let i = 0; i < 5; i++) call.media(false);
             await call.privateKey("1"); assert.equal(input.readySelection, undefined); assert.equal(call.transcriptionFrames, frames);
             await call.mark(); await voiceUntil(() => input.inputAdmission() !== undefined || !input.inputActive, "actual individual financial played mark");
