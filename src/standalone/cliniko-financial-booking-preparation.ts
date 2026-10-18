@@ -37,7 +37,12 @@ export type FinancialBookingAssessment = Readonly<{ kind: "notRequired"; version
   kind: "required"; payment: ClinikoFinancialIntent["payment"]; recipient: ClinikoFinancialIntent["recipient"];
   approvedTerms: string; reviewDate: string; expiresAt: string;
 }>;
+export type FinancialBookingPolicyCallContext = Readonly<{
+  scope: LocationScope; callId: string; sessionId: string; signal: AbortSignal; clock: () => string;
+}>;
 export type FinancialBookingPolicy = Readonly<{
+  /** Mutable quote/recipient owners cannot be mounted as a shared voice policy. */
+  ownership?: "call";
   quote(selection: FinancialBookingSelection, signal: AbortSignal): Promise<FinancialBookingAssessment | undefined>;
   current(selection: FinancialBookingSelection, assessment: FinancialBookingAssessment, signal: AbortSignal): Promise<boolean>;
   currentForSend(selection: FinancialBookingSelection, assessment: FinancialBookingAssessment, signal: AbortSignal): boolean;

@@ -24,6 +24,7 @@ export class ApprovedFinancialBookingPolicy implements FinancialBookingPolicy {
   readonly #clock: () => string;
   #pending: Pending | undefined;
   #epoch = 0;
+  get ownership(): "call" { return "call"; }
   constructor(config: Readonly<{ fees: OwnerFileFinancialFeePolicy; recipient: FinancialBookingRecipient; clock?: () => string }>) {
     if (!(config.fees instanceof OwnerFileFinancialFeePolicy) || typeof config.recipient?.read !== "function" ||
         typeof config.recipient.currentForSend !== "function" || config.clock !== undefined && typeof config.clock !== "function") throw new TypeError("Invalid financial booking policy");

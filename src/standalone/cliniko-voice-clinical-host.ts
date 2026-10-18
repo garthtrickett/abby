@@ -1,5 +1,6 @@
+import { callIdFor } from "../voice/admission.ts";
 import { inheritClinikoRequestCost } from "../cliniko/request-cost.ts";
-import type { FinancialBookingPreparationConfig } from "./cliniko-financial-booking-preparation.ts";
+import type { FinancialBookingPreparationConfig, FinancialBookingPolicy, FinancialBookingPolicyCallContext } from "./cliniko-financial-booking-preparation.ts";
 import { captureConfirmationResendPolicy } from "./capture-confirmation-resend-policy.ts";
 import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
 import type { ClinikoRequestBudget } from "../cliniko/read-budget.ts";
@@ -13,12 +14,23 @@ import { ClinikoCallFlow } from "./cliniko-call-flow.ts";
 import type { ClinikoCallFlowConfig } from "./cliniko-call-flow.ts";
 import type { ClinikoVoiceWorkflow } from "./transient-voice-composition.ts";
 
+export type FinancialVoiceProvision = Omit<FinancialBookingPreparationConfig, "presentation" | "policy"> & (
+  | Readonly<{ policy: FinancialBookingPolicy; policyForCall?: never }>
+  | Readonly<{ policy?: never; policyForCall(context: FinancialBookingPolicyCallContext): FinancialBookingPolicy }>
+);
+const policyMethods = (policy: FinancialBookingPolicy | undefined) => !!policy &&
+  [policy.quote, policy.current, policy.currentForSend].every(method => typeof method === "function");
+function policySnapshot(policy: FinancialBookingPolicy): FinancialBookingPolicy {
+  return Object.freeze({ ...(policy.ownership ? { ownership: policy.ownership } : {}),
+    quote: inheritClinikoRequestCost(policy.quote.bind(policy), policy.quote),
+    current: inheritClinikoRequestCost(policy.current.bind(policy), policy.current), currentForSend: policy.currentForSend.bind(policy) });
+}
 type CallOwned = "receipt" | "inbound" | "sessionId" | "ledger" | "signal" | "clock";
 export type ClinikoVoiceClinicalHostConfig = Omit<ClinikoCallFlowConfig, CallOwned | "intake" | "correction" | "resend" | "financial"> & Readonly<{
   scope: LocationScope;
   greeting: ApprovedGreeting;
   /** The admitted call supplies private playback; no shared/static receipt port. */
-  financial?: Omit<FinancialBookingPreparationConfig, "presentation">;
+  financial?: FinancialVoiceProvision;
   intake?: Omit<NonNullable<ClinikoCallFlowConfig["intake"]>, "presentation">;
   resend?: Omit<NonNullable<ClinikoCallFlowConfig["resend"]>, "presentation">;
   correction?: Omit<NonNullable<ClinikoCallFlowConfig["correction"]>, "presentation">;
@@ -33,6 +45,7 @@ export type ClinikoVoiceClinicalHostConfig = Omit<ClinikoCallFlowConfig, CallOwn
  * This host cannot change admission readiness or manufacture a verification result. */
 export class ClinikoVoiceClinicalHost {
   readonly #config: ClinikoVoiceClinicalHostConfig;
+  readonly #financialPolicies = new WeakSet<object>();
   constructor(config: ClinikoVoiceClinicalHostConfig) {
     if (!validGreetingShape(config.greeting, config.scope) || typeof config.intent !== "function" ||
         config.correction && typeof config.privateCorrectionTranscription !== "function" ||
@@ -43,7 +56,10 @@ export class ClinikoVoiceClinicalHost {
     if (financial && (!sameScope(financial.native.scope, config.scope) || financial.native.businessId !== config.cliniko.businessId ||
         clinikoCredentialFingerprint(financial.native.apiKey) !== clinikoCredentialFingerprint(config.cliniko.apiKey) ||
         financial.native.rateBudget !== config.cliniko.rateBudget)) throw new RangeError("invalid clinical financial binding");
-    const financialProvision = financial ? Object.freeze({
+    if (financial && (financial.policyForCall !== undefined
+      ? typeof financial.policyForCall !== "function" || financial.policy !== undefined
+      : !policyMethods(financial.policy) || financial.policy!.ownership === "call")) throw new RangeError("invalid clinical financial policy ownership");
+    const financialProvision: FinancialVoiceProvision | undefined = financial ? Object.freeze({
       native: Object.freeze({ ...financial.native, scope: Object.freeze({ ...financial.native.scope }),
         stripe: Object.freeze({ ...financial.native.stripe }), producer: Object.freeze({ ...financial.native.producer }) }),
       privateKey: financial.privateKey, financialSignal: financial.financialSignal,
@@ -51,9 +67,7 @@ export class ClinikoVoiceClinicalHost {
       authority: Object.freeze({ allows: inheritClinikoRequestCost(financial.authority.allows.bind(financial.authority), financial.authority.allows),
         producerAdmitted: inheritClinikoRequestCost(financial.authority.producerAdmitted.bind(financial.authority), financial.authority.producerAdmitted),
         current: financial.authority.current.bind(financial.authority) }),
-      policy: Object.freeze({ quote: inheritClinikoRequestCost(financial.policy.quote.bind(financial.policy), financial.policy.quote),
-        current: inheritClinikoRequestCost(financial.policy.current.bind(financial.policy), financial.policy.current),
-        currentForSend: financial.policy.currentForSend.bind(financial.policy) }),
+      ...(financial.policyForCall ? { policyForCall: financial.policyForCall.bind(financial) } : { policy: policySnapshot(financial.policy!) }),
       barrier: Object.freeze({ matches: financial.barrier.matches.bind(financial.barrier), claimOnce: financial.barrier.claimOnce.bind(financial.barrier) }),
       ...(financial.fetchPort ? { fetchPort: financial.fetchPort } : {}) }) : undefined;
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }),
@@ -121,19 +135,37 @@ export class ClinikoVoiceClinicalHost {
     if (!this.matches(approval)) throw new RangeError("clinical voice host binding mismatch");
     const c = this.#config;
     const { intake, correction, resend, financial, ...base } = c;
+    const usedPolicies = this.#financialPolicies;
     return { policies: this.#policies, ...(c.publicKnowledge ? { publicKnowledge: c.publicKnowledge } : {}),
       ...(c.privateIntakeTranscription ? { privateIntakeTranscription: c.privateIntakeTranscription } : {}),
       ...(c.privateCorrectionTranscription ? { privateCorrectionTranscription: c.privateCorrectionTranscription } : {}),
       ...(c.privateRepresentativeTranscription ? { privateRepresentativeTranscription: c.privateRepresentativeTranscription } : {}),
       intent: c.intent,
       create(context) {
-        if (!sameScope(context.receipt.scope, c.scope) || resend && !context.resendPresentation ||
+        if (!sameScope(context.receipt.scope, c.scope) || !context.sessionId ||
+            context.receipt.callId !== callIdFor(context.inbound.key) ||
+            context.receipt.admission.key.accountRef !== context.inbound.key.accountRef ||
+            context.receipt.admission.key.providerCallRef !== context.inbound.key.providerCallRef ||
+            context.receipt.admission.dialedNumber !== context.inbound.dialedNumber || resend && !context.resendPresentation ||
             financial && typeof context.financialPresentation?.play !== "function") {
           throw new RangeError("clinical voice admission mismatch");
         }
+        let provision: FinancialBookingPreparationConfig | undefined;
+        if (financial) {
+          const { policyForCall, policy: sharedPolicy, ...common } = financial;
+          const callContext = Object.freeze({ scope: Object.freeze({ ...c.scope }), callId: context.receipt.callId,
+            sessionId: context.sessionId, signal: context.signal, clock: context.clock });
+          if (!(callContext.signal instanceof AbortSignal) || callContext.signal.aborted || typeof callContext.clock !== "function") throw new RangeError("clinical voice admission mismatch");
+          let policy: FinancialBookingPolicy | undefined;
+          try { policy = policyForCall ? policyForCall(callContext) : sharedPolicy; }
+          catch { throw new RangeError("clinical financial policy unavailable"); }
+          if (!policyMethods(policy) || policyForCall && usedPolicies.has(policy!)) throw new RangeError("clinical financial policy unavailable");
+          if (policyForCall) usedPolicies.add(policy!);
+          provision = { ...common, native: { ...common.native, clock: context.clock }, policy: policySnapshot(policy!),
+            presentation: Object.freeze({ play: context.financialPresentation!.play.bind(context.financialPresentation) }) };
+        }
         const flow = ClinikoCallFlow.create({ ...base, ...context, policyVersion: c.policyVersion,
-          ...(financial ? { financial: { ...financial, native: { ...financial.native, clock: context.clock },
-            presentation: Object.freeze({ play: context.financialPresentation!.play.bind(context.financialPresentation) }) } } : {}),
+          ...(provision ? { financial: provision } : {}),
           ...(intake ? { intake: { ...intake, presentation: context.privatePresentation } } : {}),
           ...(correction ? { correction: { ...correction, presentation: context.privatePresentation } } : {}),
           ...(resend ? { resend: { ...resend, presentation: context.resendPresentation! } } : {}) });
