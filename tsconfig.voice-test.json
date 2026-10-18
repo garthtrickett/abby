@@ -9,6 +9,7 @@
     "src/standalone/operator-alert-magic-link.ts",
     "test/support/start-synthetic-queue-monitor.ts",
     "test/support/financial-consumer-process.ts",
+    "test/support/financial-expiry-process-observer.ts",
     "test/support/financial-class-voice-process.ts",
     "test/support/financial-class-caller-chain-process.ts",
     "test/support/financial-individual-caller-process.ts",

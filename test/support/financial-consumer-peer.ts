@@ -38,10 +38,13 @@ export class FinancialConsumerCycleWaitTimeout extends Error {}
  * Private RPC payloads stay in volatile fixture memory, never operational logs or
  * a local retry file. Consumers receive only native discovery, not selected refs. */
 export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smtp: SmtpMailConfig, directory: string, options: FinancialConsumerPeerOptions = {}) {
+  if (options.observeExpiry && (!options.voiceRunner || !options.connectionString)) throw new Error("Expiry observations require the actual SQL voice fixture");
   const entry = new URL(import.meta.url.endsWith(".js") ? "./financial-consumer-process.js" : "../../dist/runtime/test/support/financial-consumer-process.js", import.meta.url);
   assert.equal(existsSync(entry), true, "emitted financial worker required");
+  const observer = new URL("./financial-expiry-process-observer.js", entry);
+  if (options.observeExpiry) assert.equal(existsSync(observer), true, "emitted expiry observer required");
   const child = fork(entry, [], {
-    ...(options.observeExpiry ? { execArgv: [...process.execArgv, "--import", new URL("./financial-expiry-process-observer.js", entry).href] } : {}),
+    ...(options.observeExpiry ? { execArgv: [...process.execArgv, "--import", observer.href] } : {}),
     cwd: directory, stdio: ["ignore", "pipe", "pipe", "ipc"], env: { ...process.env, ...(options.connectionString ? { DATABASE_URL: options.connectionString } : {}), NODE_OPTIONS: "--max-old-space-size=256" } });
   const terminal = new Promise<NodeJS.Signals | null>(resolve => child.once("exit", (_code, signal) => resolve(signal)));
   const counts: FinancialConsumerCycle[] = [], output: string[] = [];

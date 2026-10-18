@@ -119,10 +119,16 @@ async function run({ actor: c, observation, clock, advanceTo, directory, connect
       clinical = true; seenClinical = false; peer = await launch();
       if (kind === "reviewTerms") {
         const mismatch = await until(() => seenClinical, "original clinic-review terms cannot become cancellation consent");
-        assert.equal(mismatch.clinicalExpiryCancelled, 0); assert.ok(mismatch.reviewRequired > 0); await noClinicalClaim(); stage(5);
+        assert.equal(mismatch.clinicalExpiryCancelled, 0); assert.ok(mismatch.reviewRequired > 0); await noClinicalClaim();
+        assert.equal(peer!.expiryObservation?.code, 5, "real financial-consent refusal must reach bounded diagnostic IPC");
+        assert.equal(peer!.expiryObservation?.claims, 0); stage(5);
       } else {
         const cancelled = await until(cycle => cycle.clinicalExpiryCancelled === 1, "one independently approved original target cancellation");
-        assert.ok(seenClinical); assert.equal(cancelled.checkoutExpiryAcknowledged, 0); assert.equal(original.cancellations.length, 1); stage(5);
+        assert.ok(seenClinical); assert.equal(cancelled.checkoutExpiryAcknowledged, 0); assert.equal(original.cancellations.length, 1);
+        const observed = peer!.expiryObservation;
+        assert.ok(observed, "real expiry result must reach bounded diagnostic IPC");
+        assert.equal(observed.code, 1); assert.ok(observed.claims >= 2); assert.ok(observed.requests > 0);
+        if (kind === "passClass" || kind === "ordinaryClass") assert.ok(observed.quotaRequired > 0); stage(5);
         if (kind === "passClass") {
           const f = original.classBooking!;
           assert.deepEqual(f.pass.record.attendee_ids, ["601", "401"]);
