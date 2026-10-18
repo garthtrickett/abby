@@ -115,16 +115,17 @@ export async function financialClassCallerChain(passes: boolean, stage: (value: 
         assert.deepEqual(f.writes, originalWrites);
         await peer.kill(); output.push(...peer.output); peer = undefined;
       });
-      assert.ok(output.every(line => /^Abby voice local listener ready on 127\.0\.0\.1:\d+; calls disabled\n$/.test(line)));
+      assert.match(output.join(""), /^(Abby voice local listener ready on 127\.0\.0\.1:\d+; calls disabled\n){3}$/);
       assert.deepEqual(await readdir(directory), []);
       const budgets = await db.selectFrom("cliniko_request_budgets").selectAll().execute();
       assert.equal(budgets.length, 1); assert.equal(budgets[0]!.max_per_minute, 180);
       assert.ok(Array.isArray(budgets[0]!.sent_at_ms) && budgets[0]!.sent_at_ms.length <= 180);
       const canaries = [intent.recipient.address, observation.financialConsent!.presentationDigest,
-        observation.intentDigest, "cs_test_owner", "private-checkout-token", "private-consumer", ...originalNotes.map(String)];
+        observation.intentDigest, "cs_test_owner", "private-checkout-token", "private-consumer",
+        "Abby financial intent v1", "Abby financial booking observation v3"];
       assert.deepEqual(value(await scanPatientDataCanaries(db, canaries.map((value, i) => ({ label: `chain_${i}`, value })))), []);
       const dump = execFileSync("pg_dump", [connectionString, "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 8_000_000 }).toString();
-      for (const canary of canaries) assert.equal(dump.includes(canary), false);
+      for (const canary of [...canaries, ...originalNotes.map(String)]) assert.equal(dump.includes(canary), false);
       stage(7);
     } finally {
       clearInterval(timer); await peer?.kill(); await c.consumer.close(); await rm(directory, { recursive: true, force: true });
