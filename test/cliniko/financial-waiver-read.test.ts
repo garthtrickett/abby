@@ -38,6 +38,12 @@ test("changed, recalled, archived or unsigned native waiver records cannot publi
   const f = await nativeWaiverFixture(); t.after(f.close);
   assert.equal((await f.create(async () => Response.json({ ...f.row, ...patch })).read(f.binding, signal())).ok, false);
 });
+test("copying a signed waiver to another native row cannot bypass original-record revocation", async t => {
+  const f = await nativeWaiverFixture(); t.after(f.close);
+  const reader = f.create(async () => Response.json({ ...f.row, id: "72", links: { self: `${base}/recalls/72` } }));
+  const found = await reader.read({ ...f.binding, waiverRecallRef: "cliniko:recall:72" }, signal());
+  assert.equal(found.ok, false, "the signature must bind its own native waiver record");
+});
 test("withdrawal during actual physical quota wait prevents the private GET", async t => {
   const f = await nativeWaiverFixture(); t.after(f.close);
   const config = { ...f.config, rateBudget: { ...f.config.rateBudget, claim: async () => { await f.withdraw(); return null; } } };

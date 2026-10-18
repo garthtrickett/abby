@@ -12,9 +12,9 @@ import type { ClinikoFinancialReviewConfig } from "../../src/cliniko/financial-r
 
 export const waiverKeys = generateKeyPairSync("ed25519"), issuerKey = Object.freeze({ keyRef: "fixture-waiver-issuer", publicKey: waiverKeys.publicKey });
 export function waiverFixture() {
-  const f = retention(), expected = { intent: f.intent, intentRecallRef: "cliniko:recall:30", targetRef: "cliniko:appointment:91" };
+  const f = retention(), expected = { intent: f.intent, intentRecallRef: "cliniko:recall:30", waiverRecallRef: "cliniko:recall:71", targetRef: "cliniko:appointment:91" };
   const decision: FinancialWaiverDecision = { actionRef: uuid(80), financialActionRef: f.intent.actionRef, intentRecallRef: expected.intentRecallRef,
-    intentDigest: financialIntentDigest(f.intent)!, targetRef: expected.targetRef, amount: f.intent.payment.amount, currency: f.intent.payment.currency,
+    waiverRecallRef: expected.waiverRecallRef, intentDigest: financialIntentDigest(f.intent)!, targetRef: expected.targetRef, amount: f.intent.payment.amount, currency: f.intent.payment.currency,
     approvedAt: "2026-11-01T09:30:00.000Z", expiresAt: "2026-11-02T01:00:00.000Z", issuerKeyRef: issuerKey.keyRef };
   const format = (d: FinancialWaiverDecision = decision, key = waiverKeys.privateKey) => {
     const payload = financialWaiverPayload(d); if (!payload) throw new Error("Invalid fixture decision");

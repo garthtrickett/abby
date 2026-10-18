@@ -13,7 +13,7 @@ import { sameScope } from "./appointment-change-authority.ts";
 /** Fixed purpose separates this approval from booking-producer trust and the
  * ordinary financial record schema. The approved file remains non-patient. */
 export const financialWaiverContentPolicy = Object.freeze({ version: "financial-waiver-v1",
-  digest: createHash("sha256").update("abby.financial-waiver.v1:explicit-positive-signed-decision:exact-intent-and-target:no-payment-or-clinical-grant").digest("hex") });
+  digest: createHash("sha256").update("abby.financial-waiver.v1:explicit-positive-signed-decision:exact-intent-native-waiver-record-and-target:no-payment-or-clinical-grant").digest("hex") });
 type Failure = Readonly<{ kind: "unavailable" }>;
 
 /** An explicitly supplied issuer key needs its own current clinic source
