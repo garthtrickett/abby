@@ -4,6 +4,7 @@ import { ClinikoVoiceClinicalHost } from "../../src/standalone/cliniko-voice-cli
 import { financialClassBookingFixture } from "../support/financial-class-booking.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
 import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
+import { MemoryLedger } from "../../src/core/ledger.ts";
 import { ok } from "../../src/core/model.ts";
 import type { ClinikoSelectionApproval } from "../../src/cliniko/catalogue-setup.ts";
 async function fixture() {
@@ -14,7 +15,8 @@ async function fixture() {
     selection: { businessId: config.cliniko.businessId, practitionerId: config.cliniko.practitionerId, appointmentTypeId: config.cliniko.appointmentTypeId, policyVersion: config.policyVersion },
     alternatives: [], businessTimeZone: config.cliniko.timeZone, credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey),
     catalogueObservedAt: config.clock!(), approvedAt: config.clock!(), approvedBy: "synthetic-admin", patientActionMode: "unavailable", patientRequestMode: "unavailable" };
-  const context = { receipt: config.receipt, inbound: config.inbound, sessionId: config.sessionId, ledger: config.ledger, policies: config.policies,
+  const ledger = config.ledger; assert.ok(ledger instanceof MemoryLedger);
+  const context = { receipt: config.receipt, inbound: config.inbound, sessionId: config.sessionId, ledger, policies: config.policies,
     signal: config.signal, clock: config.clock!, privatePresentation: { play: async () => true } };
   return { f, config, host, approval, context };
 }
