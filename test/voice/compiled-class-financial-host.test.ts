@@ -8,7 +8,9 @@ import { join } from "node:path";
 const enabled = process.env.ABBY_ISOLATED_POSTGRES_PROBE === "1";
 for (const passes of [false, true]) test(`compiled real clinical host owns class financial played consent and privacy (pass=${passes})`, { skip: !enabled, timeout: 150_000 }, async () => {
   const folder = await mkdtemp(join(tmpdir(), "abby-financial-host-compiled-"));
-  const childEnv: NodeJS.ProcessEnv = { ...process.env, NODE_OPTIONS: "--max-old-space-size=256" };
+  // The journey creates its own isolated database; never use ambient credentials.
+  const childEnv: NodeJS.ProcessEnv = { ...process.env, NODE_OPTIONS: "--max-old-space-size=256",
+    DATABASE_URL: "intentionally-not-a-database-url" };
   delete childEnv.ABBY_TEST_MENU_TIMINGS; // Optional fixed diagnostics, not application timing.
   const child = fork(new URL("../../dist/runtime/test/support/financial-class-voice-process.js", import.meta.url), [], {
     cwd: folder, stdio: ["ignore", "pipe", "pipe", "ipc"], env: childEnv });

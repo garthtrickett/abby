@@ -8,7 +8,7 @@ process.on("message", async (raw: unknown) => {
   if (value.kind !== "start" || typeof value.passes !== "boolean" || Object.keys(value).sort().join(",") !== "kind,passes") return;
   started = true;
   try {
-    if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || !process.env.DATABASE_URL?.includes("/abby_test")) throw new Error("isolated financial serving fixture required");
+    if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.DATABASE_URL !== "intentionally-not-a-database-url") throw new Error("isolated financial serving fixture required");
     await financialClassVoiceJourney(value.passes);
     process.send?.({ kind: "result", passed: true });
   } catch {
