@@ -4702,3 +4702,42 @@ controls. Source/dependencies stayed pinned and wait99972 was reaped. This
 small no-database check does not qualify serving artifacts or original-caller
 PostgreSQL expiry; those validations remain pending. The one-start Gust fairness
 handoff still precedes further large build/PostgreSQL backfill.
+
+## Current through531 combined regression passed,18October2026
+
+Frozen combined source `0f2b38252ce3f1f26985bd18ed03f9b97d434e9f`
+completed work `1792301748552` naturally at06:41:12.669497UTC. Exact command:
+`bash scripts/with-postgres.sh bash -c 'npm run db:migrate && NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck && ABBY_LEDGER=postgres npm run test:postgres'`.
+The normal required builds, default four-file concurrency and unchanged test
+contracts produced4411passed/0failed/1existing skip of4412; all six ordered
+followups then passed. The skipped C-LIVE-40 real demo-created-patient witness
+retains its existing gate; no live-provider qualification is claimed.
+
+All six original ordinary/pass class and individual paid/unpaid caller journeys
+passed inside this default-concurrency run. This supersedes the older bee6
+red result for the combined through531 candidate; it does not establish the
+sole original cause of that historical redacted failure. The original stage and
+controlled quota evidence remain preserved.
+
+The Node scope peaked1545830400B/2GiB and external database591925248B/1GiB,
+CPU200% each/Swap0/allOOMhighmax0. Source1771 and601 final generated artifacts
+were independently rechecked after terminal; wrapper2090125 was absent, scope
+and owned DB slice inactive, own Docker resources absent and pairedwait41792
+reaped. No unchanged full retry or automatic follow-on ran. This candidate
+includes the qualified527 diagnostics and531 caller changes but excludes the
+new original-caller clinical-expiry/quiet-quota correction. That correction's
+current build and actual caller qualification remain distinct. All thirteen
+gaps and authoritative cloud/clinic/provider/sender/restore/acoustic/deployment
+acceptance remain open; no merge, live activation or Aeva deletion follows.
+
+Current expiry runtime `8770a45` then passed98 affected class/native controls,
+full strict TypeScript and serving emission in work `1792305736289`, terminal
+06:48:16.595383UTC, peak1,506,803,712B/2GiB/CPU100%/heap1536MiB/Swap0/OOM0,
+601 emitted artifacts, unchanged source/dependencies and wait60015 reaped.
+Before the actual caller run, the test-only cycle observer must distinguish its
+unchanged10s observation timeout from a terminal worker during the legitimate
+60s quota pause. It may reobserve only the same connected live child within
+one original95s absolute stage deadline. Caller120s and parent570s/test600s
+remain unchanged, no worker/effect is restarted and child failure still fails.
+The affected helper graph needs fresh emission and all ten caller cases remain
+pending; no passing caller expiry or new combined-full claim is implied.

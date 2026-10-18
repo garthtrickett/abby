@@ -6,7 +6,7 @@ import { financialIndividualCaller } from "./financial-individual-caller.ts";
 import { withClassFinancialCaller } from "./financial-class-caller-context.ts";
 import type { FinancialClassVoiceBooking } from "./financial-class-voice-journey.ts";
 import type { FinancialCallerActor } from "./financial-caller-context.ts";
-import { financialConsumerPeer } from "./financial-consumer-peer.ts";
+import { financialConsumerPeer, FinancialConsumerCycleWaitTimeout } from "./financial-consumer-peer.ts";
 import type { FinancialConsumerCycle } from "../../src/standalone/cliniko-financial-consumer.ts";
 import type { FinancialConsumerClassExpirySetup } from "./financial-consumer-process.ts";
 import { withSmtpVerificationServer } from "./smtp-verification-server.ts";
@@ -38,10 +38,27 @@ async function run({ actor: c, observation, clock, advanceTo, directory, connect
   const output: string[] = [];
   const until = async (predicate: (cycle: FinancialConsumerCycle) => boolean, label: string) => {
     const deadline = performance.now() + 95_000;
-    while (true) {
-      assert.ok(performance.now() < deadline, label);
-      const cycle = await peer!.nextCycle(); if (predicate(cycle)) return cycle;
-    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const observe = async () => {
+      while (true) {
+        assert.ok(performance.now() < deadline, label);
+        let cycle: FinancialConsumerCycle;
+        try { cycle = await peer!.nextCycle(); }
+        catch (error) {
+          // Native quota recovery may leave the same worker quiet for a minute.
+          // Reobserve only its bounded IPC wait; never restart work or extend
+          // this stage's original95s, peer10s or caller120s contracts.
+          if (error instanceof FinancialConsumerCycleWaitTimeout && peer!.child.connected &&
+              peer!.child.exitCode === null && peer!.child.signalCode === null) continue;
+          throw error;
+        }
+        if (predicate(cycle)) return cycle;
+      }
+    };
+    try { return await Promise.race([observe(), new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(label)), Math.max(1, deadline - performance.now()));
+    })]); }
+    finally { if (timer) clearTimeout(timer); }
   };
   const stop = async () => { await peer!.kill(); output.push(...peer!.output); peer = undefined; };
   const noClinicalClaim = async () => {

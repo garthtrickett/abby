@@ -30,6 +30,8 @@ export type FinancialConsumerPeerOptions = Readonly<{ now?: string; connectionSt
   classClinicalApproval?(query: FinancialUnlinkedClassExpiryQuery): FinancialUnlinkedClassApproval | null | Promise<FinancialUnlinkedClassApproval | null>;
   clinicalApproval?(query: FinancialClinicalExpiryQuery): FinancialClinicalApproval | null | Promise<FinancialClinicalApproval | null>;
   holdClinicalReply?: boolean; onClinicalSubmitted?(): void }>;
+/** A bounded observation wait is not proof that the outliving worker stopped. */
+export class FinancialConsumerCycleWaitTimeout extends Error {}
 /** Actual compiled host with outliving independently authorized fixture providers.
  * Private RPC payloads stay in volatile fixture memory, never operational logs or
  * a local retry file. Consumers receive only native discovery, not selected refs. */
@@ -96,7 +98,7 @@ export async function financialConsumerPeer(f: FinancialConsumerPeerFixture, smt
     const queued = counts.shift(); if (queued) return queued;
     assert.equal(waiting, undefined);
     return new Promise<FinancialConsumerCycle>((resolve, reject) => {
-      const timer = setTimeout(() => { waiting = undefined; reject(new Error("Synthetic process cycle deadline")); }, 10_000);
+      const timer = setTimeout(() => { waiting = undefined; reject(new FinancialConsumerCycleWaitTimeout("Synthetic process cycle deadline")); }, 10_000);
       waiting = { resolve: cycle => { clearTimeout(timer); resolve(cycle); }, reject: error => { clearTimeout(timer); reject(error); } };
     });
   };
