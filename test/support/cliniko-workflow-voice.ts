@@ -320,7 +320,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       const resumeChunk = chunk; await voiceUntil(() => processedChunk >= resumeChunk, "fresh private-audio quiet interval");
     };
     await mark();
-    return { callId, sent, spoken, transcripts, privateTranscripts, modelTurns, transitionTrace, writes, writeRequests, close, mark, media, sendEvent, privateQuiet,
+    return { callId, currentTime: now, sent, spoken, transcripts, privateTranscripts, modelTurns, transitionTrace, writes, writeRequests, close, mark, media, sendEvent, privateQuiet,
       get workflowStarted() { return flow !== undefined; },
       get flow() { assert.ok(flow); return flow; }, get transcriptionFrames() { return transcriptionFrames; },
       get closed() { return closed; }, get closeCode() { return closeCode; },

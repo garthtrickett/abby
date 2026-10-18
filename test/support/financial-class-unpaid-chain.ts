@@ -3,12 +3,15 @@
 import assert from "node:assert/strict";
 import { sql } from "kysely";
 import { withClassFinancialCaller } from "./financial-class-caller-context.ts";
+import type { FinancialCallerActor } from "./financial-caller-context.ts";
 import { financialConsumerPeer } from "./financial-consumer-peer.ts";
 import { withSmtpVerificationServer } from "./smtp-verification-server.ts";
 import type { FinancialConsumerCycle } from "../../src/standalone/cliniko-financial-consumer.ts";
 
 export async function financialClassUnpaidChain(passes: boolean, stage: (value: number) => void): Promise<void> {
-  await withClassFinancialCaller(passes, stage, async ({ actor: c, observation, clock, advanceTo, directory, connectionString, db }) => {
+  await withClassFinancialCaller(passes, stage, context => runUnpaidFinancialCaller(context, stage));
+}
+export async function runUnpaidFinancialCaller({ actor: c, observation, clock, advanceTo, directory, connectionString, db }: FinancialCallerActor, stage: (value: number) => void): Promise<void> {
     let peer: Awaited<ReturnType<typeof financialConsumerPeer>> | undefined;
     const output: string[] = [];
     try {
@@ -66,5 +69,4 @@ export async function financialClassUnpaidChain(passes: boolean, stage: (value: 
       });
       assert.match(output.join(""), /^(Abby voice local listener ready on 127\.0\.0\.1:\d+; calls disabled\n){5}$/);
     } finally { await peer?.kill(); }
-  });
 }

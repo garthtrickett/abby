@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createHmac, randomUUID } from "node:crypto";
 import { readdir } from "node:fs/promises";
 import { withClassFinancialCaller } from "./financial-class-caller-context.ts";
+import type { FinancialCallerActor } from "./financial-caller-context.ts";
 import { financialConsumerPeer } from "./financial-consumer-peer.ts";
 import { withSmtpVerificationServer } from "./smtp-verification-server.ts";
 import { ClinikoFinancialResendRecords } from "../../src/cliniko/financial-resend-records.ts";
@@ -13,7 +14,9 @@ import { secret } from "./financial-webhook-handoff.ts";
 import { value, stop } from "./financial-retention.ts";
 
 export async function financialClassCallerChain(passes: boolean, stage: (value: number) => void): Promise<void> {
-  await withClassFinancialCaller(passes, stage, async ({ actor: c, observation, clock, directory, connectionString }) => {
+  await withClassFinancialCaller(passes, stage, context => runPaidFinancialCaller(context, stage));
+}
+export async function runPaidFinancialCaller({ actor: c, observation, clock, directory, connectionString }: FinancialCallerActor, stage: (value: number) => void): Promise<void> {
     const intent = c.intent;
     let peer: Awaited<ReturnType<typeof financialConsumerPeer>> | undefined;
     const output: string[] = [], approvals = new Map<string, string>();
@@ -86,5 +89,4 @@ export async function financialClassCallerChain(passes: boolean, stage: (value: 
       assert.match(output.join(""), /^(Abby voice local listener ready on 127\.0\.0\.1:\d+; calls disabled\n){3}$/);
       assert.deepEqual(await readdir(directory), []);
     } finally { await peer?.kill(); }
-  });
 }
