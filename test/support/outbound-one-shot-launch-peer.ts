@@ -27,8 +27,11 @@ export async function outboundLaunchPeer(f: Fixture, cwd: string, onSubmitted: (
         if (hold === "nativeAck" && request.method === "POST") { onSubmitted(); return; }
         data = { body: await response.text(), status: response.status };
       } else if (m.kind === "provider") {
-        assert.deepEqual(m.data, { effectRef: f.request.effectRef, capacityAllocationRef: value(decodeOutboundLaunchAttempt(f.contactControls.rows.find(r =>
-          (r.recall_type as { links: { self: string } }).links.self.endsWith("/62"))!.notes)).capacityAllocationRef, number: f.request.recipient.number, profileRef: f.ports.provider.binding().profileRef });
+        const allocation = value(decodeOutboundLaunchAttempt(f.contactControls.rows.find(r =>
+          (r.recall_type as { links: { self: string } }).links.self.endsWith("/62"))!.notes)).capacityAllocationRef;
+        assert.ok(allocation, "a provider dispatch must have an exact v2 native allocation binding");
+        assert.deepEqual(m.data, { effectRef: f.request.effectRef, capacityAllocationRef: allocation,
+          number: f.request.recipient.number, profileRef: f.ports.provider.binding().profileRef });
         f.calls.push(m.data); if (hold === "provider") { onSubmitted(); return; }
         data = { kind: "accepted", effectRef: f.request.effectRef };
       } else if (m.kind === "grant") {
