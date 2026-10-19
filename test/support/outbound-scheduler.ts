@@ -19,7 +19,7 @@ export async function outboundSchedulerFixture(options: NonNullable<Parameters<t
         state.accountReads++; await state.onAccount?.();
         assert.deepEqual(url.searchParams.getAll("q[]"), ["recalled_at:!?", "archived_at:!?"]);
         const rows = f.contactControls.rows.filter(r => r.recalled === false && r.recalled_at === null && r.archived_at === null)
-          .toSorted((a, b) => Number(a.id) - Number(b.id));
+          .sort((a, b) => Number(a.id) - Number(b.id));
         const page = Number(url.searchParams.get("page"));
         return Response.json({ total_entries: rows.length, recalls: rows.slice((page - 1) * 100, page * 100) });
       }
@@ -33,7 +33,7 @@ export async function outboundSchedulerFixture(options: NonNullable<Parameters<t
         assert.ok(patient);
         const rows = f.contactControls.rows.filter(r =>
           (r.patient as { links: { self: string } }).links.self === `https://api.au5.cliniko.com/v1/patients/${patient}`)
-          .toSorted((a, b) => Number(a.id) - Number(b.id));
+          .sort((a, b) => Number(a.id) - Number(b.id));
         const page = Number(url.searchParams.get("page"));
         return Response.json({ total_entries: rows.length, recalls: rows.slice((page - 1) * 100, page * 100) });
       }
