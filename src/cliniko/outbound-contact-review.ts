@@ -22,6 +22,10 @@ export type OutboundContactReview = Readonly<{
 type Failure = Readonly<{ kind: "invalidOutboundContactReview" }>;
 const invalid = () => err({ kind: "invalidOutboundContactReview" as const });
 const header = "Abby voice contact review v1";
+/** Recognize the family only to refuse unknown/unlisted native roles or
+ * versions. A marker proves neither valid content nor clinic approval. */
+export const hasOutboundContactReviewMarker = (notes: unknown): boolean => typeof notes === "string" &&
+  /(^|\n)Abby voice contact review(?:[ \r\n]|$)/.test(notes);
 const instruction = "Private decision history only. No current contact or reconsent authority. Never infer voice consent from marketing flags.";
 const keys = ["actionRef", "approvalRef", "reviewerRef", "scope", "businessId", "credentialFingerprint", "contactRecallTypeId", "policy",
   "patientId", "recipient", "purposes", "consent", "doNotCall", "revision", "predecessor", "reconsentApprovalRef", "reviewedAt", "effectiveFrom", "effectiveUntil"];
