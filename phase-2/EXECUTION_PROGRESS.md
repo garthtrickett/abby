@@ -1,22 +1,22 @@
 # Execution progress and evidence
 
-**Updated:** 18 October 2026. **Objective:** Work through [EXECUTION_ORDER.md](EXECUTION_ORDER.md), preserving its full thirteen-gap scope. This ledger records partial delivery; the integration is not complete or activated.
+**Updated:** 19 October 2026. **Objective:** Work through [EXECUTION_ORDER.md](EXECUTION_ORDER.md), preserving its full thirteen-gap scope. This ledger records partial delivery; the integration is not complete or activated.
 
 ## Current position
 
 | Execution stage | Current evidence and next action |
 | --- | --- |
 | 1 Aeva preservation | Independently retrieved and hash-checked 113 explicit source/test/map references at the audited revision through GitHub. All four original planning documents were published and independently retrieved at Abby `229a3596696d8ebb9bf263e58457f412898c1327`. Local-only material still requires owner selection and preservation before deletion. |
-| 2 Delivery baseline | Work is stacked and unmerged through draft531 plus the current original-caller expiry/quota correction. Frozen through531 combined0f2b382 passed4411/0/1 plus6 ordered followups. Later original-caller expiry/quota source705bca0 passes full strict/build and all10 actual caller cases; its prepared combined candidate still needs a new full regression. Earlier red runs remain recorded below. Exact-head cloud execution remains rejected before startup for account billing/spending limits. |
+| 2 Delivery baseline | Work is stacked and unmerged through draft539 plus the current test-only native settlement class/resend qualification. Through53629c373d full passed4619/0/1 plus6ordered; new through539d5f901e full1792378464534 is running, not green. Exact-head cloud checks remain rejected before startup for account billing/spending limits. Historical negatives remain preserved. |
 | 3 Exact receipt foundation | Implemented and locally qualified in `codex/abby-provider-ack-receipt`, stacked on the published plans and integrated candidate. The full interval is captured, sent and validated. The later individual/class changes consume this exact receipt; post-create observations cannot erase an established creation acknowledgement. Independent review and exact-head CI remain outstanding. |
 | 4 Individual booking | Published in draft [PR #460](https://github.com/garthtrickett/abby/pull/460), `codex/abby-provider-ack-individual`, based on receipt correction `92a16e5`. Final online/roster availability follows preparation; exact acknowledgement survives host/review/worker cancellation. Focused, isolated database/process/compiled-location and complete local `npm test` checks passed. Independent review and cloud qualification remain open; cloud jobs have not started because of billing. |
 | 5 Native class creation | Draft [PR #461](https://github.com/garthtrickett/abby/pull/461) supplies exact attendee acknowledgement and final double capacity ordering for ordinary/approved-pass creation. Focused process-loss/privacy and movement/cancellation preservation evidence is retained below. Later staged caller work composes these creation semantics; acknowledgement of replacement creation alone never completes a move. Current whole-graph and authoritative cloud qualification remain open. |
-| 6 Earlier-gap qualification | Frozen through531 combined0f2b382 passed4411/0/1 plus6 ordered followups, including all six E2E-375 cases and all six financial caller chains. It supersedes bee6 for that source scope without establishing the sole cause of its historical redacted failures. New original-expiry/quota source still needs its combined full. Gaps1–9 retain their recorded clinic, mail, operator, acoustic and public-route limits. |
+| 6 Earlier-gap qualification | Through53629c373d combined full passed4619/0/1 plus6ordered. Current through539 native invoice/waiver integration full is running, not green. Focused current class/resend results do not replace it. Gaps1–9 retain clinic, mail, operator, acoustic and public-route limits; historical failures remain recorded. |
 | 7 Class/pass completion | Drafts465–473 and487 include staged caller/SAM/private renewal, separate played consent, bounded native/proposal cost admission, cold staff observation, signed uncertainty-to-staff recovery and same/cross-case date/ordinal/pass journeys. Their current composed cohorts also ran in the passing36b5285c complete clinical graph. Broader operator acceptance, original/replacement recovery obligations and separate financial provisioning remain explicit; no blanket cohort or clinic activation follows. |
-| 8 Payments | Stripe and dedicated Cliniko financial reviews remain selected. Current705bca0 passed full strict/build with602 artifacts,38 owning/facts controls and10 actual compiled PostgreSQL caller cases: six paid/unpaid individual/ordinary/pass journeys plus individual,ordinary,pass-linked and review-only original expiry. Known insufficient own native work is refused before receipt/ordinary-clinical claims; polling observes the same physical budget and leaves a quiet recovery window. Later possible effects stay consumed. Native180, caller120s and stage95s remain. Current combined-full, concrete deploying-host financial provisioning and real acceptance remain open; no default activation. |
+| 8 Payments | Stripe and dedicated Cliniko financial reviews remain selected. Drafts537–539 add exact native invoice/current signed waiver and actual consumer composition;31 core controls, strict/616 build and3 compiled SQL cases passed. Current test-only655dce1 adds24 current-positive-waiver class/resend controls and9 emitted SQL/native180/privacy cases plus final strict. Through539 full1792378464534 is running, not green. Complete clinic financial/mapping/manual-payment/waiver authoring/supersession, actual serving and real acceptance remain open; no default activation. |
 | 9 Outbound | Contact foundation524/reader525 add canonical consent/DNC history and current independent clinic-admin source/patient/collection/record/head/reconsent grants:355 semantic controls, strict/build and65 compiled contact/SQL/privacy cases. Marketing flags and financial reviews grant no voice consent. Owning-host provisioning, audience/scheduler/capacity/cancellation/one-shot launch/results/opt-out and exact verified callback integration remain open. Earlier independent engineering is addressed before new outbound features. |
 | 10 Writeback | Pending gap 13, exact permissions/content/storage decisions and audit R08/R22. |
-| 11 Combined qualification | Frozen through531 combined0f2b382 passed4411/0/1 plus6 ordered followups. It excludes the later original-caller expiry/quota correction705bca0, whose strict/build and all10 focused caller cases passed. Prepared combined8c853c3 is source-only so far. Earlier red results remain preserved. Current combined regression, independent review, authoritative cloud and real clinic/provider/sender/restore/acoustic/deployment acceptance remain open. |
+| 11 Combined qualification | Latest completed full through53629c373d is4619pass/0fail/1existing C-LIVE-40skip plus6ordered. Current through539d5f901e full1792378464534 is running; it excludes the new655dce1 test-only class/resend followup. Independent review, cloud execution and real clinic/provider/sender/restore/acoustic/deployment acceptance remain open. Older6d01 failure is preserved and its cause remains unknown. |
 
 The three detailed plans retain the requirements and acceptance matrices. No source merge, deployment, real provider mutation, mail send or Aeva deletion is established by this ledger.
 
@@ -5142,3 +5142,74 @@ The completed through536 combined29c373d full remains4619/0/1 plus6ordered and
 excludes537/538/this patch; these changes require their own combined qualification.
 All13 gaps, remaining host/outbound/writeback engineering and real clinic/provider/
 sender/producer/restore/acoustic/cloud/deployment acceptance remain open.
+
+
+## Native settlement class/pass and resend qualification, 19 October 2026
+
+This test/support-only followup uses the actual optional settlement consumer, not
+exported grant wrappers. No production module changes. The qualified source
+655dce1 captures class policy through the emitted owner module when the emitted
+consumer runs, preserving its instance/approval contract and current real
+owner/admin files. Current positive signed waivers are first accepted through the
+actual reader via the independently granted Checkout-expiry observation; expired
+or unknown decisions cannot masquerade as a positive-waiver test.
+
+`node --test test/contract/financial-settlement-expanded-consumer.test.ts` passed
+24/24, no failure/skip, work1792378796127. Actual unlinked and case/pass consumers
+cover open/recorded-paid/full-waiver/partial-waiver, denied independent financial
+grant and quota, and payment before/after the irreversible clinical claim. Resend
+covers link payment/waiver/partial waiver, independent financial/quota denial,
+payment after its separate claims, and preserving a known Stripe receipt.
+Consumed effects remain consumed after later refusal; no replacement payable or
+silent reduction follows. Peak117084160B/256MiB CPU100%/heap192MiB/Swap0/OOM0.
+
+The explicit synthetic grant profile adds at most six invoice reads across the
+six clinical financial preparations. A successful link resend has four permits,
+each retaining both message and resend financial grants: eight invoice reads.
+A whole consumer cycle additionally makes one original-message already-sent
+precheck, separate from that resend operation. Current source/admin/mapping and
+independent grants in these fixtures use no extra native HTTP. These reviewed
+six/eight total authority ceilings are not defaults for arbitrary clinic grants,
+quota reservations or proof of complete unpaid/no-waiver policy. Every real
+native request still consumes the same account180 budget.
+
+Full strict TypeScript plus serving build1792378835159 passed on097f58b in4m28s,
+peak1539186688B/2GiB CPU100%/heap1536MiB/Swap0/OOM0;1813 sources and616 required
+emitted artifacts independently verified. The later storage-test-only emitted
+policy correction655dce1 changes no production/build inputs or those616 bytes.
+Final `npm run typecheck` on655dce1 passed, work1792379201650, peak1535492096B/2GiB
+CPU100%/heap1536MiB/Swap0/OOM0. Source/artifact pins independently unchanged;
+paired waits reaped.
+
+Fresh disposable PostgreSQL migration then `ABBY_LEDGER=postgres node --test
+--test-concurrency=4 test/storage/postgres-financial-settlement-expanded.test.ts`
+passed9/9, no fail/skip/cancel, work1792379143763, natural terminal
+2026-10-19T03:06:26.250185UTC. Actual emitted consumer/reviewer/waiver issuer/source
+and class policy ran with real permanent SQL exclusions and separately scoped
+real native180 budgets. Unlinked/case-pass/resend open cases perform the one
+approved effect; recorded-paid and currently valid signed waivers leave the
+clinical or resend approval/effect claims unused. No second payable is created.
+All-column SQL and unfiltered pg_dump canaries passed. Node136916992B/1GiB and
+aggregateDB86577152B/512MiB, CPU100% each/heap768MiB/Swap0/OOM0. Own wrapper2636024
+absent, DB absent and slice inactive;1813source/616artifact pins independently
+verified, wait4201 reaped.
+
+Earlier1792378396628 had7pass/8fail: invoice fixture omitted the own-attendee
+relationship, and resend attribution/race initially included the separate normal
+message precheck incorrectly. Corrected1792378420306 passed15/15. Expanded
+1792378489720 passed24/24 but its class waiver had expired, so it did not prove a
+current positive waiver. Source review added the positive reader assertion and
+current expiry; final24 controls above qualify that correction. First strict
+1792378577508 failed on test-only optional clock/tagged fixture narrowing/explicit
+issuer producer types; those declarations were corrected without weakening
+strictness, assertions, native180 or any deadline. Compiled-policy identity was
+corrected before the PostgreSQL launch, never bypassed with a prototype change.
+
+The independent through539 full1792378464534 is running, not green, and excludes
+these new test-only files. Last completed through536 full remains4619/0/1 plus
+6ordered for its exact29c373d source; older6d01 failure cause remains unknown.
+Complete clinic manual-payment/waiver authoring/supersession/mapping and real
+provider/sender/producer/restore acceptance remain distinct. Gaps12/13 and all
+thirteen-gap, acoustic/cloud/deployment gates remain open. No live contact,
+payment/provider mutation, default activation, local private queue, merge or
+deployment is introduced.

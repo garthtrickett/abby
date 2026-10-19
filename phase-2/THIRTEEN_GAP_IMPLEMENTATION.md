@@ -4996,3 +4996,74 @@ The completed through536 combined29c373d full remains4619/0/1 plus6ordered and
 excludes537/538/this patch; these changes require their own combined qualification.
 All13 gaps, remaining host/outbound/writeback engineering and real clinic/provider/
 sender/producer/restore/acoustic/cloud/deployment acceptance remain open.
+
+
+## Native settlement class/pass and resend qualification, 19 October 2026
+
+This test/support-only followup uses the actual optional settlement consumer, not
+exported grant wrappers. No production module changes. The qualified source
+655dce1 captures class policy through the emitted owner module when the emitted
+consumer runs, preserving its instance/approval contract and current real
+owner/admin files. Current positive signed waivers are first accepted through the
+actual reader via the independently granted Checkout-expiry observation; expired
+or unknown decisions cannot masquerade as a positive-waiver test.
+
+`node --test test/contract/financial-settlement-expanded-consumer.test.ts` passed
+24/24, no failure/skip, work1792378796127. Actual unlinked and case/pass consumers
+cover open/recorded-paid/full-waiver/partial-waiver, denied independent financial
+grant and quota, and payment before/after the irreversible clinical claim. Resend
+covers link payment/waiver/partial waiver, independent financial/quota denial,
+payment after its separate claims, and preserving a known Stripe receipt.
+Consumed effects remain consumed after later refusal; no replacement payable or
+silent reduction follows. Peak117084160B/256MiB CPU100%/heap192MiB/Swap0/OOM0.
+
+The explicit synthetic grant profile adds at most six invoice reads across the
+six clinical financial preparations. A successful link resend has four permits,
+each retaining both message and resend financial grants: eight invoice reads.
+A whole consumer cycle additionally makes one original-message already-sent
+precheck, separate from that resend operation. Current source/admin/mapping and
+independent grants in these fixtures use no extra native HTTP. These reviewed
+six/eight total authority ceilings are not defaults for arbitrary clinic grants,
+quota reservations or proof of complete unpaid/no-waiver policy. Every real
+native request still consumes the same account180 budget.
+
+Full strict TypeScript plus serving build1792378835159 passed on097f58b in4m28s,
+peak1539186688B/2GiB CPU100%/heap1536MiB/Swap0/OOM0;1813 sources and616 required
+emitted artifacts independently verified. The later storage-test-only emitted
+policy correction655dce1 changes no production/build inputs or those616 bytes.
+Final `npm run typecheck` on655dce1 passed, work1792379201650, peak1535492096B/2GiB
+CPU100%/heap1536MiB/Swap0/OOM0. Source/artifact pins independently unchanged;
+paired waits reaped.
+
+Fresh disposable PostgreSQL migration then `ABBY_LEDGER=postgres node --test
+--test-concurrency=4 test/storage/postgres-financial-settlement-expanded.test.ts`
+passed9/9, no fail/skip/cancel, work1792379143763, natural terminal
+2026-10-19T03:06:26.250185UTC. Actual emitted consumer/reviewer/waiver issuer/source
+and class policy ran with real permanent SQL exclusions and separately scoped
+real native180 budgets. Unlinked/case-pass/resend open cases perform the one
+approved effect; recorded-paid and currently valid signed waivers leave the
+clinical or resend approval/effect claims unused. No second payable is created.
+All-column SQL and unfiltered pg_dump canaries passed. Node136916992B/1GiB and
+aggregateDB86577152B/512MiB, CPU100% each/heap768MiB/Swap0/OOM0. Own wrapper2636024
+absent, DB absent and slice inactive;1813source/616artifact pins independently
+verified, wait4201 reaped.
+
+Earlier1792378396628 had7pass/8fail: invoice fixture omitted the own-attendee
+relationship, and resend attribution/race initially included the separate normal
+message precheck incorrectly. Corrected1792378420306 passed15/15. Expanded
+1792378489720 passed24/24 but its class waiver had expired, so it did not prove a
+current positive waiver. Source review added the positive reader assertion and
+current expiry; final24 controls above qualify that correction. First strict
+1792378577508 failed on test-only optional clock/tagged fixture narrowing/explicit
+issuer producer types; those declarations were corrected without weakening
+strictness, assertions, native180 or any deadline. Compiled-policy identity was
+corrected before the PostgreSQL launch, never bypassed with a prototype change.
+
+The independent through539 full1792378464534 is running, not green, and excludes
+these new test-only files. Last completed through536 full remains4619/0/1 plus
+6ordered for its exact29c373d source; older6d01 failure cause remains unknown.
+Complete clinic manual-payment/waiver authoring/supersession/mapping and real
+provider/sender/producer/restore acceptance remain distinct. Gaps12/13 and all
+thirteen-gap, acoustic/cloud/deployment gates remain open. No live contact,
+payment/provider mutation, default activation, local private queue, merge or
+deployment is introduced.

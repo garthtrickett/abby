@@ -1036,3 +1036,25 @@ Every actual request still claims the shared account, and headroom is not a hold
 The constructor starts no background work or listener and supplies no default
 activation. Complete clinic financial-status/mapping/waiver-authoring/supersession
 and deploying-host grants remain acceptance and integration dependencies.
+
+
+## Selected native settlement class/pass and resend profiles, 19 October 2026
+
+The actual selected consumer now has24 current source controls and9 emitted
+PostgreSQL/native180/privacy cases across unlinked-class expiry, case/pass expiry
+and explicit resend, in addition to the earlier individual/core composition.
+A current positive signed waiver is independently read successfully before the
+refusal cases; partial waivers never silently reduce the original obligation.
+Payment after a claim prevents the later effect while retaining the consumed
+claim. Known receipt delivery retains its separate original authority.
+
+For these explicit zero-extra-native-I/O independent fixture grants, the complete
+augmented class authority adds six invoice reads; link resend adds eight, with
+a separate normal-message precheck in a whole cycle. Deploying-host source,
+issuer/admin/mapping and complete financial grants need their own measured total
+costs. These are not universal defaults or complete clinic provisioning evidence.
+See the progress ledger for actual strict/build/SQL results and preserved initial
+fixture/type failures. Full combined539 remains running and these test-only
+followups are not relabeled a whole-graph pass. Complete current clinic manual
+payment/waiver authoring/supersession, actual serving and real acceptance remain
+required; no activation or live money/contact action follows.
