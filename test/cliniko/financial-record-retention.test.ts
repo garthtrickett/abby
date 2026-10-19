@@ -167,16 +167,38 @@ test("the clinic's explicit review date participates in current authorization in
   assert.equal(denied.events.includes("claim"), false);
 });
 
-test("oversize, malformed UTF-8 and endless empty response bodies cannot acknowledge retention", async () => {
-  for (const stream of [
+test("oversize, malformed UTF-8 and endless empty response bodies cannot acknowledge retention", { timeout: 4_000 }, async t => {
+  // This witness owns response handling, not preparation speed. Keep the
+  // original25ms deadline but advance it only after the endless body is owned;
+  // concurrent CPU work must not choose an earlier pre-dispatch refusal.
+  const realNow = performance.now.bind(performance); let elapsed = 0;
+  t.mock.method(performance, "now", () => elapsed);
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  for (const response of [
     () => new Response(new Uint8Array(1_000_001), { status: 201 }),
     () => new Response(new Uint8Array([0xc3, 0x28]), { status: 201 }),
-    () => new Response(new ReadableStream<Uint8Array>({ pull(controller) { controller.enqueue(new Uint8Array()); } }), { status: 201 }),
   ]) {
-    const f = fixture({ config: { deadlineMs: 25 }, response: async () => stream() });
-    const began = performance.now();
+    const f = fixture({ config: { deadlineMs: 25 }, response: async () => response() });
+    const began = realNow();
     assert.deepEqual(await f.retainer.retainIntentOnce(f.intent, reviewDate, stop()), { ok: true, value: { kind: "uncertain" } });
-    assert.ok(performance.now() - began < 1_000);
+    assert.ok(realNow() - began < 1_000); assert.equal(f.events.filter(e => e === "POST").length, 1);
     assert.deepEqual(await f.retainer.retainIntentOnce(f.intent, reviewDate, stop()), { ok: false, error: { kind: "alreadyClaimed" } });
   }
+  let owned!: () => void, cancelled = 0;
+  const reading = new Promise<void>(resolve => { owned = resolve; });
+  let stream!: ReadableStream<Uint8Array>;
+  const f = fixture({ config: { deadlineMs: 25 }, response: async () => {
+    stream = new ReadableStream<Uint8Array>({ pull(controller) {
+      controller.enqueue(new Uint8Array()); if (stream.locked) owned();
+    }, cancel() { cancelled++; } });
+    return new Response(stream, { status: 201 });
+  } });
+  const lifetime = new AbortController(); t.after(() => lifetime.abort());
+  const result = f.retainer.retainIntentOnce(f.intent, reviewDate, lifetime.signal);
+  await reading; assert.equal(f.events.filter(e => e === "POST").length, 1); assert.equal(stream.locked, true);
+  const began = realNow(); elapsed = 25; t.mock.timers.tick(25);
+  assert.deepEqual(await result, { ok: true, value: { kind: "uncertain" } });
+  assert.ok(realNow() - began < 1_000); assert.equal(cancelled, 1);
+  assert.deepEqual(await f.retainer.retainIntentOnce(f.intent, reviewDate, stop()), { ok: false, error: { kind: "alreadyClaimed" } });
+  assert.equal(f.events.filter(e => e === "POST").length, 1);
 });
