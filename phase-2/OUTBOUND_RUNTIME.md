@@ -1,0 +1,32 @@
+# Outbound voice runtime adapters
+
+The owner requested interchangeable Abby and Vapi runtime support on 19 October 2026. Use the existing Abby voice implementation as the starting path; selecting a hosted runtime must not require rewriting clinic workflows. This is an engineering direction, not authorization to place calls or activate provider credentials.
+
+## Responsibilities
+
+| Module | Responsibility |
+| --- | --- |
+| Abby workflow owners | Current audience/clinic approval, contact consent and DNC, quiet hours, capacity, permanent one-use exclusions, native request/possible-attempt records and independent clinical action authority. |
+| Selected runtime adapter | Phone transport plus the selected conversation runtime, exact provider acknowledgement parsing, authenticated complete call lookup/correlation and provider-specific failures. Twilio plus Abby and Twilio plus Vapi can supply the same interface. |
+| Conversation-to-clinic adapter | Route requests through Abby's existing verification, fresh appointment, readback/confirmation and clinical action owners. Model text and generic tool calls are requests, not permission or proof of a booking. This adapter still needs implementation and end-to-end qualification for a hosted runtime. |
+| Cliniko and Stripe | Remain the owning native sources for their respective appointment/contact/financial records and money operations. A completed call does not prove an appointment or payment outcome. |
+
+## Implemented interface
+
+`src/voice/outbound-runtime.ts` owns the provider-independent contracts. Existing launch/terminal-owner type exports remain compatible. `bindOutboundVoiceRuntime(adapter)` selects one trusted implementation and supplies `runtime.launch` and `runtime.terminal` to the existing owners. Launch and completion recovery therefore use one pinned selection rather than independently assembled provider identities. Inject these ports at composition; do not branch on provider names in clinic workflows.
+
+The selected non-patient identity includes a reference, effective settings/credential digest and conversation profile. Its digest must cover both transport account and conversation runtime, including effective credentials/profile/settings. Choosing Vapi with the same Twilio number is still a different selection requiring current approval. Changed reference/digest/profile invalidates previously captured ports. Existing attempts remain bound to their original runtime; the new runtime cannot adopt, retry or declare those calls ended.
+
+The launch payload contains only an opaque effect reference, opaque capacity allocation reference, dialled number and approved profile reference. It contains no native appointment, patient proof, Cliniko credential, transcript, financial record or clinic grant. The number is private transient input; the adapter may not introduce a local patient-bearing queue, map, phone hash or recovery ledger. Provider/clinic-owned durable truth remains necessary for crash recovery.
+
+`launchOnce` receives Abby's one-use final dispatch fence. The implementation must finish every internal wait first and invoke that fence immediately before its only dispatch. A repeated or late fence refuses. Exact parsed acknowledgement is distinct from connected/delivered/completed or clinically successful. Known acceptance survives cancellation or a later observer failure. Once an adapter was invoked, malformed, lost, refused or uncertain results remain conservative; this module never retries or falls back to another runtime. Permanent SQL exclusions remain the deduplication authority.
+
+`inspectTerminal` requires trusted authenticated complete provider evidence for every possible call with the exact effect/allocation pair. Missing rows, a raw callback, silence, process absence or one completed call leg cannot establish completion. Exact complete terminal results are normalized; extra/foreign/private response fields, changed identity, cancellation and malformed versions stay unknown. Only the separate terminal owner can authorize capacity release after its own native reread and current grants. Completion never clears permanent effect exclusions or DNC.
+
+## Concrete adapter requirements still open
+
+The current inbound Twilio/Abby audio loop is not silently converted into an outbound transport by this module. Concrete Twilio outbound launch/correlation and authenticated recovery must be implemented and qualified. Actual Vapi launch, event authentication, native recovery and the conversation-to-clinic adapter also remain unfinished. No real Vapi integration or two production-ready runtime implementations are claimed by synthetic conformance fixtures.
+
+A Vapi implementation must preserve Abby's exact prompt/playback/confirmation and correction rules, not merely expose an unrestricted booking function. It must authenticate and correlate events, preserve uncertainty and independently qualify speech delivery/cancellation evidence. Automatic stop reports require the separate clinic-approved unknown-consent/blocked-DNC policy and number-wide suppression/recovery; call completion and model summaries do not supply that authority. Reconsent remains clinic-approved. Unsupported evidence or capabilities must refuse.
+
+Activation must be explicit for a clinic and profile. There is no automatic provider registry, runtime failover, default outbound listener or new local schema. This interface allows implementation changes behind a stable seam; it does not make an unimplemented runtime a configuration-only switch.
