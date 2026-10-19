@@ -32,7 +32,8 @@ export function outboundDncRecordBinding(config: OutboundDncRecordConfig): strin
   } catch { return undefined; }
 }
 
-/** Blocked-only native retention. This does not authenticate a provider report,
+/** Number-stop retention records unknown patient consent and blocked DNC.
+ * An unverified participant cannot withdraw the patient's personal consent. This does not authenticate a provider report,
  * select a current lineage head, suppress a shared number or authorize reconsent.
  * The owning integration must independently establish all of those decisions.
  * Exact ACK means this decision was retained, never that a call was prevented. */
@@ -76,7 +77,7 @@ export class ClinikoOutboundDncRecords {
   }
   #blocked(review: OutboundContactReview): boolean {
     const s = contactSourceSelection(this.#config.source);
-    return review.consent === "withdrawn" && review.doNotCall === "blocked" && review.reconsentApprovalRef === null &&
+    return review.consent === "unknown" && review.doNotCall === "blocked" && review.reconsentApprovalRef === null &&
       review.reviewerRef === this.#config.automationPrincipalRef && review.contactRecallTypeId === s.contactReviewRecallTypeId &&
       review.policy.version === s.contactPolicyVersion && review.policy.digest === s.contactPolicyDigest;
   }

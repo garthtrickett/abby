@@ -15,7 +15,7 @@ test("blocked-only native decision consumes its own opaque action and cannot cla
   assert.equal(f.dncCalls.length, 1);
   const contact = value(await f.read()); assert.equal(contact.disposition, "blocked"); assert.equal(contact.head?.review.doNotCall, "blocked");
 });
-for (const change of [{ consent: "granted" }, { doNotCall: "clear" }, { doNotCall: "unknown" }, { reviewerRef: "forged-human" },
+for (const change of [{ consent: "granted" }, { consent: "withdrawn" }, { doNotCall: "clear" }, { doNotCall: "unknown" }, { reviewerRef: "forged-human" },
   { reconsentApprovalRef: randomUUID() }, { policy: { version: "foreign", digest: "d".repeat(64) } }, { contactRecallTypeId: "92" }] as const)
   test(`DNC writer refuses non-blocking or foreign decision ${JSON.stringify(change)}`, async t => {
     const f = await outboundDncRecordFixture(); t.after(f.close);

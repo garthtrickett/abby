@@ -35,7 +35,8 @@ for (const scenario of ["accepted", "denied", "unknown", "lateGrant", "archive",
       if (scenario === "archive") { const row = f.controls.rows.find(r => r.id === "102")!; row.recalled = true; row.recalled_at = f.state.now; row.archived_at = f.state.now; }
       const reader = value(ClinikoOutboundDncRecords.createReadOnly(f.config, f.definition, f.dncAuthority, f.dncPort));
       const found = value(await reader.readDecision({ recallRef: "cliniko:recall:102", actionRef: f.review.actionRef, patientId: f.review.patientId }, new AbortController().signal));
-      assert.equal(found.record.doNotCall, "blocked"); assert.equal(value(await f.read()).disposition, "blocked");
+      assert.equal(found.record.doNotCall, "blocked"); assert.equal(found.record.consent, "unknown");
+      assert.equal(value(await f.read()).disposition, "blocked");
       assert.equal(f.dncCalls.filter(c => c.method === "POST").length, 1);
     }
     assert.ok(claims <= 180);

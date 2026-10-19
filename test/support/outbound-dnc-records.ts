@@ -13,7 +13,7 @@ export async function outboundDncRecordFixture(options: { Records?: typeof Clini
   budget?: ClinikoRequestBudget; barrierFactory?: (scope: LocationScope, owner: string) => OutboundEffectBarrier } = {}) {
   const f = await outboundContactSourceFixture(options), Records = options.Records ?? ClinikoOutboundDncRecords;
   const config = { source: options.budget ? { ...f.config, rateBudget: options.budget } : f.config, automationPrincipalRef: "clinic-approved-optout-automation" };
-  const review = f.next(f.first, { reviewerRef: config.automationPrincipalRef, consent: "withdrawn", doNotCall: "blocked",
+  const review = f.next(f.first, { reviewerRef: config.automationPrincipalRef, consent: "unknown", doNotCall: "blocked",
     reviewedAt: f.state.now, effectiveFrom: f.state.now });
   const controls: { allow: boolean; producer: boolean; current: boolean;
     onAllow?: (query: OutboundDncRecordQuery) => void | Promise<void>;
