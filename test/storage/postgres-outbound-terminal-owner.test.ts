@@ -44,7 +44,7 @@ for (const scenario of ["terminal", "unknown", "active", "withdrawRelease", "wit
     assert.equal(f.posts, 1); assert.equal(f.calls.length, 1);
     const effects = (await sql`select effect_ref from outbound_effect_barriers where tenant_id = ${scope.tenantId}`.execute(db)).rows;
     assert.equal(effects.length, 3, "terminal observation leaves all original record/approval/effect exclusions intact");
-    const canaries = [apiKey, f.request.recipient.number, "Abby possible outbound launch v2", "cliniko:recall:30", "generic-clinic-greeting"];
+    const canaries = [apiKey, f.request.recipient.number, "Abby possible outbound launch v2", "Abby possible outbound launch v3", "cliniko:recall:30", "generic-clinic-greeting"];
     assert.deepEqual(await scanPatientDataCanaries(db, canaries.map((value, i) => ({ label: `terminal_${i}`, value }))), { ok: true, value: [] });
     const dump = execFileSync("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 8_000_000 }).toString();
     for (const canary of canaries) assert.equal(dump.includes(canary), false);

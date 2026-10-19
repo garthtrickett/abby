@@ -32,7 +32,7 @@ async function fixture() {
   return { ...f, get claims() { return f.claims; }, get posts() { return f.posts; }, apiKey, physicalBudget: budget, scope };
 }
 async function privacy(f: Awaited<ReturnType<typeof fixture>>) {
-  const values = [f.apiKey, f.request.recipient.number, "Abby possible outbound launch v2", "cliniko:recall:30", "generic-clinic-greeting"];
+  const values = [f.apiKey, f.request.recipient.number, "Abby possible outbound launch v2", "Abby possible outbound launch v3", "cliniko:recall:30", "generic-clinic-greeting"];
   assert.deepEqual(await scanPatientDataCanaries(db, values.map((value, i) => ({ label: `scheduler_${i}`, value }))), { ok: true, value: [] });
   const dump = execFileSync("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 8_000_000 }).toString();
   for (const value of values) assert.equal(dump.includes(value), false);

@@ -53,7 +53,7 @@ test("changing native allocation to another live place cannot borrow the old ter
   assert.deepEqual(value(await f.inspect()), { kind: "held" }); assert.equal(f.held.size, 2);
 });
 test("legacy possible evidence cannot invent an allocation after a cold read", async t => {
-  const f = await fixture(); t.after(f.close); const { capacityAllocationRef: _allocation, ...legacy } = f.attempt;
+  const f = await fixture(); t.after(f.close); const { capacityAllocationRef: _allocation, dncReferences: _dnc, ...legacy } = f.attempt;
   f.row.notes = value(encodeOutboundLaunchAttempt(legacy));
   const r = await f.inspect(); assert.ok(!r.ok && r.error.kind === "unrecoverable");
   assert.equal(f.lookupCount, 0); assert.equal(f.held.size, 1);

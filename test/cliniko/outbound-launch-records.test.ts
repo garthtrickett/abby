@@ -3,6 +3,7 @@ import test from "node:test";
 import { ClinikoOutboundLaunchRecords } from "../../src/cliniko/outbound-launch-records.ts";
 import { outboundLaunchFixture } from "../support/outbound-launch.ts";
 import { value,outboundNow } from "../support/outbound-records.ts";
+import { randomUUID } from "node:crypto";
 test("exact possible-attempt retention burns only its record action and never launches or claims future approval/effect",async()=>{
   const f=await outboundLaunchFixture(),retained=value(await f.retain());assert.equal(retained.kind,"accepted");assert.equal(f.calls.length,1);assert.deepEqual([...f.burned],[f.attempt.actionRef]);
   assert.equal(f.burned.has(f.attempt.effectRef),false);assert.equal(f.burned.has(f.attempt.approvalRef),false);assert.equal(f.queries[0]!.operation,"retainPossibleLaunch");
@@ -33,4 +34,16 @@ test("exact cold possible-attempt GET requests archive inclusion under its indep
  assert.equal(result.archivedAt,outboundNow);
  const denied=value(ClinikoOutboundLaunchRecords.createReadOnly(f.config,{allows:async q=>q.includeArchived!==true,current:()=>true},f.port)),before=f.calls.length;
  assert.deepEqual(await denied.readPossibleAttempt({recallRef:retained.recallRef,actionRef:f.attempt.actionRef,patientId:f.attempt.patientId},new AbortController().signal),{ok:false,error:{kind:"forbidden"}});assert.equal(f.calls.length,before);
+});
+test("cold archived native context preserves reserved DNC references without consuming those future actions", async () => {
+  const f = await outboundLaunchFixture(), attempt = { ...f.attempt, capacityAllocationRef: randomUUID(),
+    dncReferences: { actionRef: randomUUID(), approvalRef: randomUUID() } };
+  const retained = value(await f.records.retainPossibleAttemptOnce(attempt, "2026-11-01", new AbortController().signal));
+  assert.equal(retained.kind, "accepted"); assert.deepEqual([...f.burned], [attempt.actionRef]);
+  const row = f.rows.get("40")!; row.recalled = true; row.recalled_at = outboundNow; row.archived_at = outboundNow;
+  f.setNow("2026-11-03T10:00:00.000Z"); f.denyProducer();
+  const reader = value(ClinikoOutboundLaunchRecords.createReadOnly(f.config, f.authority, f.port));
+  const found = value(await reader.readPossibleAttempt({ recallRef: "cliniko:recall:40", actionRef: attempt.actionRef, patientId: attempt.patientId }, new AbortController().signal));
+  assert.deepEqual(found.attempt.dncReferences, attempt.dncReferences); assert.equal(f.burned.has(attempt.dncReferences.actionRef), false);
+  assert.equal(f.burned.has(attempt.dncReferences.approvalRef), false);
 });

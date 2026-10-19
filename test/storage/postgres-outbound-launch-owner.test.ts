@@ -48,7 +48,7 @@ test(`actual emitted follow-up launcher native180 PostgreSQL permanent effects a
     assert.equal((await value(f.make()).launchOnce(f.binding, new AbortController().signal)).ok, false);
     assert.equal(f.calls.length, 1);
   }
-  const canaries = [apiKey, f.request.recipient.number, "Abby possible outbound launch v1", "Abby possible outbound launch v2", "Abby outbound recipient request v1", "cliniko:recall:30", "generic-clinic-greeting"];
+  const canaries = [apiKey, f.request.recipient.number, "Abby possible outbound launch v1", "Abby possible outbound launch v2", "Abby possible outbound launch v3", "Abby outbound recipient request v1", "cliniko:recall:30", "generic-clinic-greeting"];
   assert.deepEqual(await scanPatientDataCanaries(db, canaries.map((value, i) => ({ label: `launch_${i}`, value }))), { ok: true, value: [] });
   const dump = execFileSync("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 8_000_000 }).toString();
   for (const canary of canaries) assert.equal(dump.includes(canary), false);
@@ -70,7 +70,12 @@ test(`compiled launcher SIGKILL after ${hold} preserves actual SQL capacity/nati
   const held = (await sql<{ allocation_ref: string }>`select allocation_ref from outbound_capacity_allocations where tenant_id = ${scope.tenantId} and released_at is null`.execute(db)).rows;
   assert.equal(held.length, 1, "process death is not proof a remote call ended");
   const durable = f.contactControls.rows.find(r => (r.recall_type as { links: { self: string } }).links.self.endsWith("/62"))!;
-  assert.equal(value(decodeOutboundLaunchAttempt(durable.notes)).capacityAllocationRef, held[0]!.allocation_ref,
+  const recovered = value(decodeOutboundLaunchAttempt(durable.notes));
+  assert.ok(recovered.dncReferences, "reserved future DNC identities survive real owner SIGKILL in native context");
+  for (const ref of [recovered.dncReferences.actionRef, recovered.dncReferences.approvalRef])
+    assert.equal((await sql`select effect_ref from outbound_effect_barriers where tenant_id = ${scope.tenantId} and effect_ref = ${ref}::uuid`.execute(db)).rows.length, 0,
+      "reserving a native identity must not consume or approve a future DNC action");
+  assert.equal(recovered.capacityAllocationRef, held[0]!.allocation_ref,
     "independent cold recovery has the exact native-to-allocation binding after owner death");
   await sql`delete from outbound_effect_barriers where tenant_id = ${scope.tenantId}`.execute(db);
   // Closing/archiving the durable possible attempt cannot make it disappear.
@@ -78,7 +83,7 @@ test(`compiled launcher SIGKILL after ${hold} preserves actual SQL capacity/nati
   attempt.recalled = true; attempt.recalled_at = f.state.now; attempt.archived_at = f.state.now;
   assert.equal((await value(f.make()).launchOnce(f.binding, new AbortController().signal)).ok, false);
   assert.equal(f.calls.length, hold === "provider" ? 1 : 0); assert.equal(f.posts, 1);
-  const values = [apiKey, f.request.recipient.number, "Abby possible outbound launch v1", "Abby possible outbound launch v2", "cliniko:recall:30"];
+  const values = [apiKey, f.request.recipient.number, "Abby possible outbound launch v1", "Abby possible outbound launch v2", "Abby possible outbound launch v3", "cliniko:recall:30"];
   assert.deepEqual(await scanPatientDataCanaries(db, values.map((value, i) => ({ label: `launch_worker_${i}`, value }))), { ok: true, value: [] });
   const dump = execFileSync("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 8_000_000 }).toString();
   for (const value of values) assert.equal(dump.includes(value), false);

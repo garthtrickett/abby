@@ -48,3 +48,69 @@ test("malformed or explicit undefined capacity allocation is never encoded as le
   for (const capacityAllocationRef of ["private-patient-ref", "", undefined])
     assert.equal(encodeOutboundLaunchAttempt({ ...attempt, capacityAllocationRef } as typeof attempt).ok, false);
 });
+
+function dncValue() {
+  const { request, attempt } = outboundLaunchValue();
+  return { request, attempt: { ...attempt, capacityAllocationRef: randomUUID(), dncReferences: { actionRef: randomUUID(), approvalRef: randomUUID() } } };
+}
+test("v3 possible context retains stable independent future DNC identities without granting a stop or write", () => {
+  const { request, attempt } = dncValue(), notes = value(encodeOutboundLaunchAttempt(attempt)), decoded = value(decodeOutboundLaunchAttempt(notes));
+  assert.ok(notes.includes("Abby possible outbound launch v3")); assert.ok(notes.length <= 1050);
+  assert.deepEqual(decoded, attempt); assert.ok(Object.isFrozen(decoded.dncReferences));
+  const { dncReferences: _refs, ...v2 } = attempt;
+  assert.ok(notes.length < value(encodeOutboundLaunchAttempt(v2)).length, "extra recovery IDs must not shrink the supported native note envelope");
+  assert.equal(outboundAttemptMatchesRequest(decoded, request, attempt.requestRecallRef), true);
+  assert.equal(Object.hasOwn(decoded, "optedOut"), false); assert.equal(notes.includes(request.recipient.number), false);
+  for (const version of ["v1", "v2"]) assert.equal(decodeOutboundLaunchAttempt(notes.replace("launch v3", `launch ${version}`)).ok, false);
+});
+for (const ref of ["actionRef", "approvalRef"] as const)
+  for (const alias of ["actionRef", "requestActionRef", "campaignRef", "approvalRef", "effectRef", "capacityAllocationRef"] as const)
+    test(`future DNC ${ref} cannot alias original ${alias}`, () => {
+      const { attempt } = dncValue();
+      assert.equal(encodeOutboundLaunchAttempt({ ...attempt, dncReferences: { ...attempt.dncReferences, [ref]: attempt[alias] } }).ok, false);
+    });
+test("future DNC references cannot alias each other or encode a partial private context", () => {
+  const { attempt } = dncValue();
+  for (const dncReferences of [undefined, null, { actionRef: attempt.dncReferences.actionRef },
+    { ...attempt.dncReferences, approvalRef: attempt.dncReferences.actionRef }, { ...attempt.dncReferences, actionRef: "private-patient-ref" },
+    { ...attempt.dncReferences, number: "+61400000999" }])
+    assert.equal(encodeOutboundLaunchAttempt({ ...attempt, dncReferences } as typeof attempt).ok, false);
+  const { capacityAllocationRef: _capacity, ...withoutAllocation } = attempt;
+  assert.equal(encodeOutboundLaunchAttempt(withoutAllocation).ok, false);
+});
+test("legacy possible-attempt records retain their original shape and acquire no DNC identities", () => {
+  const { attempt } = outboundLaunchValue();
+  for (const [record, version, length] of [[attempt, "v1", 13], [{ ...attempt, capacityAllocationRef: randomUUID() }, "v2", 14]] as const) {
+    const notes = value(encodeOutboundLaunchAttempt(record)), decoded = value(decodeOutboundLaunchAttempt(notes));
+    assert.ok(notes.includes(`Abby possible outbound launch ${version}`)); assert.equal(JSON.parse(notes.split("\n")[2]!).length, length);
+    assert.equal(Object.hasOwn(decoded, "dncReferences"), false); assert.equal(value(encodeOutboundLaunchAttempt(decoded)), notes);
+  }
+});
+test("changing either future DNC identity changes the exact native context digest", () => {
+  const { attempt } = dncValue();
+  for (const ref of ["actionRef", "approvalRef"] as const)
+    assert.notEqual(outboundLaunchAttemptDigest({ ...attempt, dncReferences: { ...attempt.dncReferences, [ref]: randomUUID() } }), outboundLaunchAttemptDigest(attempt));
+});
+test("v3 preserves the original native note limit for a near-boundary v2 context", () => {
+  const { attempt } = dncValue(); let largest: { record: typeof attempt; notes: string } | undefined;
+  for (let n = 1; n <= 96; n++) {
+    const record = { ...attempt, scope: { tenantId: "t".repeat(n), clinicId: "c".repeat(n), locationId: "l".repeat(n) },
+      provider: { ...attempt.provider, ref: "p".repeat(n) } };
+    const { dncReferences: _refs, ...v2 } = record, legacy = encodeOutboundLaunchAttempt(v2);
+    if (legacy.ok && (!largest || legacy.value.length > largest.notes.length)) largest = { record, notes: legacy.value };
+  }
+  assert.ok(largest && largest.notes.length >= 1040, "exercise an actually near-full legacy native note");
+  const lines = largest.notes.split("\n"), naive = JSON.parse(lines[2]!);
+  naive.push([largest.record.dncReferences.actionRef, largest.record.dncReferences.approvalRef]);
+  assert.ok([lines[0], "Abby possible outbound launch v3", JSON.stringify(naive), lines[3]].join("\n").length > 1050,
+    "simply appending the two full UUIDs would break this supported legacy context");
+  const notes = value(encodeOutboundLaunchAttempt(largest.record));
+  assert.ok(notes.length < largest.notes.length); assert.deepEqual(value(decodeOutboundLaunchAttempt(notes)), largest.record);
+});
+test("v3 rejects noncanonical compact identities instead of admitting a second record encoding", () => {
+  const { attempt } = dncValue(), notes = value(encodeOutboundLaunchAttempt(attempt)), lines = notes.split("\n"), payload = JSON.parse(lines[2]!);
+  for (const bad of [attempt.requestActionRef, payload[1] + "=", "!".repeat(22), "A".repeat(22)]) {
+    const changed = [...payload]; changed[1] = bad;
+    assert.equal(decodeOutboundLaunchAttempt([lines[0], lines[1], JSON.stringify(changed), lines[3]].join("\n")).ok, false);
+  }
+});
