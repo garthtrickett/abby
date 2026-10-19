@@ -194,11 +194,29 @@ test("oversize, malformed UTF-8 and endless empty response bodies cannot acknowl
     return new Response(stream, { status: 201 });
   } });
   const lifetime = new AbortController(); t.after(() => lifetime.abort());
+  const began = realNow();
   const result = f.retainer.retainIntentOnce(f.intent, reviewDate, lifetime.signal);
   await reading; assert.equal(f.events.filter(e => e === "POST").length, 1); assert.equal(stream.locked, true);
-  const began = realNow(); elapsed = 25; t.mock.timers.tick(25);
+  elapsed = 25; t.mock.timers.tick(25);
   assert.deepEqual(await result, { ok: true, value: { kind: "uncertain" } });
   assert.ok(realNow() - began < 1_000); assert.equal(cancelled, 1);
   assert.deepEqual(await f.retainer.retainIntentOnce(f.intent, reviewDate, stop()), { ok: false, error: { kind: "alreadyClaimed" } });
   assert.equal(f.events.filter(e => e === "POST").length, 1);
+});
+
+
+test("the original deadline still refuses a held post-claim grant before any response is sent", { timeout: 4_000 }, async t => {
+  let elapsed = 0, enter!: () => void, release!: () => void;
+  const waiting = new Promise<void>(resolve => { enter = resolve; }), held = new Promise<void>(resolve => { release = resolve; });
+  t.mock.method(performance, "now", () => elapsed); t.mock.timers.enable({ apis: ["setTimeout"] });
+  const lifetime = new AbortController(); t.after(() => lifetime.abort()); t.after(release);
+  const f = fixture({ config: { deadlineMs: 25 }, authority: { producerAdmitted: async () => {
+    if (f.events.includes("claim")) { enter(); await held; } return true;
+  } } });
+  const result = f.retainer.retainIntentOnce(f.intent, reviewDate, lifetime.signal);
+  await waiting; elapsed = 25; t.mock.timers.tick(25);
+  assert.deepEqual(await result, { ok: false, error: { kind: "unavailable" } });
+  assert.equal(f.events.includes("POST"), false); release();
+  assert.deepEqual(await f.retainer.retainIntentOnce(f.intent, reviewDate, stop()), { ok: false, error: { kind: "alreadyClaimed" } });
+  assert.equal(f.events.includes("POST"), false);
 });
