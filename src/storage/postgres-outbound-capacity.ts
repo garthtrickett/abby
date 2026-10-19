@@ -42,7 +42,7 @@ export class PostgresOutboundCapacity implements OutboundCapacity {
       });
     } catch { return err({ kind: "storageFailure" }); }
   }
-  async releaseOnce(ref: string): ReturnType<OutboundCapacity["releaseOnce"]> {
+  async releaseOnce(ref: string, beforeRelease?: () => boolean): ReturnType<OutboundCapacity["releaseOnce"]> {
     if (!validOutboundEffectRef(ref)) return err({ kind: "invalidInput" });
     try {
       return await this.#db.transaction().execute(async trx => {
@@ -52,6 +52,7 @@ export class PostgresOutboundCapacity implements OutboundCapacity {
         if (!prior || prior.clinicId !== this.#scope.clinicId || prior.locationId !== this.#scope.locationId || prior.allocation.ownerBinding !== this.#binding)
           return err({ kind: "bindingMismatch" as const });
         if (prior.allocation.releasedAt !== null) return ok({ released: false });
+        if (beforeRelease && beforeRelease() !== true) return err({ kind: "forbidden" as const });
         const row = await sql`update outbound_capacity_allocations set released_at = clock_timestamp()
           where tenant_id = ${this.#scope.tenantId} and allocation_ref = ${ref}::uuid and released_at is null returning allocation_ref`.execute(trx);
         return ok({ released: row.rows.length === 1 });

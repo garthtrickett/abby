@@ -13,7 +13,7 @@ test("actual follow-up owner composes native campaign/contact/request/history/po
   assert.equal(value(decodeOutboundLaunchAttempt(retained.notes)).capacityAllocationRef, [...f.held][0]);
   assert.ok(f.claims <= 150 && f.claims > 0);
   assert.ok(f.burned.has(f.request.approvalRef) && f.burned.has(f.request.effectRef));
-  assert.deepEqual(Object.keys(f.calls[0]!).sort(), ["effectRef", "number", "profileRef"]);
+  assert.deepEqual(Object.keys(f.calls[0]!).sort(), ["capacityAllocationRef", "effectRef", "number", "profileRef"]);
   assert.equal((await f.launch()).ok, false); assert.equal(f.calls.length, 1);
 });
 for (const operation of ["approveAudience", "approveProvider", "producerAdmitted", "approveLaunch"])

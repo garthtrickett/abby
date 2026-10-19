@@ -91,3 +91,37 @@ test("capacity SQL and unfiltered backup carry no private provider/recipient/pat
   const dump = execFileSync("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 8_000_000 }).toString();
   for (const value of values) assert.equal(dump.includes(value), false);
 });
+
+test("release checks current permission after an actual advisory-lock wait, immediately before SQL mutation", { timeout: 15_000 }, async () => {
+  const owner = scope(), ref = randomUUID(), store = new PostgresOutboundCapacity(db, owner, binding());
+  value(await store.acquireOnce(ref, 1));
+  let entered!: () => void, unlock!: () => void;
+  const ready = new Promise<void>(resolve => { entered = resolve; });
+  const hold = new Promise<void>(resolve => { unlock = resolve; });
+  let blockerPid = 0, current = true, gates = 0;
+  const blocker = db.transaction().execute(async trx => {
+    blockerPid = (await sql<{ pid: number }>`select pg_backend_pid() as pid`.execute(trx)).rows[0]!.pid;
+    await sql`select pg_advisory_xact_lock(172934501, hashtext(${owner.tenantId}))`.execute(trx);
+    entered(); await hold;
+  });
+  let pending: ReturnType<PostgresOutboundCapacity["releaseOnce"]> | undefined;
+  try {
+    await Promise.race([ready, blocker.then(() => { throw new Error("Synthetic blocker ended before acquisition"); })]);
+    pending = store.releaseOnce(ref, () => { gates++; return current; });
+    const deadline = performance.now() + 5000;
+    let waiting = false;
+    while (!waiting && performance.now() < deadline) {
+      waiting = (await sql<{ waiting: boolean }>`select exists(select 1 from pg_locks
+        where not granted and ${blockerPid} = any(pg_blocking_pids(pid))) as waiting`.execute(db)).rows[0]!.waiting;
+      if (!waiting) await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.equal(waiting, true, "the release is actually blocked behind this transaction");
+    assert.equal(gates, 0); current = false; unlock(); await blocker;
+    assert.deepEqual(await pending, { ok: false, error: { kind: "forbidden" } });
+    assert.equal(gates, 1);
+    assert.equal((await sql<{ released_at: Date | null }>`select released_at from outbound_capacity_allocations
+      where tenant_id = ${owner.tenantId} and allocation_ref = ${ref}::uuid`.execute(db)).rows[0]!.released_at, null);
+    current = true; assert.deepEqual(value(await store.releaseOnce(ref, () => { gates++; return current; })), { released: true });
+    assert.equal(gates, 2);
+  } finally { unlock(); await blocker; await pending; }
+});

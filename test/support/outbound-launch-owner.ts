@@ -70,9 +70,9 @@ export async function outboundLaunchOwnerFixture(options: {
         if (used.has(ref)) return { ok: true, value: { kind: "alreadyUsed" } };
         if (held.size >= maximum) return { ok: true, value: { kind: "full" } };
         used.add(ref); held.add(ref); return { ok: true, value: { kind: "acquired" } };
-      }, releaseOnce: async ref => { const changed = held.delete(ref); if (changed) released.add(ref); return { ok: true, value: { released: changed } }; },
+      }, releaseOnce: async (ref, beforeRelease) => { if (beforeRelease && beforeRelease() !== true) return { ok: false, error: { kind: "forbidden" } }; const changed = held.delete(ref); if (changed) released.add(ref); return { ok: true, value: { released: changed } }; },
     };
-    const calls: { effectRef: string; number: string; profileRef: string }[] = [];
+    const calls: { effectRef: string; capacityAllocationRef: string; number: string; profileRef: string }[] = [];
     const controls: { providerRef: string; providerDigest: string; mode: "accepted" | "unknown" | "loseAfterAck";
       beforeEdge?: () => void | Promise<void>; afterAck?: () => void | Promise<void>;
       retainResponse?: (row: Record<string, unknown>) => Response | Promise<Response> } = {

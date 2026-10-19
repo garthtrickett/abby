@@ -29,7 +29,7 @@ export type OutboundProviderBinding = Readonly<{ ref: string; bindingDigest: str
  * calls acknowledged. No live adapter or listener is installed by this module. */
 export type OutboundLaunchProvider = Readonly<{
   binding(): OutboundProviderBinding;
-  launchOnce(payload: Readonly<{ effectRef: string; number: string; profileRef: string }>, signal: AbortSignal,
+  launchOnce(payload: Readonly<{ effectRef: string; capacityAllocationRef: string; number: string; profileRef: string }>, signal: AbortSignal,
     beforeSend: () => Promise<boolean>, acknowledged: (effectRef: string) => void): Promise<Readonly<{ kind: "accepted" | "definitiveUnsent" | "unknown"; effectRef?: string }>>;
 }>;
 export type OutboundLaunchQuery = Readonly<{ operation: "approveAudience" | "approveProvider" | "producerAdmitted" | "approveLaunch";
@@ -189,7 +189,7 @@ export class ClinikoOutboundLaunchOwner {
       if (!retained.ok || retained.value.kind !== "accepted") throw new Refusal("unavailable");
       own = { recallRef: retained.value.recallRef, attempt }; await prepare();
       providerInvoked = true;
-      const result = await wait(this.#ports.provider.launchOnce(Object.freeze({ effectRef: r.effectRef, number: r.recipient.number, profileRef: q!.provider.profileRef }), signal,
+      const result = await wait(this.#ports.provider.launchOnce(Object.freeze({ effectRef: r.effectRef, capacityAllocationRef: allocation, number: r.recipient.number, profileRef: q!.provider.profileRef }), signal,
         async () => {
           if (edgeInvoked || !active()) return false; edgeInvoked = true;
           try { await prepare(); if (now() >= attempt.dispatchNotAfter) return false; current(); dispatched = true; return true; }
