@@ -111,8 +111,9 @@ export class ClinikoOutboundLaunchOwner {
       return ok(new ClinikoOutboundLaunchOwner(config, ports, requests.value, attempts.value, history.value, contact.value, owner));
     } catch { return err({ kind: "invalidConfig" }); }
   }
-  async launchOnce(binding: Readonly<{ recallRef: string; actionRef: string; patientId: string }>, external: AbortSignal): Promise<Result<OutboundLaunchOutcome, Failure>> {
-    if (!(external instanceof AbortSignal) || external.aborted) return err({ kind: "unavailable" });
+  async launchOnce(binding: Readonly<{ recallRef: string; actionRef: string; patientId: string }>, external: AbortSignal,
+    parentCurrent?: (campaign: OutboundCampaignApproval) => boolean): Promise<Result<OutboundLaunchOutcome, Failure>> {
+    if (!(external instanceof AbortSignal) || external.aborted || parentCurrent !== undefined && typeof parentCurrent !== "function") return err({ kind: "unavailable" });
     let selected: typeof binding;
     try { selected = Object.freeze(structuredClone(binding)); } catch { return err({ kind: "unavailable" }); }
     const controller = new AbortController(), ms = this.#config.deadlineMs ?? 60_000, timer = setTimeout(() => controller.abort(), ms);
@@ -133,7 +134,7 @@ export class ClinikoOutboundLaunchOwner {
     };
     const current = () => {
       const at = now();
-      if (!active() || !q || this.#ports.effects.matches(this.#config.requests.scope, this.#owner) !== true ||
+      if (!active() || !q || parentCurrent && parentCurrent(q.campaign) !== true || this.#ports.effects.matches(this.#config.requests.scope, this.#owner) !== true ||
           this.#ports.capacity.matches(this.#config.requests.scope, outboundCapacityOwnerBinding(this.#config.campaignRef)!) !== true || launchOperations.some(operation => this.#ports.authority.current(Object.freeze({ ...q!, operation }), signal) !== true) || !isDeepStrictEqual(this.#ports.provider.binding(), q.provider) ||
           outboundContactTime(q.record.request.schedule, at).kind !== "due" ||
           consentWindow && (consentWindow.observedAt > at || consentWindow.effectiveFrom > at || at >= consentWindow.effectiveUntil)) throw new Refusal("forbidden");
@@ -141,6 +142,7 @@ export class ClinikoOutboundLaunchOwner {
     const prepare = async () => {
       const policy = await wait(this.#campaign.current(signal));
       if (!policy.ok || !policy.value || policy.value.campaignRef !== this.#config.campaignRef || policy.value.purpose !== "followUp") throw new Refusal("forbidden");
+      if (parentCurrent && parentCurrent(policy.value) !== true) throw new Refusal("forbidden");
       const record = await wait(this.#requests.readRequest(selected, signal));
       if (!record.ok || closed(record.value) || record.value.request.purpose !== "followUp" || record.value.request.appointment !== undefined) throw new Refusal("forbidden");
       const bound = await wait(this.#campaign.currentFor(outboundRecordSelection(this.#config.requests), record.value.request, signal));

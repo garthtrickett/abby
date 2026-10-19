@@ -10,6 +10,7 @@
     "src/standalone/financial-settlement-authorities.ts",
     "src/standalone/cliniko-outbound-launch-owner.ts",
     "src/standalone/cliniko-outbound-terminal-owner.ts",
+    "src/standalone/cliniko-outbound-scheduler.ts",
     "src/storage/postgres-outbound-capacity.ts",
     "test/support/start-synthetic-queue-monitor.ts",
     "test/support/financial-consumer-process.ts",

@@ -104,3 +104,9 @@ for (const operation of ["approveAudience", "approveProvider", "producerAdmitted
     assert.ok(!result.ok || result.value.kind === "unknown");
     assert.equal(withdrawn, true); assert.equal(f.calls.length, 0); assert.equal(f.posts, 1); assert.equal(f.held.size, 1);
   });
+
+test("optional parent guard can restrict but cannot grant an independently denied launch", async t => {
+  const f = await outboundLaunchOwnerFixture(); t.after(f.close); f.deny("approveLaunch");
+  assert.equal((await f.owner.launchOnce(f.binding, new AbortController().signal, () => true)).ok, false);
+  assert.equal(f.calls.length, 0); assert.equal(f.posts, 0);
+});
