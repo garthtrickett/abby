@@ -976,3 +976,34 @@ composition still need their own evidence before any automatic effect.
 
 API reference reviewed18October2026: [Cliniko invoices](https://docs.api.cliniko.com/openapi/invoice).
 No live provider was accessed; only public API documentation was read.
+
+## Explicit current financial waiver decisions, 18 October 2026
+
+A separate positive waiver citation binds its distinct decision UUID, exact
+financial intent/action/digest, original intent recall, own native waiver recall,
+acknowledged native target, amount/currency, issuer and approval/expiry times.
+Canonical Ed25519 signatures use a waiver-specific domain; caller notes, booking
+producer trust or pending financial-record approval cannot establish this trust.
+The fixed waiver content policy and explicit issuer public key require their own
+current clinic-admin source approval. Only non-patient source/key fingerprints
+are retained in the owner-only approval file. Independent exact patient/record
+read permission remains mandatory.
+
+One exact native GET shares the physical account budget. Current source/admin
+membership and financial-read permission are checked before/after quota and
+private-body completion; the final synchronous permission fence follows the
+last asynchronous issuer lookup. Recalled/archived, changed, foreign, expired,
+unsigned or copied native rows refuse. The signature includes its own native
+waiver record ID, so copied notes cannot evade original-record revocation. A
+signer must know that exact native identity before issuing the citation. No
+record writer or automatic signing/activation is added here.
+
+Partial waiver amounts remain explicit and cannot become full coverage or be
+blindly summed. A positive waiver is not received money, a Stripe receipt, a
+refund, clinical consent or an effect grant. Missing/recalled/expired decisions
+are unknown, never evidence that no waiver exists. Complete supersession and
+manual-payment/waiver ownership must still be provisioned and qualified through
+the actual financial consumer/collection/expiry path before automatic effects.
+All private context remains transient/native; no SQL or local private queue is
+added. Source/admin native cost remains unknown until the complete host port is
+reviewed; no zero-cost declaration is inherited from a callback.

@@ -5054,3 +5054,48 @@ The separate combined29c373d full work1792316922473 remains live and excludes
 this followup. Older6d01 remains4428/1/1 with ordered followups not run. All13
 gaps, remaining waiver/host/outbound/writeback engineering and clinic/provider/
 sender/producer/restore/acoustic/cloud/deployment acceptance remain open.
+
+## Approved native financial waiver source, 18 October 2026
+
+Implemented optional canonical signed waiver decisions, explicit independently
+approved waiver issuer and exact current native record reader. The signature
+binds exact intent/target/amount/currency and its own native record; partial
+waivers stay explicit. Current source/admin membership and separate patient/record
+permission remain necessary. This reads positive decisions only, creates no
+waiver writer, automatic effect, SQL/private queue or default activation, and
+does not interpret absence as no waiver.
+
+Final4f2f4c6 source passed43/43 controls, zero skips/failures,
+work1792318461840, peak77,721,600B/256MiB CPU100%/heap192MiB/Swap0/OOM0;
+wait98334 reaped. Exact command: `node --test
+test/cliniko/financial-waiver-decision.test.ts
+test/cliniko/financial-waiver-read.test.ts`. Covers canonical/foreign/forged/changed/
+expired/partial signatures, own native record binding, wrong patient/type, source
+withdrawal and membership, shared quota, held provider/body and mutation races.
+Full standalone `npm run typecheck`, work1792318489398, passed on the same
+source, peak1521844224B/2GiB CPU100%/heap1536MiB/Swap0/OOM0. All1805 frozen
+source hashes independently unchanged, wrapper2400384 absent, terminal work wait
+reaped after the original68263 tool handle was absent on resume. This optional source API is not in default serving; no composed-host/SQL
+or real clinic/provider acceptance is claimed.
+
+Prior evidence is retained: initial40 controls passed1792318113941. Focused
+1792318153037 reproduced a private GET after financial permission withdrawal
+during the final issuer lookup; final synchronous current check fixed it, with
+41 controls passing1792318172638 and42 including held-body passing1792318224301.
+Readonly1792318314146 then reproduced copied signed notes accepted in a different
+record. Earlier TSC1792318257768 passed on that source, but did not qualify this
+semantic defect. Signature/expected binding now include the own native record,
+and the43-control/final TSC evidence above qualifies that correction. No assertion,
+application deadline/quota or strict setting was weakened.
+
+The separate29c373d combined full1792316922473 completed4619 passes/zero failures/
+one existing skip of4620, plus all6 ordered followups, terminal18October2026
+10:52:10.150495UTC. All1797 source and612 generated artifact pins independently
+unchanged; wrapper and own DB absent/external slice inactive, terminal work wait
+reaped after original34647 handle was absent on resume. Node1527480320B/2GiB and
+DB604835840B/1GiB, CPU200% each/Swap0/OOM0. This qualifies the combined through536
+graph and excludes this followup and537. It does not explain or relabel old6d01
+4428/1/1, whose ordered followups did not run.
+Actual financial-owner integration, waiver authoring/supersession and complete
+manual-payment decisions, outbound/writeback engineering and all13 acceptance
+gates remain open; no merge, deployment or live provider/contact/payment action.
