@@ -1017,3 +1017,15 @@ Version1.242 retains419 stable IDs and unchanged full-call states. Current4e4c11
 ## Possible outbound launch evidence and cold history
 
 Version1.242 retains419 stable IDs and unchanged full-call states. Current540f938 passes250 semantic controls, strict TypeScript/compiled build with519 artifacts and60 actual compiled SQL/process/privacy/restore cases. New fixtures prove record-action-only consumption before native POST, competing workers, SIGKILL/lost ACK, no-database cold closed/archived inspection and independent denials. Exact archive filtering and read permission are explicit. A possible record is never call launch/delivery/terminal/contact/clinical proof; no scheduler, carrier, audience/contact-review or full outbound caller journey is added. Separate frozen519 full completed4,105/1fail/1skip on E2E-375; ordered follow-ups did not run, and it excludes this source.
+
+
+## Conditional follow-up owner and capacity qualification
+
+Version1.242 retains419 stable scenario IDs and unchanged registered full-call
+states. New lower-level actual-owner and compiled SQL/native180/process/privacy
+witnesses qualify optional general follow-up composition and portable opaque
+capacity, not a registered complete outbound caller journey. Grant withdrawal
+and consent expiry at the final edge deny dispatch. Invoked outcomes retain
+capacity until separately trusted terminal recovery. Scheduler/opt-out/sick-day/
+clinical callback and real carrier activation remain open. Current evidence and
+exact commands are in [the progress ledger](../phase-2/EXECUTION_PROGRESS.md).

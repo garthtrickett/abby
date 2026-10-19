@@ -1,4 +1,4 @@
-# Outbound and sick-day contract — campaign definition, native records and discovery, no launch activation
+# Outbound and sick-day contract — conditional follow-up launch, no activation
 
 Source requirements: EXECUTION_ORDER stage9, THIRTEEN_GAP gap12, Aeva auditR20/R21. Existing recalls/queue monitoring and verified clinical workflows are reusable seams, not campaign support. Carrier work remains deferred. Keep native clinic/provider ownership and opaque-only local operations.
 
@@ -6,7 +6,7 @@ Campaign policy is non-patient clinic-owned configuration: independent approved 
 
 Do not introduce a local patient/contact/campaign queue. Native work records retain bounded exact target and approved recipient context; local SQL holds random independent permanent one-use effects and permitted non-patient ownership only. Private provider results/callback IDs remain native or volatile. Use existing shared quota, privacy and owned-operation machinery, without making financial account/Stripe fields a prerequisite for outbound.
 
-Audience loading, due scheduling, launch, result interpretation and callback clinical action have separate grants and outcomes. Each stage rereads cancellation/opt-out and approved policy; unavailable DNC denies launch. A record, phone match, campaign ID, callback token, old verification or current capacity cannot supply patient permission. The actual dispatch seam requires fresh native appointment, exact patient/channel, campaign version and current contact/launch/producer/restore authority, then permanent send exclusion and acknowledged clinic-owned possible-launch evidence before one launch. Lost/unknown launch remains consumed, including process death; an expiring capacity slot cannot permit repeat dialing. Capacity can be released after authoritative provider terminal evidence or a separately proven provider-enforced maximum call duration plus the last possible dispatch window. A stale heartbeat or lease alone cannot prove a remote call ended; an unbounded/unknown provider must refuse launch or retain the slot for independent recovery. Permanent per-recipient effect exclusion never expires. Every actual native call claims the existing physical budget; headroom is not reservation.
+Audience loading, due scheduling, launch, result interpretation and callback clinical action have separate grants and outcomes. Each stage rereads cancellation/opt-out and approved policy; unavailable DNC denies launch. A record, phone match, campaign ID, callback token, old verification or current capacity cannot supply patient permission. For appointment-targeted work, dispatch requires the exact fresh native appointment. The general follow-up dispatch seam separately requires exact patient/channel, campaign version and current contact/launch/producer/restore authority, then permanent send exclusion and acknowledged clinic-owned possible-launch evidence before one launch. Lost/unknown launch remains consumed, including process death; an expiring capacity slot cannot permit repeat dialing. Capacity can be released after authoritative provider terminal evidence or a separately proven provider-enforced maximum call duration plus the last possible dispatch window. A stale heartbeat or lease alone cannot prove a remote call ended; an unbounded/unknown provider must refuse launch or retain the slot for independent recovery. Permanent per-recipient effect exclusion never expires. Every actual native call claims the existing physical budget; headroom is not reservation.
 
 Quiet hours are evaluated in the explicitly approved IANA recipient/clinic timezone at current dispatch time. Date bounds and weekends belong to the approved policy, including local-midnight windows and both DST transitions. Scheduling a later poll does not authorize a call. Cancellation, opt-out, clock/policy/appointment change during any wait prevents a later launch. No automatic second attempt is minted after no-answer, failed launch, voicemail or unknown result; any retry needs its independent policy/approval/effect contract.
 
@@ -109,3 +109,75 @@ The concrete native reader now combines a current owner-file clinic source defin
 Current8ee0ec6 passes355 semantic controls, strict TypeScript/526-artifact build and65 actual compiled contact/SQL/process/privacy cases. The maximum500-row/50-review case uses62 physical GETs in the fixed synthetic authority profile and completes under the unchanged15s deadline; additional real grants share quota and require separate cost/admission evidence. Strongest decoded grants replace preliminary queries for final revalidation; immediately adjacent source freshness checks are shared without merging grants or skipping checks after waits. See [exact results, earlier failures and limits](EXECUTION_PROGRESS.md#gap-12-concrete-private-cliniko-contact-review-reader-18-october-2026).
 
 This is a private observation, not an atomic snapshot, deployed consent source or launch grant. Owning-host provisioning, real clinic approval, audience/dispatcher, scheduling/capacity/cancellation/one-shot launch/results/opt-out and verified callback integration remain open. The independently running523 full regression excludes this reader. No live contact or activation follows.
+
+
+## Conditional one-shot follow-up and portable capacity, 19 October 2026
+
+`ClinikoOutboundLaunchOwner` composes the actual native request/contact/history
+readers, current clinic campaign approval and four separate audience/provider/
+producer/launch grants. It checks the due civil schedule, exact current phone,
+contact/DNC lineage and complete possible-attempt history. A reviewed total native
+cost uses the same physical account180 budget; headroom is never a reservation.
+The v2 possible-attempt note retains the exact random capacity allocation ID
+for independent cold recovery; legacy v1 evidence remains readable and still
+prevents replay, but supplies no allocation link. Neither format proves a terminal
+call. Permanent approval/effect claims and exact native acknowledgement precede one trusted provider adapter invocation. Its one-use callback
+rechecks policy, native evidence, consent validity and all four current grants
+immediately before transport. Exact acknowledgement means accepted, not delivered,
+terminal or clinically successful. Later observer failure preserves known acceptance.
+
+The initial review reproduced two real races: a one-second lagging reader clock
+accepted consent already expired at dispatch; and a launch grant withdrawn during
+the final native history wait passed an audience-only current check. A third counterexample found no durable mapping from a held place to its native
+attempt; the v2 note now binds the independent allocation, including after process
+death. The corrected
+fence uses the launch clock, exact request digest and verified contact effective
+window, and checks each operation after waits. The source controls include expiry
+during those waits and independent withdrawal of each grant.
+
+Migration051 stores only random one-use allocation IDs, a non-patient campaign
+binding, clinic/location ownership and held/released timestamps. Tenant locking
+counts held places across location and policy/provider changes. No heartbeat,
+lease, deadline or process death releases capacity. Only a definitely never-invoked
+adapter can release unused occupancy here; all invoked outcomes stay held pending
+a separately trusted terminal recovery owner. Full shared archive/import/re-export,
+source fencing and cutover reconciliation retain held/released history and original
+ownership. Missing imported rows deny decisions instead of repairing history.
+
+Validation on `2dc632e14923a52924759e8c3f9441fa795eabef`:
+
+- Final exact-revision owner/codec controls:49/49, work1792386557290,
+  peak118,169,600B/256MiB. The broader linked contact/campaign/history cohort
+  passed252/252, work1792386462749. Current archive envelope/opaque history
+  controls passed22/22, work1792385918001. No failures or skips.
+- `npm run typecheck && npm run build:voice-tests`, work1792386532566,
+  passed with1826 source pins and623 emitted artifacts; peak1551339520B/2GiB,
+  CPU100%, heap1536MiB, Swap0/OOM0. Required emitted owner/capacity entries verified.
+- Disposable PostgreSQL migration followed by `ABBY_LEDGER=postgres node --test
+  --test-concurrency=4 test/storage/postgres-outbound-capacity.test.ts
+  test/storage/postgres-outbound-effect-barrier.test.ts
+  test/storage/postgres-outbound-launch-owner.test.ts`:17/17, work1792386786317.
+  Eight actual emitted owner cases include native180, contention, uncertainty,
+  exact acknowledgement, lost native ACK, changed contact, two real SIGKILL points,
+  cold closed/archived no-replay after local effect-row loss, empty worker output/
+  directory and SQL/unfiltered-backup privacy. Node240107520B/1GiB,
+  DB188375040B/512MiB, CPU100%each/Swap0/OOM0.
+- Source-only PostgreSQL config/minimal archive, cutover receipt and shared text/
+  voice portability preservation:28/28,
+  work1792386223974, Node288948224B/1GiB plus
+  DB385974272B/512MiB. These source-only files import no dist; their unchanged archive graph was
+  qualified onb358724 before the separate native-note/owner link refinement. Both SQL
+  jobs retained source/dependency pins and cleaned their own DB/slice/processes.
+  Original deadlines and default four-file concurrency remain unchanged.
+
+Initial strict checks found a partial-index SQL expression typing error and a
+test fixture's inferred zero-argument ports; corrected declarations preserve the
+same SQL predicate and production signatures. Earlier red evidence is retained;
+no assertion, native quota, deadline or privacy check was weakened.
+
+This is optional general follow-up engineering. Appointment-targeted and sick-day
+requests refuse. Scheduler, result/terminal-release recovery, opt-out writing,
+verified clinical callbacks, live carrier and owning-host provisioning remain open.
+No public/default route or local private queue is added; private context stays native
+or volatile. All thirteen gaps and clinic/provider/sender/restore/acoustic/cloud/
+deployment acceptance remain in scope. No live contact, deployment or merge follows.

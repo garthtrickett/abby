@@ -7,16 +7,16 @@
 | Execution stage | Current evidence and next action |
 | --- | --- |
 | 1 Aeva preservation | Independently retrieved and hash-checked 113 explicit source/test/map references at the audited revision through GitHub. All four original planning documents were published and independently retrieved at Abby `229a3596696d8ebb9bf263e58457f412898c1327`. Local-only material still requires owner selection and preservation before deletion. |
-| 2 Delivery baseline | Work is stacked and unmerged through draft539 plus the current test-only native settlement class/resend qualification. Through53629c373d full passed4619/0/1 plus6ordered; new through539d5f901e full1792378464534 is running, not green. Exact-head cloud checks remain rejected before startup for account billing/spending limits. Historical negatives remain preserved. |
+| 2 Delivery baseline | Stacked and unmerged through draft540 plus this conditional outbound patch. Through539d5f901e full completed4742/0/1existingSkip plus6ordered;540 and outbound have separate focused qualification. Exact cloud workflows remain rejected before startup for billing/spending limits. |
 | 3 Exact receipt foundation | Implemented and locally qualified in `codex/abby-provider-ack-receipt`, stacked on the published plans and integrated candidate. The full interval is captured, sent and validated. The later individual/class changes consume this exact receipt; post-create observations cannot erase an established creation acknowledgement. Independent review and exact-head CI remain outstanding. |
 | 4 Individual booking | Published in draft [PR #460](https://github.com/garthtrickett/abby/pull/460), `codex/abby-provider-ack-individual`, based on receipt correction `92a16e5`. Final online/roster availability follows preparation; exact acknowledgement survives host/review/worker cancellation. Focused, isolated database/process/compiled-location and complete local `npm test` checks passed. Independent review and cloud qualification remain open; cloud jobs have not started because of billing. |
 | 5 Native class creation | Draft [PR #461](https://github.com/garthtrickett/abby/pull/461) supplies exact attendee acknowledgement and final double capacity ordering for ordinary/approved-pass creation. Focused process-loss/privacy and movement/cancellation preservation evidence is retained below. Later staged caller work composes these creation semantics; acknowledgement of replacement creation alone never completes a move. Current whole-graph and authoritative cloud qualification remain open. |
-| 6 Earlier-gap qualification | Through53629c373d combined full passed4619/0/1 plus6ordered. Current through539 native invoice/waiver integration full is running, not green. Focused current class/resend results do not replace it. Gaps1–9 retain clinic, mail, operator, acoustic and public-route limits; historical failures remain recorded. |
+| 6 Earlier-gap qualification | Through539 combined full passed4742/0/1existingSkip plus6ordered. New540 and outbound files retain separate focused evidence. Gaps1–9 still require clinic/mail/operator/acoustic/public-route acceptance. Older negatives and unknown6d01 cause remain recorded. |
 | 7 Class/pass completion | Drafts465–473 and487 include staged caller/SAM/private renewal, separate played consent, bounded native/proposal cost admission, cold staff observation, signed uncertainty-to-staff recovery and same/cross-case date/ordinal/pass journeys. Their current composed cohorts also ran in the passing36b5285c complete clinical graph. Broader operator acceptance, original/replacement recovery obligations and separate financial provisioning remain explicit; no blanket cohort or clinic activation follows. |
-| 8 Payments | Stripe and dedicated Cliniko financial reviews remain selected. Drafts537–539 add exact native invoice/current signed waiver and actual consumer composition;31 core controls, strict/616 build and3 compiled SQL cases passed. Current test-only655dce1 adds24 current-positive-waiver class/resend controls and9 emitted SQL/native180/privacy cases plus final strict. Through539 full1792378464534 is running, not green. Complete clinic financial/mapping/manual-payment/waiver authoring/supersession, actual serving and real acceptance remain open; no default activation. |
-| 9 Outbound | Contact foundation524/reader525 add canonical consent/DNC history and current independent clinic-admin source/patient/collection/record/head/reconsent grants:355 semantic controls, strict/build and65 compiled contact/SQL/privacy cases. Marketing flags and financial reviews grant no voice consent. Owning-host provisioning, audience/scheduler/capacity/cancellation/one-shot launch/results/opt-out and exact verified callback integration remain open. Earlier independent engineering is addressed before new outbound features. |
+| 8 Payments | Stripe and dedicated Cliniko financial reviews remain selected. Drafts537–539 add exact native invoice/current signed waiver and actual consumer composition;31 core controls, strict/616 build and3 compiled SQL cases passed. Current test-only655dce1 adds24 current-positive-waiver class/resend controls and9 emitted SQL/native180/privacy cases plus final strict. Through539 full1792378464534 passed4742/0/1existingSkip plus6ordered;540 retains separate focused qualification. Complete clinic financial/mapping/manual-payment/waiver authoring/supersession, actual serving and real acceptance remain open; no default activation. |
+| 9 Outbound | Contact foundation/reader and current campaign/native request/history now compose one optional general follow-up owner with portable opaque capacity.49 exact owner/codec controls plus252 broader controls, strict/623 build,17 compiled SQL/process/privacy and separate shared archive/cutover preservation pass. Scheduler/results/terminal release/opt-out/exact sick-day/callback and real activation remain open. |
 | 10 Writeback | Pending gap 13, exact permissions/content/storage decisions and audit R08/R22. |
-| 11 Combined qualification | Latest completed full through53629c373d is4619pass/0fail/1existing C-LIVE-40skip plus6ordered. Current through539d5f901e full1792378464534 is running; it excludes the new655dce1 test-only class/resend followup. Independent review, cloud execution and real clinic/provider/sender/restore/acoustic/deployment acceptance remain open. Older6d01 failure is preserved and its cause remains unknown. |
+| 11 Combined qualification | Completed through539d5f901e full1792378464534 passed4742/0/1existing C-LIVE-40skip plus6ordered. It excludes540 test-only files and this new outbound runtime/schema/archive patch. Exact cloud execution and real clinic/provider/sender/restore/acoustic/deployment acceptance remain open. Older6d01 cause remains unknown. |
 
 The three detailed plans retain the requirements and acceptance matrices. No source merge, deployment, real provider mutation, mail send or Aeva deletion is established by this ledger.
 
@@ -5205,11 +5205,97 @@ issuer producer types; those declarations were corrected without weakening
 strictness, assertions, native180 or any deadline. Compiled-policy identity was
 corrected before the PostgreSQL launch, never bypassed with a prototype change.
 
-The independent through539 full1792378464534 is running, not green, and excludes
-these new test-only files. Last completed through536 full remains4619/0/1 plus
-6ordered for its exact29c373d source; older6d01 failure cause remains unknown.
+At the initial qualification of these test-only files, through539 full1792378464534
+was still running. It has since passed4742/0/1existingSkip plus6ordered, as recorded
+below, and excludes these new files. Older6d01 failure cause remains unknown.
 Complete clinic manual-payment/waiver authoring/supersession/mapping and real
 provider/sender/producer/restore acceptance remain distinct. Gaps12/13 and all
 thirteen-gap, acoustic/cloud/deployment gates remain open. No live contact,
 payment/provider mutation, default activation, local private queue, merge or
 deployment is introduced.
+
+
+## Through539 combined regression completed, 19 October 2026
+
+Work1792378464534 on exact d5f901e4cbc438fc34b513c1ebf93c084e838621
+finished naturally03:58:45.908855UTC after64m21s: full strict and required builds,
+4742 passed/zero failed/one existing C-LIVE-40 skip of4743, then all6 ordered
+follow-ups. Independently verified1810 source and619 final artifact hashes and
+owned process/database/slice cleanup. Node1,590,910,976B/2GiB and DB609,619,968B/1GiB,
+CPU200%each/Swap0/OOM0. The same paired wait10739 completed successfully.
+This full includes native invoice/current signed waiver composition through539;
+it excludes540's separately qualified test-only files and this outbound patch.
+The old6d01 failure cause remains unknown. Exact cloud workflows still refused
+startup for billing/spending limits; local success grants no merge or activation.
+
+
+## Conditional one-shot follow-up and portable capacity, 19 October 2026
+
+`ClinikoOutboundLaunchOwner` composes the actual native request/contact/history
+readers, current clinic campaign approval and four separate audience/provider/
+producer/launch grants. It checks the due civil schedule, exact current phone,
+contact/DNC lineage and complete possible-attempt history. A reviewed total native
+cost uses the same physical account180 budget; headroom is never a reservation.
+The v2 possible-attempt note retains the exact random capacity allocation ID
+for independent cold recovery; legacy v1 evidence remains readable and still
+prevents replay, but supplies no allocation link. Neither format proves a terminal
+call. Permanent approval/effect claims and exact native acknowledgement precede one trusted provider adapter invocation. Its one-use callback
+rechecks policy, native evidence, consent validity and all four current grants
+immediately before transport. Exact acknowledgement means accepted, not delivered,
+terminal or clinically successful. Later observer failure preserves known acceptance.
+
+The initial review reproduced two real races: a one-second lagging reader clock
+accepted consent already expired at dispatch; and a launch grant withdrawn during
+the final native history wait passed an audience-only current check. A third counterexample found no durable mapping from a held place to its native
+attempt; the v2 note now binds the independent allocation, including after process
+death. The corrected
+fence uses the launch clock, exact request digest and verified contact effective
+window, and checks each operation after waits. The source controls include expiry
+during those waits and independent withdrawal of each grant.
+
+Migration051 stores only random one-use allocation IDs, a non-patient campaign
+binding, clinic/location ownership and held/released timestamps. Tenant locking
+counts held places across location and policy/provider changes. No heartbeat,
+lease, deadline or process death releases capacity. Only a definitely never-invoked
+adapter can release unused occupancy here; all invoked outcomes stay held pending
+a separately trusted terminal recovery owner. Full shared archive/import/re-export,
+source fencing and cutover reconciliation retain held/released history and original
+ownership. Missing imported rows deny decisions instead of repairing history.
+
+Validation on `2dc632e14923a52924759e8c3f9441fa795eabef`:
+
+- Final exact-revision owner/codec controls:49/49, work1792386557290,
+  peak118,169,600B/256MiB. The broader linked contact/campaign/history cohort
+  passed252/252, work1792386462749. Current archive envelope/opaque history
+  controls passed22/22, work1792385918001. No failures or skips.
+- `npm run typecheck && npm run build:voice-tests`, work1792386532566,
+  passed with1826 source pins and623 emitted artifacts; peak1551339520B/2GiB,
+  CPU100%, heap1536MiB, Swap0/OOM0. Required emitted owner/capacity entries verified.
+- Disposable PostgreSQL migration followed by `ABBY_LEDGER=postgres node --test
+  --test-concurrency=4 test/storage/postgres-outbound-capacity.test.ts
+  test/storage/postgres-outbound-effect-barrier.test.ts
+  test/storage/postgres-outbound-launch-owner.test.ts`:17/17, work1792386786317.
+  Eight actual emitted owner cases include native180, contention, uncertainty,
+  exact acknowledgement, lost native ACK, changed contact, two real SIGKILL points,
+  cold closed/archived no-replay after local effect-row loss, empty worker output/
+  directory and SQL/unfiltered-backup privacy. Node240107520B/1GiB,
+  DB188375040B/512MiB, CPU100%each/Swap0/OOM0.
+- Source-only PostgreSQL config/minimal archive, cutover receipt and shared text/
+  voice portability preservation:28/28,
+  work1792386223974, Node288948224B/1GiB plus
+  DB385974272B/512MiB. These source-only files import no dist; their unchanged archive graph was
+  qualified onb358724 before the separate native-note/owner link refinement. Both SQL
+  jobs retained source/dependency pins and cleaned their own DB/slice/processes.
+  Original deadlines and default four-file concurrency remain unchanged.
+
+Initial strict checks found a partial-index SQL expression typing error and a
+test fixture's inferred zero-argument ports; corrected declarations preserve the
+same SQL predicate and production signatures. Earlier red evidence is retained;
+no assertion, native quota, deadline or privacy check was weakened.
+
+This is optional general follow-up engineering. Appointment-targeted and sick-day
+requests refuse. Scheduler, result/terminal-release recovery, opt-out writing,
+verified clinical callbacks, live carrier and owning-host provisioning remain open.
+No public/default route or local private queue is added; private context stays native
+or volatile. All thirteen gaps and clinic/provider/sender/restore/acoustic/cloud/
+deployment acceptance remain in scope. No live contact, deployment or merge follows.
