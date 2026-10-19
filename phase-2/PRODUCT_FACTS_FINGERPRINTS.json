@@ -5,7 +5,7 @@
   "sources": {
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
     "docs/adr/0003-class-movement-staff-resolution.md": "683bdd10660afc00309bac21e32ceda976573aa5e29aca4106fb1cddcb71b62f",
-    "phase-2/EXECUTION_PROGRESS.md": "7de4282886a850c92c7b4a79285e312c3194d2ede8e8555933a43b21c1a0d921",
+    "phase-2/EXECUTION_PROGRESS.md": "1821c4fc713a0a06e35f079d3770e3cbde78adfe328e7a0b1cac8c2351c348cf",
     "phase-2/OUTBOUND_NUMBER_STOPS.md": "04e7a3ab1da5b5617caaa47bd6e6ee002635837a6ce830b8fba9c819849fb04e",
     "phase-2/OUTBOUND_RUNTIME.md": "9659c9db8648ab13a4fa93f631dc6d679f53f84ed18c2221fb67310f63da88cd",
     "phase-2/OUTBOUND_SICK_DAY_CONTRACT.md": "ff80dd2a2dc988d90b62a8f807be3004d174d0460e183934c7efe14bdabcda98",
@@ -255,7 +255,7 @@
     "test/contract/outbound-runtime-owners.test.ts": "98efc9376082e3000226ed2570442f127acb6489577328e59fb01c3d9b9f7739",
     "test/contract/outbound-scheduler.test.ts": "feb5596f576a166d50fee4e8abd059e679ee7b5098a7c541da9e6adcc694c54a",
     "test/contract/outbound-stop-owner.test.ts": "1fdbd250c5998411723cd95e911f52a75327abcdb77e1ed8ecb00cd0c3d08da5",
-    "test/contract/outbound-targeted-launch.test.ts": "fcd75ff30ffe4748502a31b67600928b10a7ed1c3d0e98180f62028960213ee3",
+    "test/contract/outbound-targeted-launch.test.ts": "5f17dcca4df728be0af61f38300c8e7bc0f69be5f3e7626c5048ce5d4d2c7308",
     "test/contract/outbound-terminal-owner.test.ts": "23feede9f2a917897735c26a9075554ab27c3f38978efd9fe307378e446873e6",
     "test/contract/stripe-checkout-correlation.test.ts": "d78e9da28b447b4939f58b241cdce721d51a9ceeda8b7d8aad05aa915d6ef5ed",
     "test/contract/stripe-checkout-discovery.test.ts": "f45148981925a83dd17eb2af88857baf2e5f8f6a775ec708781680b352a0b6d0",
