@@ -69,7 +69,7 @@ export class ClinikoOutboundStopOwner {
         c.businessId !== config.requests.businessId || c.rateBudget !== config.requests.rateBudget) return err({ kind: "invalidConfig" });
       const budget = config.requests.rateBudget, physical = Object.freeze({ claim: budget.claim.bind(budget), observe429: budget.observe429.bind(budget),
         ...(budget.checkHeadroom ? { checkHeadroom: budget.checkHeadroom.bind(budget) } : {}) });
-      const freezeConfig = <T extends OutboundRecordConfig | OutboundDncRecordConfig["source"]>(c: T): T => Object.freeze({ ...c,
+      const freezeConfig = <T extends OutboundRecordConfig | OutboundLaunchRecordConfig | OutboundDncRecordConfig["source"]>(c: T): Readonly<T> => Object.freeze<T>({ ...c,
         scope: Object.freeze({ ...c.scope }), rateBudget: physical, ...(c.clock ? { clock: c.clock.bind(c) } : {}) });
       const captured = Object.freeze({ ...config, requests: freezeConfig(config.requests), attempts: freezeConfig(config.attempts),
         dnc: Object.freeze({ ...config.dnc, source: Object.freeze({ ...freezeConfig(config.dnc.source), contactRevision: Object.freeze({

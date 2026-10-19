@@ -93,7 +93,7 @@ test("a later separately approved reconsent cannot cause replay of an already re
   const reconsent = f.next(stop, { reviewerRef: "human-clinic-reviewer", consent: "granted", doNotCall: "clear", reconsentApprovalRef: randomUUID(),
     reviewedAt: f.state.now, effectiveFrom: f.state.now });
   const previous = f.contactControls.rows.find(r => r.id === "300"); assert.ok(previous);
-  const row = { ...previous, id: "301" }; f.contactControls.rows.push(row);
+  const row: Record<string, unknown> & { id: string } = { ...previous, id: "301" }; f.contactControls.rows.push(row);
   // Use the underlying native row's links and canonical content for the new
   // independently granted human review; the automatic owner grants none of it.
   row.notes = value(encodeOutboundContactReview(reconsent)); row.links = { self: "https://api.au5.cliniko.com/v1/recalls/301" };
