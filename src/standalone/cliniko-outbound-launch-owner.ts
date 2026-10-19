@@ -29,7 +29,7 @@ import type { OutboundProviderBinding, OutboundLaunchProvider } from "../voice/o
 export type { OutboundProviderBinding, OutboundLaunchProvider } from "../voice/outbound-runtime.ts";
 export type OutboundLaunchQuery = Readonly<{ operation: "approveAudience" | "approveProvider" | "producerAdmitted" | "approveLaunch" | "approveAppointmentTarget";
   ownerBinding: string; record: OutboundRecipientRecord; campaign: OutboundCampaignApproval; provider: OutboundProviderBinding;
-  target?: Readonly<Pick<OutboundTargetObservation, "target" | "digest">> }>;
+  target?: Readonly<Pick<OutboundTargetObservation, "target" | "digest"> & { appointmentPolicyDigest: string }> }>;
 export type OutboundLaunchAuthority = Readonly<{
   allows(query: OutboundLaunchQuery, signal: AbortSignal): Promise<boolean>;
   current(query: OutboundLaunchQuery, signal: AbortSignal): boolean;
@@ -159,7 +159,8 @@ export class ClinikoOutboundLaunchOwner {
       const t = observation.value.target, at = now();
       if (t.archivedAt !== null || t.cancelledAt !== null || t.deletedAt !== null || t.patientArrived === true || t.didNotArrive === true ||
           Date.parse(t.startsAt) <= Date.parse(at) || observation.value.observedAt > at) throw new Refusal("forbidden");
-      return Object.freeze({ target: t, digest: observation.value.digest });
+      return Object.freeze({ target: t, digest: observation.value.digest,
+        appointmentPolicyDigest: this.#config.individualTarget!.appointmentPolicyDigest });
     };
     const prepare = async () => {
       const policy = await wait(this.#campaign.current(signal));

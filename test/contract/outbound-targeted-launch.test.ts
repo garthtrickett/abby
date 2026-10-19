@@ -10,7 +10,7 @@ test("explicit sick-day composition observes only the original target and sends 
   const f = await outboundTargetedLaunchFixture(); t.after(f.close);
   assert.deepEqual(value(await f.launchTargeted()), { kind: "accepted", capacity: "held" }); assert.equal(f.calls.length, 1);
   assert.deepEqual(Object.keys(f.calls[0]!).sort(), ["capacityAllocationRef", "effectRef", "number", "profileRef"]);
-  assert.ok(f.targetState.gets >= 8); assert.ok(f.targetLaunchQueries.some(q => q.operation === "approveAppointmentTarget" && q.target?.digest === f.observed.digest));
+  assert.ok(f.targetState.gets >= 8); assert.ok(f.targetLaunchQueries.some(q => q.operation === "approveAppointmentTarget" && q.target?.digest === f.observed.digest && q.target.appointmentPolicyDigest === "9".repeat(64)));
   assert.ok(f.targetQueries.some(q => q.request?.purpose === "sickDay" && q.targetDigest === f.observed.digest));
   assert.equal(f.targetLaunchQueries.some(q => JSON.stringify(q).includes("discard-private-native-target-note")), false);
 });
@@ -84,4 +84,22 @@ test("a caller can neither change the pinned target policy nor replace its captu
 test("aborted targeted launch reads no appointment and consumes no new action", async t => {
   const f = await outboundTargetedLaunchFixture(); t.after(f.close); const controller = new AbortController(); controller.abort();
   assert.equal((await f.launchTargeted(controller.signal)).ok, false); assert.equal(f.targetState.gets, 0); assert.equal(f.calls.length, 0); assert.equal(f.burned.size, 0);
+});
+
+test("the independent launch decision can refuse the exact appointment policy despite current native read grants", async t => {
+  const f = await outboundTargetedLaunchFixture(); t.after(f.close);
+  f.targetState.launchAllows = q => q.operation !== "approveAppointmentTarget" || q.target?.appointmentPolicyDigest === "f".repeat(64);
+  assert.equal((await f.launchTargeted()).ok, false); assert.equal(f.calls.length, 0); assert.equal(f.posts, 0);
+});
+test("appointment start reached during a grant wait refuses before any effect is consumed", async t => {
+  const f = await outboundTargetedLaunchFixture(); t.after(f.close);
+  f.targetState.launchAllows = q => { if (q.operation === "approveAppointmentTarget") f.state.now = "2026-11-02T23:00:00.000Z"; return true; };
+  assert.equal((await f.launchTargeted()).ok, false); assert.equal(f.calls.length, 0); assert.equal(f.posts, 0); assert.equal(f.burned.size, 0);
+});
+test("a held exact target read obeys the outer launch deadline and cannot dispatch after it returns", { timeout: 3000 }, async t => {
+  const f = await outboundTargetedLaunchFixture(); t.after(f.close); let release!: () => void;
+  f.targetState.beforeRead = () => new Promise<void>(resolve => { release = resolve; });
+  const owner = value(ClinikoOutboundLaunchOwner.create({ ...f.targetConfig, deadlineMs: 30 }, f.targetPorts));
+  assert.equal((await owner.launchOnce(f.binding, new AbortController().signal)).ok, false); assert.equal(f.calls.length, 0); assert.equal(f.posts, 0);
+  release(); await new Promise<void>(resolve => setImmediate(resolve)); assert.equal(f.calls.length, 0); assert.equal(f.posts, 0);
 });
