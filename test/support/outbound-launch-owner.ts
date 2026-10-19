@@ -17,6 +17,8 @@ import { outboundCapacityOwnerBinding } from "../../src/core/outbound-capacity.t
 
 export async function outboundLaunchOwnerFixture(options: {
   apiKey?: string; scope?: import("../../src/core/model.ts").LocationScope;
+  purpose?: "followUp" | "sickDay";
+  appointment?: Readonly<{ ref: string; digest: string }>;
   budget?: import("../../src/cliniko/read-budget.ts").ClinikoRequestBudget;
   effectFactory?(scope: Parameters<OutboundEffectBarrier["matches"]>[0], owner: string): OutboundEffectBarrier;
   capacityFactory?(scope: Parameters<OutboundCapacity["matches"]>[0], owner: string): OutboundCapacity;
@@ -25,10 +27,11 @@ export async function outboundLaunchOwnerFixture(options: {
   const f = await outboundContactSourceFixture({ ...(options.apiKey ? { apiKey: options.apiKey } : {}), ...(options.scope ? { scope: options.scope } : {}) }), runtime = options.runtime ?? { ClinikoOutboundLaunchOwner, OwnerFileOutboundCampaign };
   try {
     const base = "https://api.au5.cliniko.com/v1", path = join(dirname(f.definitionConfig.path), "campaign.json");
-    const original = { ...f.request, actionRef: randomUUID(), effectRef: randomUUID(), approvalRef: randomUUID(), campaignRef: randomUUID() };
+    const original = { ...f.request, ...(options.purpose ? { purpose: options.purpose } : {}), ...(options.appointment ? { appointment: options.appointment } : {}),
+      actionRef: randomUUID(), effectRef: randomUUID(), approvalRef: randomUUID(), campaignRef: randomUUID() };
     const approval: OutboundCampaignApproval = { scope: original.scope, revision: "outbound-1", approverRef: f.state.account!.actor.actorRef,
       approvedAt: "2026-11-01T00:00:00.000Z", effectiveFrom: "2026-11-01T00:00:00.000Z", effectiveUntil: "2026-12-01T00:00:00.000Z",
-      approved: true, enabled: true, campaignRef: original.campaignRef, purpose: "followUp", providerRef: "synthetic-provider", maximumConcurrent: 1,
+      approved: true, enabled: true, campaignRef: original.campaignRef, purpose: original.purpose, providerRef: "synthetic-provider", maximumConcurrent: 1,
       audience: { kind: "nativeRecipientRequests", businessId: original.businessId, credentialFingerprint: original.credentialFingerprint,
         outboundRecallTypeId: "61", recordPolicyDigest: "d".repeat(64) }, schedule: original.schedule };
     await writeFile(path, JSON.stringify(approval), { mode: 0o600 });

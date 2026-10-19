@@ -22,11 +22,14 @@ import { checkClinikoHeadroom } from "../cliniko/read-budget.ts";
 import { OwnerFileOutboundCampaign } from "./owner-file-outbound-campaign.ts";
 import type { OutboundCampaignApproval } from "./owner-file-outbound-campaign.ts";
 import { sameScope } from "./appointment-change-authority.ts";
+import { ClinikoOutboundAppointmentTarget } from "../cliniko/outbound-appointment-target.ts";
+import type { OutboundTargetAuthority, OutboundTargetObservation, OutboundTargetQuery } from "../cliniko/outbound-appointment-target.ts";
 
 import type { OutboundProviderBinding, OutboundLaunchProvider } from "../voice/outbound-runtime.ts";
 export type { OutboundProviderBinding, OutboundLaunchProvider } from "../voice/outbound-runtime.ts";
-export type OutboundLaunchQuery = Readonly<{ operation: "approveAudience" | "approveProvider" | "producerAdmitted" | "approveLaunch";
-  ownerBinding: string; record: OutboundRecipientRecord; campaign: OutboundCampaignApproval; provider: OutboundProviderBinding }>;
+export type OutboundLaunchQuery = Readonly<{ operation: "approveAudience" | "approveProvider" | "producerAdmitted" | "approveLaunch" | "approveAppointmentTarget";
+  ownerBinding: string; record: OutboundRecipientRecord; campaign: OutboundCampaignApproval; provider: OutboundProviderBinding;
+  target?: Readonly<Pick<OutboundTargetObservation, "target" | "digest">> }>;
 export type OutboundLaunchAuthority = Readonly<{
   allows(query: OutboundLaunchQuery, signal: AbortSignal): Promise<boolean>;
   current(query: OutboundLaunchQuery, signal: AbortSignal): boolean;
@@ -34,6 +37,9 @@ export type OutboundLaunchAuthority = Readonly<{
 export type OutboundLaunchOwnerConfig = Readonly<{
   requests: OutboundRecordConfig; attempts: OutboundLaunchRecordConfig; contact: OutboundContactSourceConfig;
   campaignRef: string; campaign: OwnerFileOutboundCampaign;
+  /** Explicit staff-owned sick-day target observation. This is neither patient
+   * verification nor permission for any subsequent clinical action. */
+  individualTarget?: Readonly<{ appointmentPolicyDigest: string }>;
   /** Reviewed TOTAL native authority/reader/attempt cost for this complete exact
    * profile. No inherited zero/default, reservation or extra account capacity. */
   maximumNativeRequests: number; deadlineMs?: number; dispatchWindowMs?: number;
@@ -41,6 +47,7 @@ export type OutboundLaunchOwnerConfig = Readonly<{
 type Ports = Readonly<{ request: OutboundRecordReadAuthority; attempt: OutboundLaunchRecordAuthority;
   history: OutboundLaunchHistoryAuthority; contact: OutboundContactAuthority; contactDefinition: OutboundContactDefinition;
   authority: OutboundLaunchAuthority; provider: OutboundLaunchProvider;
+  target?: OutboundTargetAuthority;
   effects: OutboundEffectBarrier; attemptEffects: OutboundEffectBarrier; capacity: OutboundCapacity; native?: typeof fetch }>;
 type Failure = Readonly<{ kind: "invalidConfig" | "unavailable" | "forbidden" | "alreadyAttempted" | "capacityUnavailable" }>;
 export type OutboundLaunchOutcome = Readonly<{ kind: "accepted" | "unknown"; capacity: "held" }>;
@@ -56,9 +63,9 @@ export function outboundLaunchOwnerBinding(config: OutboundLaunchOwnerConfig): s
 class Refusal extends Error { readonly kind: Failure["kind"]; constructor(kind: Failure["kind"]) { super("Outbound launch unavailable"); this.kind = kind; } }
 const closed = (record: OutboundRecipientRecord) => record.recalled || record.recalledAt !== null || record.archivedAt !== null;
 
-/** Conditional one-shot general follow-up owner. Exact-target/sick-day and
- * protected callback actions deliberately refuse until their separate native
- * clinical reader/verified workflow is composed. No scheduler or default route.
+/** Conditional one-shot general follow-up or explicitly composed exact sick-day
+ * launch. Protected callback actions still need independent patient verification
+ * and clinical authority. No scheduler or default route.
  * Private native context stays volatile; local stores contain opaque IDs only. */
 export class ClinikoOutboundLaunchOwner {
   readonly #config: OutboundLaunchOwnerConfig;
@@ -91,13 +98,16 @@ export class ClinikoOutboundLaunchOwner {
       const history = ClinikoOutboundLaunchHistory.create(input.attempts, incoming.history, incoming.native);
       const contact = ClinikoOutboundContactSource.create(input.contact, incoming.contactDefinition, incoming.contact, incoming.native);
       if (!requests.ok || !attempts.ok || !history.ok || !contact.ok) return err({ kind: "invalidConfig" });
+      if (input.individualTarget !== undefined && (!incoming.target || !ClinikoOutboundAppointmentTarget.create({ requests: input.requests,
+        appointmentPolicyDigest: input.individualTarget.appointmentPolicyDigest }, incoming.target, incoming.native).ok)) return err({ kind: "invalidConfig" });
       const ports = Object.freeze({ ...incoming,
+        ...(incoming.target ? { target: Object.freeze({ allows: incoming.target.allows.bind(incoming.target), current: incoming.target.current.bind(incoming.target) }) } : {}),
         effects: Object.freeze({ matches: incoming.effects.matches.bind(incoming.effects), claimOnce: incoming.effects.claimOnce.bind(incoming.effects) }),
         capacity: Object.freeze({ matches: incoming.capacity.matches.bind(incoming.capacity), acquireOnce: incoming.capacity.acquireOnce.bind(incoming.capacity), releaseOnce: incoming.capacity.releaseOnce.bind(incoming.capacity) }),
         authority: Object.freeze({ allows: incoming.authority.allows.bind(incoming.authority), current: incoming.authority.current.bind(incoming.authority) }),
         provider: Object.freeze({ binding: incoming.provider.binding.bind(incoming.provider), launchOnce: incoming.provider.launchOnce.bind(incoming.provider) }) });
       const physical = input.requests.rateBudget;
-      const config = Object.freeze({ ...input, requests: Object.freeze({ ...input.requests, scope: Object.freeze({ ...input.requests.scope }),
+      const config = Object.freeze({ ...input, ...(input.individualTarget ? { individualTarget: Object.freeze({ ...input.individualTarget }) } : {}), requests: Object.freeze({ ...input.requests, scope: Object.freeze({ ...input.requests.scope }),
         ...(input.requests.clock ? { clock: input.requests.clock.bind(input.requests) } : {}),
         rateBudget: Object.freeze({ claim: physical.claim.bind(physical), observe429: physical.observe429.bind(physical),
           ...(physical.checkHeadroom ? { checkHeadroom: physical.checkHeadroom.bind(physical) } : {}) }) }) });
@@ -114,6 +124,7 @@ export class ClinikoOutboundLaunchOwner {
     const clock = this.#config.requests.clock ?? (() => new Date().toISOString());
     const allocation = randomUUID(); let acquired = false, providerInvoked = false, dispatched = false, accepted = false, edgeInvoked = false;
     let q: OutboundLaunchQuery | undefined, own: { recallRef: string; attempt: OutboundLaunchAttempt } | undefined;
+    let targetGrant: OutboundTargetQuery | undefined;
     let lastNow = -Infinity;
     let consentWindow: Readonly<{ observedAt: string; effectiveFrom: string; effectiveUntil: string }> | undefined;
     const now = () => {
@@ -122,29 +133,52 @@ export class ClinikoOutboundLaunchOwner {
       lastNow = value; return text;
     };
     const active = () => !signal.aborted && performance.now() - began <= ms;
+    const targetOperations = () => q?.target ? [...launchOperations, "approveAppointmentTarget" as const] : launchOperations;
     const wait = async <T>(promise: Promise<T>): Promise<T> => {
       const value = await awaitUntilAbort(promise, signal); if (value === undefined || !active()) throw new Refusal("unavailable"); return value;
     };
     const current = () => {
       const at = now();
       if (!active() || !q || parentCurrent && parentCurrent(q.campaign) !== true || this.#ports.effects.matches(this.#config.requests.scope, this.#owner) !== true ||
-          this.#ports.capacity.matches(this.#config.requests.scope, outboundCapacityOwnerBinding(this.#config.campaignRef)!) !== true || launchOperations.some(operation => this.#ports.authority.current(Object.freeze({ ...q!, operation }), signal) !== true) || !isDeepStrictEqual(this.#ports.provider.binding(), q.provider) ||
+          this.#ports.capacity.matches(this.#config.requests.scope, outboundCapacityOwnerBinding(this.#config.campaignRef)!) !== true || targetOperations().some(operation => this.#ports.authority.current(Object.freeze({ ...q!, operation }), signal) !== true) || !isDeepStrictEqual(this.#ports.provider.binding(), q.provider) ||
+          targetGrant && this.#ports.target?.current(targetGrant, signal) !== true ||
+          q.target && Date.parse(q.target.target.startsAt) <= Date.parse(at) ||
           outboundContactTime(q.record.request.schedule, at).kind !== "due" ||
           consentWindow && (consentWindow.observedAt > at || consentWindow.effectiveFrom > at || at >= consentWindow.effectiveUntil)) throw new Refusal("forbidden");
     };
+    const targetReader = this.#config.individualTarget && this.#ports.target ? ClinikoOutboundAppointmentTarget.create({
+      requests: this.#config.requests, appointmentPolicyDigest: this.#config.individualTarget.appointmentPolicyDigest }, {
+      allows: this.#ports.target.allows, current: (g, s) => {
+        if (g.target || !targetGrant) targetGrant = g;
+        return this.#ports.target!.current(g, s);
+      } }, this.#ports.native) : undefined;
+    const readTarget = async (record: OutboundRecipientRecord) => {
+      if (!targetReader?.ok || record.request.purpose !== "sickDay" || !record.request.appointment) throw new Refusal("forbidden");
+      const observation = await wait(targetReader.value.readForRequest(record.request, signal));
+      if (!observation.ok) throw new Refusal("forbidden");
+      const t = observation.value.target, at = now();
+      if (t.archivedAt !== null || t.cancelledAt !== null || t.deletedAt !== null || t.patientArrived === true || t.didNotArrive === true ||
+          Date.parse(t.startsAt) <= Date.parse(at) || observation.value.observedAt > at) throw new Refusal("forbidden");
+      return Object.freeze({ target: t, digest: observation.value.digest });
+    };
     const prepare = async () => {
       const policy = await wait(this.#campaign.current(signal));
-      if (!policy.ok || !policy.value || policy.value.campaignRef !== this.#config.campaignRef || policy.value.purpose !== "followUp") throw new Refusal("forbidden");
+      if (!policy.ok || !policy.value || policy.value.campaignRef !== this.#config.campaignRef ||
+          policy.value.purpose !== "followUp" && !(policy.value.purpose === "sickDay" && targetReader?.ok)) throw new Refusal("forbidden");
       if (parentCurrent && parentCurrent(policy.value) !== true) throw new Refusal("forbidden");
       const record = await wait(this.#requests.readRequest(selected, signal));
-      if (!record.ok || closed(record.value) || record.value.request.purpose !== "followUp" || record.value.request.appointment !== undefined) throw new Refusal("forbidden");
+      if (!record.ok || closed(record.value)) throw new Refusal("forbidden");
+      const targeted = policy.value.purpose === "sickDay";
+      if (record.value.request.purpose !== policy.value.purpose || !targeted && record.value.request.appointment !== undefined) throw new Refusal("forbidden");
+      const target = targeted ? await readTarget(record.value) : undefined;
       const bound = await wait(this.#campaign.currentFor(outboundRecordSelection(this.#config.requests), record.value.request, signal));
       const provider = Object.freeze({ ...this.#ports.provider.binding() });
       if (!bound.ok || !bound.value || !isDeepStrictEqual(bound.value, policy.value) || !providerBinding(provider) || provider.ref !== bound.value.providerRef) throw new Refusal("forbidden");
-      const next = Object.freeze({ operation: "approveAudience" as const, ownerBinding: this.#owner, record: record.value, campaign: bound.value, provider });
-      if (q && (!isDeepStrictEqual(q.record, next.record) || !isDeepStrictEqual(q.campaign, next.campaign) || !isDeepStrictEqual(q.provider, next.provider))) throw new Refusal("forbidden");
+      const next = Object.freeze({ operation: "approveAudience" as const, ownerBinding: this.#owner, record: record.value, campaign: bound.value, provider,
+        ...(target ? { target } : {}) });
+      if (q && (!isDeepStrictEqual(q.record, next.record) || !isDeepStrictEqual(q.campaign, next.campaign) || !isDeepStrictEqual(q.provider, next.provider) || !isDeepStrictEqual(q.target, next.target))) throw new Refusal("forbidden");
       q = next; current();
-      for (const operation of launchOperations) {
+      for (const operation of targetOperations()) {
         const query = Object.freeze({ ...q, operation });
         if (await wait(Promise.resolve().then(() => this.#ports.authority.allows(query, signal))) !== true || this.#ports.authority.current(query, signal) !== true) throw new Refusal("forbidden");
         current();
@@ -162,6 +196,10 @@ export class ClinikoOutboundLaunchOwner {
           own && history.value.records.length !== 1) throw new Refusal("alreadyAttempted");
       const lastPolicy = await wait(this.#campaign.currentFor(outboundRecordSelection(this.#config.requests), q.record.request, signal));
       if (!lastPolicy.ok || !lastPolicy.value || !isDeepStrictEqual(lastPolicy.value, q.campaign)) throw new Refusal("forbidden");
+      // Complete every other native/grant wait first, then observe the same
+      // original target again. No list, nearest appointment or replacement is
+      // selected if it changed. This remains a fresh observation, never a CAS.
+      if (q.target && !isDeepStrictEqual(await readTarget(q.record), q.target)) throw new Refusal("forbidden");
       current();
     };
     try {

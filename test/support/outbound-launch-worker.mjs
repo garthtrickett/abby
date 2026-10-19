@@ -28,6 +28,7 @@ process.on('message', async message => {
       contactRevision: { matches: (tenant, fingerprint) => tenant === requests.scope.tenantId && fingerprint === clinikoCredentialFingerprint(requests.apiKey),
         read: fingerprint => rpc('revision', fingerprint) } },
       campaignRef: setup.campaignRef, campaign: campaign.value, maximumNativeRequests: 150, dispatchWindowMs: 10000, deadlineMs: 15000 };
+    if (setup.individualTarget) config.individualTarget = setup.individualTarget;
     const grant = family => ({ allows: query => rpc('grant', { family, query }), current: () => process.connected });
     const native = async (input, init) => {
       const value = await rpc('fetch', { input: String(input), method: init?.method, headers: Object.fromEntries(new Headers(init?.headers)), body: init?.body });
@@ -38,6 +39,7 @@ process.on('message', async message => {
       request: grant('request'), attempt: { ...grant('attempt'), producerAdmitted: query => rpc('grant', { family: 'attemptProducer', query }) },
       history: { allowsHistoryRead: query => rpc('grant', { family: 'history', query }), allowsRecordRead: query => rpc('grant', { family: 'historyRecord', query }), current: () => process.connected },
       contact: grant('contact'), contactDefinition: { currentFor: selection => rpc('definition', selection) }, authority: grant('authority'),
+      ...(setup.individualTarget ? { target: grant('target') } : {}),
       effects: new PostgresOutboundEffectBarrier(db, requests.scope, outboundLaunchOwnerBinding(config)),
       attemptEffects: new PostgresOutboundEffectBarrier(db, requests.scope, outboundLaunchRecordOwnerBinding(attempts)),
       capacity: new PostgresOutboundCapacity(db, requests.scope, outboundCapacityOwnerBinding(config.campaignRef)), native,
