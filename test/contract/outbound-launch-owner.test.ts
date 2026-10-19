@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { outboundLaunchOwnerFixture } from "../support/outbound-launch-owner.ts";
+import { encodeOutboundContactReview } from "../../src/cliniko/outbound-contact-review.ts";
 import { value } from "../support/outbound-records.ts";
 
 test("actual follow-up owner composes native campaign/contact/request/history/possible-attempt before one launch", async t => {
@@ -57,4 +58,33 @@ test("captured physical quota admission cannot be replaced to burn effects witho
   for (let n = 0; n < 40; n++) assert.equal(f.budget.claim(), null);
   Object.assign(f.config.requests.rateBudget, { checkHeadroom: () => null });
   assert.equal((await f.launch()).ok, false); assert.equal(f.burned.size, 0); assert.equal(f.posts, 0);
+});
+
+
+test("reader-local consent time cannot authorize an expired review at dispatch time", async t => {
+  const f = await outboundLaunchOwnerFixture(); t.after(f.close);
+  f.state.now = "2026-11-02T00:00:01.000Z";
+  Object.assign(f.config.contact, { clock: () => "2026-11-02T00:00:00.000Z" });
+  f.contactControls.rows.find(r => r.id === "101")!.notes = value(encodeOutboundContactReview({
+    ...f.first, effectiveUntil: "2026-11-02T00:00:00.500Z" }));
+  const owner = value(f.make());
+  assert.equal((await owner.launchOnce(f.binding, new AbortController().signal)).ok, false);
+  assert.equal(f.calls.length, 0); assert.equal(f.posts, 0); assert.equal(f.burned.size, 0);
+});
+
+test("consent expiring during final native history wait cannot pass the provider edge", async t => {
+  const f = await outboundLaunchOwnerFixture(); t.after(f.close);
+  f.state.now = "2026-11-02T00:00:00.000Z";
+  f.contactControls.rows.find(r => r.id === "101")!.notes = value(encodeOutboundContactReview({
+    ...f.first, effectiveUntil: "2026-11-02T00:00:00.500Z" }));
+  let finalEdge = false;
+  f.controls.beforeEdge = () => { finalEdge = true; };
+  Object.assign(f.ports.history, { allowsHistoryRead: async () => {
+    if (finalEdge) f.state.now = "2026-11-02T00:00:01.000Z";
+    return true;
+  } });
+  const owner = value(f.make()), result = await owner.launchOnce(f.binding, new AbortController().signal);
+  assert.ok(!result.ok || result.value.kind === "unknown");
+  assert.equal(finalEdge, true); assert.equal(f.calls.length, 0); assert.equal(f.posts, 1);
+  assert.equal(f.held.size, 1, "invoked adapters retain conservative capacity until independent recovery");
 });

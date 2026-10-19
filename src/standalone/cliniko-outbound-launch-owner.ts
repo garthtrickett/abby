@@ -120,6 +120,7 @@ export class ClinikoOutboundLaunchOwner {
     const allocation = randomUUID(); let acquired = false, providerInvoked = false, dispatched = false, accepted = false, edgeInvoked = false;
     let q: OutboundLaunchQuery | undefined, own: { recallRef: string; attempt: OutboundLaunchAttempt } | undefined;
     let lastNow = -Infinity;
+    let consentWindow: Readonly<{ observedAt: string; effectiveFrom: string; effectiveUntil: string }> | undefined;
     const now = () => {
       const text = clock(), value = Date.parse(text);
       if (!Number.isFinite(value) || new Date(value).toISOString() !== text || value < lastNow) throw new Refusal("unavailable");
@@ -130,9 +131,11 @@ export class ClinikoOutboundLaunchOwner {
       const value = await awaitUntilAbort(promise, signal); if (value === undefined || !active()) throw new Refusal("unavailable"); return value;
     };
     const current = () => {
+      const at = now();
       if (!active() || !q || this.#ports.effects.matches(this.#config.requests.scope, this.#owner) !== true ||
           this.#ports.capacity.matches(this.#config.requests.scope, outboundCapacityOwnerBinding(this.#config.campaignRef)!) !== true || this.#ports.authority.current(q, signal) !== true || !isDeepStrictEqual(this.#ports.provider.binding(), q.provider) ||
-          outboundContactTime(q.record.request.schedule, now()).kind !== "due") throw new Refusal("forbidden");
+          outboundContactTime(q.record.request.schedule, at).kind !== "due" ||
+          consentWindow && (consentWindow.observedAt > at || consentWindow.effectiveFrom > at || at >= consentWindow.effectiveUntil)) throw new Refusal("forbidden");
     };
     const prepare = async () => {
       const policy = await wait(this.#campaign.current(signal));
@@ -151,7 +154,13 @@ export class ClinikoOutboundLaunchOwner {
         current();
       }
       const consent = await wait(this.#contact.readCurrentForRequest(q.record.request, signal));
-      if (!consent.ok || consent.value.disposition !== "eligibleEvidence") throw new Refusal("forbidden");
+      if (!consent.ok || consent.value.disposition !== "eligibleEvidence" || !consent.value.head ||
+          consent.value.requestDigest !== outboundRecipientRequestDigest(q.record.request)) throw new Refusal("forbidden");
+      // Reader-local time cannot authorize a later dispatch. Keep the verified
+      // review window in the synchronous fence across subsequent native waits.
+      consentWindow = Object.freeze({ observedAt: consent.value.observedAt, effectiveFrom: consent.value.head.review.effectiveFrom,
+        effectiveUntil: consent.value.head.review.effectiveUntil });
+      current();
       const history = await wait(this.#history.readForRequest({ recallRef: q.record.recallRef, request: q.record.request }, signal));
       if (!history.ok || history.value.records.some(r => !own || r.recallRef !== own.recallRef || !isDeepStrictEqual(r.attempt, own.attempt) || r.recalled || r.archivedAt !== null) ||
           own && history.value.records.length !== 1) throw new Refusal("alreadyAttempted");
