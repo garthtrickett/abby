@@ -14,9 +14,9 @@
 | 6 Earlier-gap qualification | Through539 combined full passed4742/0/1existingSkip plus6ordered. New540 and outbound files retain separate focused evidence. Gaps1–9 still require clinic/mail/operator/acoustic/public-route acceptance. Older negatives and unknown6d01 cause remain recorded. |
 | 7 Class/pass completion | Drafts465–473 and487 include staged caller/SAM/private renewal, separate played consent, bounded native/proposal cost admission, cold staff observation, signed uncertainty-to-staff recovery and same/cross-case date/ordinal/pass journeys. Their current composed cohorts also ran in the passing36b5285c complete clinical graph. Broader operator acceptance, original/replacement recovery obligations and separate financial provisioning remain explicit; no blanket cohort or clinic activation follows. |
 | 8 Payments | Stripe and dedicated Cliniko financial reviews remain selected. Drafts537–539 add exact native invoice/current signed waiver and actual consumer composition;31 core controls, strict/616 build and3 compiled SQL cases passed. Current test-only655dce1 adds24 current-positive-waiver class/resend controls and9 emitted SQL/native180/privacy cases plus final strict. Through539 full1792378464534 passed4742/0/1existingSkip plus6ordered;540 retains separate focused qualification. Complete clinic financial/mapping/manual-payment/waiver authoring/supersession, actual serving and real acceptance remain open; no default activation. |
-| 9 Outbound | Contact foundation/reader and current campaign/native request/history now compose one optional general follow-up owner with portable opaque capacity.49 exact owner/codec controls plus252 broader controls, strict/623 build,17 compiled SQL/process/privacy and separate shared archive/cutover preservation pass. Scheduler/results/terminal release/opt-out/exact sick-day/callback and real activation remain open. |
+| 9 Outbound | Optional native-backed follow-up and portable capacity (draft541) now have a separately qualified conditional terminal observer/release owner:46 source controls, strict/624 build and25 compiled SQL/native180/process/privacy cases. Final record/grant checks occur after actual SQL lock waits. A selected authenticated real provider reader, scheduler, opt-out writes, exact sick-day/callback and actual owning-host activation remain open. |
 | 10 Writeback | Pending gap 13, exact permissions/content/storage decisions and audit R08/R22. |
-| 11 Combined qualification | Completed through539d5f901e full1792378464534 passed4742/0/1existing C-LIVE-40skip plus6ordered. It excludes540 test-only files and this new outbound runtime/schema/archive patch. Exact cloud execution and real clinic/provider/sender/restore/acoustic/deployment acceptance remain open. Older6d01 cause remains unknown. |
+| 11 Combined qualification | Completed through539 full passed4742/0/1existing C-LIVE-40skip plus6ordered. Current541b6175a0 full1792386938614 is running, not green, and excludes this new terminal owner/metadata/storage-fence patch. Exact cloud startup remains refused for billing; clinic/provider/sender/restore/acoustic/deployment gates remain open. |
 
 The three detailed plans retain the requirements and acceptance matrices. No source merge, deployment, real provider mutation, mail send or Aeva deletion is established by this ledger.
 
@@ -5299,3 +5299,66 @@ verified clinical callbacks, live carrier and owning-host provisioning remain op
 No public/default route or local private queue is added; private context stays native
 or volatile. All thirteen gaps and clinic/provider/sender/restore/acoustic/cloud/
 deployment acceptance remain in scope. No live contact, deployment or merge follows.
+
+
+## Conditional terminal-provider observation and guarded release, 19 October 2026
+
+The optional `ClinikoOutboundTerminalOwner` rereads actual native possible-attempt
+context under current record grants, then separately requires native-source/mapping,
+provider-observation and capacity-release grants. It uses the exact provider binding,
+campaign and native v2 allocation. Dispatch metadata now carries both independent
+effect and allocation IDs; changing the native allocation cannot borrow an earlier
+call's terminal evidence. Legacy records/calls without the metadata stay unrecoverable
+or unknown, not automatically released. Campaign cancellation does not prevent a
+separately authorized terminal cleanup and grants no new launch.
+
+The selected provider reader must establish authenticated complete terminal truth for
+all possible matching calls. Active, absent, incomplete, foreign or malformed evidence
+retains capacity. It is a trusted integration contract; no real carrier/backend reader
+or public callback endpoint is installed. A callback body, clinic note, timeout, dead
+process or expired lease alone cannot satisfy it. Terminal truth is volatile/provider-
+owned, never a local patient or provider-call ledger. No contact delivery, opt-out or
+clinical outcome is inferred.
+
+The native record is read again after provider observation. The strongest decoded
+native grant is retained per invocation, avoiding a shared mutable permission query
+between concurrent inspections. Every independent grant, source record permission,
+provider binding and deadline is checked again by a synchronous callback inside the
+real SQL transaction, after advisory-lock/import-history waits and immediately before
+release. A known SQL result survives later observer failure; a lost result stays unknown.
+Permanent original exclusions remain consumed. Current source-origin/target ownership
+mapping needs its own approval; old native context never authorizes an inferred mapping.
+
+Validation on production `92384c4` plus the process-fixture correction `1ac9c98`:
+
+- `node --test --test-concurrency=2 test/contract/outbound-terminal-owner.test.ts
+  test/contract/outbound-launch-owner.test.ts`:46/46, work1792387544863, zero failures/
+  skips, peak164126720B/256MiB CPU100%/heap192MiB/Swap0/OOM0. The fixture preserves
+  real shared budget counters; its explicit eight-request terminal profile is not a
+  default or reservation for other clinic authority implementations.
+- `npm run typecheck && npm run build:voice-tests`, work1792387830501, passed in4m42s,
+ 1830 source pins/624 required serving artifacts, peak1546993664B/2GiB CPU100%/
+  heap1536MiB/Swap0/OOM0. First strict1792387633361 found a legacy-optional allocation
+  in the process peer; an actual v2-presence assertion now precedes payload matching.
+  No runtime requirement, quota, deadline or privacy assertion was weakened.
+- Disposable PostgreSQL migration then `ABBY_LEDGER=postgres node --test
+  --test-concurrency=4 test/storage/postgres-outbound-capacity.test.ts
+  test/storage/postgres-outbound-effect-barrier.test.ts
+  test/storage/postgres-outbound-launch-owner.test.ts
+  test/storage/postgres-outbound-terminal-owner.test.ts`:25/25, work1792388133420,
+  terminal05:36:30.111269UTC. Seven actual emitted terminal-owner cases use real SQL
+  and shared native180 budgets; all prior launch/process/privacy cases remain.
+  The added real advisory-lock test proves permission is evaluated after the release
+  actually waits, not before it. Known release/idempotence, unknown/active holds,
+  foreign metadata, swapped allocation and permission loss pass with all-column SQL/
+  unfiltered-backup canaries. Node317706240B/1GiB plus aggregateDB194121728B/512MiB,
+  CPU100%each/heap768MiB/Swap0/OOM0. Own wrapper absent, DB absent and slice inactive;
+  1830 source/624 artifact hashes independently unchanged. Paired waits completed.
+
+Parent draft541 full1792386938614 on frozenb6175a0 continues independently; it excludes
+this new terminal runtime, metadata and storage-fence change and is not declared green.
+Completed through539 remains4742/0/1existingSkip plus6ordered. Cloud jobs on541 refused
+startup for billing/spending limits. Scheduler, authenticated opt-out writing and exact
+sick-day/verified callback integration remain open, alongside gap13 and real clinic/
+provider/sender/producer/restore/acoustic/deployment acceptance. No live contact, default
+activation, merge or deployment follows. All thirteen gaps remain in scope.

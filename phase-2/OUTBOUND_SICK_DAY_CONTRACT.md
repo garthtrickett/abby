@@ -181,3 +181,25 @@ verified clinical callbacks, live carrier and owning-host provisioning remain op
 No public/default route or local private queue is added; private context stays native
 or volatile. All thirteen gaps and clinic/provider/sender/restore/acoustic/cloud/
 deployment acceptance remain in scope. No live contact, deployment or merge follows.
+
+
+## Conditional terminal recovery, 19 October 2026
+
+The separate release-only owner reads exact native v2 context and a selected trusted
+provider's authenticated complete terminal evidence for both effect and allocation
+metadata. Dispatch now tags both independent IDs. Legacy/untagged, active, absent,
+incomplete or foreign evidence keeps capacity held. No real provider reader or public
+callback route is installed. A separately approved source-origin/target mapping and
+independent provider/release grants are mandatory; cancellation supplies no authority.
+
+Reread the native record after provider observation. Keep its strongest current grant
+per invocation. The actual storage callback rechecks all grants and ownership after
+SQL advisory/import waits, immediately before mutation. Known release is idempotent
+and never reopens permanent effects. Process absence, elapsed time or a lease is not
+terminal proof. No delivery, opt-out, callback or clinical result follows from release.
+
+The46 source controls, strict624-artifact build and25 actual compiled SQL/process/
+privacy cases include the real lock-wait withdrawal counterexample. See
+[exact commands, metrics and remaining limits](EXECUTION_PROGRESS.md#conditional-terminal-provider-observation-and-guarded-release-19-october-2026).
+The parent541 full is running and excludes this patch; no complete campaign or
+activation is claimed. The opt-out policy question remains pending with the owner.
