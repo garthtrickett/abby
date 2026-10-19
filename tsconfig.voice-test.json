@@ -12,6 +12,7 @@
     "src/standalone/cliniko-outbound-terminal-owner.ts",
     "src/standalone/cliniko-outbound-scheduler.ts",
     "src/cliniko/outbound-dnc-records.ts",
+    "src/cliniko/outbound-appointment-target.ts",
     "src/storage/postgres-outbound-capacity.ts",
     "test/support/start-synthetic-queue-monitor.ts",
     "test/support/financial-consumer-process.ts",
