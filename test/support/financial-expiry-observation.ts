@@ -1,18 +1,31 @@
 /** Test-only fixed numeric observations. No native/action/patient/provider IDs,
  * financial values, error strings, payloads or permission cross this interface. */
+export type FinancialNativeReadFailure = Readonly<{ reader: number; code: number; afterClaim: boolean }>;
 export type FinancialExpiryObservation = Readonly<{
-  code: number; claims: number; requests: number; quotaRequired: number; quotaDenials: number; elapsedMs: number;
+  code: number; claims: number; requests: number; quotaRequired: number; quotaDenials: number; elapsedMs: number; nativeFailure?: FinancialNativeReadFailure;
 }>;
 const fields = "claims,code,elapsedMs,quotaDenials,quotaRequired,requests";
 const integer = (value: unknown, max: number): value is number => Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= max;
+const nativeCodes = ["invalidConfig", "invalidQuery", "scopeMismatch", "invalidProof", "forbidden", "unavailable", "malformed", "changed", "tooManyResults", "rateLimited", "mismatched", "notFound"] as const;
+export function financialNativeReadCode(value: unknown): number {
+  try { const r = value as { ok?: unknown; error?: { kind?: unknown } }; return r?.ok === false ? Math.max(0, nativeCodes.findIndex(k => k === r.error?.kind) + 1) : 0; }
+  catch { return 0; }
+}
+function nativeFailure(value: unknown): FinancialNativeReadFailure | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const r = value as Record<string, unknown>;
+  if (Object.keys(r).sort().join(",") !== "afterClaim,code,reader" || !integer(r.reader, 4) || r.reader === 0 || !integer(r.code, nativeCodes.length) || typeof r.afterClaim !== "boolean") return undefined;
+  return Object.freeze({ reader: r.reader, code: r.code, afterClaim: r.afterClaim });
+}
 export function financialExpiryObservation(value: unknown): FinancialExpiryObservation | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   try {
     const row = value as Record<string, unknown>;
-    if (Object.keys(row).sort().join(",") !== fields || !integer(row.code, 10) || !integer(row.claims, 65535) ||
+    const keys = Object.keys(row).sort().join(","), failure = Object.hasOwn(row, "nativeFailure") ? nativeFailure(row.nativeFailure) : undefined;
+    if ((keys !== fields && (keys !== "claims,code,elapsedMs,nativeFailure,quotaDenials,quotaRequired,requests" || !failure)) || !integer(row.code, 10) || !integer(row.claims, 65535) ||
         !integer(row.requests, 65535) || !integer(row.quotaRequired, 200) || !integer(row.quotaDenials, 65535) || !integer(row.elapsedMs, 600_000)) return undefined;
     return Object.freeze({ code: row.code, claims: row.claims, requests: row.requests, quotaRequired: row.quotaRequired,
-      quotaDenials: row.quotaDenials, elapsedMs: row.elapsedMs });
+      quotaDenials: row.quotaDenials, elapsedMs: row.elapsedMs, ...(failure ? { nativeFailure: failure } : {}) });
   } catch { return undefined; }
 }
 const codes = ["cancelled", "uncertain", "invalidConfig", "invalidQuery", "forbidden", "unavailable", "alreadyClaimed", "mismatched", "attemptUncertain", "rateLimited"] as const;
@@ -33,10 +46,12 @@ export class FinancialExpiryObservations {
       const row = message as { kind: unknown; observation: unknown };
       const next = financialExpiryObservation(row.observation); if (row.kind !== "expiryObservation" || !next) return false;
       const prior = this.#value;
+      const failure = prior?.nativeFailure?.afterClaim ? prior.nativeFailure : next.nativeFailure?.afterClaim ? next.nativeFailure : prior?.nativeFailure ?? next.nativeFailure;
       this.#value = Object.freeze({ ...next,
         claims: Math.min(65535, (prior?.claims ?? 0) + next.claims), requests: Math.min(65535, (prior?.requests ?? 0) + next.requests),
         quotaDenials: Math.min(65535, (prior?.quotaDenials ?? 0) + next.quotaDenials),
-        quotaRequired: Math.max(prior?.quotaRequired ?? 0, next.quotaRequired), elapsedMs: Math.max(prior?.elapsedMs ?? 0, next.elapsedMs) });
+        quotaRequired: Math.max(prior?.quotaRequired ?? 0, next.quotaRequired), elapsedMs: Math.max(prior?.elapsedMs ?? 0, next.elapsedMs),
+        ...(failure ? { nativeFailure: failure } : {}) });
       return true;
     } catch { return false; }
   }

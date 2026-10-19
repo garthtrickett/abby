@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { setImmediate } from "node:timers/promises";
 import { financialExpiryObservation, FinancialExpiryObservations, attachFinancialExpiryObservation, financialExpiryFailureObservation, financialExpiryResultCode, financialExpiryProbeResult } from "../support/financial-expiry-observation.ts";
-import { observeFinancialExpiry, expiryObservationCounts } from "../support/observe-financial-expiry.ts";
+import { observeFinancialExpiry, observeFinancialNativeRead, expiryObservationCounts } from "../support/observe-financial-expiry.ts";
 const sample = { code: 6, claims: 2, requests: 64, quotaRequired: 64, quotaDenials: 1, elapsedMs: 30_000 };
 
 test("failure evidence retains consumed claims and slow work across later refusal cycles", () => {
@@ -84,4 +84,71 @@ test("asynchronous and unsettled observation sinks cannot replace or delay the o
   const actual = { ok: true, value: { kind: "cancelled" } };
   assert.equal(await observeFinancialExpiry(async () => actual, () => new Promise(() => {})), actual);
   await setImmediate();
+});
+
+
+test("the first post-claim native refusal survives later cycles without exporting private error context", async () => {
+  const snapshots = new FinancialExpiryObservations();
+  const failure = { ok: false as const, error: { kind: "rateLimited", patient: "private-patient", message: "private-context" } };
+  const found = await observeFinancialExpiry(async () => {
+    const counts = expiryObservationCounts.getStore()!;
+    await observeFinancialNativeRead(1, async () => ({ ok: false, error: { kind: "forbidden" } }));
+    counts.claims = 2;
+    assert.equal(await observeFinancialNativeRead(2, async () => failure), failure);
+    await observeFinancialNativeRead(3, async () => ({ ok: false, error: { kind: "unavailable" } }));
+    return { ok: false, error: { kind: "mismatched" } };
+  }, observation => snapshots.accept({ kind: "expiryObservation", observation }));
+  assert.equal(found.error.kind, "mismatched");
+  snapshots.accept({ kind: "expiryObservation", observation: sample });
+  assert.deepEqual(snapshots.value!.nativeFailure, { reader: 2, code: 10, afterClaim: true });
+  assert.equal(JSON.stringify(snapshots.value).includes("private"), false);
+  assert.ok(Object.isFrozen(snapshots.value!.nativeFailure));
+});
+for (const nativeFailure of [{ reader: 0, code: 1, afterClaim: false }, { reader: 5, code: 1, afterClaim: true },
+  { reader: 2, code: 13, afterClaim: true }, { reader: 2, code: 1, afterClaim: "yes" },
+  { reader: 2, code: 1, afterClaim: true, private: "private" }, null])
+test("native diagnostic metadata cannot bypass the private-free result schema", () => {
+  assert.equal(financialExpiryObservation({ ...sample, nativeFailure }), undefined);
+});
+test("native observation preserves exact thrown failures and known successful results", async () => {
+  const failure = new Error("private-native-error"), accepted = { ok: true, value: { private: "private-accepted-value" } };
+  await assert.rejects(observeFinancialNativeRead(2, async () => { throw failure; }), error => error === failure);
+  assert.equal(await observeFinancialNativeRead(2, async () => accepted), accepted);
+});
+test("native refusal observations cannot cross overlapping operation contexts", async () => {
+  let release!: () => void; const held = new Promise<void>(r => { release = r; }), seen: unknown[] = [];
+  const first = observeFinancialExpiry(async () => { expiryObservationCounts.getStore()!.claims = 1; await held;
+    return observeFinancialNativeRead(2, async () => ({ ok: false, error: { kind: "changed" } })); }, value => seen.push(value.nativeFailure));
+  await observeFinancialExpiry(() => observeFinancialNativeRead(1, async () => ({ ok: false, error: { kind: "forbidden" } })), value => seen.push(value.nativeFailure));
+  release(); await first;
+  assert.deepEqual(seen, [{ reader: 1, code: 5, afterClaim: false }, { reader: 2, code: 8, afterClaim: true }]);
+});
+
+test("an actual post-claim case quota refusal remains a consumed mismatch with fixed reader evidence", async t => {
+  const { caseClassExpiryFixture, value } = await import("../support/financial-case-class-expiry.ts");
+  const { ClinikoPatientCaseSessionsReader } = await import("../../src/cliniko/patient-case-sessions.ts");
+  const { financialRecordOwnerBinding } = await import("../../src/cliniko/financial-record-retention.ts");
+  const actual = ClinikoPatientCaseSessionsReader.prototype.inspectAttendance;
+  t.mock.method(ClinikoPatientCaseSessionsReader.prototype, "inspectAttendance", function (this: InstanceType<typeof ClinikoPatientCaseSessionsReader>, ...args: Parameters<typeof actual>) {
+    return observeFinancialNativeRead(2, () => actual.apply(this, args));
+  });
+  const burned = new Set<string>(); let filled = false;
+  let f!: Awaited<ReturnType<typeof caseClassExpiryFixture>>;
+  f = await caseClassExpiryFixture({ barrierFor(config) {
+    const binding = value(financialRecordOwnerBinding(config));
+    return { matches: (scope, owner) => JSON.stringify(scope) === JSON.stringify(config.scope) && owner === binding,
+      claimOnce: async ref => { const claimed = !burned.has(ref); burned.add(ref);
+        if (claimed && f && ref === f.intent.effects.clinicalExpiry) expiryObservationCounts.getStore()!.claims++;
+        return { ok: true, value: { claimed } }; } };
+  }, caseRead() {
+    if (!filled && burned.has(f.intent.effects.clinicalExpiry)) {
+      filled = true;
+      for (let i = 0; i < 180; i++) if (f.budget.claim() !== null) break;
+    }
+  }, beforeCancel() { assert.fail("no native cancellation after failed case read"); } });
+  t.after(f.close); let evidence: unknown;
+  const result = await observeFinancialExpiry(() => f.expireCase(), value => { evidence = value; });
+  assert.deepEqual(result, { ok: false, error: { kind: "mismatched" } });
+  assert.equal(filled, true); assert.equal(burned.has(f.intent.effects.clinicalExpiry), true); assert.equal(f.cancellations.length, 0);
+  assert.deepEqual((evidence as typeof sample & { nativeFailure: unknown }).nativeFailure, { reader: 2, code: 10, afterClaim: true });
 });
