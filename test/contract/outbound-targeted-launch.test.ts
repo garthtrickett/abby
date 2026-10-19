@@ -97,9 +97,20 @@ test("appointment start reached during a grant wait refuses before any effect is
   assert.equal((await f.launchTargeted()).ok, false); assert.equal(f.calls.length, 0); assert.equal(f.posts, 0); assert.equal(f.burned.size, 0);
 });
 test("a held exact target read obeys the outer launch deadline and cannot dispatch after it returns", { timeout: 3000 }, async t => {
-  const f = await outboundTargetedLaunchFixture(); t.after(f.close); let release!: () => void;
-  f.targetState.beforeRead = () => new Promise<void>(resolve => { release = resolve; });
+  const f = await outboundTargetedLaunchFixture(); t.after(f.close);
+  let release!: () => void, enter!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; }), reading = new Promise<void>(resolve => { enter = resolve; });
+  t.after(release); const lifetime = new AbortController(); t.after(() => lifetime.abort());
+  f.targetState.beforeRead = () => { enter(); return held; };
+  // Reach the intended held target before advancing the unchanged30ms outer
+  // deadline; preparation scheduling must not choose another refusal branch.
+  const realNow = performance.now.bind(performance); let elapsed = 0;
+  t.mock.method(performance, "now", () => elapsed); t.mock.timers.enable({ apis: ["setTimeout"] });
   const owner = value(ClinikoOutboundLaunchOwner.create({ ...f.targetConfig, deadlineMs: 30 }, f.targetPorts));
-  assert.equal((await owner.launchOnce(f.binding, new AbortController().signal)).ok, false); assert.equal(f.calls.length, 0); assert.equal(f.posts, 0);
-  release(); await new Promise<void>(resolve => setImmediate(resolve)); assert.equal(f.calls.length, 0); assert.equal(f.posts, 0);
+  const result = owner.launchOnce(f.binding, lifetime.signal); await reading;
+  const began = realNow(); elapsed = 30; t.mock.timers.tick(30);
+  assert.equal((await result).ok, false); assert.ok(realNow() - began < 1_000);
+  assert.equal(f.calls.length, 0); assert.equal(f.posts, 0); assert.equal(f.burned.size, 0);
+  release(); await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal(f.calls.length, 0); assert.equal(f.posts, 0); assert.equal(f.burned.size, 0);
 });
