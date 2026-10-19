@@ -4,6 +4,8 @@
 
 **Execution:** The owner subsequently instructed work through this order. See [current progress and evidence](EXECUTION_PROGRESS.md). That instruction activates the planned engineering; clinic/provider acceptance, deployment and Aeva removal retain their separate requirements below.
 
+**Aeva reference for current and future agents:** The owner supplied an updated Aeva snapshot on 19 October 2026, extracted beside Abby at `/home/gust/code/aeva-website-dev`. When uncertain about an implementation or workflow, search this copy for existing solutions and their tests before designing new machinery; Aeva may already solve it. Use its patterns as a reference and adapt them to Abby's contracts and validation. The copy has no `.git` metadata and is distinct from the older commit pinned in the reuse audit. See [snapshot provenance and useful entry points](AEVA_TO_ABBY_REUSE_AUDIT.md#current-owner-supplied-reference-19-october-2026).
+
 Preserve access to the useful Aeva material now. For Abby engineering, deliver the provider acknowledged booking change first, requalify the affected receptionist flows, finish the remaining earlier-gap and class work, then build payments, outbound and approved writeback in that order. Apply the Aeva lessons inside those changes rather than creating a separate Aeva feature-parity project.
 
 ## The three source documents

@@ -2,6 +2,8 @@
 
 **Updated:** 19 October 2026. **Objective:** Work through [EXECUTION_ORDER.md](EXECUTION_ORDER.md), preserving its full thirteen-gap scope. This ledger records partial delivery; the integration is not complete or activated.
 
+**Reference for ongoing work:** Search the owner-supplied Aeva snapshot at `/home/gust/code/aeva-website-dev` when uncertain about an implementation; existing solutions and regression tests there should inform Abby's work. See [provenance and entry points](AEVA_TO_ABBY_REUSE_AUDIT.md#current-owner-supplied-reference-19-october-2026). The current runtime adapter foundation is published in draft [PR #548](https://github.com/garthtrickett/abby/pull/548), with local qualification recorded below; concrete outbound runtime/authenticated recovery and the remaining thirteen-gap work continue.
+
 ## Current position
 
 | Execution stage | Current evidence and next action |

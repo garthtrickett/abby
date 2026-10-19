@@ -5,7 +5,7 @@
   "sources": {
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
     "docs/adr/0003-class-movement-staff-resolution.md": "683bdd10660afc00309bac21e32ceda976573aa5e29aca4106fb1cddcb71b62f",
-    "phase-2/EXECUTION_PROGRESS.md": "55df4961dcba5adbfdd0a7de3279643aad9648f34778056cee0c101ba2f21b2e",
+    "phase-2/EXECUTION_PROGRESS.md": "1ce521f5e8d2f21ea28924ef2d5bcb3e10f0d83c3b5ea30617178441157ee79c",
     "phase-2/OUTBOUND_RUNTIME.md": "d5f44431ad5db32feeba2236b9e0e472245acff4bd41867dd3f849f34ae202cd",
     "phase-2/OUTBOUND_SICK_DAY_CONTRACT.md": "6ceff73af2094922c970fb5465951436262979cd9855c421f1c15b9ac628c68f",
     "scripts/serve-cliniko-voice.ts": "5d987f0beacf7e1132c60e26822cedd01b3deaef838a868203caf36d17b88283",

@@ -6,6 +6,14 @@ Keep the [13-gap Cliniko integration plan](THIRTEEN_GAP_IMPLEMENTATION.md) as Ab
 
 The most useful transfers are concrete acceptance scenarios and small designs for unfinished financial/outbound/writeback work, independent checks for disappeared calls, explicit availability alternatives, setup diagnostics, and source-bound operational knowledge. Abby already has substantial verification, confirmation, multi-person, privacy, lease and notification machinery. Reuse that machinery and extend its tests rather than rebuilding it in Aeva's shape.
 
+## Current owner-supplied reference, 19 October 2026
+
+The latest snapshot supplied by the owner is available at **`/home/gust/code/aeva-website-dev`**, beside `/home/gust/code/abby`. Current and future agents should search this copy for existing implementations and tests whenever unsure how to solve a workflow or integration problem. Treat Aeva as a likely source of an existing solution, then adapt and verify it under Abby's architecture, privacy, permission and recovery contracts.
+
+The source archive was `aeva-website-dev.zip`, SHA-256 `ceeeda427e248fc4bb68e0f10788867df9de5cf5462d98b45d0234079fc14a4e`. Extraction verified 5,492 regular files against archive size/CRC and preserved two internal symbolic links. No `.git` metadata remains; the archive contained none. This owner-supplied snapshot has no verified commit identity and must not be attributed to the historical `34a642be...` audit below. Paths in this new section refer to the uploaded snapshot; the original numbered recommendations retain their pinned historical source unless individually rechecked.
+
+Start with `docs/flows/`, including `outbound-campaigns.md` and `vapi-assistant-lifecycle.md`; inspect the corresponding implementation and tests under `server/src/`. For the current outbound work, useful entry points include `services/pms/outboundPmsAdapter.ts`, `services/ob/obOutboundLaunchService.ts`, `services/outbound/vapiOutboundService.ts`, and `services/postcall/outboundDispatchContext.ts`, relative to `server/src/`. These are reference locations, not new claims of Abby implementation or successful clinic/provider acceptance.
+
 ## Source and evidence boundaries
 
 - Aeva: locally cached `origin/dev` at `34a642be8da7884b924eb02e7ccae731bd428276` in `aeva-ai/aeva-website`. All Aeva paths below refer to this immutable tree unless explicitly marked otherwise. The tree contains 5,431 tracked paths; this was a broad domain survey followed by selected writer-to-reader and test inspection, not a line-by-line certification of the entire repository.
