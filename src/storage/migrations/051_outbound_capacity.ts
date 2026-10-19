@@ -17,7 +17,7 @@ export async function up<DB>(db: Kysely<DB>): Promise<void> {
       length(clinic_id) between 1 and 256 and length(location_id) between 1 and 256 and owner_binding ~ '^[a-f0-9]{64}$'
       and allocation_ref::text ~ '^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$'
       and (released_at is null or released_at >= acquired_at)`).execute();
-  await db.schema.createIndex("outbound_capacity_held").on("outbound_capacity_allocations").columns(["tenant_id", "owner_binding"]).where("released_at", "is", null).execute();
+  await db.schema.createIndex("outbound_capacity_held").on("outbound_capacity_allocations").columns(["tenant_id", "owner_binding"]).where(sql<boolean>`released_at is null`).execute();
   await sql`create trigger outbound_capacity_portability_guard before insert or update or delete
     on outbound_capacity_allocations for each row execute function abby_guard_portability_write()`.execute(db);
   await sql`create trigger outbound_capacity_portability_truncate before truncate

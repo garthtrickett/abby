@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { randomUUID } from "node:crypto";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { outboundLaunchPeer } from "../support/outbound-one-shot-launch-peer.ts";
 import { execFileSync } from "node:child_process";
 import { sql } from "kysely";
 import { connectPostgres } from "../../src/storage/connect.ts";
@@ -47,4 +51,31 @@ test(`actual emitted follow-up launcher native180 PostgreSQL permanent effects a
   assert.deepEqual(await scanPatientDataCanaries(db, canaries.map((value, i) => ({ label: `launch_${i}`, value }))), { ok: true, value: [] });
   const dump = execFileSync("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 8_000_000 }).toString();
   for (const canary of canaries) assert.equal(dump.includes(canary), false);
+});
+
+for (const hold of ["nativeAck", "provider"] as const)
+test(`compiled launcher SIGKILL after ${hold} preserves actual SQL capacity/native history and cold no-replay`, { timeout: 30_000 }, async t => {
+  const apiKey = `synthetic-worker-${randomUUID()}-au5`, scope = { tenantId: `launch-worker-${randomUUID()}`, clinicId: "clinic", locationId: "location" };
+  const f = await outboundLaunchOwnerFixture({ apiKey, scope, budget: new PostgresClinikoRequestBudget(db, { apiKey, maxPerMinute: 180 }),
+    runtime: { ClinikoOutboundLaunchOwner, OwnerFileOutboundCampaign }, effectFactory: (s, b) => new PostgresOutboundEffectBarrier(db, s, b),
+    capacityFactory: (s, b) => new PostgresOutboundCapacity(db, s, b) }); t.after(f.close);
+  const directory = await mkdtemp(join(tmpdir(), "abby-one-shot-launch-empty-")); t.after(() => rm(directory, { recursive: true, force: true }));
+  let submitted!: () => void;
+  const reached = new Promise<void>(resolve => { submitted = resolve; });
+  const peer = await outboundLaunchPeer(f, directory, submitted, hold); t.after(peer.kill);
+  await Promise.race([reached, peer.errors, new Promise<never>((_, reject) => { const timer = setTimeout(() => reject(new Error("Synthetic held launch unavailable")), 20_000); t.after(() => clearTimeout(timer)); })]);
+  assert.equal(f.posts, 1); assert.equal(f.calls.length, hold === "provider" ? 1 : 0);
+  await peer.kill(); assert.deepEqual(peer.output, []); assert.deepEqual(await readdir(directory), []);
+  const held = (await sql`select allocation_ref from outbound_capacity_allocations where tenant_id = ${scope.tenantId} and released_at is null`.execute(db)).rows;
+  assert.equal(held.length, 1, "process death is not proof a remote call ended");
+  await sql`delete from outbound_effect_barriers where tenant_id = ${scope.tenantId}`.execute(db);
+  // Closing/archiving the durable possible attempt cannot make it disappear.
+  const attempt = f.contactControls.rows.find(r => (r.recall_type as { links: { self: string } }).links.self.endsWith("/62"))!;
+  attempt.recalled = true; attempt.recalled_at = f.state.now; attempt.archived_at = f.state.now;
+  assert.equal((await value(f.make()).launchOnce(f.binding, new AbortController().signal)).ok, false);
+  assert.equal(f.calls.length, hold === "provider" ? 1 : 0); assert.equal(f.posts, 1);
+  const values = [apiKey, f.request.recipient.number, "Abby possible outbound launch v1", "cliniko:recall:30"];
+  assert.deepEqual(await scanPatientDataCanaries(db, values.map((value, i) => ({ label: `launch_worker_${i}`, value }))), { ok: true, value: [] });
+  const dump = execFileSync("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 8_000_000 }).toString();
+  for (const value of values) assert.equal(dump.includes(value), false);
 });
