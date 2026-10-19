@@ -9,19 +9,8 @@ import type { OutboundLaunchRecord, OutboundLaunchRecordConfig, OutboundLaunchRe
 import { checkClinikoHeadroom } from "../cliniko/read-budget.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 
-export type OutboundTerminalProviderBinding = Readonly<{ ref: string; bindingDigest: string }>;
-/** A selected trusted, authenticated provider reader must establish complete
- * terminal truth for ALL calls tagged with this exact effect/allocation pair.
- * Callback bodies, clinic notes, local timeouts, absent lookup rows and one
- * completed call among several possible calls cannot implement this contract.
- * Legacy calls without the allocation metadata remain unknown. No live reader
- * or public callback route is installed by this optional composition. */
-export type OutboundTerminalProvider = Readonly<{
-  binding(): OutboundTerminalProviderBinding;
-  inspectTerminal(binding: Readonly<{ effectRef: string; capacityAllocationRef: string }>, signal: AbortSignal): Promise<
-    Readonly<{ kind: "unknown" | "active" }> | Readonly<{ kind: "terminal"; complete: true;
-      effectRef: string; capacityAllocationRef: string; provider: OutboundTerminalProviderBinding; endedAt: string; observedAt: string }>>;
-}>;
+import type { OutboundTerminalProviderBinding, OutboundTerminalProvider } from "../voice/outbound-runtime.ts";
+export type { OutboundTerminalProviderBinding, OutboundTerminalProvider } from "../voice/outbound-runtime.ts";
 export type OutboundTerminalQuery = Readonly<{ operation: "approveNativeSource" | "readProviderTerminal" | "releaseCapacity";
   record: OutboundLaunchRecord; provider: OutboundTerminalProviderBinding; capacityScope: LocationScope; capacityOwner: string }>;
 export type OutboundTerminalAuthority = Readonly<{

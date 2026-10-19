@@ -23,15 +23,8 @@ import { OwnerFileOutboundCampaign } from "./owner-file-outbound-campaign.ts";
 import type { OutboundCampaignApproval } from "./owner-file-outbound-campaign.ts";
 import { sameScope } from "./appointment-change-authority.ts";
 
-export type OutboundProviderBinding = Readonly<{ ref: string; bindingDigest: string; profileRef: string }>;
-/** A selected trusted adapter must invoke beforeSend after all internal waits,
- * immediately before its only provider dispatch. Only exact parsed provider ACK
- * calls acknowledged. No live adapter or listener is installed by this module. */
-export type OutboundLaunchProvider = Readonly<{
-  binding(): OutboundProviderBinding;
-  launchOnce(payload: Readonly<{ effectRef: string; capacityAllocationRef: string; number: string; profileRef: string }>, signal: AbortSignal,
-    beforeSend: () => Promise<boolean>, acknowledged: (effectRef: string) => void): Promise<Readonly<{ kind: "accepted" | "definitiveUnsent" | "unknown"; effectRef?: string }>>;
-}>;
+import type { OutboundProviderBinding, OutboundLaunchProvider } from "../voice/outbound-runtime.ts";
+export type { OutboundProviderBinding, OutboundLaunchProvider } from "../voice/outbound-runtime.ts";
 export type OutboundLaunchQuery = Readonly<{ operation: "approveAudience" | "approveProvider" | "producerAdmitted" | "approveLaunch";
   ownerBinding: string; record: OutboundRecipientRecord; campaign: OutboundCampaignApproval; provider: OutboundProviderBinding }>;
 export type OutboundLaunchAuthority = Readonly<{
