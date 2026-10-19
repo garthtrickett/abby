@@ -45,8 +45,16 @@ for (const engine of ["abby", "vapi"] as const)
       if (allocations.length) assert.equal(allocations[0]!.released_at !== null, scenario === "accepted");
       const effects = (await sql`select effect_ref from outbound_effect_barriers where tenant_id = ${scope.tenantId}`.execute(db)).rows;
       assert.equal(effects.length, scenario === "denied" ? 0 : 3); assert.ok(f.claims <= 180);
-      const canaries = [apiKey, f.request.recipient.number, f.requestRow.notes as string, "cliniko:recall:30"];
+      const note = f.requestRow.notes as string, noteWindows: string[] = [];
+      // Cover every byte, including a short final tail, within the scanner's
+      // existing 256-character bound. Whole-note backup absence stays checked.
+      for (let offset = 0; offset < note.length; offset += 253) {
+        const window = note.slice(offset, offset + 256); if (window.length >= 4) noteWindows.push(window);
+      }
+      assert.ok(noteWindows.length > 0);
+      const canaries = [apiKey, f.request.recipient.number, "cliniko:recall:30", ...noteWindows];
       assert.deepEqual(await scanPatientDataCanaries(db, canaries.map((value, i) => ({ label: `runtime_${i}`, value }))), { ok: true, value: [] });
       const dump = execFileSync("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 8_000_000 }).toString();
       for (const canary of canaries) assert.equal(dump.includes(canary), false);
+      assert.equal(dump.includes(note), false);
     });
