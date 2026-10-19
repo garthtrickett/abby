@@ -180,7 +180,7 @@ export class ClinikoOutboundLaunchOwner {
         if (!claim.ok || !claim.value.claimed) throw new Refusal("alreadyAttempted");
       }
       const r = q!.record.request, attemptedAt = now();
-      const attempt: OutboundLaunchAttempt = Object.freeze({ actionRef: randomUUID(), requestRecallRef: q!.record.recallRef, requestActionRef: r.actionRef,
+      const attempt: OutboundLaunchAttempt = Object.freeze({ actionRef: randomUUID(), capacityAllocationRef: allocation, requestRecallRef: q!.record.recallRef, requestActionRef: r.actionRef,
         requestDigest: outboundRecipientRequestDigest(r)!, campaignRef: r.campaignRef, approvalRef: r.approvalRef, effectRef: r.effectRef,
         scope: r.scope, businessId: r.businessId, credentialFingerprint: r.credentialFingerprint, patientId: r.patientId,
         provider: Object.freeze({ ref: q!.provider.ref, bindingDigest: q!.provider.bindingDigest }), attemptedAt,

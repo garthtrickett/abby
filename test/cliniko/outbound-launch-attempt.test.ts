@@ -25,3 +25,26 @@ test("parser rejects noncanonical notes and older or foreign record families",()
   const {attempt}=outboundLaunchValue(),notes=value(encodeOutboundLaunchAttempt(attempt));
   for(const changed of [notes+"\n",notes.replace("launch v1","launch v2"),notes.replace("Possible attempt only.","Launched successfully."),notes.replace('["cliniko:recall:30"','[ "cliniko:recall:30"')])assert.equal(decodeOutboundLaunchAttempt(changed).ok,false);
 });
+
+
+test("v2 possible evidence binds its exact independent capacity allocation while v1 stays readable", () => {
+  const { request, attempt } = outboundLaunchValue(), capacityAllocationRef = randomUUID();
+  const notes = value(encodeOutboundLaunchAttempt({ ...attempt, capacityAllocationRef }));
+  assert.ok(notes.includes("Abby possible outbound launch v2"));
+  const decoded = value(decodeOutboundLaunchAttempt(notes));
+  assert.equal(decoded.capacityAllocationRef, capacityAllocationRef);
+  assert.equal(outboundAttemptMatchesRequest(decoded, request, attempt.requestRecallRef), true);
+  assert.notEqual(outboundLaunchAttemptDigest(decoded), outboundLaunchAttemptDigest(attempt));
+  assert.equal(Object.hasOwn(value(decodeOutboundLaunchAttempt(value(encodeOutboundLaunchAttempt(attempt)))), "capacityAllocationRef"), false);
+  assert.equal(decodeOutboundLaunchAttempt(notes.replace("launch v2", "launch v1")).ok, false);
+});
+for (const field of ["actionRef", "requestActionRef", "campaignRef", "approvalRef", "effectRef"] as const)
+  test(`capacity allocation cannot alias possible-attempt ${field}`, () => {
+    const { attempt } = outboundLaunchValue();
+    assert.equal(encodeOutboundLaunchAttempt({ ...attempt, capacityAllocationRef: attempt[field] }).ok, false);
+  });
+test("malformed or explicit undefined capacity allocation is never encoded as legacy evidence", () => {
+  const { attempt } = outboundLaunchValue();
+  for (const capacityAllocationRef of ["private-patient-ref", "", undefined])
+    assert.equal(encodeOutboundLaunchAttempt({ ...attempt, capacityAllocationRef } as typeof attempt).ok, false);
+});

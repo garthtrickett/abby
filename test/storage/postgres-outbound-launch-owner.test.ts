@@ -12,6 +12,7 @@ import { PostgresOutboundEffectBarrier } from "../../src/storage/postgres-outbou
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { outboundLaunchOwnerFixture } from "../support/outbound-launch-owner.ts";
+import { decodeOutboundLaunchAttempt } from "../../src/cliniko/outbound-launch-attempt.ts";
 import { value } from "../support/outbound-records.ts";
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL required");
 const db = connectPostgres(process.env.DATABASE_URL); after(() => db.destroy());
@@ -47,7 +48,7 @@ test(`actual emitted follow-up launcher native180 PostgreSQL permanent effects a
     assert.equal((await value(f.make()).launchOnce(f.binding, new AbortController().signal)).ok, false);
     assert.equal(f.calls.length, 1);
   }
-  const canaries = [apiKey, f.request.recipient.number, "Abby possible outbound launch v1", "Abby outbound recipient request v1", "cliniko:recall:30", "generic-clinic-greeting"];
+  const canaries = [apiKey, f.request.recipient.number, "Abby possible outbound launch v1", "Abby possible outbound launch v2", "Abby outbound recipient request v1", "cliniko:recall:30", "generic-clinic-greeting"];
   assert.deepEqual(await scanPatientDataCanaries(db, canaries.map((value, i) => ({ label: `launch_${i}`, value }))), { ok: true, value: [] });
   const dump = execFileSync("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 8_000_000 }).toString();
   for (const canary of canaries) assert.equal(dump.includes(canary), false);
@@ -66,15 +67,18 @@ test(`compiled launcher SIGKILL after ${hold} preserves actual SQL capacity/nati
   await Promise.race([reached, peer.errors, new Promise<never>((_, reject) => { const timer = setTimeout(() => reject(new Error("Synthetic held launch unavailable")), 20_000); t.after(() => clearTimeout(timer)); })]);
   assert.equal(f.posts, 1); assert.equal(f.calls.length, hold === "provider" ? 1 : 0);
   await peer.kill(); assert.deepEqual(peer.output, []); assert.deepEqual(await readdir(directory), []);
-  const held = (await sql`select allocation_ref from outbound_capacity_allocations where tenant_id = ${scope.tenantId} and released_at is null`.execute(db)).rows;
+  const held = (await sql<{ allocation_ref: string }>`select allocation_ref from outbound_capacity_allocations where tenant_id = ${scope.tenantId} and released_at is null`.execute(db)).rows;
   assert.equal(held.length, 1, "process death is not proof a remote call ended");
+  const durable = f.contactControls.rows.find(r => (r.recall_type as { links: { self: string } }).links.self.endsWith("/62"))!;
+  assert.equal(value(decodeOutboundLaunchAttempt(durable.notes)).capacityAllocationRef, held[0]!.allocation_ref,
+    "independent cold recovery has the exact native-to-allocation binding after owner death");
   await sql`delete from outbound_effect_barriers where tenant_id = ${scope.tenantId}`.execute(db);
   // Closing/archiving the durable possible attempt cannot make it disappear.
   const attempt = f.contactControls.rows.find(r => (r.recall_type as { links: { self: string } }).links.self.endsWith("/62"))!;
   attempt.recalled = true; attempt.recalled_at = f.state.now; attempt.archived_at = f.state.now;
   assert.equal((await value(f.make()).launchOnce(f.binding, new AbortController().signal)).ok, false);
   assert.equal(f.calls.length, hold === "provider" ? 1 : 0); assert.equal(f.posts, 1);
-  const values = [apiKey, f.request.recipient.number, "Abby possible outbound launch v1", "cliniko:recall:30"];
+  const values = [apiKey, f.request.recipient.number, "Abby possible outbound launch v1", "Abby possible outbound launch v2", "cliniko:recall:30"];
   assert.deepEqual(await scanPatientDataCanaries(db, values.map((value, i) => ({ label: `launch_worker_${i}`, value }))), { ok: true, value: [] });
   const dump = execFileSync("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 8_000_000 }).toString();
   for (const value of values) assert.equal(dump.includes(value), false);

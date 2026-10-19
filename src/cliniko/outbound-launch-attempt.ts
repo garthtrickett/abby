@@ -12,11 +12,15 @@ export type OutboundLaunchAttempt = Readonly<{
   campaignRef: string; approvalRef: string; effectRef: string;
   scope: LocationScope; businessId: string; credentialFingerprint: string; patientId: string;
   provider: Readonly<{ ref: string; bindingDigest: string }>;
+  /** Present in v2: clinic-owned exact link to an opaque local allocation.
+   * Older v1 evidence still prevents replay but cannot identify a held place. */
+  capacityAllocationRef?: string;
   attemptedAt: string; dispatchNotAfter: string;
 }>;
 type Failure = Readonly<{ kind: "invalidOutboundLaunchAttempt" }>;
 const invalid = () => err({ kind: "invalidOutboundLaunchAttempt" as const });
 const header = "Abby possible outbound launch v1";
+const capacityHeader = "Abby possible outbound launch v2";
 const instruction = "Possible attempt only. No launch, delivery, terminal or clinical result proved. Never replay this effect.";
 const exact = (v: unknown, keys: readonly string[]) => !!v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).sort().join(",") === [...keys].sort().join(",");
 const numeric = (v: unknown) => typeof v === "string" && /^[1-9][0-9]{0,18}$/.test(v);
@@ -25,8 +29,10 @@ const digest = (v: unknown) => typeof v === "string" && /^[a-f0-9]{64}$/.test(v)
 const instant = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(v) &&
   Number.isFinite(Date.parse(v)) && new Date(v).toISOString() === v;
 function valid(a: OutboundLaunchAttempt): boolean {
-  if (!exact(a,["actionRef","requestRecallRef","requestActionRef","requestDigest","campaignRef","approvalRef","effectRef","scope","businessId","credentialFingerprint","patientId","provider","attemptedAt","dispatchNotAfter"])) return false;
-  const ids=[a.actionRef,a.requestActionRef,a.campaignRef,a.approvalRef,a.effectRef];
+  const fields = ["actionRef","requestRecallRef","requestActionRef","requestDigest","campaignRef","approvalRef","effectRef",
+    "scope","businessId","credentialFingerprint","patientId","provider","attemptedAt","dispatchNotAfter"];
+  if (!exact(a, fields) && !exact(a, [...fields, "capacityAllocationRef"])) return false;
+  const ids=[a.actionRef,a.requestActionRef,a.campaignRef,a.approvalRef,a.effectRef,...(Object.hasOwn(a,"capacityAllocationRef")?[a.capacityAllocationRef]:[])];
   return ids.every(validRecallMarker) && new Set(ids).size===ids.length && typeof a.requestRecallRef==="string" && /^cliniko:recall:[1-9][0-9]{0,18}$/.test(a.requestRecallRef) &&
     digest(a.requestDigest) && exact(a.scope,["tenantId","clinicId","locationId"]) && Object.values(a.scope).every(opaque) &&
     numeric(a.businessId) && numeric(a.patientId) && digest(a.credentialFingerprint) && exact(a.provider,["ref","bindingDigest"]) && opaque(a.provider.ref) && digest(a.provider.bindingDigest) &&
@@ -36,19 +42,19 @@ export function encodeOutboundLaunchAttempt(a: OutboundLaunchAttempt): Result<st
   try {
     if(!valid(a))return invalid();
     const payload=[a.requestRecallRef,a.requestActionRef,a.requestDigest,a.campaignRef,a.approvalRef,a.effectRef,
-      [a.scope.tenantId,a.scope.clinicId,a.scope.locationId],a.businessId,a.credentialFingerprint,a.patientId,[a.provider.ref,a.provider.bindingDigest],a.attemptedAt,a.dispatchNotAfter];
-    const summary=`${header}\n${JSON.stringify(payload)}\n${instruction}`;
+      [a.scope.tenantId,a.scope.clinicId,a.scope.locationId],a.businessId,a.credentialFingerprint,a.patientId,[a.provider.ref,a.provider.bindingDigest],a.attemptedAt,a.dispatchNotAfter,...(a.capacityAllocationRef === undefined ? [] : [a.capacityAllocationRef])];
+    const summary=`${a.capacityAllocationRef === undefined ? header : capacityHeader}\n${JSON.stringify(payload)}\n${instruction}`;
     return validRecallSummary(summary)?ok(formatRecallNote(a.actionRef,summary)):invalid();
   }catch{return invalid();}
 }
 export function decodeOutboundLaunchAttempt(notes: unknown): Result<OutboundLaunchAttempt,Failure> {
   try {
     if(typeof notes!=="string"||notes.length>1050)return invalid();const lines=notes.split("\n");
-    if(lines.length!==4||!lines[0]!.startsWith("Abby request ")||lines[1]!==header||lines[3]!==instruction)return invalid();
+    if(lines.length!==4||!lines[0]!.startsWith("Abby request ")||(lines[1]!==header&&lines[1]!==capacityHeader)||lines[3]!==instruction)return invalid();
     const a:unknown=JSON.parse(lines[2]!);
-    if(!Array.isArray(a)||a.length!==13||!Array.isArray(a[6])||a[6].length!==3||!Array.isArray(a[10])||a[10].length!==2)return invalid();
+    if(!Array.isArray(a)||a.length!==(lines[1]===capacityHeader?14:13)||!Array.isArray(a[6])||a[6].length!==3||!Array.isArray(a[10])||a[10].length!==2)return invalid();
     const result:OutboundLaunchAttempt={actionRef:lines[0]!.slice(13),requestRecallRef:a[0],requestActionRef:a[1],requestDigest:a[2],campaignRef:a[3],approvalRef:a[4],effectRef:a[5],
-      scope:{tenantId:a[6][0],clinicId:a[6][1],locationId:a[6][2]},businessId:a[7],credentialFingerprint:a[8],patientId:a[9],provider:{ref:a[10][0],bindingDigest:a[10][1]},attemptedAt:a[11],dispatchNotAfter:a[12]};
+      scope:{tenantId:a[6][0],clinicId:a[6][1],locationId:a[6][2]},businessId:a[7],credentialFingerprint:a[8],patientId:a[9],provider:{ref:a[10][0],bindingDigest:a[10][1]},attemptedAt:a[11],dispatchNotAfter:a[12],...(lines[1]===capacityHeader?{capacityAllocationRef:a[13]}:{})};
     const encoded=encodeOutboundLaunchAttempt(result);if(!encoded.ok||encoded.value!==notes)return invalid();
     return ok(Object.freeze({...result,scope:Object.freeze({...result.scope}),provider:Object.freeze({...result.provider})}));
   }catch{return invalid();}

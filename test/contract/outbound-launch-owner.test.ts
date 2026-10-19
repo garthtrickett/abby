@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { outboundLaunchOwnerFixture } from "../support/outbound-launch-owner.ts";
+import { decodeOutboundLaunchAttempt } from "../../src/cliniko/outbound-launch-attempt.ts";
 import { encodeOutboundContactReview } from "../../src/cliniko/outbound-contact-review.ts";
 import { value } from "../support/outbound-records.ts";
 
@@ -8,6 +9,8 @@ test("actual follow-up owner composes native campaign/contact/request/history/po
   const f = await outboundLaunchOwnerFixture(); t.after(f.close);
   assert.deepEqual(value(await f.launch()), { kind: "accepted", capacity: "held" });
   assert.equal(f.posts, 1); assert.equal(f.calls.length, 1); assert.equal(f.held.size, 1);
+  const retained = f.contactControls.rows.find(r => (r.recall_type as { links: { self: string } }).links.self.endsWith("/62"))!;
+  assert.equal(value(decodeOutboundLaunchAttempt(retained.notes)).capacityAllocationRef, [...f.held][0]);
   assert.ok(f.claims <= 150 && f.claims > 0);
   assert.ok(f.burned.has(f.request.approvalRef) && f.burned.has(f.request.effectRef));
   assert.deepEqual(Object.keys(f.calls[0]!).sort(), ["effectRef", "number", "profileRef"]);
