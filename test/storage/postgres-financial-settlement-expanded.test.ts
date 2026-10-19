@@ -14,6 +14,7 @@ import { unlinkedClassExpiryFixture } from "../support/financial-unlinked-class-
 import { financialResendFixture } from "../support/financial-resend-owner.ts";
 import { settlementNative } from "../support/financial-settlement-native.ts";
 import { intentValue } from "../support/financial-retention.ts";
+import { OwnerFileAdminDirectory } from "../../src/standalone/identity/owner-file-admin-directory.ts";
 import { secret } from "../support/financial-webhook-handoff.ts";
 import type { FinancialConsumerAuthorities, FinancialConsumerCycle, FinancialConsumerConfig } from "../../src/standalone/cliniko-financial-consumer.ts";
 import type { FinancialRecordRetentionConfig } from "../../src/cliniko/financial-record-retention.ts";
@@ -25,6 +26,7 @@ const { createFinancialSettlementConsumer } = await import(new URL("financial-se
 const { ClinikoFinancialSettlementReview } = await import(new URL("cliniko-financial-settlement-review.js", emitted).href) as typeof import("../../src/standalone/cliniko-financial-settlement-review.ts");
 const { ApprovedFinancialWaiverIssuer } = await import(new URL("approved-financial-waiver-issuer.js", emitted).href) as typeof import("../../src/standalone/approved-financial-waiver-issuer.ts");
 const { OwnerFileFinancialSource } = await import(new URL("owner-file-financial-source.js", emitted).href) as typeof import("../../src/standalone/owner-file-financial-source.ts");
+const { OwnerFileClassPolicy } = await import(new URL("owner-file-class-policy.js", emitted).href) as typeof import("../../src/standalone/owner-file-class-policy.ts");
 const runtime = { ClinikoFinancialSettlementReview, ApprovedFinancialWaiverIssuer, OwnerFileFinancialSource };
 
 for (const kind of ["unlinked", "case", "resend"] as const) for (const scenario of ["open", "paid", "waived"] as const)
@@ -55,12 +57,15 @@ test(`compiled native settlement ${kind}/${scenario} uses real PostgreSQL one-us
   if (scenario === "paid") source.state.status = 20;
   if (scenario === "waived") source.state.waived = true;
   if (source.state.waived) await source.confirmWaiver();
+  const classPolicy = selected.kind === "resend" ? undefined : value(await OwnerFileClassPolicy.capture({
+    ...selected.fixture.classPolicy.binding(), path: selected.fixture.classPolicyPath,
+    directory: new OwnerFileAdminDirectory(selected.fixture.classDirectoryPath, intent.scope), clock: f.config.cliniko.clock! }));
   const authority: FinancialConsumerAuthorities = {
     run: { allows: async () => true, current: () => true },
     pending: { allowsPendingRead: async () => true, allowsRecordRead: async () => true, current: () => true },
     checkout: f.checkoutAuthority, records: f.recordsAuthority, message: f.authority,
-    ...(selected.kind === "case" ? { caseClassClinicalExpiry: { authority: selected.fixture.caseAuthority, classPolicy: selected.fixture.classPolicy, maximumAuthorityRequests: 0 } }
-      : selected.kind === "unlinked" ? { classClinicalExpiry: { authority: selected.fixture.classAuthority, classPolicy: selected.fixture.classPolicy } }
+    ...(selected.kind === "case" ? { caseClassClinicalExpiry: { authority: selected.fixture.caseAuthority, classPolicy: classPolicy!, maximumAuthorityRequests: 0 } }
+      : selected.kind === "unlinked" ? { classClinicalExpiry: { authority: selected.fixture.classAuthority, classPolicy: classPolicy! } }
       : { resend: { authority: selected.fixture.resendAuthority, maximumAuthorityRequests: 0 } }),
     work: { authorizeWork: async () => ({ reviewDate: "2026-11-02" }), providerBindingAuthorized: async () => true,
       current: () => true, onCheckoutAcknowledged: async () => { throw new Error("No new payable expected"); } },
