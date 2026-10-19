@@ -1007,3 +1007,32 @@ the actual financial consumer/collection/expiry path before automatic effects.
 All private context remains transient/native; no SQL or local private queue is
 added. Source/admin native cost remains unknown until the complete host port is
 reviewed; no zero-cost declaration is inherited from a callback.
+
+## Concrete native settlement review composition, 19 October 2026
+
+The optional `createFinancialSettlementConsumer` factory constructs the real
+consumer with concrete invoice and optional current waiver readers, the exact
+account/scope and the same physical budget. An independent current clinic owner
+supplies the exact invoice/target mapping; generic booking IDs are not numerically
+aliased to individual/attendee IDs. Missing waiver selection is unknown, not no
+waiver. Current complete manual-payment/waiver financial grants remain mandatory.
+
+Recorded-paid/closed/credit or an observed positive full or partial waiver blocks
+the original full-amount collection/link and clinical expiry. The existing
+immutable amount cannot be silently reduced or recollected after a partial
+waiver; changed obligations need their own fresh quote/terms/acceptance. An open
+invoice only supplies context and cannot establish absent partial/manual money.
+Checkout link expiry has its own independent consequence grant and can inspect
+recorded payment/waiver without promoting it to unpaid or clinical authority.
+Receipts retain their Stripe money/provider/sender/recipient grants; this review
+does not turn a paid receipt into collection or erase an already known outcome.
+
+Exact mappings and independent authority are fenced after asynchronous native
+reads. All existing source, patient, provider, recipient, clinical and complete
+producer/restore grants and one-use effects remain. Augmented case/pass expiry
+and resend ports require an explicit newly reviewed total native request ceiling
+above the prior ceiling, within180; no cost is guessed or inherited as zero.
+Every actual request still claims the shared account, and headroom is not a hold.
+The constructor starts no background work or listener and supplies no default
+activation. Complete clinic financial-status/mapping/waiver-authoring/supersession
+and deploying-host grants remain acceptance and integration dependencies.

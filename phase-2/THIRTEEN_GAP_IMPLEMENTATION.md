@@ -4953,3 +4953,46 @@ graph and excludes this followup and537. It does not explain or relabel old6d01
 Actual financial-owner integration, waiver authoring/supersession and complete
 manual-payment decisions, outbound/writeback engineering and all13 acceptance
 gates remain open; no merge, deployment or live provider/contact/payment action.
+
+## Native invoice/waiver financial consumer integration, 19 October 2026
+
+Implemented the concrete settlement reviewer and actual consumer factory, with
+current independently approved native record mapping, exact account/shared-budget
+binding, existing financial grants and separate collection/link/Checkout-expiry/
+clinical-expiry/receipt consequences. Paid/closed/credit and positive full/partial
+waivers refuse the original full-amount collection or clinical cancellation.
+Open/no-selected-waiver is not complete outstanding-money or no-waiver evidence.
+Case/pass and resend wrappers demand newly reviewed total authority cost; their
+actual expanded class/resend journeys still need separate qualification.
+
+31 source and actual-consumer controls passed, work1792370063798, no skips/failures,
+peak93,847,552B/256MiB CPU100%/heap192MiB/Swap0/OOM0; wait21908 reaped. Exact command:
+`node --test test/contract/financial-settlement-review.test.ts
+test/contract/financial-settlement-consumer.test.ts`. Includes actual Checkout
+preclaim and closed-unpaid clinical cancellation, original receipt preservation,
+current signed waiver, partial waiver/target/current-authority/budget/cost refusal.
+
+Full strict TypeScript plus `npm run build:voice-tests`, work1792370244807, passed
+in4m14s on6b4c204, peak1,573,629,952B/2GiB CPU100%/heap1536MiB/Swap0/OOM0. All1810
+source and616 emitted artifact hashes independently unchanged; explicit factory/
+review/invoice/waiver entries verified. Wrapper2601777 absent, wait14091 reaped.
+
+Fresh PostgreSQL migration then `ABBY_LEDGER=postgres node --test
+--test-concurrency=4 test/storage/postgres-financial-settlement.test.ts` passed3/3,
+zero failures/skips, work1792370541367, terminal00:42:39.596319UTC19October2026.
+Actual emitted factory/reviewer/current issuer/source classes ran with real SQL
+permanent claims and per-case real180-request account budgets. Open+independent
+approval created once; recorded-paid and current native signed-waiver evidence
+left the Checkout claim unused. Native waiver record was included in the real
+fixture account pending scan under its separate approved type. All-column SQL
+and unfiltered pg_dump canaries/opaque-only claim columns passed. Node115941376B/
+1GiB+aggregateDB106602496B/512MiB CPU100% each/Swap0/OOM0. Frozen source/artifacts
+independently unchanged; ownwrapper2603848 absent/DBabsent/sliceinactive, wait18109
+reaped. No real provider, money, contact or deployment action occurred.
+
+This conditional composed integration does not establish complete clinic
+manual-payment/waiver/supersession policy or all class/resend/serving activation.
+The completed through536 combined29c373d full remains4619/0/1 plus6ordered and
+excludes537/538/this patch; these changes require their own combined qualification.
+All13 gaps, remaining host/outbound/writeback engineering and real clinic/provider/
+sender/producer/restore/acoustic/cloud/deployment acceptance remain open.
