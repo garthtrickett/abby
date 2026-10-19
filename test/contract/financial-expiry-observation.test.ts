@@ -129,7 +129,7 @@ test("an actual post-claim case quota refusal remains a consumed mismatch with f
   const { ClinikoPatientCaseSessionsReader } = await import("../../src/cliniko/patient-case-sessions.ts");
   const { financialRecordOwnerBinding } = await import("../../src/cliniko/financial-record-retention.ts");
   const actual = ClinikoPatientCaseSessionsReader.prototype.inspectAttendance;
-  t.mock.method(ClinikoPatientCaseSessionsReader.prototype, "inspectAttendance", function (this: InstanceType<typeof ClinikoPatientCaseSessionsReader>, ...args: Parameters<typeof actual>) {
+  t.mock.method(ClinikoPatientCaseSessionsReader.prototype, "inspectAttendance", function (this: typeof ClinikoPatientCaseSessionsReader.prototype, ...args: Parameters<typeof actual>) {
     return observeFinancialNativeRead(2, () => actual.apply(this, args));
   });
   const burned = new Set<string>(); let filled = false;
