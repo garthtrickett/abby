@@ -1,3 +1,4 @@
+import { up as up051, down as down051 } from "./migrations/051_outbound_capacity.ts";
 import { up as up050, down as down050 } from "./migrations/050_outbound_effect_barriers.ts";
 import { Migrator } from "kysely";
 import type { Kysely } from "kysely";
@@ -106,6 +107,7 @@ function createMigrator<DB>(db: Kysely<DB>): Migrator {
       "048_cliniko_request_reservations": { up: up048, down: down048 },
       "049_financial_effect_barriers": { up: up049, down: down049 },
       "050_outbound_effect_barriers": { up: up050, down: down050 },
+      "051_outbound_capacity": { up: up051, down: down051 },
     }) },
   });
 }
@@ -121,6 +123,6 @@ export async function migrate<DB>(db: Kysely<DB>, direction: "up" | "down" = "up
 }
 
 /** Used by the upgrade probe to boot an actual older schema before seeding data. */
-export async function migrateTo<DB>(db: Kysely<DB>, target: "001_text_probe" | "002_booking_setting_audit" | "003_tenant_scope_constraints" | "004_automation_setting_audit" | "005_clinic_write_stop" | "006_write_stop_recovery" | "007_clinic_knowledge" | "008_pending_location_calls" | "009_effect_call_leases" | "010_effect_call_lease_versions" | "011_portability_fence" | "012_config_import_registry" | "013_number_cutover" | "014_patient_phone_index" | "015_remove_turn_digests" | "016_patient_phone_scan" | "017_phone_normalization_plan" | "018_phone_index_connection" | "019_phone_scan_verification_index" | "020_cliniko_request_budget" | "021_cutover_phone_index_readiness" | "022_cliniko_catalogue_approvals" | "023_phone_index_credentials" | "034_greeting_setting_audit" | "035_cancellation_setting_audit" | "036_rescheduling_setting_audit" | "037_clinic_intake_setting" | "038_staffed_destination_setting_audit" | "039_clinic_notification_settings" | "040_clinic_voice_settings" | "041_admin_magic_link_identity" | "042_patient_verification_budget" | "043_clinic_patient_correction_setting" | "044_cliniko_contact_revision" | "045_cliniko_contact_change_registry" | "046_correction_setting_portability_guard" | "047_confirmation_resend_journal" | "048_cliniko_request_reservations" | "049_financial_effect_barriers" | "050_outbound_effect_barriers"): Promise<void> {
+export async function migrateTo<DB>(db: Kysely<DB>, target: "001_text_probe" | "002_booking_setting_audit" | "003_tenant_scope_constraints" | "004_automation_setting_audit" | "005_clinic_write_stop" | "006_write_stop_recovery" | "007_clinic_knowledge" | "008_pending_location_calls" | "009_effect_call_leases" | "010_effect_call_lease_versions" | "011_portability_fence" | "012_config_import_registry" | "013_number_cutover" | "014_patient_phone_index" | "015_remove_turn_digests" | "016_patient_phone_scan" | "017_phone_normalization_plan" | "018_phone_index_connection" | "019_phone_scan_verification_index" | "020_cliniko_request_budget" | "021_cutover_phone_index_readiness" | "022_cliniko_catalogue_approvals" | "023_phone_index_credentials" | "034_greeting_setting_audit" | "035_cancellation_setting_audit" | "036_rescheduling_setting_audit" | "037_clinic_intake_setting" | "038_staffed_destination_setting_audit" | "039_clinic_notification_settings" | "040_clinic_voice_settings" | "041_admin_magic_link_identity" | "042_patient_verification_budget" | "043_clinic_patient_correction_setting" | "044_cliniko_contact_revision" | "045_cliniko_contact_change_registry" | "046_correction_setting_portability_guard" | "047_confirmation_resend_journal" | "048_cliniko_request_reservations" | "049_financial_effect_barriers" | "050_outbound_effect_barriers" | "051_outbound_capacity"): Promise<void> {
   assertMigration(await createMigrator(db).migrateTo(target));
 }

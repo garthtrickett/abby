@@ -1,3 +1,4 @@
+import { outboundCapacityArchiveRecord, validOutboundCapacityHistory } from "./outbound-capacity-history.ts";
 import { outboundEffectArchiveRecord, validOutboundEffectHistory } from "./outbound-effect-history.ts";
 import { createHash } from "node:crypto";
 import type { TenantConfigArchiveData } from "./config-archive.ts";
@@ -9,10 +10,10 @@ import { financialEffectArchiveRecord, validFinancialEffectHistory } from "./fin
  * allow another family's retained history to escape digest checking. */
 export function validStaffWorkHistoryManifest(data: TenantConfigArchiveData): boolean {
   try {
-    const records: (ReturnType<typeof confirmationResendArchiveRecord> | ReturnType<typeof financialEffectArchiveRecord> | ReturnType<typeof outboundEffectArchiveRecord>)[] = [];
-    const resend = new Set<string>(), financial = new Set<string>(), outbound = new Set<string>();
+    const records: (ReturnType<typeof confirmationResendArchiveRecord> | ReturnType<typeof financialEffectArchiveRecord> | ReturnType<typeof outboundEffectArchiveRecord> | ReturnType<typeof outboundCapacityArchiveRecord>)[] = [];
+    const resend = new Set<string>(), financial = new Set<string>(), outbound = new Set<string>(), capacity = new Set<string>();
     for (const location of data.locations) {
-      if (!validConfirmationResendArchiveHistory(location.confirmationResends) || !validFinancialEffectHistory(location.financialEffects) || !validOutboundEffectHistory(location.outboundEffects)) return false;
+      if (!validConfirmationResendArchiveHistory(location.confirmationResends) || !validFinancialEffectHistory(location.financialEffects) || !validOutboundEffectHistory(location.outboundEffects) || !validOutboundCapacityHistory(location.outboundCapacity)) return false;
       for (const row of location.confirmationResends ?? []) {
         if (resend.has(row.requestRef)) return false;
         resend.add(row.requestRef); records.push(confirmationResendArchiveRecord(location.sourceScope, row));
@@ -20,6 +21,10 @@ export function validStaffWorkHistoryManifest(data: TenantConfigArchiveData): bo
       for (const row of location.financialEffects ?? []) {
         if (financial.has(row.effectRef)) return false;
         financial.add(row.effectRef); records.push(financialEffectArchiveRecord(location.sourceScope, row));
+      }
+      for (const row of location.outboundCapacity ?? []) {
+        if (capacity.has(row.allocationRef)) return false;
+        capacity.add(row.allocationRef); records.push(outboundCapacityArchiveRecord(location.sourceScope, row));
       }
       for (const row of location.outboundEffects ?? []) {
         if (outbound.has(row.effectRef)) return false;

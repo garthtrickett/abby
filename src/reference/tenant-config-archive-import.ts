@@ -105,6 +105,7 @@ function prepare(data: TenantConfigArchiveData, mapper: ReferenceImportMapper):
       ...(location.confirmationResends === undefined ? {} : { confirmationResends: location.confirmationResends }),
       ...(location.financialEffects === undefined ? {} : { financialEffects: location.financialEffects }),
       ...(location.outboundEffects === undefined ? {} : { outboundEffects: location.outboundEffects }),
+      ...(location.outboundCapacity === undefined ? {} : { outboundCapacity: location.outboundCapacity }),
       knowledge: location.knowledge };
     const mapped = mapConfig(scoped, location.targetScope, mapper);
     if (!mapped.ok) return mapped;

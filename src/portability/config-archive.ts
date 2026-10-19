@@ -1,3 +1,5 @@
+import { validOutboundCapacityHistory } from "./outbound-capacity-history.ts";
+import type { OutboundCapacityArchiveRow } from "./outbound-capacity-history.ts";
 import { validOutboundEffectHistory } from "./outbound-effect-history.ts";
 import type { OutboundEffectArchiveRow } from "./outbound-effect-history.ts";
 import { validFinancialEffectHistory } from "./financial-effect-history.ts";
@@ -58,6 +60,7 @@ export type ConfigArchiveData = Readonly<{
   confirmationResends?: readonly ConfirmationResendArchiveRow[];
   financialEffects?: readonly FinancialEffectArchiveRow[];
   outboundEffects?: readonly OutboundEffectArchiveRow[];
+  outboundCapacity?: readonly OutboundCapacityArchiveRow[];
   knowledge: readonly PortablePublishedKnowledge[];
 }>;
 
@@ -81,6 +84,7 @@ export type TenantConfigArchiveData = Readonly<{
     confirmationResends?: readonly ConfirmationResendArchiveRow[];
   financialEffects?: readonly FinancialEffectArchiveRow[];
   outboundEffects?: readonly OutboundEffectArchiveRow[];
+  outboundCapacity?: readonly OutboundCapacityArchiveRow[];
     policies: ConfigArchiveData["policies"];
     knowledge: readonly PortablePublishedKnowledge[];
   }>[];
@@ -338,6 +342,7 @@ type MutableLocation = {
   confirmationResends?: ConfirmationResendArchiveRow[];
   financialEffects?: FinancialEffectArchiveRow[];
   outboundEffects?: OutboundEffectArchiveRow[];
+  outboundCapacity?: OutboundCapacityArchiveRow[];
   knowledge: PortablePublishedKnowledge[];
 };
 
@@ -417,7 +422,7 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
     }
     if (locations.size !== declaredMappings.size) throw new InvalidConfigArchive("locations");
 
-    const resendRefs = new Set<string>(), financialRefs = new Set<string>(), outboundRefs = new Set<string>();
+    const resendRefs = new Set<string>(), financialRefs = new Set<string>(), outboundRefs = new Set<string>(), capacityRefs = new Set<string>();
     for (const row of lines(sections.staffWork, "staffWork")) {
       if (row.kind === "financialEffectBarrier") {
         if (row.recordVersion !== 1 || !["claimedAt,effectRef,kind,ownerBinding,recordId,recordVersion,sourceClinicId,sourceLocationId,sourceTenantId",
@@ -431,6 +436,18 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
         const barrier = barriers[0]!;
         if (financialRefs.has(barrier.effectRef) || row.recordId !== expectedId("financialEffect", barrier.effectRef, 1)) throw new InvalidConfigArchive("staffWork");
         financialRefs.add(barrier.effectRef); location.financialEffects ??= []; location.financialEffects.push(barrier);
+        continue;
+      }
+      if (row.kind === "outboundCapacityAllocation") {
+        if (row.recordVersion !== 1 || !["acquiredAt,allocationRef,kind,ownerBinding,recordId,recordVersion,releasedAt,sourceClinicId,sourceLocationId,sourceTenantId",
+            "acquiredAt,allocationRef,kind,originScope,ownerBinding,recordId,recordVersion,releasedAt,sourceClinicId,sourceLocationId,sourceTenantId"].includes(Object.keys(row).sort().join(","))) throw new InvalidConfigArchive("staffWork");
+        const key = JSON.stringify([ref(row.sourceClinicId, "staffWork"), ref(row.sourceLocationId, "staffWork")]);
+        const location = locations.get(key), allocations: unknown = [{ allocationRef: row.allocationRef, ownerBinding: row.ownerBinding,
+          acquiredAt: row.acquiredAt, releasedAt: row.releasedAt, ...(Object.hasOwn(row, "originScope") ? { originScope: row.originScope } : {}) }];
+        if (!location || !validOutboundCapacityHistory(allocations) || allocations === undefined) throw new InvalidConfigArchive("staffWork");
+        const allocation = allocations[0]!;
+        if (capacityRefs.has(allocation.allocationRef) || row.recordId !== expectedId("outboundCapacity", allocation.allocationRef, 1)) throw new InvalidConfigArchive("staffWork");
+        capacityRefs.add(allocation.allocationRef); location.outboundCapacity ??= []; location.outboundCapacity.push(allocation);
         continue;
       }
       if (row.kind === "outboundEffectBarrier") {
@@ -470,6 +487,7 @@ export async function decodeTenantConfigArchive(input: ArchiveEnvelope, expected
       location.confirmationResends?.sort((a, b) => a.requestRef.localeCompare(b.requestRef));
       location.financialEffects?.sort((a, b) => a.effectRef.localeCompare(b.effectRef));
       location.outboundEffects?.sort((a, b) => a.effectRef.localeCompare(b.effectRef));
+      location.outboundCapacity?.sort((a, b) => a.allocationRef.localeCompare(b.allocationRef));
     }
 
     if (verified.manifest.archiveVersion === 2) {
@@ -744,5 +762,6 @@ export async function decodeConfigArchive(input: ArchiveEnvelope, expectedTarget
     ...(location.confirmationResends === undefined ? {} : { confirmationResends: location.confirmationResends }),
     ...(location.financialEffects === undefined ? {} : { financialEffects: location.financialEffects }),
     ...(location.outboundEffects === undefined ? {} : { outboundEffects: location.outboundEffects }),
+    ...(location.outboundCapacity === undefined ? {} : { outboundCapacity: location.outboundCapacity }),
     writeStops: clinic.writeStops, knowledge: location.knowledge });
 }
