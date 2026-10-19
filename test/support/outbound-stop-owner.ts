@@ -12,10 +12,10 @@ import type { OutboundDncPolicyApproval } from "../../src/standalone/owner-file-
 import { ClinikoOutboundStopOwner } from "../../src/standalone/cliniko-outbound-stop-owner.ts";
 import type { OutboundStopProvider, OutboundStopQuery } from "../../src/standalone/cliniko-outbound-stop-owner.ts";
 
-export async function outboundStopOwnerFixture(options: NonNullable<Parameters<typeof outboundLaunchOwnerFixture>[0]> & {
-  StopOwner?: typeof ClinikoOutboundStopOwner; Policy?: typeof OwnerFileOutboundDncPolicy;
+export async function outboundStopOwnerFixture<T extends typeof outboundLaunchOwnerFixture = typeof outboundLaunchOwnerFixture>(options: NonNullable<Parameters<T>[0]> & {
+  StopOwner?: typeof ClinikoOutboundStopOwner; Policy?: typeof OwnerFileOutboundDncPolicy; LaunchFixture?: T;
 } = {}) {
-  const { StopOwner = ClinikoOutboundStopOwner, Policy = OwnerFileOutboundDncPolicy, ...rest } = options, f = await outboundLaunchOwnerFixture(rest);
+  const { StopOwner = ClinikoOutboundStopOwner, Policy = OwnerFileOutboundDncPolicy, LaunchFixture = outboundLaunchOwnerFixture, ...rest } = options, f = await LaunchFixture(rest) as Awaited<ReturnType<T>>;
   try {
     assert.equal(value(await f.launch()).kind, "accepted");
     const row = f.contactControls.rows.find(r => (r.recall_type as { links: { self: string } }).links.self.endsWith("/62"))!;

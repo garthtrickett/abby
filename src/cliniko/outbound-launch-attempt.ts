@@ -1,3 +1,4 @@
+import { packUuid as compact, unpackUuid as expand, packDigest as compactDigest, unpackDigest as expandDigest } from "./internal/outbound-note-packing.ts";
 import { createHash } from "node:crypto";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
@@ -40,24 +41,6 @@ const instant = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d
 // V3 and v4 use the lossless 22-character representation of already-validated
 // random UUIDs. Even with two extra IDs, its note is shorter than the same v2
 // context. Public objects, native permission queries and SQL still use UUIDs.
-const compact = (ref: string): string => Buffer.from(ref.replaceAll("-", ""), "hex").toString("base64url");
-function expand(ref: unknown): string {
-  if (typeof ref !== "string" || !/^[A-Za-z0-9_-]{22}$/.test(ref)) throw new Error("Invalid opaque reference");
-  const bytes = Buffer.from(ref, "base64url"), hex = bytes.toString("hex");
-  const result = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
-  if (bytes.length !== 16 || bytes.toString("base64url") !== ref || !validRecallMarker(result)) throw new Error("Invalid opaque reference");
-  return result;
-}
-// V4 also packs fixed-size digests and the numeric native recall identifier.
-// This saves enough bytes for all three additional UUIDs without expanding the
-// existing 1000/1050 note bounds. Public contexts keep their canonical strings.
-const compactDigest = (value: string) => Buffer.from(value, "hex").toString("base64url");
-function expandDigest(value: unknown): string {
-  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(value)) throw new Error("Invalid context digest");
-  const bytes = Buffer.from(value, "base64url");
-  if (bytes.length !== 32 || bytes.toString("base64url") !== value) throw new Error("Invalid context digest");
-  return bytes.toString("hex");
-}
 function valid(a: OutboundLaunchAttempt): boolean {
   const fields = ["actionRef","requestRecallRef","requestActionRef","requestDigest","campaignRef","approvalRef","effectRef",
     "scope","businessId","credentialFingerprint","patientId","provider","attemptedAt","dispatchNotAfter"];
