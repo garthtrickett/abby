@@ -1,4 +1,4 @@
-# Outbound and sick-day contract — conditional follow-up launch, no activation
+# Outbound and sick-day contract — conditional follow-up and exact sick-day launch, no activation
 
 Source requirements: EXECUTION_ORDER stage9, THIRTEEN_GAP gap12, Aeva auditR20/R21. Existing recalls/queue monitoring and verified clinical workflows are reusable seams, not campaign support. Carrier work remains deferred. Keep native clinic/provider ownership and opaque-only local operations.
 
@@ -245,3 +245,7 @@ The owner requested a swappable Abby/Vapi outbound runtime. A shared guarded int
 ## Conditional automatic native stop owner, 19 October 2026
 
 A conditional owner now consumes exact v3 native context and a trusted durable authenticated-provider stop observation under current clinic-approved policy to retain unknown-consent/blocked-DNC decisions. Separate decoded history export and native/current/producer grants apply. Stable IDs, one-use exclusion, archived/closed recovery, later approved reconsent and unknown writes preserve conservative behavior. Final 95 composed source controls, 49 complete codec/lineage controls, strict TypeScript and the required serving build and nine emitted SQL/native 180-request/privacy cases pass. This does not implement raw provider authentication, number-wide suppression or unresolved-stop call admission; concrete runtime/verified callback and clinical handoff remain open. No activation follows. See [contract and remaining requirements](OUTBOUND_STOP_RECOVERY.md) and [exact evidence](EXECUTION_PROGRESS.md#conditional-automatic-native-stop-recovery-19-october-2026).
+
+## Exact sick-day launch extension, 19 October 2026
+
+An explicit appointment-policy configuration and independent native target plus `approveAppointmentTarget` grants now allow the one-shot owner to prepare sick-day calls against the exact original future appointment. Target/version and policy fingerprint are stable; fresh rereads after waits and final current/start-time fences refuse changes or invalid status. The default follow-up composition and its grants are unchanged; targeted follow-up and sick-day scheduler expansion remain unsupported. The provider still receives no appointment or patient proof. 95 source controls, final strict/required serving build and nineteen emitted SQL/native 180-request/runtime/privacy cases, including two real SIGKILL/positive archived-history recovery cases, pass. Concrete runtime, number-wide DNC and verified clinical callback remain unfinished; no activation follows. See [exact contract](OUTBOUND_TARGETED_LAUNCH.md) and [evidence](EXECUTION_PROGRESS.md#exact-sick-day-call-launch-19-october-2026).
