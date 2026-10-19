@@ -88,3 +88,16 @@ test("consent expiring during final native history wait cannot pass the provider
   assert.equal(finalEdge, true); assert.equal(f.calls.length, 0); assert.equal(f.posts, 1);
   assert.equal(f.held.size, 1, "invoked adapters retain conservative capacity until independent recovery");
 });
+
+
+for (const operation of ["approveAudience", "approveProvider", "producerAdmitted", "approveLaunch"] as const)
+  test(`independent ${operation} withdrawal during final native history wait cannot dispatch`, async t => {
+    const f = await outboundLaunchOwnerFixture(); t.after(f.close);
+    let finalEdge = false, withdrawn = false;
+    f.controls.beforeEdge = () => { finalEdge = true; };
+    Object.assign(f.ports.authority, { current: (q: { operation: string }) => !(withdrawn && q.operation === operation) });
+    Object.assign(f.ports.history, { allowsHistoryRead: async () => { if (finalEdge) withdrawn = true; return true; } });
+    const owner = value(f.make()), result = await owner.launchOnce(f.binding, new AbortController().signal);
+    assert.ok(!result.ok || result.value.kind === "unknown");
+    assert.equal(withdrawn, true); assert.equal(f.calls.length, 0); assert.equal(f.posts, 1); assert.equal(f.held.size, 1);
+  });

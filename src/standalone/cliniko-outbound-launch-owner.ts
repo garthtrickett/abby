@@ -51,6 +51,7 @@ type Ports = Readonly<{ request: OutboundRecordReadAuthority; attempt: OutboundL
   effects: OutboundEffectBarrier; attemptEffects: OutboundEffectBarrier; capacity: OutboundCapacity; native?: typeof fetch }>;
 type Failure = Readonly<{ kind: "invalidConfig" | "unavailable" | "forbidden" | "alreadyAttempted" | "capacityUnavailable" }>;
 export type OutboundLaunchOutcome = Readonly<{ kind: "accepted" | "unknown"; capacity: "held" }>;
+const launchOperations = ["approveAudience", "approveProvider", "producerAdmitted", "approveLaunch"] as const;
 const opaque = (s: unknown): s is string => typeof s === "string" && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$/.test(s);
 function providerBinding(v: OutboundProviderBinding): boolean {
   return !!v && Object.keys(v).sort().join(",") === "bindingDigest,profileRef,ref" && opaque(v.ref) && opaque(v.profileRef) && /^[a-f0-9]{64}$/.test(v.bindingDigest);
@@ -133,7 +134,7 @@ export class ClinikoOutboundLaunchOwner {
     const current = () => {
       const at = now();
       if (!active() || !q || this.#ports.effects.matches(this.#config.requests.scope, this.#owner) !== true ||
-          this.#ports.capacity.matches(this.#config.requests.scope, outboundCapacityOwnerBinding(this.#config.campaignRef)!) !== true || this.#ports.authority.current(q, signal) !== true || !isDeepStrictEqual(this.#ports.provider.binding(), q.provider) ||
+          this.#ports.capacity.matches(this.#config.requests.scope, outboundCapacityOwnerBinding(this.#config.campaignRef)!) !== true || launchOperations.some(operation => this.#ports.authority.current(Object.freeze({ ...q!, operation }), signal) !== true) || !isDeepStrictEqual(this.#ports.provider.binding(), q.provider) ||
           outboundContactTime(q.record.request.schedule, at).kind !== "due" ||
           consentWindow && (consentWindow.observedAt > at || consentWindow.effectiveFrom > at || at >= consentWindow.effectiveUntil)) throw new Refusal("forbidden");
     };
@@ -148,7 +149,7 @@ export class ClinikoOutboundLaunchOwner {
       const next = Object.freeze({ operation: "approveAudience" as const, ownerBinding: this.#owner, record: record.value, campaign: bound.value, provider });
       if (q && (!isDeepStrictEqual(q.record, next.record) || !isDeepStrictEqual(q.campaign, next.campaign) || !isDeepStrictEqual(q.provider, next.provider))) throw new Refusal("forbidden");
       q = next; current();
-      for (const operation of ["approveAudience", "approveProvider", "producerAdmitted", "approveLaunch"] as const) {
+      for (const operation of launchOperations) {
         const query = Object.freeze({ ...q, operation });
         if (await wait(Promise.resolve().then(() => this.#ports.authority.allows(query, signal))) !== true || this.#ports.authority.current(query, signal) !== true) throw new Refusal("forbidden");
         current();
