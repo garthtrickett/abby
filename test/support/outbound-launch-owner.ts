@@ -89,7 +89,7 @@ export async function outboundLaunchOwnerFixture(options: {
       },
     };
     const authority: OutboundLaunchAuthority = { allows: async q => q.operation !== denied, current: () => live };
-    const ports = { request: { allows: async () => true, current: () => live }, attempt: { allows: async () => true, current: () => live, producerAdmitted: async () => true },
+    const ports: Parameters<typeof ClinikoOutboundLaunchOwner.create>[1] = { request: { allows: async () => true, current: () => live }, attempt: { allows: async () => true, current: () => live, producerAdmitted: async () => true },
       history: { allowsHistoryRead: async () => true, allowsRecordRead: async () => true, current: () => live },
       contact: f.authority, contactDefinition: f.definition, authority, provider, effects, attemptEffects, capacity, native };
     const make = () => runtime.ClinikoOutboundLaunchOwner.create(config, ports), owner = value(make());
