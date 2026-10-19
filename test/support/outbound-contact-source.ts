@@ -13,13 +13,14 @@ import type { AdminAccount, AdminDirectory } from "../../src/standalone/identity
 import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 import { outboundRequestValue } from "./outbound-recipient-request.ts";
 import { value } from "./outbound-records.ts";
-export async function outboundContactSourceFixture() {
-  const request = { ...outboundRequestValue(), credentialFingerprint: clinikoCredentialFingerprint("synthetic-key-au5") };
+export async function outboundContactSourceFixture(options: { apiKey?: string; scope?: import("../../src/core/model.ts").LocationScope } = {}) {
+  const seed = outboundRequestValue(), apiKey = options.apiKey ?? "synthetic-key-au5";
+  const request = { ...seed, scope: options.scope ?? seed.scope, credentialFingerprint: clinikoCredentialFingerprint(apiKey) };
   const folder = await mkdtemp(join(tmpdir(), "abby-contact-source-")), path = join(folder, "source.json");
   const state = { now: "2026-11-02T00:00:00.000Z", live: true, revision: 1, revisionBlocked: false, claims: 0,
     account: { email: "reviewer@example.invalid", membershipVersion: "1", actor: { actorRef: "contact-admin", role: "clinicAdmin", scope: request.scope } } as AdminAccount | undefined };
   const directory: AdminDirectory = { findByRef: async () => ({ ok: true, value: state.account }), findByEmail: async () => ({ ok: true, value: state.account }) };
-  const config: OutboundContactSourceConfig = { scope: request.scope, apiKey: "synthetic-key-au5", contactEmail: "test@example.invalid", businessId: request.businessId,
+  const config: OutboundContactSourceConfig = { scope: request.scope, apiKey, contactEmail: "test@example.invalid", businessId: request.businessId,
     contactReviewRecallTypeId: "91", contactPolicyVersion: "contact-v1", contactPolicyDigest: "c".repeat(64), countryCallingCode: "61", clock: () => state.now,
     rateBudget: { claim: () => { state.claims++; return null; }, observe429: () => ({ kind: "rateLimited", resetAt: "2026-11-02T00:01:00.000Z" }) },
     contactRevision: { matches: (tenant, credential) => tenant === request.scope.tenantId && credential === request.credentialFingerprint,

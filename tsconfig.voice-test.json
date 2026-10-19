@@ -8,6 +8,8 @@
     "scripts/monitor-cliniko-queue.ts",
     "src/standalone/operator-alert-magic-link.ts",
     "src/standalone/financial-settlement-authorities.ts",
+    "src/standalone/cliniko-outbound-launch-owner.ts",
+    "src/storage/postgres-outbound-capacity.ts",
     "test/support/start-synthetic-queue-monitor.ts",
     "test/support/financial-consumer-process.ts",
     "test/support/financial-expiry-process-observer.ts",
