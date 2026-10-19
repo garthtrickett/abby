@@ -20,7 +20,7 @@ function grants(f: CycleFixture): FinancialConsumerAuthorities {
 function config(f: { checkoutConfig: FinancialConsumerConfig["checkout"]; config: { cliniko: FinancialConsumerConfig["checkout"]["cliniko"]; stripe: FinancialConsumerConfig["checkout"]["stripe"] } }): FinancialConsumerConfig {
   const checkout = { ...f.checkoutConfig, cliniko: f.config.cliniko, stripe: f.config.stripe };
   return { checkout, pollEveryMs: 1000, cycleDeadlineMs: 10_000, webhook: { endpointSecret: secret,
-    accountRef: checkout.stripe.accountRef, livemode: false, apiVersion: checkout.stripe.apiVersion, clock: checkout.stripe.clock } };
+    accountRef: checkout.stripe.accountRef, livemode: false, apiVersion: checkout.stripe.apiVersion, clock: () => Date.parse(checkout.cliniko.clock!()) } };
 }
 function cycle() {
   let notify!: (result: FinancialConsumerCycle) => void;
@@ -33,8 +33,10 @@ function cycle() {
 
 for (const kind of ["unlinked", "case"] as const) for (const scenario of ["open", "paid", "waived", "partialWaiver", "deniedFinancial", "deniedQuota", "paidBeforeClaim", "paidAfterClaim"] as const)
 test(`actual reviewed ${kind} class consumer preserves native settlement ${scenario}`, async t => {
-  const f = kind === "case" ? await caseClassExpiryFixture() : await unlinkedClassExpiryFixture(); t.after(f.close);
-  const native = "caseNative" in f ? f.caseNative : f.classNative;
+  const selected = kind === "case" ? { kind: "case" as const, fixture: await caseClassExpiryFixture() }
+    : { kind: "unlinked" as const, fixture: await unlinkedClassExpiryFixture() };
+  const f = selected.fixture; t.after(f.close);
+  const native = selected.kind === "case" ? selected.fixture.caseNative : selected.fixture.classNative;
   const source = await settlementNative(f.config.cliniko, f.intent, native); t.after(source.close);
   if (scenario === "paid") source.state.status = 20;
   if (scenario === "waived" || scenario === "partialWaiver") source.state.waived = true;
@@ -47,9 +49,10 @@ test(`actual reviewed ${kind} class consumer preserves native settlement ${scena
   // independent fixture grants/mapping/issuer use no native HTTP. A positive
   // waiver stops at its first check (one invoice + one waiver). This six-call
   // bound is for these explicit ports, never a default for other host grants.
-  const authority: FinancialConsumerAuthorities = { ...grants(f), ...("caseAuthority" in f ? {
-    caseClassClinicalExpiry: { authority: f.caseAuthority, classPolicy: f.classPolicy, maximumAuthorityRequests: 0 },
-  } : { classClinicalExpiry: { authority: f.classAuthority, classPolicy: f.classPolicy } }) };
+  const authority: FinancialConsumerAuthorities = { ...grants(f), ...(selected.kind === "case" ? {
+    caseClassClinicalExpiry: { authority: selected.fixture.caseAuthority, classPolicy: selected.fixture.classPolicy, maximumAuthorityRequests: 0 },
+  } : { classClinicalExpiry: { authority: selected.fixture.classAuthority, classPolicy: selected.fixture.classPolicy } }) };
+  if (source.state.waived) await source.confirmWaiver();
   const observed = cycle(), consumer = value(createFinancialSettlementConsumer(config(f), authority, source.review,
     { barrier: f.barrier, delivery: f.delivery, native: source.native, stripe: f.expiryStripePort, onCycle: observed.notify },
     kind === "case" ? { caseClassClinicalExpiry: 6 } : {}));
@@ -92,6 +95,7 @@ test(`actual reviewed consumer resend respects ${scenario} without new Checkout`
   // Four #permit sites each invoke message and resend financial grants. These
   // exact ports add two invoice reads per permit, at most eight in total.
   // Receipt delivery retains its original financial grants and adds no reads.
+  if (source.state.waived) await source.confirmWaiver();
   const observed = cycle(), consumer = value(createFinancialSettlementConsumer(config(f), authority, source.review,
     { barrier: f.barrier, delivery: f.delivery, native: source.native, stripe, onCycle: observed.notify }, { resend: 8 }));
   t.after(() => consumer.close()); value(consumer.start(stop())); const result = await observed.done; await consumer.close();

@@ -19,7 +19,7 @@ export async function settlementNative(config: ClinikoFinancialReviewConfig, int
   try {
     source.state.now = config.clock!();
     source.state.account = { ...source.state.account!, actor: { ...source.state.account!.actor, scope: intent.scope } };
-    const waiverConfig = { ...config, recallTypeId: "49" };
+    const waiverConfig = { ...config, producer: issuerKey, recallTypeId: "49" };
     const selection = value(financialSourceSelection({ ...waiverConfig, producer: issuerKey }, financialWaiverContentPolicy));
     const { scope: _scope, ...selected } = selection;
     await source.replace({ scope: intent.scope, source: selected });
@@ -27,7 +27,8 @@ export async function settlementNative(config: ClinikoFinancialReviewConfig, int
     const issuer = value(runtime.ApprovedFinancialWaiverIssuer.create(waiverConfig, issuerKey, definition));
     const targetRef = intent.booking.kind === "book" ? "cliniko:appointment:91" : "cliniko:attendee:91";
     const decision = { ...signed.decision, financialActionRef: intent.actionRef, intentDigest: financialIntentDigest(intent)!, targetRef,
-      amount: intent.payment.amount, currency: intent.payment.currency };
+      amount: intent.payment.amount, currency: intent.payment.currency,
+      expiresAt: new Date(Date.parse(config.clock!()) + 60_000).toISOString() };
     const state = { status: 10, invoiceReads: 0, waiverReads: 0, waived: false, live: true, changeAfterInvoice: 0, waiverAmount: intent.payment.amount };
     const native: typeof fetch = async (input, init) => {
       if (String(input) === `${base}/invoices/72`) {
@@ -56,6 +57,11 @@ export async function settlementNative(config: ClinikoFinancialReviewConfig, int
     const review = value(runtime.ClinikoFinancialSettlementReview.create(config, { bindings: { resolve, current: () => state.live },
       invoices: { allows: async () => true, current: () => state.live },
       waivers: { config: waiverConfig, issuer, authority: { allows: async () => true, current: () => state.live } }, native }));
-    return { review, native, state, close: source.close };
+    return { review, native, state, close: source.close,
+      async confirmWaiver() {
+        const accepted = await review.allows({ intent, intentRecallRef: "cliniko:recall:30", targetRef }, "expireCheckout", stop(), async () => true, () => state.live);
+        assert.equal(accepted, true, "positive current signed waiver must pass its actual native reader, not merely refuse as expired/unknown");
+        state.invoiceReads = 0; state.waiverReads = 0;
+      } };
   } catch (error) { await source.close(); throw error; }
 }

@@ -44,22 +44,24 @@ test(`compiled native settlement ${kind}/${scenario} uses real PostgreSQL one-us
       const result = await actual.claimOnce(ref); if (result.ok && result.value.claimed) claimed.add(ref); return result;
     } };
   };
-  const f = kind === "resend" ? await financialResendFixture({ message: { checkout: { native: { intent, config: { apiKey }, barrierFactory: barrierFor } } } })
-    : kind === "case" ? await caseClassExpiryFixture({ intent, barrierFor, beforeCancel: async () => { assert.ok(claimed.has(intent.effects.clinicalExpiry)); } })
-    : await unlinkedClassExpiryFixture({ intent, barrierFor, beforeCancel: async () => { assert.ok(claimed.has(intent.effects.clinicalExpiry)); } });
-  if ("close" in f) t.after(f.close);
-  if ("resendAuthority" in f) value(await f.send());
-  const native = "caseNative" in f ? f.caseNative : "classNative" in f ? f.classNative : f.nativePort;
+  const selected = kind === "resend" ? { kind: "resend" as const, fixture: await financialResendFixture({ message: { checkout: { native: { intent, config: { apiKey }, barrierFactory: barrierFor } } } }) }
+    : kind === "case" ? { kind: "case" as const, fixture: await caseClassExpiryFixture({ intent, barrierFor, beforeCancel: async () => { assert.ok(claimed.has(intent.effects.clinicalExpiry)); } }) }
+    : { kind: "unlinked" as const, fixture: await unlinkedClassExpiryFixture({ intent, barrierFor, beforeCancel: async () => { assert.ok(claimed.has(intent.effects.clinicalExpiry)); } }) };
+  const f = selected.fixture;
+  if (selected.kind !== "resend") t.after(selected.fixture.close);
+  if (selected.kind === "resend") value(await selected.fixture.send());
+  const native = selected.kind === "case" ? selected.fixture.caseNative : selected.kind === "unlinked" ? selected.fixture.classNative : selected.fixture.nativePort;
   const source = await settlementNative(f.config.cliniko, f.intent, native, runtime); t.after(source.close);
   if (scenario === "paid") source.state.status = 20;
   if (scenario === "waived") source.state.waived = true;
+  if (source.state.waived) await source.confirmWaiver();
   const authority: FinancialConsumerAuthorities = {
     run: { allows: async () => true, current: () => true },
     pending: { allowsPendingRead: async () => true, allowsRecordRead: async () => true, current: () => true },
     checkout: f.checkoutAuthority, records: f.recordsAuthority, message: f.authority,
-    ...("caseAuthority" in f ? { caseClassClinicalExpiry: { authority: f.caseAuthority, classPolicy: f.classPolicy, maximumAuthorityRequests: 0 } }
-      : "classAuthority" in f ? { classClinicalExpiry: { authority: f.classAuthority, classPolicy: f.classPolicy } }
-      : { resend: { authority: f.resendAuthority, maximumAuthorityRequests: 0 } }),
+    ...(selected.kind === "case" ? { caseClassClinicalExpiry: { authority: selected.fixture.caseAuthority, classPolicy: selected.fixture.classPolicy, maximumAuthorityRequests: 0 } }
+      : selected.kind === "unlinked" ? { classClinicalExpiry: { authority: selected.fixture.classAuthority, classPolicy: selected.fixture.classPolicy } }
+      : { resend: { authority: selected.fixture.resendAuthority, maximumAuthorityRequests: 0 } }),
     work: { authorizeWork: async () => ({ reviewDate: "2026-11-02" }), providerBindingAuthorized: async () => true,
       current: () => true, onCheckoutAcknowledged: async () => { throw new Error("No new payable expected"); } },
     webhook: { allowsReferenceRead: async () => true, acceptsExistingPending: async () => true, current: () => true } };
@@ -69,11 +71,11 @@ test(`compiled native settlement ${kind}/${scenario} uses real PostgreSQL one-us
       return Response.json({ object: "list", url: "/v1/checkout/sessions", has_more: false,
         data: f.sessions.filter(s => Number(s.created) >= from && Number(s.created) <= through) });
     }
-    return "expiryStripePort" in f ? f.expiryStripePort(input, init) : f.stripePort(input, init);
+    return selected.kind === "resend" ? selected.fixture.stripePort(input, init) : selected.fixture.expiryStripePort(input, init);
   };
   const checkout = { ...f.checkoutConfig, cliniko: f.config.cliniko, stripe: f.config.stripe };
   const config: FinancialConsumerConfig = { checkout, pollEveryMs: 1000, cycleDeadlineMs: 10_000,
-    webhook: { endpointSecret: secret, accountRef: checkout.stripe.accountRef, livemode: false, apiVersion: checkout.stripe.apiVersion, clock: checkout.stripe.clock } };
+    webhook: { endpointSecret: secret, accountRef: checkout.stripe.accountRef, livemode: false, apiVersion: checkout.stripe.apiVersion, clock: () => Date.parse(checkout.cliniko.clock!()) } };
   let notify!: (result: FinancialConsumerCycle) => void;
   const cycle = new Promise<FinancialConsumerCycle>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("Compiled settlement cycle unavailable")), 15_000);
@@ -84,13 +86,14 @@ test(`compiled native settlement ${kind}/${scenario} uses real PostgreSQL one-us
     kind === "case" ? { caseClassClinicalExpiry: 6 } : kind === "resend" ? { resend: 8 } : {}));
   t.after(() => consumer.close()); value(consumer.start(stop())); const result = await cycle; await consumer.close();
   assert.ok(source.state.invoiceReads > 0);
-  const effect = "selected" in f ? f.selected.request.effectRef : f.intent.effects.clinicalExpiry;
+  const effect = selected.kind === "resend" ? selected.fixture.selected.request.effectRef : f.intent.effects.clinicalExpiry;
   const rows = (await sql`select effect_ref from financial_effect_barriers where tenant_id = ${intent.scope.tenantId} and effect_ref = ${effect}::uuid`.execute(db)).rows;
   assert.equal(rows.length, scenario === "open" ? 1 : 0);
   assert.equal(kind === "resend" ? result.messageAccepted : result.clinicalExpiryCancelled, scenario === "open" ? 1 : 0);
   assert.equal(f.sessions.length, 1);
-  if ("cancellations" in f) assert.equal(f.cancellations.length, scenario === "open" ? 1 : 0);
-  if ("selected" in f) {
+  if (selected.kind !== "resend") assert.equal(selected.fixture.cancellations.length, scenario === "open" ? 1 : 0);
+  if (selected.kind === "resend") {
+    const f = selected.fixture;
     assert.equal(f.messages.length, scenario === "open" ? 2 : 1);
     const approvals = (await sql`select effect_ref from financial_effect_barriers where tenant_id = ${intent.scope.tenantId}
       and effect_ref = ${f.selected.request.approvalRef}::uuid`.execute(db)).rows;
