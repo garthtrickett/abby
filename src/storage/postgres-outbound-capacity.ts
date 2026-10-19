@@ -9,8 +9,8 @@ import { carryOutboundCapacityOrigins, readOutboundCapacityCarryover } from "./p
 import type Database from "./generated/Database.ts";
 
 /** Trusted storage port: release is not exposed as an HTTP command. The owning
- * protocol separately proves definite no-dispatch or authenticated exact terminal
- * evidence. No lease, timeout, process exit or local absence releases a place. */
+ * protocol separately proves definite no-dispatch or the complete authenticated
+ * outcome required for its independent call/contact allocation. No lease, timeout, process exit or local absence releases a place. */
 export class PostgresOutboundCapacity implements OutboundCapacity {
   readonly #db: Kysely<Database>;
   readonly #scope: LocationScope;

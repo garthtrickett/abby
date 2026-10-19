@@ -1,3 +1,4 @@
+import { validOutboundEffectRef } from "../core/outbound-effect-barrier.ts";
 import { isDeepStrictEqual } from "node:util";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
@@ -11,6 +12,10 @@ import type { OutboundContactSourceSelection } from "../cliniko/internal/outboun
 import type { OutboundContactDefinition } from "../cliniko/outbound-contact-source.ts";
 
 export type OutboundContactAccount = Readonly<{ ref: string; credentialFingerprints: readonly string[];
+  /** Optional only for legacy read-only accounts. Guarded launch requires this
+   * independently random clinic-wide identity, preserved across campaign,
+   * runtime, source-role, credential and namespace changes. */
+  contactGuardRef?: string;
   coverage: "allCurrentAndRetiredVoiceContactSources"; sources: readonly OutboundContactSourceSelection[] }>;
 export type OutboundContactAccountApproval = ClinicApproval & Readonly<{ account: OutboundContactAccount }>;
 type Source = Readonly<{ selection: OutboundContactSourceSelection; definition: OutboundContactDefinition }>;
@@ -28,7 +33,8 @@ function sourceValid(s: OutboundContactSourceSelection, scope: LocationScope): b
 function decode(v: unknown, scope: LocationScope): OutboundContactAccountApproval | undefined {
   const common = decodeClinicApproval(v, scope, [...clinicApprovalKeys, "account"]); if (!common) return undefined;
   const account = (v as OutboundContactAccountApproval).account;
-  if (!exact(account, ["ref", "credentialFingerprints", "coverage", "sources"]) || !approvalRef(account.ref) ||
+  if ((!exact(account, ["ref", "credentialFingerprints", "coverage", "sources"]) && !exact(account, ["ref", "credentialFingerprints", "coverage", "sources", "contactGuardRef"])) ||
+      Object.hasOwn(account, "contactGuardRef") && !validOutboundEffectRef(account.contactGuardRef) || !approvalRef(account.ref) ||
       account.coverage !== "allCurrentAndRetiredVoiceContactSources" || !Array.isArray(account.credentialFingerprints) ||
       account.credentialFingerprints.length < 1 || account.credentialFingerprints.length > 8 || !account.credentialFingerprints.every(fingerprint) ||
       new Set(account.credentialFingerprints).size !== account.credentialFingerprints.length || !Array.isArray(account.sources) || account.sources.length < 1 || account.sources.length > 8 ||

@@ -6,7 +6,9 @@ const { PostgresOutboundCapacity } = await import(new URL('storage/postgres-outb
 const { PostgresOutboundEffectBarrier } = await import(new URL('storage/postgres-outbound-effect-barrier.js', emitted));
 const { PostgresClinikoRequestBudget } = await import(new URL('storage/postgres-cliniko-request-budget.js', emitted));
 const { connectPostgres } = await import(new URL('storage/connect.js', emitted));
-const { outboundCapacityOwnerBinding } = await import(new URL('core/outbound-capacity.js', emitted));
+const { OwnerFileOutboundContactAccount } = await import(new URL('standalone/owner-file-outbound-contact-account.js', emitted));
+const { contactSourceSelection } = await import(new URL('cliniko/outbound-contact-source.js', emitted));
+const { outboundCapacityOwnerBinding, outboundContactGuardOwnerBinding } = await import(new URL('core/outbound-capacity.js', emitted));
 const { outboundLaunchRecordOwnerBinding } = await import(new URL('cliniko/outbound-launch-records.js', emitted));
 const { clinikoCredentialFingerprint } = await import(new URL('cliniko/read-budget.js', emitted));
 let next = 0, started = false;
@@ -28,6 +30,14 @@ process.on('message', async message => {
       contactRevision: { matches: (tenant, fingerprint) => tenant === requests.scope.tenantId && fingerprint === clinikoCredentialFingerprint(requests.apiKey),
         read: fingerprint => rpc('revision', fingerprint) } },
       campaignRef: setup.campaignRef, campaign: campaign.value, maximumNativeRequests: 150, dispatchWindowMs: 10000, deadlineMs: 15000 };
+    if (setup.guarded) {
+      const account = await OwnerFileOutboundContactAccount.capture({ path: setup.guarded.accountPath, scope: requests.scope,
+        credentialFingerprint: clinikoCredentialFingerprint(requests.apiKey), directory, clock,
+        definitions: [{ selection: contactSourceSelection(config.contact), definition: { currentFor: selection => rpc('definition', selection) } }] }, new AbortController().signal);
+      if (!account.ok) throw new Error('Synthetic contact account unavailable');
+      config.contactSafety = { guardRef: setup.guarded.guardRef, account: account.value, maximumNativeRequests: setup.guarded.maximumNativeRequests };
+      config.maximumNativeRequests = 180;
+    }
     if (setup.individualTarget) config.individualTarget = setup.individualTarget;
     const grant = family => ({ allows: query => rpc('grant', { family, query }), current: () => process.connected });
     const native = async (input, init) => {
@@ -40,6 +50,8 @@ process.on('message', async message => {
       history: { allowsHistoryRead: query => rpc('grant', { family: 'history', query }), allowsRecordRead: query => rpc('grant', { family: 'historyRecord', query }), current: () => process.connected },
       contact: grant('contact'), contactDefinition: { currentFor: selection => rpc('definition', selection) }, authority: grant('authority'),
       ...(setup.individualTarget ? { target: grant('target') } : {}),
+      ...(setup.guarded ? { numberStops: grant('numberStops'), contactCapacity: new PostgresOutboundCapacity(db, requests.scope,
+        outboundContactGuardOwnerBinding(setup.guarded.guardRef)) } : {}),
       effects: new PostgresOutboundEffectBarrier(db, requests.scope, outboundLaunchOwnerBinding(config)),
       attemptEffects: new PostgresOutboundEffectBarrier(db, requests.scope, outboundLaunchRecordOwnerBinding(attempts)),
       capacity: new PostgresOutboundCapacity(db, requests.scope, outboundCapacityOwnerBinding(config.campaignRef)), native,

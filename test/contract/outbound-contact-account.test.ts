@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { outboundContactAccountFixture } from "../support/outbound-contact-account.ts";
 import { value } from "../support/outbound-records.ts";
@@ -70,4 +71,14 @@ test("a held source definition obeys the account deadline", { timeout: 3000 }, a
   const f = await outboundContactAccountFixture({ deadlineMs: 100 }); t.after(f.close);
   const definitions = f.config.definitions.map(d => ({ ...d, definition: { currentFor: () => new Promise<never>(() => {}) } }));
   assert.equal((await OwnerFileOutboundContactAccount.capture({ ...f.config, definitions }, new AbortController().signal)).ok, false);
+});
+
+test("guarded account requires a canonical random guard while legacy read-only account stays unchanged", async t => {
+  const f = await outboundContactAccountFixture(); t.after(f.close);
+  const original = value(await f.read()); assert.ok(original); assert.equal(Object.hasOwn(original.account, "contactGuardRef"), false);
+  const guardRef = randomUUID(); await f.replace({ account: { ...f.approval.account, contactGuardRef: guardRef } });
+  const guarded = value(await f.make()), current = value(await guarded.current(new AbortController().signal)); assert.equal(current?.account.contactGuardRef, guardRef);
+  for (const bad of ["", "patient:22", "00000000-0000-0000-0000-000000000000", null]) {
+    await f.replace({ account: { ...f.approval.account, contactGuardRef: bad } }); assert.equal((await f.make()).ok, false);
+  }
 });

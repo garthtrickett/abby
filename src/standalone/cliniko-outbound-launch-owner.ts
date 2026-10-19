@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import type { OutboundEffectBarrier } from "../core/outbound-effect-barrier.ts";
-import { outboundCapacityOwnerBinding } from "../core/outbound-capacity.ts";
+import { outboundCapacityOwnerBinding, outboundContactGuardOwnerBinding } from "../core/outbound-capacity.ts";
 import type { OutboundCapacity } from "../core/outbound-capacity.ts";
 import { outboundContactTime } from "../core/outbound-contact-time.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
@@ -25,11 +25,17 @@ import { sameScope } from "./appointment-change-authority.ts";
 import { ClinikoOutboundAppointmentTarget } from "../cliniko/outbound-appointment-target.ts";
 import type { OutboundTargetAuthority, OutboundTargetObservation, OutboundTargetQuery } from "../cliniko/outbound-appointment-target.ts";
 
+import type { OutboundContactSourceSelection } from "../cliniko/internal/outbound-contact-source-context.ts";
+import { contactSourceSelection } from "../cliniko/outbound-contact-source.ts";
+import { ClinikoOutboundNumberStops } from "./cliniko-outbound-number-stops.ts";
+import type { OutboundNumberStopAuthority, OutboundNumberStopQuery } from "./cliniko-outbound-number-stops.ts";
+import { OwnerFileOutboundContactAccount } from "./owner-file-outbound-contact-account.ts";
 import type { OutboundProviderBinding, OutboundLaunchProvider } from "../voice/outbound-runtime.ts";
 export type { OutboundProviderBinding, OutboundLaunchProvider } from "../voice/outbound-runtime.ts";
-export type OutboundLaunchQuery = Readonly<{ operation: "approveAudience" | "approveProvider" | "producerAdmitted" | "approveLaunch" | "approveAppointmentTarget";
+export type OutboundLaunchQuery = Readonly<{ operation: "approveAudience" | "approveProvider" | "producerAdmitted" | "approveLaunch" | "approveAppointmentTarget" | "approveContactSafety";
   ownerBinding: string; record: OutboundRecipientRecord; campaign: OutboundCampaignApproval; provider: OutboundProviderBinding;
-  target?: Readonly<Pick<OutboundTargetObservation, "target" | "digest"> & { appointmentPolicyDigest: string }> }>;
+  target?: Readonly<Pick<OutboundTargetObservation, "target" | "digest"> & { appointmentPolicyDigest: string }>;
+  contactSafety?: Readonly<{ guardRef: string; ownerBinding: string; accountBinding: string }> }>;
 export type OutboundLaunchAuthority = Readonly<{
   allows(query: OutboundLaunchQuery, signal: AbortSignal): Promise<boolean>;
   current(query: OutboundLaunchQuery, signal: AbortSignal): boolean;
@@ -40,6 +46,9 @@ export type OutboundLaunchOwnerConfig = Readonly<{
   /** Explicit staff-owned sick-day target observation. This is neither patient
    * verification nor permission for any subsequent clinical action. */
   individualTarget?: Readonly<{ appointmentPolicyDigest: string }>;
+  /** Opt-in composed safety: bounded native number-stop observation plus one
+   * unresolved contact hold across the complete clinic, not per campaign. */
+  contactSafety?: Readonly<{ guardRef: string; account: OwnerFileOutboundContactAccount; maximumNativeRequests: number }>;
   /** Reviewed TOTAL native authority/reader/attempt cost for this complete exact
    * profile. No inherited zero/default, reservation or extra account capacity. */
   maximumNativeRequests: number; deadlineMs?: number; dispatchWindowMs?: number;
@@ -47,7 +56,7 @@ export type OutboundLaunchOwnerConfig = Readonly<{
 type Ports = Readonly<{ request: OutboundRecordReadAuthority; attempt: OutboundLaunchRecordAuthority;
   history: OutboundLaunchHistoryAuthority; contact: OutboundContactAuthority; contactDefinition: OutboundContactDefinition;
   authority: OutboundLaunchAuthority; provider: OutboundLaunchProvider;
-  target?: OutboundTargetAuthority;
+  target?: OutboundTargetAuthority; numberStops?: OutboundNumberStopAuthority; contactCapacity?: OutboundCapacity;
   effects: OutboundEffectBarrier; attemptEffects: OutboundEffectBarrier; capacity: OutboundCapacity; native?: typeof fetch }>;
 type Failure = Readonly<{ kind: "invalidConfig" | "unavailable" | "forbidden" | "alreadyAttempted" | "capacityUnavailable" }>;
 export type OutboundLaunchOutcome = Readonly<{ kind: "accepted" | "unknown"; capacity: "held" }>;
@@ -75,9 +84,17 @@ export class ClinikoOutboundLaunchOwner {
   readonly #history: ClinikoOutboundLaunchHistory;
   readonly #contact: ClinikoOutboundContactSource;
   readonly #owner: string;
+  readonly #contactAccountCurrent: OwnerFileOutboundContactAccount["current"] | undefined;
+  readonly #contactAccountMethods: readonly unknown[];
+  readonly #contactAccountBinding: string | undefined;
+  readonly #contactSource: OutboundContactSourceSelection;
   readonly #campaign: Readonly<Pick<OwnerFileOutboundCampaign, "current" | "currentFor">>;
   private constructor(config: OutboundLaunchOwnerConfig, ports: Ports, requests: Pick<ClinikoOutboundRecipientRecords, "readRequest">,
     attempts: ClinikoOutboundLaunchRecords, history: ClinikoOutboundLaunchHistory, contact: ClinikoOutboundContactSource, owner: string) {
+    this.#contactAccountCurrent = config.contactSafety?.account.current.bind(config.contactSafety.account);
+    this.#contactAccountMethods = config.contactSafety ? Object.freeze([config.contactSafety.account.current, config.contactSafety.account.matches, config.contactSafety.account.bindingFingerprint]) : [];
+    this.#contactAccountBinding = config.contactSafety?.account.bindingFingerprint();
+    this.#contactSource = contactSourceSelection(config.contact);
     this.#config = config; this.#ports = ports; this.#requests = requests; this.#attempts = attempts;
     this.#history = history; this.#contact = contact; this.#owner = owner;
     this.#campaign = Object.freeze({ current: config.campaign.current.bind(config.campaign), currentFor: config.campaign.currentFor.bind(config.campaign) });
@@ -93,6 +110,14 @@ export class ClinikoOutboundLaunchOwner {
           [incoming.authority.allows, incoming.authority.current, incoming.provider.binding, incoming.provider.launchOnce].some(f => typeof f !== "function")) return err({ kind: "invalidConfig" });
       for (const other of [input.attempts, input.contact]) if (!sameScope(input.requests.scope, other.scope) || input.requests.apiKey !== other.apiKey ||
         input.requests.businessId !== other.businessId || input.requests.rateBudget !== other.rateBudget) return err({ kind: "invalidConfig" });
+      const safety = input.contactSafety;
+      if (safety !== undefined) {
+        const guard = outboundContactGuardOwnerBinding(safety.guardRef);
+        if (!guard || !(safety.account instanceof OwnerFileOutboundContactAccount) || !incoming.numberStops || !incoming.contactCapacity ||
+            incoming.contactCapacity.matches(input.requests.scope, guard) !== true ||
+            !ClinikoOutboundNumberStops.create({ requests: input.requests, source: contactSourceSelection(input.contact), account: safety.account,
+              maximumNativeRequests: safety.maximumNativeRequests }, incoming.numberStops, incoming.native).ok) return err({ kind: "invalidConfig" });
+      } else if (incoming.numberStops !== undefined || incoming.contactCapacity !== undefined) return err({ kind: "invalidConfig" });
       const requests = ClinikoOutboundRecipientRecords.createReadOnly(input.requests, incoming.request, incoming.native);
       const attempts = ClinikoOutboundLaunchRecords.create(input.attempts, incoming.attempt, incoming.attemptEffects, incoming.native);
       const history = ClinikoOutboundLaunchHistory.create(input.attempts, incoming.history, incoming.native);
@@ -101,13 +126,15 @@ export class ClinikoOutboundLaunchOwner {
       if (input.individualTarget !== undefined && (!incoming.target || !ClinikoOutboundAppointmentTarget.create({ requests: input.requests,
         appointmentPolicyDigest: input.individualTarget.appointmentPolicyDigest }, incoming.target, incoming.native).ok)) return err({ kind: "invalidConfig" });
       const ports = Object.freeze({ ...incoming,
+        ...(incoming.numberStops ? { numberStops: Object.freeze({ allows: incoming.numberStops.allows.bind(incoming.numberStops), current: incoming.numberStops.current.bind(incoming.numberStops) }) } : {}),
+        ...(incoming.contactCapacity ? { contactCapacity: Object.freeze({ matches: incoming.contactCapacity.matches.bind(incoming.contactCapacity), acquireOnce: incoming.contactCapacity.acquireOnce.bind(incoming.contactCapacity), releaseOnce: incoming.contactCapacity.releaseOnce.bind(incoming.contactCapacity) }) } : {}),
         ...(incoming.target ? { target: Object.freeze({ allows: incoming.target.allows.bind(incoming.target), current: incoming.target.current.bind(incoming.target) }) } : {}),
         effects: Object.freeze({ matches: incoming.effects.matches.bind(incoming.effects), claimOnce: incoming.effects.claimOnce.bind(incoming.effects) }),
         capacity: Object.freeze({ matches: incoming.capacity.matches.bind(incoming.capacity), acquireOnce: incoming.capacity.acquireOnce.bind(incoming.capacity), releaseOnce: incoming.capacity.releaseOnce.bind(incoming.capacity) }),
         authority: Object.freeze({ allows: incoming.authority.allows.bind(incoming.authority), current: incoming.authority.current.bind(incoming.authority) }),
         provider: Object.freeze({ binding: incoming.provider.binding.bind(incoming.provider), launchOnce: incoming.provider.launchOnce.bind(incoming.provider) }) });
       const physical = input.requests.rateBudget;
-      const config = Object.freeze({ ...input, ...(input.individualTarget ? { individualTarget: Object.freeze({ ...input.individualTarget }) } : {}), requests: Object.freeze({ ...input.requests, scope: Object.freeze({ ...input.requests.scope }),
+      const config = Object.freeze({ ...input, ...(safety ? { contactSafety: Object.freeze({ ...safety }) } : {}), ...(input.individualTarget ? { individualTarget: Object.freeze({ ...input.individualTarget }) } : {}), requests: Object.freeze({ ...input.requests, scope: Object.freeze({ ...input.requests.scope }),
         ...(input.requests.clock ? { clock: input.requests.clock.bind(input.requests) } : {}),
         rateBudget: Object.freeze({ claim: physical.claim.bind(physical), observe429: physical.observe429.bind(physical),
           ...(physical.checkHeadroom ? { checkHeadroom: physical.checkHeadroom.bind(physical) } : {}) }) }) });
@@ -122,9 +149,28 @@ export class ClinikoOutboundLaunchOwner {
     const controller = new AbortController(), ms = this.#config.deadlineMs ?? 60_000, timer = setTimeout(() => controller.abort(), ms);
     const signal = AbortSignal.any([external, controller.signal]), began = performance.now();
     const clock = this.#config.requests.clock ?? (() => new Date().toISOString());
-    const allocation = randomUUID(); let acquired = false, providerInvoked = false, dispatched = false, accepted = false, edgeInvoked = false;
+    const allocation = randomUUID(), contactAllocation = randomUUID(); let contactAcquired = false, acquired = false, providerInvoked = false, dispatched = false, accepted = false, edgeInvoked = false;
     let q: OutboundLaunchQuery | undefined, own: { recallRef: string; attempt: OutboundLaunchAttempt } | undefined;
     let targetGrant: OutboundTargetQuery | undefined;
+    const numberGrants = new Map<string, OutboundNumberStopQuery>();
+    const safety = this.#config.contactSafety;
+    const accountMethodsCurrent = () => {
+      try { return !safety || [safety.account.current, safety.account.matches, safety.account.bindingFingerprint].every((method, index) => method === this.#contactAccountMethods[index]); }
+      catch { return false; }
+    };
+    if (!accountMethodsCurrent()) { clearTimeout(timer); controller.abort(); return err({ kind: "forbidden" }); }
+    const numberReader = safety && this.#ports.numberStops ? ClinikoOutboundNumberStops.create({ requests: this.#config.requests,
+      source: this.#contactSource, account: safety.account, maximumNativeRequests: safety.maximumNativeRequests }, {
+      allows: async (query, sourceSignal) => {
+        const allowed = await this.#ports.numberStops!.allows(query, sourceSignal);
+        if (allowed === true) {
+          const key = query.operation + ":" + ("recallRef" in query ? query.recallRef : "entry" in query ? query.entry.review.actionRef : "stop" in query ? query.stop.review.actionRef : "account");
+          const old = numberGrants.get(key);
+          if (!(query.operation === "readContactNumberReview" && !query.review && old?.operation === "readContactNumberReview" && old.review)) numberGrants.set(key, query);
+        }
+        return allowed;
+      }, current: this.#ports.numberStops.current,
+    }, this.#ports.native) : undefined;
     let lastNow = -Infinity;
     let consentWindow: Readonly<{ observedAt: string; effectiveFrom: string; effectiveUntil: string }> | undefined;
     const now = () => {
@@ -133,15 +179,19 @@ export class ClinikoOutboundLaunchOwner {
       lastNow = value; return text;
     };
     const active = () => !signal.aborted && performance.now() - began <= ms;
-    const targetOperations = () => q?.target ? [...launchOperations, "approveAppointmentTarget" as const] : launchOperations;
+    const targetOperations = () => [...launchOperations, ...(q?.target ? ["approveAppointmentTarget" as const] : []), ...(safety ? ["approveContactSafety" as const] : [])];
     const wait = async <T>(promise: Promise<T>): Promise<T> => {
       const value = await awaitUntilAbort(promise, signal); if (value === undefined || !active()) throw new Refusal("unavailable"); return value;
     };
     const current = () => {
       const at = now();
-      if (!active() || !q || parentCurrent && parentCurrent(q.campaign) !== true || this.#ports.effects.matches(this.#config.requests.scope, this.#owner) !== true ||
+      if (!active() || !q || !accountMethodsCurrent() || parentCurrent && parentCurrent(q.campaign) !== true || this.#ports.effects.matches(this.#config.requests.scope, this.#owner) !== true ||
           this.#ports.capacity.matches(this.#config.requests.scope, outboundCapacityOwnerBinding(this.#config.campaignRef)!) !== true || targetOperations().some(operation => this.#ports.authority.current(Object.freeze({ ...q!, operation }), signal) !== true) || !isDeepStrictEqual(this.#ports.provider.binding(), q.provider) ||
           targetGrant && this.#ports.target?.current(targetGrant, signal) !== true ||
+          safety && (this.#ports.contactCapacity?.matches(this.#config.requests.scope, outboundContactGuardOwnerBinding(safety.guardRef)!) !== true ||
+            [...numberGrants.values()].some(grant => this.#ports.numberStops?.current(grant, signal) !== true ||
+              grant.operation === "approveContactNumberHead" && grant.entry.review.consent === "granted" && grant.entry.review.doNotCall === "clear" &&
+              (at < grant.entry.review.effectiveFrom || at >= grant.entry.review.effectiveUntil))) ||
           q.target && Date.parse(q.target.target.startsAt) <= Date.parse(at) ||
           outboundContactTime(q.record.request.schedule, at).kind !== "due" ||
           consentWindow && (consentWindow.observedAt > at || consentWindow.effectiveFrom > at || at >= consentWindow.effectiveUntil)) throw new Refusal("forbidden");
@@ -175,8 +225,13 @@ export class ClinikoOutboundLaunchOwner {
       const bound = await wait(this.#campaign.currentFor(outboundRecordSelection(this.#config.requests), record.value.request, signal));
       const provider = Object.freeze({ ...this.#ports.provider.binding() });
       if (!bound.ok || !bound.value || !isDeepStrictEqual(bound.value, policy.value) || !providerBinding(provider) || provider.ref !== bound.value.providerRef) throw new Refusal("forbidden");
+      if (safety) {
+        const account = this.#contactAccountCurrent && await wait(this.#contactAccountCurrent(signal));
+        if (!account || !account.ok || account.value?.account.contactGuardRef !== safety.guardRef) throw new Refusal("forbidden");
+      }
       const next = Object.freeze({ operation: "approveAudience" as const, ownerBinding: this.#owner, record: record.value, campaign: bound.value, provider,
-        ...(target ? { target } : {}) });
+        ...(target ? { target } : {}), ...(safety ? { contactSafety: Object.freeze({ guardRef: safety.guardRef,
+          ownerBinding: outboundContactGuardOwnerBinding(safety.guardRef)!, accountBinding: this.#contactAccountBinding! }) } : {}) });
       if (q && (!isDeepStrictEqual(q.record, next.record) || !isDeepStrictEqual(q.campaign, next.campaign) || !isDeepStrictEqual(q.provider, next.provider) || !isDeepStrictEqual(q.target, next.target))) throw new Refusal("forbidden");
       q = next; current();
       for (const operation of targetOperations()) {
@@ -192,6 +247,13 @@ export class ClinikoOutboundLaunchOwner {
       consentWindow = Object.freeze({ observedAt: consent.value.observedAt, effectiveFrom: consent.value.head.review.effectiveFrom,
         effectiveUntil: consent.value.head.review.effectiveUntil });
       current();
+      if (safety) {
+        if (!numberReader?.ok) throw new Refusal("forbidden");
+        const observed = await wait(numberReader.value.readForRequest(q.record.request, signal));
+        if (!observed.ok || observed.value.disposition !== "noRecordedStopObserved" || observed.value.requestDigest !== outboundRecipientRequestDigest(q.record.request) ||
+            observed.value.accountBinding !== q.contactSafety?.accountBinding || observed.value.observedAt > now()) throw new Refusal("forbidden");
+        current();
+      }
       const history = await wait(this.#history.readForRequest({ recallRef: q.record.recallRef, request: q.record.request }, signal));
       if (!history.ok || history.value.records.some(r => !own || r.recallRef !== own.recallRef || !isDeepStrictEqual(r.attempt, own.attempt) || r.recalled || r.archivedAt !== null) ||
           own && history.value.records.length !== 1) throw new Refusal("alreadyAttempted");
@@ -206,6 +268,10 @@ export class ClinikoOutboundLaunchOwner {
     try {
       if (await wait(checkClinikoHeadroom(this.#config.requests.rateBudget, this.#config.maximumNativeRequests)) !== null) throw new Refusal("unavailable");
       await prepare();
+      if (safety) {
+        current(); const contact = await wait(this.#ports.contactCapacity!.acquireOnce(contactAllocation, 1));
+        if (!contact.ok || contact.value.kind !== "acquired") throw new Refusal("capacityUnavailable"); contactAcquired = true;
+      }
       const a = await wait(this.#ports.capacity.acquireOnce(allocation, q!.campaign.maximumConcurrent));
       if (!a.ok || a.value.kind !== "acquired") throw new Refusal("capacityUnavailable"); acquired = true;
       await prepare();
@@ -215,7 +281,8 @@ export class ClinikoOutboundLaunchOwner {
       }
       const r = q!.record.request, attemptedAt = now();
       const attempt: OutboundLaunchAttempt = Object.freeze({ actionRef: randomUUID(), capacityAllocationRef: allocation,
-        dncReferences: Object.freeze({ actionRef: randomUUID(), approvalRef: randomUUID() }), requestRecallRef: q!.record.recallRef, requestActionRef: r.actionRef,
+        dncReferences: Object.freeze({ actionRef: randomUUID(), approvalRef: randomUUID() }),
+        ...(safety ? { contactReferences: Object.freeze({ guardRef: safety.guardRef, allocationRef: contactAllocation, outcomeActionRef: randomUUID() }) } : {}), requestRecallRef: q!.record.recallRef, requestActionRef: r.actionRef,
         requestDigest: outboundRecipientRequestDigest(r)!, campaignRef: r.campaignRef, approvalRef: r.approvalRef, effectRef: r.effectRef,
         scope: r.scope, businessId: r.businessId, credentialFingerprint: r.credentialFingerprint, patientId: r.patientId,
         provider: Object.freeze({ ref: q!.provider.ref, bindingDigest: q!.provider.bindingDigest }), attemptedAt,
@@ -241,6 +308,10 @@ export class ClinikoOutboundLaunchOwner {
       // was queued. Once invoked, every result retains the place for a separate
       // trusted terminal/recovery owner; neither timeout nor definitive-looking
       // unqualified payload frees capacity automatically.
+      // This independent hold is deliberately NOT released by call-terminal
+      // recovery. Missing/unknown contact outcome, native ACK loss or process
+      // loss stays blocked; no TTL, heartbeat or local absence clears it.
+      if (contactAcquired && !providerInvoked) { try { await awaitUntilAbort(this.#ports.contactCapacity!.releaseOnce(contactAllocation), AbortSignal.timeout(1000)); } catch { /* Hold remains conservative. */ } }
       if (acquired && !providerInvoked) { try { await awaitUntilAbort(this.#ports.capacity.releaseOnce(allocation), AbortSignal.timeout(1000)); } catch { /* Occupancy remains conservative. */ } }
     }
   }

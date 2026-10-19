@@ -6,10 +6,12 @@ import { fork } from "node:child_process";
 import type { outboundLaunchOwnerFixture } from "./outbound-launch-owner.ts";
 import type { OutboundTargetAuthority } from "../../src/cliniko/outbound-appointment-target.ts";
 import type { OutboundLaunchAuthority } from "../../src/standalone/cliniko-outbound-launch-owner.ts";
+import type { OutboundNumberStopAuthority } from "../../src/standalone/cliniko-outbound-number-stops.ts";
 type Fixture = Awaited<ReturnType<typeof outboundLaunchOwnerFixture>>;
 export async function outboundLaunchPeer(f: Fixture, cwd: string, onSubmitted: () => void, hold: "nativeAck" | "provider",
   targeted?: Readonly<{ individualTarget: Readonly<{ appointmentPolicyDigest: string }>; target: OutboundTargetAuthority;
-    authority: OutboundLaunchAuthority; native: typeof fetch }>) {
+    authority: OutboundLaunchAuthority; native: typeof fetch }>,
+  guarded?: Readonly<{ guardRef: string; accountPath: string; maximumNativeRequests: number; numberStops: OutboundNumberStopAuthority; native: typeof fetch }>) {
   const child = fork(new URL("./outbound-launch-worker.mjs", import.meta.url), [], { cwd, stdio: ["ignore", "pipe", "pipe", "ipc"],
     env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=256" } });
   const output: string[] = []; child.stdout?.on("data", value => output.push(String(value))); child.stderr?.on("data", value => output.push(String(value)));
@@ -26,7 +28,7 @@ export async function outboundLaunchPeer(f: Fixture, cwd: string, onSubmitted: (
       else if (m.kind === "revision") data = await f.config.contact.contactRevision.read(m.data);
       else if (m.kind === "fetch") {
         const request = m.data;
-        const response = await (targeted?.native ?? f.native)(request.input, { method: request.method, headers: request.headers, redirect: "error", signal: AbortSignal.timeout(15000),
+        const response = await (guarded?.native ?? targeted?.native ?? f.native)(request.input, { method: request.method, headers: request.headers, redirect: "error", signal: AbortSignal.timeout(15000),
           ...(request.body === undefined ? {} : { body: request.body }) });
         if (hold === "nativeAck" && request.method === "POST") { onSubmitted(); return; }
         data = { body: await response.text(), status: response.status };
@@ -47,6 +49,7 @@ export async function outboundLaunchPeer(f: Fixture, cwd: string, onSubmitted: (
         else if (family === "historyRecord") data = f.ports.history.current(query, signal) && await f.ports.history.allowsRecordRead(query, signal);
         else if (family === "contact") data = f.ports.contact.current(query, signal) && await f.ports.contact.allows(query, signal);
         else if (family === "authority") { const authority = targeted?.authority ?? f.ports.authority; data = authority.current(query, signal) && await authority.allows(query, signal); }
+        else if (family === "numberStops" && guarded) data = guarded.numberStops.current(query, signal) && await guarded.numberStops.allows(query, signal);
         else if (family === "target" && targeted) data = targeted.target.current(query, signal) && await targeted.target.allows(query, signal);
         else throw new Error("Synthetic grant unavailable");
       } else throw new Error("Synthetic operation unavailable");
@@ -58,6 +61,7 @@ export async function outboundLaunchPeer(f: Fixture, cwd: string, onSubmitted: (
   const { clock: _contactClock, rateBudget: _contactBudget, contactRevision: _revision, ...contact } = f.config.contact;
   child.send({ kind: "start", data: { requests, attempts, contact, campaignRef: f.request.campaignRef,
     ...(targeted ? { individualTarget: targeted.individualTarget } : {}),
+    ...(guarded ? { guarded: { guardRef: guarded.guardRef, accountPath: guarded.accountPath, maximumNativeRequests: guarded.maximumNativeRequests } } : {}),
     campaignPath: join(dirname(f.definitionConfig.path), "campaign.json"), now: f.state.now, provider: f.ports.provider.binding(), binding: f.binding } });
   return { child, output, errors,
     async kill() { if (child.exitCode === null && child.signalCode === null) { assert.ok(child.kill("SIGKILL")); assert.equal(await terminal, "SIGKILL"); } } };
