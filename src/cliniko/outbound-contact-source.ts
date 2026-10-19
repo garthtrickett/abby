@@ -20,10 +20,12 @@ export type { OutboundContactSourceConfig, OutboundContactSourceSelection } from
 export { contactSourceSelection } from "./internal/outbound-contact-source-context.ts";
 
 type QueryBase = OutboundContactSourceSelection & Readonly<{ ownerBinding: string; patientId: string }>;
+export type OutboundContactHistoryEntry = Readonly<{ recallRef: string; review: OutboundContactReview; digest: string }>;
 export type OutboundContactQuery = QueryBase & (
   Readonly<{ operation: "readPatientContact" }> |
   Readonly<{ operation: "readContactHistory"; includeArchived: true; includeClosed: true }> |
   Readonly<{ operation: "readContactReview"; includeArchived: true; recallRef: string; actionRef: string; review?: OutboundContactReview; reviewDigest?: string }> |
+  Readonly<{ operation: "readContactLineage"; history: readonly OutboundContactHistoryEntry[] }> |
   Readonly<{ operation: "approveContactHead"; recallRef: string; review: OutboundContactReview; reviewDigest: string }> |
   Readonly<{ operation: "approveContactReconsent"; recallRef: string; review: OutboundContactReview; reviewDigest: string; approvalRef: string }>
 );
@@ -38,6 +40,7 @@ export type OutboundContactDefinition = Readonly<{
 }>;
 export type OutboundContactEvidence = Readonly<{ kind: "contactReviewEvidence"; disposition: "eligibleEvidence" | "blocked";
   observedAt: string; requestDigest: string; head?: Readonly<{ recallRef: string; review: OutboundContactReview; digest: string }> }>;
+export type OutboundContactHistoryEvidence = OutboundContactEvidence & Readonly<{ history: readonly OutboundContactHistoryEntry[] }>;
 type Row = Record<string, unknown>;
 const object = (v: unknown): Row | undefined => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Row : undefined;
 class Failure extends Error {
@@ -78,6 +81,16 @@ export class ClinikoOutboundContactSource {
     } catch { return err({ kind: "invalidConfig" }); }
   }
   async readCurrentForRequest(input: OutboundRecipientRequest, external: AbortSignal): Promise<Result<OutboundContactEvidence, NativeOutboundFailure>> {
+    const found = await this.#read(input, external, false); if (!found.ok) return found;
+    const { history: _history, ...evidence } = found.value; return ok(Object.freeze(evidence));
+  }
+  /** Explicit private lineage export for recovery. Full native/record/head grants
+   * still apply, plus an independent decoded readContactLineage grant. No new
+   * verification, write, launch or positive contact authority is supplied. */
+  async readHistoryForRequest(input: OutboundRecipientRequest, external: AbortSignal): Promise<Result<OutboundContactHistoryEvidence, NativeOutboundFailure>> {
+    return this.#read(input, external, true);
+  }
+  async #read(input: OutboundRecipientRequest, external: AbortSignal, includeHistory: boolean): Promise<Result<OutboundContactHistoryEvidence, NativeOutboundFailure>> {
     if (!(external instanceof AbortSignal) || external.aborted) return err({ kind: "unavailable" });
     const encoded = encodeOutboundRecipientRequest(input); if (!encoded.ok) return err({ kind: "invalidQuery" });
     const decoded = decodeOutboundRecipientRequest(encoded.value); if (!decoded.ok) return err({ kind: "invalidQuery" });
@@ -195,13 +208,17 @@ export class ClinikoOutboundContactSource {
         if (lineage.value.disposition === "eligibleEvidence" && !row.recalled && row.archivedAt === null && firstPhone.matches &&
           head.recipient.number === request.recipient.number && head.purposes.includes(request.purpose)) disposition = "eligibleEvidence";
       }
+      const historyEvidence = Object.freeze(reviews.map(review => Object.freeze({ recallRef: `cliniko:recall:${nativeRows.get(review.actionRef)!.id}`,
+        review, digest: outboundContactReviewDigest(review)! })));
+      if (includeHistory) await permit(Object.freeze({ ...base, operation: "readContactLineage", history: historyEvidence }));
       for (const q of [...grants.values()]) await permit(q);
       if (JSON.stringify(await scan()) !== JSON.stringify(history)) throw new Failure("mismatched");
       if ((await phone()).key !== firstPhone.key || await revision() !== initialRevision) throw new Failure("mismatched");
       await definition(); for (const q of grants.values()) current(q);
       const at = clock();
       if (head && (at < head.effectiveFrom || at >= head.effectiveUntil)) disposition = "blocked";
-      return ok(Object.freeze({ kind: "contactReviewEvidence", disposition, observedAt: at, requestDigest: outboundRecipientRequestDigest(request)!, ...(headEvidence ? { head: headEvidence } : {}) }));
+      return ok(Object.freeze({ kind: "contactReviewEvidence", disposition, observedAt: at, requestDigest: outboundRecipientRequestDigest(request)!,
+        ...(headEvidence ? { head: headEvidence } : {}), history: historyEvidence }));
     } catch (error) {
       return err({ kind: error instanceof Failure || error instanceof OwnedBodyError || error instanceof PatientRecallHistoryError ? error.kind : "unavailable",
         ...(error instanceof Failure && error.resetAt ? { resetAt: error.resetAt } : {}),
