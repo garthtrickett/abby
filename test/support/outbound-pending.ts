@@ -3,7 +3,7 @@ import { ClinikoOutboundPendingDiscovery } from "../../src/cliniko/outbound-pend
 import type { OutboundPendingAuthority, OutboundPendingAccountQuery } from "../../src/cliniko/outbound-pending-discovery.ts";
 import type { OutboundRecordQuery } from "../../src/cliniko/outbound-recipient-records.ts";
 import { outboundRecordsFixture, value } from "./outbound-records.ts";
-export async function outboundPendingFixture(options: { deadlineMs?: number } = {}) {
+export async function outboundPendingFixture(options: Pick<NonNullable<Parameters<typeof outboundRecordsFixture>[0]>, "deadlineMs" | "request"> = {}) {
   const f = await outboundRecordsFixture(options); value(await f.retain()); f.calls.length = 0;
   let accountAllowed = true, recordAllowed = true, live = true;
   const accountQueries: OutboundPendingAccountQuery[] = [], recordQueries: OutboundRecordQuery[] = [];
