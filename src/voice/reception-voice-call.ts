@@ -12,6 +12,7 @@ import type { PrelocationPromptResult, PrelocationVoiceFailure } from "./preloca
 import type { TranscriptEvent } from "./turn-assembler.ts";
 import type { DispatchResult, PlaybackPort, VoiceSessionFailure } from "./voice-session.ts";
 import { VoiceSession } from "./voice-session.ts";
+import type { PrivateKeypadInput } from "./private-keypad-input.ts";
 
 export type SharedVoiceFailure = PrelocationVoiceFailure | VoiceSessionFailure |
   Readonly<{ kind: "sessionUnavailable" | "disconnected" }>;
@@ -23,6 +24,9 @@ export type SharedVoiceTurn =
   | Readonly<{ kind: "locationBound"; receipt: AdmissionReceipt; state: CallState }>
   | Readonly<{ kind: "callerTurn"; state: CallState }>;
 export type FullVoiceSessionFactory = (receipt: AdmissionReceipt, sessionId: string, playback: PlaybackPort) => VoiceSession;
+/** One prepared call owns both its synchronous session factory and private input.
+ * Transport must claim/start the input through its existing call lifecycle. */
+export type PreparedVoiceSession = Readonly<{ create: FullVoiceSessionFactory; privateKeypadInput?: PrivateKeypadInput }>;
 
 /** Owns media/session handoff after a typed incoming or outgoing entry. Location choice is an incoming entry concern. */
 export class ReceptionVoiceCall {

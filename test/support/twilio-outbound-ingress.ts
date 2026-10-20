@@ -10,33 +10,52 @@ import { TwilioSignedIngress } from "../../src/voice/twilio-signed-ingress.ts";
 import { TwilioMediaStream } from "../../src/voice/twilio-media-stream.ts";
 import { createTwilioIngressServer } from "../../src/voice/twilio-ingress-server.ts";
 import { outboundLaunchValue } from "./outbound-launch.ts";
+import { outboundRequestValue } from "./outbound-recipient-request.ts";
 
 export async function twilioOutboundIngressFixture(options: {
   claimWait?: () => Promise<void>; allow?: (query: TwilioOutboundIngressQuery) => Promise<boolean>; deadlineMs?: number;
   createWait?: () => Promise<void>; profileRef?: string;
+  callSid?: string; streamSid?: string;
+  identities?: Readonly<{ accountSid: string; authToken: string; contextKey: Uint8Array; callSid: string; streamSid: string;
+    patientId: string; recipientNumber: string; nativeRecallId: string }>;
+  sessionEffects?: TwilioOutboundIngressConfig["sessionEffects"];
   conversation?: (runtime: TwilioAbbyOutboundRuntime) => TwilioOutboundIngressConfig["createCall"];
 } = {}) {
   const state = { allowed: true, current: true, created: 0, disconnected: 0, progress: [] as string[],
     claims: [] as string[], burned: new Set<string>(), frames: [] as string[], queries: [] as TwilioOutboundIngressQuery[] };
-  const config = { ref: "twilio-abby", profileRef: options.profileRef ?? "generic-outbound", accountSid: `AC${"a".repeat(32)}`, authToken: "synthetic-twilio-token",
+  const config = { ref: "twilio-abby", profileRef: options.profileRef ?? "generic-outbound", accountSid: options.identities?.accountSid ?? `AC${"a".repeat(32)}`, authToken: options.identities?.authToken ?? "synthetic-twilio-token",
     from: "+61255550100", publicAnswerUrl: "https://clinic.example.invalid/outbound/answer", publicStatusUrl: "https://clinic.example.invalid/outbound/status",
-    publicStreamUrl: "wss://clinic.example.invalid/outbound/stream", contextKey: new Uint8Array(32).fill(7), now: () => "2026-11-01T10:00:00.000Z" };
-  const callSid = `CA${"b".repeat(32)}`, streamSid = `MZ${"c".repeat(32)}`; let form!: URLSearchParams;
+    publicStreamUrl: "wss://clinic.example.invalid/outbound/stream", contextKey: options.identities?.contextKey ?? new Uint8Array(32).fill(7), now: () => "2026-11-01T10:00:00.000Z" };
+  const callSid = options.identities?.callSid ?? options.callSid ?? `CA${"b".repeat(32)}`, streamSid = options.identities?.streamSid ?? options.streamSid ?? `MZ${"c".repeat(32)}`; let form!: URLSearchParams;
   const runtime = new TwilioAbbyOutboundRuntime(config, async (_url, init) => {
     form = new URLSearchParams(String(init?.body));
     return Response.json({ account_sid: config.accountSid, sid: callSid, to: form.get("To"), from: config.from, direction: "outbound-api", status: "queued",
       parent_call_sid: null, uri: `/2010-04-01/Accounts/${config.accountSid}/Calls/${callSid}.json` }, { status: 201 });
   });
-  const seed = outboundLaunchValue(), provider = runtime.binding(), call = { effectRef: seed.attempt.effectRef,
-    capacityAllocationRef: randomUUID(), number: "+61455550123", profileRef: provider.profileRef };
-  const original = { recallRef: "cliniko:recall:40", attempt: { ...seed.attempt, capacityAllocationRef: call.capacityAllocationRef,
+  const request = outboundRequestValue(), seed = outboundLaunchValue(options.identities ? { ...request,
+    patientId: options.identities.patientId, recipient: { kind: "voice", number: options.identities.recipientNumber } } : request);
+  const provider = runtime.binding(), call = { effectRef: seed.attempt.effectRef,
+    capacityAllocationRef: randomUUID(), number: options.identities?.recipientNumber ?? "+61455550123", profileRef: provider.profileRef };
+  const original = { recallRef: options.identities ? `cliniko:recall:${BigInt(options.identities.nativeRecallId) + 1n}` : "cliniko:recall:40", attempt: {
+    ...seed.attempt, ...(options.identities ? { requestRecallRef: `cliniko:recall:${options.identities.nativeRecallId}` } : {}), capacityAllocationRef: call.capacityAllocationRef,
     provider: { ref: provider.ref, bindingDigest: provider.bindingDigest }, dncReferences: { actionRef: randomUUID(), approvalRef: randomUUID() },
     contactReferences: { guardRef: randomUUID(), allocationRef: randomUUID(), outcomeActionRef: randomUUID() } } };
   assert.equal((await runtime.launchOnce(call, new AbortController().signal, async () => true, () => {}, original)).kind, "accepted");
   const makeRouter = (selected = new TwilioAbbyOutboundRuntime(config)) => new TwilioOutboundIngress({ runtime: selected,
     authority: { allows: async query => { state.queries.push(query); return state.allowed && (!options.allow || await options.allow(query)); }, current: () => state.current },
-    sessionEffects: (scope, binding) => ({ matches: (s, b) => JSON.stringify(s) === JSON.stringify(scope) && b === binding,
-      async claimOnce(ref) { await options.claimWait?.(); state.claims.push(ref); const claimed = !state.burned.has(ref); state.burned.add(ref); return { ok: true, value: { claimed } }; } }),
+    sessionEffects: (scope, binding) => {
+      const selected = options.sessionEffects?.(scope, binding);
+      return { matches: (s, b) => JSON.stringify(s) === JSON.stringify(scope) && b === binding && (!selected || selected.matches(s, b)),
+        async claimOnce(ref) {
+          await options.claimWait?.(); state.claims.push(ref);
+          if (selected) {
+            const result = await selected.claimOnce(ref);
+            if (result.ok && result.value.claimed) state.burned.add(ref);
+            return result;
+          }
+          const claimed = !state.burned.has(ref); state.burned.add(ref); return { ok: true, value: { claimed } };
+        } };
+    },
     async createCall(stream, send, close, signal) {
       assert.equal(stream.call.kind, "authenticatedOutboundCall"); assert.equal("event" in stream, false);
       assert.equal(state.burned.has(stream.call.context.sessionActionRef), true);

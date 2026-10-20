@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { outboundRequestValue } from "../support/outbound-recipient-request.ts";
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
@@ -15,7 +17,8 @@ if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL required");
 const db = connectPostgres(process.env.DATABASE_URL); after(() => db.destroy());
 for (const mode of ["pending", "accountDenied", "recordDenied", "changed"] as const)
   test(`compiled native pending ${mode} keeps private context outside SQL, backups and worker output`,{timeout:35000},async t=>{
-    const f=await outboundPendingFixture();f.f.denyProducer();
+    const seed=outboundRequestValue(),request={...seed,scope:{...seed.scope,tenantId:`outbound-pending-${randomUUID()}`}};
+    const f=await outboundPendingFixture({request});f.f.denyProducer();
     if(mode==="accountDenied")f.denyAccount();if(mode==="recordDenied")f.denyRecord();
     if(mode==="changed")f.controls.get=original=>Response.json({...original,recalled:true,recalled_at:original.updated_at});
     f.f.port=f.port;
@@ -32,4 +35,13 @@ for (const mode of ["pending", "accountDenied", "recordDenied", "changed"] as co
     assert.deepEqual(await scanPatientDataCanaries(db,canaries.map((value,i)=>({label:`outbound_pending_${i}`,value}))),{ok:true,value:[]});
     const dump=execFileSync("pg_dump",[process.env.DATABASE_URL!,"--no-owner","--no-privileges"],{timeout:10000,maxBuffer:8_000_000}).toString();
     for(const canary of canaries)assert.equal(dump.includes(canary),false);
+    if(mode==="pending"){
+      // After the actual read-only/backup assertions, prove the same tenant-wide
+      // predicate detects an unexpected write in THIS case. Unrelated tenants
+      // remain present and no effect/table/history is erased to make it pass.
+      const {PostgresOutboundEffectBarrier}=await import(new URL("../../dist/runtime/src/storage/postgres-outbound-effect-barrier.js",import.meta.url).href) as typeof import("../../src/storage/postgres-outbound-effect-barrier.ts");
+      const claimed=value(await new PostgresOutboundEffectBarrier(db,f.f.request.scope,f.f.binding).claimOnce(randomUUID()));
+      assert.equal(claimed.claimed,true);
+      assert.equal((await sql`select effect_ref from outbound_effect_barriers where tenant_id=${f.f.request.scope.tenantId}`.execute(db)).rows.length,1);
+    }
   });
