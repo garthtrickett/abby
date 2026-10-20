@@ -43,3 +43,13 @@ coverage, complete all-call/provider finality, hold release or clinical authorit
 Report/recovery/receiver foundations through PR565 are normally merged with all
 exact-head cloud jobs green; actual merged-main qualification is separately
 recorded in EXECUTION_PROGRESS.md.
+
+
+The subsequent approved-profile version2 conservatively closes an exact whole
+stop phrase at uncertain ASR quality without report/DNC retention. The real
+OpenAI adapter's uncertain quality is unchanged. Revised63 source, focused
+strict types, full strict/667 serving build and10 emitted SQL/privacy cases
+pass. Two original PostgreSQL/TLS browser login journeys pass after explicit
+image preparation outside the unchanged10-second launch deadline. Revised
+exact-head cloud qualification follows; this does not promote NoStop/finality,
+clinical authority, real acoustic acceptance or activation.

@@ -20,13 +20,14 @@ const { ClinikoTwilioOutboundStopRecovery } = await import(new URL("src/standalo
 const { TwilioOutboundReportAuthentication, decodeTwilioOutboundReport } = await import(new URL("src/cliniko/twilio-outbound-report.js", emitted).href) as typeof import("../../src/cliniko/twilio-outbound-report.ts");
 const { outboundDncRecordBinding } = await import(new URL("src/cliniko/outbound-dnc-records.js", emitted).href) as typeof import("../../src/cliniko/outbound-dnc-records.ts");
 
-for (const scenario of ["accepted", "reportStored", "reportUnstored", "decisionStored", "decisionUnstored", "reportGrant", "decisionGrant", "quota", "parallelCold"] as const)
+for (const scenario of ["accepted", "reportStored", "reportUnstored", "decisionStored", "decisionUnstored", "reportGrant", "decisionGrant", "quota", "parallelCold", "unclearStop"] as const)
 test(`emitted signed voice produces native stop/DNC with SQL one-use holds and full backup privacy: ${scenario}`, { timeout: 30000 }, async t => {
   const apiKey = `synthetic-stop-speech-${randomUUID()}-au5`, scope = { tenantId: `speech-${randomUUID()}`, clinicId: "clinic", locationId: "main" };
   const guardRef = randomUUID(), budget = new PostgresClinikoRequestBudget(db, { apiKey, maxPerMinute: 180 });
   const patientId = (BigInt("0x" + randomUUID().replaceAll("-", "")) % 1_000_000_000_000_000_000n + 1_000_000_000_000_000_000n).toString();
   const text = "Please, remove my number from your calling list.";
   const f = await twilioOutboundStopSpeechFixture({ apiKey, scope, budget, patientId, guardRef, text,
+    ...(scenario === "unclearStop" ? { quality: "needsClarification" } : {}),
     ...(scenario === "reportStored" ? { reportResponse: "lostStored" } : scenario === "reportUnstored" ? { reportResponse: "lostUnstored" } : {}),
     ...(scenario === "decisionStored" ? { decisionResponse: "lostStored" } : scenario === "decisionUnstored" ? { decisionResponse: "lostUnstored" } : {}),
     effectFactory: (s, b) => new PostgresOutboundEffectBarrier(db, s, b), capacityFactory: (s, b) => new PostgresOutboundCapacity(db, s, b),
@@ -38,8 +39,8 @@ test(`emitted signed voice produces native stop/DNC with SQL one-use holds and f
   if (scenario === "quota") for (let n = 0; n < 180; n++) if (await budget.claim() !== null) break;
   const closed = once(wire.socket, "close"); wire.sendTurn(); await closed; await f.finished;
   assert.deepEqual(f.intents, []); assert.equal(f.spoken.length, 1); assert.equal(f.carrierCalls, 1);
-  assert.equal(f.reportPosts.length, scenario === "reportGrant" || scenario === "quota" ? 0 : 1);
-  assert.equal(f.dncPosts.length, ["reportUnstored", "reportGrant", "decisionGrant", "quota", "parallelCold"].includes(scenario) ? 0 : 1);
+  assert.equal(f.reportPosts.length, ["reportGrant", "quota", "unclearStop"].includes(scenario) ? 0 : 1);
+  assert.equal(f.dncPosts.length, ["reportUnstored", "reportGrant", "decisionGrant", "quota", "parallelCold", "unclearStop"].includes(scenario) ? 0 : 1);
   const original = f.original(), auth = new TwilioOutboundReportAuthentication(f.key, f.attempt.provider);
   const makeCold = (connection = db) => value(ClinikoTwilioOutboundStopRecovery.create(f.config, { ...f.ports,
     runtime: f.runtime, authentication: auth, effects: new PostgresOutboundEffectBarrier(connection, scope, outboundDncRecordBinding(f.config.stop.dnc)!) }));

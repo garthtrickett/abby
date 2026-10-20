@@ -26,7 +26,7 @@ const phrases = Object.freeze(["stop calling", "stop calling me", "stop calling 
   "do not call this number again", "don't call this number again", "please do not call this number again",
   "remove my number from your calling list", "please remove my number from your calling list",
   "take me off your calling list", "please take me off your calling list", "i don't want any more calls", "i do not want any more calls"]);
-const grammarDigest = createHash("sha256").update(JSON.stringify(["abby.clear-stop-phrases.english.v1", phrases])).digest("hex");
+const grammarDigest = createHash("sha256").update(JSON.stringify(["abby.clear-stop-phrases.english.v2", phrases, "unclearPositiveClosesWithoutRetention"])).digest("hex");
 /** A positive whole-turn rule only. False means no positive match, never proof
  * of no-stop/all-call coverage. Quoted, negated, unclear and unsupported language
  * must not be promoted into complete no-stop evidence. */
@@ -129,7 +129,11 @@ export class TwilioOutboundStopSpeech {
       inspect: (turn: FinalCallerTurn) => {
         if (!this.matchesRuntime(this.#runtime) || !same(turn)) throw Error("Unavailable outbound stop producer");
         if (positive) { if (!isDeepStrictEqual(positive, turn)) throw Error("Changed positive stop turn"); return "stop" as const; }
-        if (turn.quality !== "clear" || !clearOutboundStopPhrase(turn.text)) return "continue" as const;
+        if (!clearOutboundStopPhrase(turn.text)) return "continue" as const;
+        // The real transcription adapter currently reports uncertain quality.
+        // Restrict contact conservatively, without promoting those words into
+        // a signed positive report or an automatic native DNC assertion.
+        if (turn.quality !== "clear") throw Error("Unresolved outbound stop observation");
         positive = Object.freeze({ ...turn }); return "stop" as const;
       },
       retainStop: async (turn: FinalCallerTurn, signal: AbortSignal) => {

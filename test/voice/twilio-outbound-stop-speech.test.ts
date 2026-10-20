@@ -90,7 +90,7 @@ test("approved conversation without the selected producer binding opens no speec
   assert.equal(f.reportPosts.length, 0); assert.equal(f.dncPosts.length, 0);
 });
 
-for (const [text, quality] of [["don't stop calling me", "clear"], ["Stop calling me", "needsClarification"]] as const)
+for (const [text, quality] of [["don't stop calling me", "clear"], ["Could you help me", "needsClarification"]] as const)
 test(`actual ${quality} non-positive turn produces no stop or no-stop record`, { timeout: 15000 }, async t => {
   const f = await twilioOutboundStopSpeechFixture({ text, quality }); t.after(f.close);
   const server = await f.listen(); t.after(server.close); const wire = await f.start(server);
@@ -101,4 +101,16 @@ test(`actual ${quality} non-positive turn produces no stop or no-stop record`, {
   assert.equal(f.reportPosts.length, 0); assert.equal(f.dncPosts.length, 0);
   assert.deepEqual(f.intents, quality === "clear" ? [text] : []); assert.equal(f.contactHeld.size, 1); assert.equal(f.held.size, 1);
   const closed = once(wire.socket, "close"); wire.socket.close(); await closed; await f.finished;
+});
+
+test("actual uncertain whole stop phrase closes without another utterance or fabricated native stop", { timeout: 15000 }, async t => {
+  const f = await twilioOutboundStopSpeechFixture({ text: "Stop calling me", quality: "needsClarification" }); t.after(f.close);
+  const server = await f.listen(); t.after(server.close); const wire = await f.start(server);
+  const outcome = new Promise<"closed" | "ordinaryReply"> (resolve => {
+    wire.socket.once("close", () => resolve("closed"));
+    wire.socket.on("message", raw => { if ((JSON.parse(raw.toString()) as { event: string }).event === "mark") resolve("ordinaryReply"); });
+  });
+  wire.sendTurn(); assert.equal(await outcome, "closed"); await f.finished;
+  assert.equal(f.spoken.length, 1); assert.deepEqual(f.intents, []); assert.equal(f.reportPosts.length, 0); assert.equal(f.dncPosts.length, 0);
+  assert.equal(f.contactHeld.size, 1); assert.equal(f.held.size, 1); assert.equal(f.contactReleased.size, 0); assert.equal(f.released.size, 0);
 });

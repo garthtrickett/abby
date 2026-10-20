@@ -22,7 +22,12 @@ such as “please stop calling me” and “remove my number from your calling l
 Negation, quotations, reported speech, unclear recognition and unsupported
 language are not promoted to positive evidence. An unmatched phrase never proves
 no-stop coverage. Classifier failure closes the conversation without fabricating
-a stop report. Acoustic, language and clinic acceptance remain required.
+a stop report. An exact whole stop phrase with uncertain quality now closes
+conservatively without signing positive evidence or writing a DNC. The real
+OpenAI transcription adapter currently marks every final `needsClarification`;
+that safeguard remains unchanged. The positive grammar/profile descriptor is
+version2 so this behavior requires the matching new approved binding. Acoustic,
+language and clinic acceptance remain required.
 
 A positive turn immediately fences further speech and ordinary work, cancels
 transient work and closes the transport. Independently bounded native retention
@@ -60,7 +65,8 @@ claim no-stop. Original native routing is not responder verification or exact
 clinical authority. Source/verifier history, restore qualification, independent
 clinical handoff, gap13 and real acceptance remain separate obligations.
 
-Qualification is recorded in [the progress ledger](EXECUTION_PROGRESS.md):62
+Initial published c0d35e9 qualification is recorded in
+[the progress ledger](EXECUTION_PROGRESS.md):62
 focused source controls,129 existing shared-voice/embedded/endpointing/signed
 outbound controls, focused strict types, full strict TypeScript/667 emitted
 artifacts and9 actual emitted-code PostgreSQL cases pass. The SQL cases include
@@ -69,3 +75,12 @@ quota and all-column/full-backup checks over patient/contact/call/session,
 report/context keys, MAC, entire native notes and launch URLs/form. No skip,
 quota increase or scanner filter was introduced. Publication and exact-head
 cloud qualification follow; no activation or real acceptance is inferred.
+
+The conservative uncertain-stop refinement first failed its actual signed-voice
+red control (ordinary reply instead of closure), then passed that same control.
+Current profile2 passes63 combined source controls, focused strict typing,
+full strict TypeScript/667 serving artifacts and10 actual emitted PostgreSQL
+cases including uncertain stop closure without report/DNC action consumption.
+The two unchanged real PostgreSQL/TLS browser login journeys also pass with
+the image prepared before the existing startup deadline. Exact revised-head
+cloud qualification follows; initial results are not substituted for new source.
