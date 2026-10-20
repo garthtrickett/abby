@@ -15,7 +15,8 @@ import { outboundRequestValue } from "./outbound-recipient-request.ts";
 export async function twilioOutboundIngressFixture(options: {
   claimWait?: () => Promise<void>; allow?: (query: TwilioOutboundIngressQuery) => Promise<boolean>; deadlineMs?: number;
   createWait?: () => Promise<void>; profileRef?: string;
-  callSid?: string; streamSid?: string;
+  callSid?: string; streamSid?: string; now?: () => string;
+  request?: Parameters<typeof outboundLaunchValue>[0];
   identities?: Readonly<{ accountSid: string; authToken: string; contextKey: Uint8Array; callSid: string; streamSid: string;
     patientId: string; recipientNumber: string; nativeRecallId: string }>;
   sessionEffects?: TwilioOutboundIngressConfig["sessionEffects"];
@@ -25,19 +26,19 @@ export async function twilioOutboundIngressFixture(options: {
     claims: [] as string[], burned: new Set<string>(), frames: [] as string[], queries: [] as TwilioOutboundIngressQuery[] };
   const config = { ref: "twilio-abby", profileRef: options.profileRef ?? "generic-outbound", accountSid: options.identities?.accountSid ?? `AC${"a".repeat(32)}`, authToken: options.identities?.authToken ?? "synthetic-twilio-token",
     from: "+61255550100", publicAnswerUrl: "https://clinic.example.invalid/outbound/answer", publicStatusUrl: "https://clinic.example.invalid/outbound/status",
-    publicStreamUrl: "wss://clinic.example.invalid/outbound/stream", contextKey: options.identities?.contextKey ?? new Uint8Array(32).fill(7), now: () => "2026-11-01T10:00:00.000Z" };
+    publicStreamUrl: "wss://clinic.example.invalid/outbound/stream", contextKey: options.identities?.contextKey ?? new Uint8Array(32).fill(7), now: options.now ?? (() => "2026-11-01T10:00:00.000Z") };
   const callSid = options.identities?.callSid ?? options.callSid ?? `CA${"b".repeat(32)}`, streamSid = options.identities?.streamSid ?? options.streamSid ?? `MZ${"c".repeat(32)}`; let form!: URLSearchParams;
   const runtime = new TwilioAbbyOutboundRuntime(config, async (_url, init) => {
     form = new URLSearchParams(String(init?.body));
     return Response.json({ account_sid: config.accountSid, sid: callSid, to: form.get("To"), from: config.from, direction: "outbound-api", status: "queued",
       parent_call_sid: null, uri: `/2010-04-01/Accounts/${config.accountSid}/Calls/${callSid}.json` }, { status: 201 });
   });
-  const request = outboundRequestValue(), seed = outboundLaunchValue(options.identities ? { ...request,
+  const request = options.request ?? outboundRequestValue(), seed = outboundLaunchValue(options.identities ? { ...request,
     patientId: options.identities.patientId, recipient: { kind: "voice", number: options.identities.recipientNumber } } : request);
   const provider = runtime.binding(), call = { effectRef: seed.attempt.effectRef,
-    capacityAllocationRef: randomUUID(), number: options.identities?.recipientNumber ?? "+61455550123", profileRef: provider.profileRef };
+    capacityAllocationRef: randomUUID(), number: options.identities?.recipientNumber ?? (options.request ? request.recipient.number : "+61455550123"), profileRef: provider.profileRef };
   const original = { recallRef: options.identities ? `cliniko:recall:${BigInt(options.identities.nativeRecallId) + 1n}` : "cliniko:recall:40", attempt: {
-    ...seed.attempt, ...(options.identities ? { requestRecallRef: `cliniko:recall:${options.identities.nativeRecallId}` } : {}), capacityAllocationRef: call.capacityAllocationRef,
+    ...seed.attempt, ...(options.now ? { attemptedAt: config.now(), dispatchNotAfter: new Date(Date.parse(config.now()) + 60_000).toISOString() } : {}), ...(options.identities ? { requestRecallRef: `cliniko:recall:${options.identities.nativeRecallId}` } : {}), capacityAllocationRef: call.capacityAllocationRef,
     provider: { ref: provider.ref, bindingDigest: provider.bindingDigest }, dncReferences: { actionRef: randomUUID(), approvalRef: randomUUID() },
     contactReferences: { guardRef: randomUUID(), allocationRef: randomUUID(), outcomeActionRef: randomUUID() } } };
   assert.equal((await runtime.launchOnce(call, new AbortController().signal, async () => true, () => {}, original)).kind, "accepted");
