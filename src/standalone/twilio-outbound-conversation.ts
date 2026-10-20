@@ -16,6 +16,19 @@ import { TwilioConnectedCall } from "../voice/twilio-connected-call.ts";
 import type { TwilioConnectedCallConfig } from "../voice/twilio-connected-call.ts";
 import type { PlaybackPort, VoiceSession } from "../voice/voice-session.ts";
 import { TwilioOutboundStopSpeech } from "./twilio-outbound-stop-speech.ts";
+import { awaitUntilAbort } from "../shared/await-until-abort.ts";
+import { callIdFor } from "../voice/admission.ts";
+import type { OutboundConversationCall } from "../voice/outbound-voice-entry.ts";
+import type { PreparedVoiceSession } from "../voice/reception-voice-call.ts";
+import type { PrivateKeypadInput } from "../voice/private-keypad-input.ts";
+
+type OutboundSessionFactory = (ledger: MemoryLedger, receipt: AdmissionReceipt, sessionId: string, playback: PlaybackPort,
+  signal: AbortSignal, original: OutboundOriginalSend) => VoiceSession;
+export type OutboundVoicePreparation = Readonly<{
+  ledger: MemoryLedger; call: OutboundConversationCall; sessionId: string;
+  /** Private routing evidence only, never patient proof. */
+  original: OutboundOriginalSend; signal: AbortSignal;
+}>;
 
 export type TwilioAbbyOutboundConversationConfig = Readonly<{
   runtime: TwilioAbbyOutboundRuntime;
@@ -26,14 +39,16 @@ export type TwilioAbbyOutboundConversationConfig = Readonly<{
   stopSpeech?: TwilioOutboundStopSpeech;
   readiness: AutomationReadiness;
   knowledge?: ModelKnowledgeContextHost;
-  /** Original native routing context remains private and is not a verified
-   * patient. Clinic workflows require independent exact-subject/action authority. */
-  session: (ledger: MemoryLedger, receipt: AdmissionReceipt, sessionId: string, playback: PlaybackPort, signal: AbortSignal, original: OutboundOriginalSend) => VoiceSession;
   now?: () => string;
   monotonicNow?: () => number;
   mediaOptions?: TwilioConnectedCallConfig["mediaOptions"];
   playbackOptions?: TwilioConnectedCallConfig["playbackOptions"];
-}>;
+}> & (Readonly<{ session: OutboundSessionFactory; prepareSession?: never }> | Readonly<{
+  session?: never;
+  /** Existing ingress startup cancellation bounds preparation. A late result is
+   * retired; this does not extend the wire deadline or grant clinical authority. */
+  prepareSession: (context: OutboundVoicePreparation) => Promise<PreparedVoiceSession>;
+}>);
 /** Explicit optional ingress factory. The signed ingress owns authentication and
  * the permanent session exclusion; this owns one transient Abby conversation.
  * It provides no complete final report or contact/capacity release authority. */
@@ -42,13 +57,16 @@ export function twilioAbbyOutboundConversation(config: TwilioAbbyOutboundConvers
     close: (kind?: "normal" | "failure") => void, signal: AbortSignal) => Promise<TwilioWireCall> {
   if (!(config.runtime instanceof TwilioAbbyOutboundRuntime) || !/^[a-f0-9]{64}$/.test(config.runtimeConfigurationHash) ||
       typeof config.source?.read !== "function" || typeof config.source.current !== "function" ||
-      typeof config.speech?.create !== "function" || typeof config.session !== "function" ||
+      typeof config.speech?.create !== "function" ||
+      !(typeof config.session === "function" && !Object.hasOwn(config, "prepareSession") ||
+        typeof config.prepareSession === "function" && !Object.hasOwn(config, "session")) ||
       config.stopSpeech !== undefined && (!(config.stopSpeech instanceof TwilioOutboundStopSpeech) || !config.stopSpeech.matchesRuntime(config.runtime)))
     throw Error("Invalid outbound conversation configuration");
   const provider = Object.freeze({ ...config.runtime.binding() }), now = config.now ?? (() => new Date().toISOString());
   const runtimeConfigurationHash = config.runtimeConfigurationHash, readiness = config.readiness;
   const readApproval = config.source.read.bind(config.source), currentApproval = config.source.current.bind(config.source);
-  const createSpeech = config.speech.create.bind(config.speech), createSession = config.session.bind(config);
+  const createSpeech = config.speech.create.bind(config.speech), createSession = config.session?.bind(config);
+  const prepareSession = config.prepareSession?.bind(config);
   const stopBinding = config.stopSpeech?.profileBinding(), stopCurrent = config.stopSpeech?.matchesRuntime.bind(config.stopSpeech);
   const bindStop = config.stopSpeech?.bindPolicy.bind(config.stopSpeech), selectedRuntime = config.runtime;
   const settings = structuredClone({ ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}),
@@ -68,6 +86,13 @@ export function twilioAbbyOutboundConversation(config: TwilioAbbyOutboundConvers
   return async (stream, send, close, ingressSignal) => {
     const lifetime = new AbortController(), signal = AbortSignal.any([ingressSignal, lifetime.signal]);
     const ledger = new MemoryLedger(readiness);
+    let candidate: PreparedVoiceSession | undefined, privateInput: PrivateKeypadInput | undefined;
+    let abandoned = false, inputTransferred = false, inputStopped = false;
+    const discardInput = () => {
+      if (!privateInput || inputStopped) return;
+      inputStopped = true;
+      try { privateInput.stop(); } catch { /* Failure must still retire the call. */ }
+    };
     try {
       const original = stream.call.context.original.attempt;
       if (original.provider.ref !== provider.ref || original.provider.bindingDigest !== provider.bindingDigest || signal.aborted)
@@ -77,6 +102,26 @@ export function twilioAbbyOutboundConversation(config: TwilioAbbyOutboundConvers
         readiness, now, signal, ...(config.knowledge ? { knowledge: config.knowledge } : {}) });
       if (!prepared.ok) throw Error("Outbound conversation unavailable");
       const entry = prepared.value, current = () => !signal.aborted && entry.current?.() === true;
+      const sessionId = randomUUID();
+      if (prepareSession) {
+        const context: OutboundVoicePreparation = Object.freeze({ ledger, sessionId, signal,
+          call: Object.freeze({ key: Object.freeze({ ...entry.key }), scope: Object.freeze({ ...original.scope }),
+            clinicNumber: stream.call.clinicNumber, profileRef: provider.profileRef }), original: stream.call.context.original });
+        const pending = Promise.resolve().then(() => current() ? prepareSession(context) : undefined).then(value => {
+          privateInput = value?.privateKeypadInput;
+          if (!value || typeof value.create !== "function" ||
+              Object.keys(value).some(key => key !== "create" && key !== "privateKeypadInput")) { discardInput(); return undefined; }
+          candidate = Object.freeze({ create: value.create.bind(value), ...(privateInput ? { privateKeypadInput: privateInput } : {}) });
+          if (abandoned || signal.aborted) discardInput();
+          return candidate;
+        });
+        const result = await awaitUntilAbort(pending, signal);
+        if (!result || !current()) { abandoned = true; discardInput(); throw Error("Outbound conversation unavailable"); }
+        candidate = result;
+      } else {
+        candidate = { create: (receipt, id, playback) => createSession!(ledger, receipt, id, playback, signal, stream.call.context.original) };
+      }
+      const sessionFactory = candidate.create;
       const speech: SpeechAdapterFactory = { create(profile, sessionId, runtime) {
         if (!current()) return err({ kind: "readinessFailed", missing: ["voiceProfile"] });
         const created = createSpeech(profile, sessionId, runtime);
@@ -106,15 +151,18 @@ export function twilioAbbyOutboundConversation(config: TwilioAbbyOutboundConvers
           },
         } };
       } };
-      const call = new TwilioConnectedCall({ entry, sessionId: randomUUID(), ledger, speech,
+      const call = new TwilioConnectedCall({ entry, sessionId, ledger, speech,
+        ...(candidate.privateKeypadInput ? { privateKeypadInput: candidate.privateKeypadInput } : {}),
         fullFactory: (receipt, sessionId, playback) => {
-          const session = createSession(ledger, receipt, sessionId, playback, signal, stream.call.context.original);
+          if (!current() || receipt.callId !== callIdFor(entry.key)) throw Error("Outbound conversation unavailable");
+          const session = sessionFactory(receipt, sessionId, playback);
           if (bindStop) session.protectOutboundContact(bindStop(stream, receipt, sessionId, () => close("normal")));
           return session;
         },
         streamStartedAt: stream.streamStartedAt, now, ...settings,
         ...(config.monotonicNow ? { monotonicNow: config.monotonicNow } : {}),
         send: json => current() ? send(json) : "notSent", closeTransport: close, onCallStop: () => lifetime.abort() });
+      inputTransferred = true;
       let cleanup: Promise<unknown> | undefined;
       const disconnect = () => {
         ingressSignal.removeEventListener("abort", onAbort);
@@ -125,6 +173,10 @@ export function twilioAbbyOutboundConversation(config: TwilioAbbyOutboundConvers
       ingressSignal.addEventListener("abort", onAbort, { once: true });
       if (ingressSignal.aborted) { await disconnect(); throw Error("Outbound conversation unavailable"); }
       return { receive: raw => call.receive(raw), disconnect };
-    } catch { lifetime.abort(); ledger.dispose(); throw Error("Outbound conversation unavailable"); }
+    } catch {
+      abandoned = true; lifetime.abort();
+      if (!inputTransferred) discardInput();
+      ledger.dispose(); throw Error("Outbound conversation unavailable");
+    }
   };
 }

@@ -42,7 +42,8 @@
     "src/standalone/cliniko-twilio-outbound-stop-recovery.ts",
     "src/standalone/twilio-outbound-stop-receiver.ts",
     "test/support/twilio-outbound-stop-speech.ts",
-    "test/support/twilio-outbound-finality.ts"
+    "test/support/twilio-outbound-finality.ts",
+    "test/support/twilio-outbound-conversation.ts"
   ],
   "include": []
 }
