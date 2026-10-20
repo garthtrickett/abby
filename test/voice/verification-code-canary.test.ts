@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import crypto from "node:crypto";
-import { distinctFromClock, drawDistinctCode, installStagedVerificationCanaries } from "../support/verification-code-canary.ts";
+import { distinctFromClock, drawDistinctCode, installClinicalVerificationCanaries, installStagedVerificationCanaries } from "../support/verification-code-canary.ts";
 
 test("numeric verification canaries reject every real timestamp substring across decimal rollovers", () => {
   for (const sinceMs of [1792470200000, 1792470990000, 1792479990000]) {
@@ -17,6 +17,13 @@ test("numeric verification canaries reject every real timestamp substring across
       for (let offset = 0; offset <= text.length - 6; offset++) assert.equal(distinctFromClock(Number(text.slice(offset, offset + 6)), window), false);
     }
   }
+});
+
+test("clinical canary sampling cannot change crypto outside the isolated compiled fixture", () => {
+  const before = crypto.randomInt, prior = process.env.ABBY_VOICE_TEST_MODE;
+  process.env.ABBY_VOICE_TEST_MODE = "0";
+  try { assert.throws(() => installClinicalVerificationCanaries(), /isolated clinical/); assert.equal(crypto.randomInt, before); }
+  finally { if (prior === undefined) delete process.env.ABBY_VOICE_TEST_MODE; else process.env.ABBY_VOICE_TEST_MODE = prior; }
 });
 test("synthetic canary sampling remains bounded and requires the isolated staged class process", () => {
   const window = { sinceMs: 1792470200000, throughMs: 1792470860000 };
