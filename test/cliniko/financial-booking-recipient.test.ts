@@ -89,3 +89,31 @@ test("financial recipient deadline bounds a held body stream", { timeout: 3000 }
   t.mock.timers.enable({ apis: ["setTimeout"] }); const pending = reader.read(f.selection, signal()); await ready; t.mock.timers.tick(1000);
   assert.equal(await pending, undefined);
 });
+
+// TransientPatientProof issues32 random bytes encoded as base64url. Unlike
+// public approval names, this opaque reference may begin with '-' or '_'.
+for (const prefix of ["-", "_"])
+test(`financial recipient admits an independently authorized issuer-format proof beginning ${prefix}`, async t => {
+  const f = await fixture(); t.after(f.close);
+  const verificationRef = prefix + "A".repeat(42);
+  assert.equal(Buffer.from(verificationRef, "base64url").toString("base64url"), verificationRef);
+  const reader = f.create(), selected = { ...f.selection, verificationRef }, found = await reader.read(selected, signal());
+  assert.ok(found, "all canonical references produced by the live verifier must reach independent recipient authority");
+  assert.equal(f.state.gets, 1); assert.equal(f.queries.length, 3);
+  assert.equal(reader.currentForSend(selected, found.recipient, signal()), true);
+  assert.equal(reader.currentForSend(f.selection, found.recipient, signal()), false);
+});
+
+for (const verificationRef of ["-" + "A".repeat(41), "_" + "A".repeat(42) + "=", "+" + "A".repeat(42),
+  "-" + "A".repeat(41) + "B", "_" + "A".repeat(41) + "\n"])
+test(`financial recipient refuses malformed opaque verification reference ${JSON.stringify(verificationRef)}`, async t => {
+  const f = await fixture(); t.after(f.close);
+  assert.equal(await f.create().read({ ...f.selection, verificationRef }, signal()), undefined);
+  assert.equal(f.state.gets, 0); assert.equal(f.queries.length, 0);
+});
+for (const prefix of ["-", "_"])
+test(`issuer-format ${prefix} reference cannot replace independent financial-recipient permission`, async t => {
+  const f = await fixture(); t.after(f.close); f.state.allowed = false;
+  assert.equal(await f.create().read({ ...f.selection, verificationRef: prefix + "A".repeat(42) }, signal()), undefined);
+  assert.equal(f.state.gets, 0); assert.equal(f.queries.length, 1);
+});
