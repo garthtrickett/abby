@@ -39,7 +39,7 @@ import { value } from "./outbound-records.ts";
 type BaseOptions = NonNullable<Parameters<typeof outboundContactLifecycleFixture>[0]>;
 export async function twilioOutboundStopSpeechFixture(options: Pick<BaseOptions, "apiKey" | "scope" | "patientId" | "budget" | "effectFactory" | "capacityFactory" | "capacity" | "guardRef"> & {
   carrierRead?: typeof fetch;
-  text?: string; quality?: "clear" | "needsClarification"; omitProfileBinding?: boolean;
+  text?: string; quality?: "clear" | "needsClarification"; omitProfileBinding?: boolean; transcriptionAt?: string;
   reportResponse?: "lostStored" | "lostUnstored"; decisionResponse?: "lostStored" | "lostUnstored";
 } = {}) {
   const f = await outboundContactLifecycleFixture(options);
@@ -121,7 +121,7 @@ export async function twilioOutboundStopSpeechFixture(options: Pick<BaseOptions,
           transcriptionStats.flushes++; await state.beforeFlush?.(signal);
           // Media timestamps end at +120ms; independently observed fixture time
           // advances past that actual frame before native records are produced.
-          f.state.now = "2026-11-02T00:00:01.000Z";
+          f.state.now = options.transcriptionAt ?? "2026-11-02T00:00:01.000Z";
           return ok([{ kind: "segmentFinal", sessionId, generation, utteranceId: "outgoing-stop", text: options.text ?? "Please stop calling me.", quality: options.quality ?? "clear" }]);
         }, close: async () => { transcriptionStats.closes++; } }) }),
       session(ledger, receipt, sessionId, playback) {

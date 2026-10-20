@@ -141,8 +141,11 @@ export class OutboundTerminalTranscription {
 
   #makeTurn(): FinalCallerTurn | undefined {
     if (this.#bad || this.#cancelled || this.#partials.size || !this.#segments.size) return;
-    const at = this.#now(), frameAt = Date.parse(this.#lastFrameAt);
-    if (!Number.isFinite(frameAt) || !Number.isFinite(Date.parse(at)) || new Date(at).toISOString() !== at || Date.parse(at) < frameAt) return;
+    const now = this.#now(), at = this.#lastFrameAt, frameAt = Date.parse(at);
+    // Recognition can finish after the carrier has ended. Native finality must
+    // compare the observed audio time, while record creation keeps its own clock.
+    if (!Number.isFinite(frameAt) || new Date(at).toISOString() !== at || !Number.isFinite(Date.parse(now)) ||
+        new Date(now).toISOString() !== now || Date.parse(now) < frameAt) return;
     const segments = [...this.#segments.values()];
     return Object.freeze({ callId: this.#callId, sessionId: this.#sessionId, turnId: "outbound-terminal:" + randomUUID(),
       text: segments.map(e => e.text.trim()).join(" "), quality: segments.every(e => e.quality === "clear") ? "clear" : "needsClarification", at });

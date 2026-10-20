@@ -17,12 +17,13 @@ const { PostgresClinikoRequestBudget } = await import(new URL("src/storage/postg
 const { PostgresOutboundCapacity } = await import(new URL("src/storage/postgres-outbound-capacity.js", emitted).href) as typeof import("../../src/storage/postgres-outbound-capacity.ts");
 const { PostgresOutboundEffectBarrier } = await import(new URL("src/storage/postgres-outbound-effect-barrier.js", emitted).href) as typeof import("../../src/storage/postgres-outbound-effect-barrier.ts");
 
-for (const scenario of ["wireStop", "socketClose", "queuedWireStop", "queuedSocketClose", "reportStored", "reportUnstored", "decisionGrant", "conversationGrant", "quota", "unclear"] as const)
+for (const scenario of ["wireStop", "lateDecode", "socketClose", "queuedWireStop", "queuedSocketClose", "reportStored", "reportUnstored", "decisionGrant", "conversationGrant", "quota", "unclear"] as const)
 test(`actual emitted unendpointed terminal speech retains native180, independent releases and SQL/raw-backup privacy: ${scenario}`, { timeout: 170000 }, async t => {
   const apiKey = `synthetic-terminal-${randomUUID()}-au5`, scope = { tenantId: `terminal-${randomUUID()}`, clinicId: "clinic", locationId: "main" }, guardRef = randomUUID();
   const budget = new PostgresClinikoRequestBudget(db, { apiKey, maxPerMinute: 180 });
   const patientId = (BigInt("0x" + randomUUID().replaceAll("-", "")) % 1_000_000_000_000_000_000n + 1_000_000_000_000_000_000n).toString();
   const f = await twilioOutboundFinalityFixture({ apiKey, scope, budget, patientId, guardRef,
+    ...(scenario === "lateDecode" ? { transcriptionAt: "2026-11-02T00:00:04.000Z" } : {}),
     ...(scenario === "unclear" ? { quality: "needsClarification" } : {}),
     ...(scenario === "reportStored" ? { reportResponse: "lostStored" } : scenario === "reportUnstored" ? { reportResponse: "lostUnstored" } : {}),
     effectFactory: (s, b) => new PostgresOutboundEffectBarrier(db, s, b), capacityFactory: (s, b) => new PostgresOutboundCapacity(db, s, b),
@@ -51,10 +52,10 @@ test(`actual emitted unendpointed terminal speech retains native180, independent
   assert.equal(effects.filter(e => e.effect_ref === original.sessionActionRef).length, 1);
   const second = await f.listen(); t.after(second.close); const answer = await second.post(); const duplicate = await second.open(await answer.text());
   assert.equal(await duplicate.outcome, "closed"); assert.equal(f.carrierCalls, 1); assert.equal(f.reportPosts.length <= 1, true);
-  if (["wireStop", "socketClose", "queuedWireStop", "queuedSocketClose", "reportStored"].includes(scenario)) {
+  if (["wireStop", "lateDecode", "socketClose", "queuedWireStop", "queuedSocketClose", "reportStored"].includes(scenario)) {
     const until = Date.now() + 75000;
     while (await budget.checkHeadroom(100) !== null) { assert.ok(Date.now() < until, "wait only for real native100 headroom"); await new Promise(resolve => setTimeout(resolve, 500)); }
-    f.state.now = "2026-11-02T00:00:03.000Z";
+    f.state.now = scenario === "lateDecode" ? "2026-11-02T00:00:05.000Z" : "2026-11-02T00:00:03.000Z";
     const recovered = value(await f.recoverFinality()); assert.equal(value(recovered.contact).kind, "nativeContactOutcomeRetained");
     assert.deepEqual(value(recovered.call), { kind: "terminal", released: true });
     assert.ok((await holds()).rows.every(h => h.released_at !== null)); assert.equal(f.outcomePosts.length, 1);

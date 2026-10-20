@@ -7,7 +7,7 @@ import type { MediaFrame, TranscriptionPort } from "../../src/voice/media-turn-c
 import type { FinalCallerTurn } from "../../src/core/model.ts";
 import { clearOutboundStopPhrase } from "../../src/standalone/twilio-outbound-stop-speech.ts";
 
-function fixture(options: { raw?: Partial<TranscriptionPort>; deadline?: number; retentionDeadline?: number } = {}) {
+function fixture(options: { raw?: Partial<TranscriptionPort>; deadline?: number; retentionDeadline?: number; now?: string } = {}) {
   const state = { current: true };
   const calls = { accept: 0, flush: 0, close: 0, cancel: 0 }, observed: FinalCallerTurn[] = [], retained: FinalCallerTurn[] = [];
   const frames: MediaFrame[] = [0, 1].map(sequence => ({ sessionId: "session", sequence, capturedAt: `2026-11-02T00:00:00.0${sequence * 2}0Z`, bytes: new Uint8Array(640) }));
@@ -19,7 +19,7 @@ function fixture(options: { raw?: Partial<TranscriptionPort>; deadline?: number;
     close: async () => { calls.close++; await options.raw?.close?.(); },
   };
   const owner = new OutboundTerminalTranscription(raw, { callId: "call", sessionId: "session", deadlineMs: options.deadline ?? 100,
-    now: () => "2026-11-02T00:00:01.000Z", policy: () => !state.current ? undefined : ({ retentionDeadlineMs: options.retentionDeadline ?? 100,
+    now: () => options.now ?? "2026-11-02T00:00:01.000Z", policy: () => !state.current ? undefined : ({ retentionDeadlineMs: options.retentionDeadline ?? 100,
       inspect: turn => { observed.push(turn); if (turn.quality !== "clear") throw Error("uncertain"); return clearOutboundStopPhrase(turn.text) ? "stop" : "continue"; },
       retainStop: async turn => { retained.push(turn); } }) });
   const caller = new AbortController();
@@ -146,4 +146,21 @@ for (const completedPositive of [false, true]) test(`a truncated public queue ${
   for (let sequence = 2; sequence < 67; sequence++) f.owner.bufferPublicFrame({ ...f.frames[0]!, sequence });
   await f.owner.finish(); assert.equal(f.retained.length, completedPositive ? 1 : 0);
   assert.equal(f.calls.flush, completedPositive ? 1 : 0);
+});
+
+for (const queued of [false, true]) test(`late terminal ASR preserves observed audio time ${queued ? "from the public queue" : "from ordinary admission"}`, async () => {
+  const f = fixture({ now: "2026-11-02T00:00:04.000Z" });
+  if (queued) for (const frame of f.frames) f.owner.bufferPublicFrame(frame);
+  else await f.accept();
+  await f.owner.finish(); assert.equal(f.retained.length, 1);
+  assert.equal(f.retained[0]!.at, f.frames[1]!.capturedAt);
+});
+
+for (const fault of ["noncanonicalFrame", "invalidFrame", "futureFrame", "noncanonicalNow", "invalidNow"] as const)
+test(`terminal audio-time evidence fails closed for ${fault}`, async () => {
+  const f = fixture({ now: fault === "noncanonicalNow" ? "2026-11-02T00:00:01Z" : fault === "invalidNow" ? "invalid" : "2026-11-02T00:00:01.000Z" });
+  const frame = { ...f.frames[0]!, capturedAt: fault === "noncanonicalFrame" ? "2026-11-02T00:00:00Z" :
+    fault === "invalidFrame" ? "invalid" : fault === "futureFrame" ? "2026-11-02T00:00:02.000Z" : f.frames[0]!.capturedAt };
+  await f.owner.transcription.accept(frame, 1, f.caller.signal);
+  await f.owner.finish(); assert.equal(f.retained.length, 0); assert.equal(f.observed.length, 0);
 });
