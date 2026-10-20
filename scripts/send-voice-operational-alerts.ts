@@ -1,6 +1,7 @@
-import { createHmac } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { checkVoiceOperationsWindow } from "./check-voice-operations.ts";
+import { operationalAlertKey } from "../src/standalone/operational-alert.ts";
+import type { OperationalCounterKind } from "../src/voice/operational-counts.ts";
 
 type AlertDeliveryPorts = Readonly<{ fetch?: typeof fetch; allowTestLoopbackHttp?: boolean }>;
 
@@ -23,12 +24,11 @@ export async function sendVoiceOperationalAlerts(env: NodeJS.ProcessEnv,
   }
   const url = destination(rawUrl, ports.allowTestLoopbackHttp === true);
   const result = await checkVoiceOperationsWindow(env);
-  const scope = [env.ABBY_TENANT_ID?.trim(), env.ABBY_CLINIC_ID?.trim(), env.ABBY_LOCATION_ID?.trim()];
+  const scope = { tenantId: env.ABBY_TENANT_ID?.trim() ?? "", clinicId: env.ABBY_CLINIC_ID?.trim() ?? "", locationId: env.ABBY_LOCATION_ID?.trim() ?? "" };
   const send = ports.fetch ?? fetch;
   const crossed = result.days.flatMap(day => day.alerts.map(alert => ({ date: day.date, alert })));
   const attempts = await Promise.allSettled(crossed.map(async ({ date, alert }) => {
-    const alertKey = createHmac("sha256", Buffer.from(token, "hex"))
-      .update(JSON.stringify([scope, date, alert.kind, alert.threshold])).digest("hex");
+    const alertKey = operationalAlertKey(scope, date, alert.kind as OperationalCounterKind, alert.threshold!, token);
     const response = await send(url, { method: "POST", redirect: "manual", signal: AbortSignal.timeout(5_000),
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json",
         "idempotency-key": alertKey },

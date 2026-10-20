@@ -13,8 +13,9 @@ import type { PatientPhoneIndexClinicId, PatientPhoneIndexTenantId } from "./gen
 import type { PatientPhoneSyncClinicId, PatientPhoneSyncTenantId } from "./generated/public/PatientPhoneSync.ts";
 import type { PatientPhoneClinicStatusClinicId, PatientPhoneClinicStatusTenantId } from "./generated/public/PatientPhoneClinicStatus.ts";
 import type { PatientPhoneClinicScope, PatientPhoneLink } from "./postgres-patient-phone-index.ts";
+import { lockContactAccount, readContactRevision } from "./postgres-cliniko-contact-revision.ts";
 
-export type PhoneScanFailure = Readonly<{ kind: "invalidInput" | "storageFailure" | "staleScan" | "sourceChanged" | "tooManyResults" | "clinicDisconnected" }>;
+export type PhoneScanFailure = Readonly<{ kind: "invalidInput" | "storageFailure" | "staleScan" | "sourceChanged" | "tooManyResults" | "clinicDisconnected" | "contactChanged" }>;
 export type PhoneScanCursor = Readonly<{
   scanRef: string;
   countryCallingCode: string;
@@ -23,6 +24,7 @@ export type PhoneScanCursor = Readonly<{
   seenCount: number;
   linkCount: number;
   expectedGeneration: number | null;
+  contactVersion: number;
 }>;
 export type PhoneScanPage = Readonly<{
   page: number;
@@ -46,10 +48,10 @@ function compareIds(left: string, right: string): number {
 }
 
 function cursor(row: { scan_ref: string; country_calling_code: string; next_page: number; total_entries: number | null;
-  seen_count: number; link_count: number; expected_generation: number | null }): PhoneScanCursor {
+  seen_count: number; link_count: number; expected_generation: number | null; contact_version: number }): PhoneScanCursor {
   return { scanRef: row.scan_ref, countryCallingCode: row.country_calling_code,
     nextPage: row.next_page, totalEntries: row.total_entries, seenCount: row.seen_count,
-    linkCount: row.link_count, expectedGeneration: row.expected_generation };
+    linkCount: row.link_count, expectedGeneration: row.expected_generation, contactVersion: row.contact_version };
 }
 
 /** Checkpoints only Cliniko patient IDs, phone numbers, and non-patient scan metadata. */
@@ -63,6 +65,9 @@ export class PostgresPatientPhoneScan {
         !fingerprintPattern.test(credentialFingerprint)) return err({ kind: "invalidInput" });
     try {
       return await this.db.transaction().execute(async trx => {
+        await lockContactAccount(trx, scope.tenantId, credentialFingerprint);
+        const revision = await readContactRevision(trx, scope.tenantId, credentialFingerprint);
+        if (revision.blocked) return err({ kind: "contactChanged" });
         await sql`select pg_advisory_xact_lock(hashtext(${scope.tenantId}), hashtext(${scope.clinicId}))`.execute(trx);
         const connection = await trx.selectFrom("patient_phone_clinic_status").select("enabled")
           .where("tenant_id", "=", scope.tenantId as PatientPhoneClinicStatusTenantId)
@@ -78,6 +83,7 @@ export class PostgresPatientPhoneScan {
         if (existing && existing.country_calling_code === countryCallingCode &&
             existing.credential_fingerprint === credentialFingerprint &&
             existing.normalization_version === PHONE_NORMALIZATION_VERSION &&
+            existing.contact_version === revision.version &&
             existing.expected_generation === (head?.generation ?? null) &&
             existing.started_at instanceof Date && Date.now() - existing.started_at.getTime() < 86_400_000) {
           return ok(cursor(existing));
@@ -86,10 +92,11 @@ export class PostgresPatientPhoneScan {
           .where("tenant_id", "=", ids.tenant_id).where("clinic_id", "=", ids.clinic_id).execute();
         const fresh: PhoneScanCursor = { scanRef: randomUUID(), countryCallingCode,
           nextPage: 1, totalEntries: null, seenCount: 0, linkCount: 0,
-          expectedGeneration: head?.generation ?? null };
+          expectedGeneration: head?.generation ?? null, contactVersion: revision.version };
         await trx.insertInto("patient_phone_scan").values({ ...ids,
           scan_ref: fresh.scanRef, country_calling_code: countryCallingCode,
           credential_fingerprint: credentialFingerprint,
+          contact_version: revision.version,
           expected_generation: fresh.expectedGeneration, next_page: 1, total_entries: null,
           seen_count: 0, link_count: 0, normalization_version: PHONE_NORMALIZATION_VERSION }).execute();
         return ok(fresh);
@@ -206,12 +213,21 @@ export class PostgresPatientPhoneScan {
   async finish(scope: PatientPhoneClinicScope, scanRef: string): Promise<Result<number, PhoneScanFailure>> {
     if (!validScope(scope) || !scanRefPattern.test(scanRef)) return err({ kind: "invalidInput" });
     try {
+      // Read only the account selection before locking; reread the exact scan under both locks.
+      const selected = await this.db.selectFrom("patient_phone_scan").select("credential_fingerprint")
+        .where("tenant_id", "=", scope.tenantId as PatientPhoneScanTenantId)
+        .where("clinic_id", "=", scope.clinicId as PatientPhoneScanClinicId)
+        .where("scan_ref", "=", scanRef).executeTakeFirst();
+      if (!selected || !fingerprintPattern.test(selected.credential_fingerprint ?? "")) return err({ kind: "staleScan" });
       return await this.db.transaction().execute(async trx => {
+        await lockContactAccount(trx, scope.tenantId, selected.credential_fingerprint!);
         await sql`select pg_advisory_xact_lock(hashtext(${scope.tenantId}), hashtext(${scope.clinicId}))`.execute(trx);
         const row = await trx.selectFrom("patient_phone_scan").selectAll()
           .where("tenant_id", "=", scope.tenantId as PatientPhoneScanTenantId)
           .where("clinic_id", "=", scope.clinicId as PatientPhoneScanClinicId).forUpdate().executeTakeFirst();
-        if (!row || row.scan_ref !== scanRef) return err({ kind: "staleScan" });
+        if (!row || row.scan_ref !== scanRef || row.credential_fingerprint !== selected.credential_fingerprint) return err({ kind: "staleScan" });
+        const revision = await readContactRevision(trx, scope.tenantId, selected.credential_fingerprint!);
+        if (revision.blocked || revision.version !== row.contact_version) return err({ kind: "contactChanged" });
         if (row.normalization_version !== PHONE_NORMALIZATION_VERSION ||
             !fingerprintPattern.test(row.credential_fingerprint ?? "") ||
             row.total_entries === null || row.seen_count !== row.total_entries ||
@@ -231,10 +247,12 @@ export class PostgresPatientPhoneScan {
           clinic_id: scope.clinicId as PatientPhoneSyncClinicId, generation, completed_at: new Date(),
           country_calling_code: row.country_calling_code,
           normalization_version: row.normalization_version,
+          contact_version: row.contact_version,
           credential_fingerprint: row.credential_fingerprint })
           .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id"])
             .doUpdateSet({ generation, completed_at: new Date(), country_calling_code: row.country_calling_code,
               normalization_version: row.normalization_version,
+              contact_version: row.contact_version,
               credential_fingerprint: row.credential_fingerprint })).execute();
         await trx.deleteFrom("patient_phone_scan")
           .where("tenant_id", "=", scope.tenantId as PatientPhoneScanTenantId)

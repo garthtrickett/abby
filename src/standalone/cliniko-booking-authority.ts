@@ -3,6 +3,9 @@ import type { HostReadFailure } from "../core/host.ts";
 import type { ActionRequest, BookableOffer, LocationScope, Result } from "../core/model.ts";
 import { approvalInstant, approvalRef } from "./owner-file-clinic-approval.ts";
 import { sameScope, validClinikoId } from "./appointment-change-authority.ts";
+import type { ClinikoBookingGuard } from "./cliniko-booking-guard.ts";
+
+export type BookingNativeRead = Readonly<{ source: ClinikoBookingGuard; receipt: object }>;
 
 export type ClinikoBookingEvidence = Readonly<{
   scope: LocationScope; callId: string; sessionId: string; policyVersion: string; patientId: string;
@@ -16,6 +19,8 @@ export type ClinikoBookingQuery = Readonly<{
 export interface ClinikoBookingAuthority {
   /** Fresh approved selection/eligibility/available time at both phases; this is never slot exclusivity. */
   resolve(query: ClinikoBookingQuery): Promise<Result<ClinikoBookingEvidence, HostReadFailure>>;
+  /** Complete preparation before the final availability read; only local checks may follow it. */
+  resolveForSend(query: ClinikoBookingQuery, nativeRead?: BookingNativeRead): Promise<Result<ClinikoBookingEvidence, HostReadFailure>>;
 }
 export type PreparedClinikoBooking = Readonly<{
   request: Extract<ActionRequest, { kind: "book" }>;
@@ -42,7 +47,7 @@ export function validClinikoBookingEvidence(value: ClinikoBookingEvidence, query
 }
 export function bookingProviderRequest(prepared: PreparedClinikoBooking, marker: string): ClinikoBookingRequest {
   return { scope: prepared.request.patient.scope, patientId: prepared.request.patient.patientRef,
-    startsAt: prepared.request.offer.startsAt, marker };
+    startsAt: prepared.request.offer.startsAt, endsAt: prepared.evidence.endsAt, marker };
 }
 export function sameClinikoBookingEvidence(left: ClinikoBookingEvidence, right: ClinikoBookingEvidence): boolean {
   return left.endsAt === right.endsAt && left.timeZone === right.timeZone && left.bookingPolicyVersion === right.bookingPolicyVersion &&

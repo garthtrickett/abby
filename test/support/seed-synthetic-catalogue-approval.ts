@@ -12,6 +12,7 @@ export async function seedSyntheticCatalogueApproval(db: Kysely<Database>, input
   routeVersion: string;
   apiKey: string;
   policyVersion?: string;
+  businessId?: string;
   alternatives?: readonly Readonly<{ practitionerId: string; appointmentTypeId: string }>[];
 }>): Promise<void> {
   if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || input.apiKey !== "synthetic-key-au5") {
@@ -22,10 +23,10 @@ export async function seedSyntheticCatalogueApproval(db: Kysely<Database>, input
   const result = await store.change(input.scope, 0, {
     scope: input.scope,
     route: { accountRef: input.accountRef, dialedNumber: input.dialedNumber, routeVersion: input.routeVersion },
-    selection: { businessId: "11", practitionerId: "22", appointmentTypeId: "33",
+    selection: { businessId: input.businessId ?? "11", practitionerId: "22", appointmentTypeId: "33",
       policyVersion: input.policyVersion ?? "0" },
     alternatives: (input.alternatives ?? []).map(choice => ({
-      businessId: "11", practitionerId: choice.practitionerId,
+      businessId: input.businessId ?? "11", practitionerId: choice.practitionerId,
       appointmentTypeId: choice.appointmentTypeId, policyVersion: input.policyVersion ?? "0",
     })),
     credentialFingerprint: clinikoCredentialFingerprint(input.apiKey),

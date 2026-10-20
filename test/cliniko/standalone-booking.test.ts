@@ -8,7 +8,7 @@ async function prepare(f: Awaited<ReturnType<typeof standaloneBookingFixture>>) 
   const ref = await f.verify(); assert.ok((await f.propose(ref)).ok); assert.ok((await f.confirm()).ok); return ref;
 }
 
-test("E2E-279 standalone best-effort booking uses actual email proof, played SAM affirmation, review and exact/conflict inspections", async () => {
+test("E2E-279 standalone booking uses actual email proof, played SAM affirmation, owned review and exact native acknowledgement", async () => {
   const f = await standaloneBookingFixture();
   try {
     const ref = await prepare(f); assert.equal(f.recalls.length, 0); assert.equal(f.posts, 0);
@@ -19,7 +19,8 @@ test("E2E-279 standalone best-effort booking uses actual email proof, played SAM
     assert.equal(review.value.request.patientId, verificationCanaries[2]);
     assert.deepEqual([review.value.request.operation.startsAt, review.value.request.operation.endsAt], [f.evidence.offer.startsAt, f.evidence.endsAt]);
     assert.equal(f.traffic.filter(value => value === "POST /v1/individual_appointments").length, 1);
-    assert.ok(f.traffic.includes("GET /v1/individual_appointments/91")); assert.ok(f.traffic.includes("GET /v1/individual_appointments/91/conflicts"));
+    assert.equal(f.traffic.includes("GET /v1/individual_appointments/91"), false);
+    assert.equal(f.traffic.includes("GET /v1/individual_appointments/91/conflicts"), false);
     assert.equal(f.claims, f.traffic.length); assert.equal((await f.discovery()).pending.length, 1);
     await f.drain(); assert.equal(f.posts, 1);
     const progress = await f.propose(ref, "second-proposal");
@@ -97,7 +98,7 @@ test("E2E-279 lost review or booking responses keep pending provider review, nev
   }
 });
 
-test("E2E-279 inconsistent/unreadable created target and conflicts stay unresolved without automatic cancellation or later upgrade", async () => {
+test("E2E-279 later unreadable, changed or conflicting diary state cannot veto a validated creation acknowledgement", async () => {
   for (const failure of ["duration", "patient", "marker", "cancelled", "unavailable", "malformed", "conflict", "conflictMalformed", "conflictUnavailable"] as const) {
     const f = await standaloneBookingFixture();
     try {
@@ -106,7 +107,8 @@ test("E2E-279 inconsistent/unreadable created target and conflicts stay unresolv
       else if (failure === "conflictMalformed") f.setConflict("malformed");
       else if (failure === "conflictUnavailable") f.setConflict("unavailable"); else f.setInspection(failure);
       await f.drain(); assert.equal(f.posts, 1); assert.equal(f.recalls.length, 1);
-      const action = Object.values((await f.state()).actions)[0]!; assert.notEqual(action.status, "committed");
+      const action = Object.values((await f.state()).actions)[0]!; assert.equal(action.status, "committed");
+      assert.equal(f.traffic.some(value => value.startsWith("GET /v1/individual_appointments/91")), false);
       f.setInspection("exact"); f.setConflict("clear");
       assert.deepEqual(await f.host.reconcile(action.mutation), { kind: "stillUnknown", actionKey: action.key });
       assert.equal(f.traffic.some(value => value.startsWith("PATCH ") || value.startsWith("DELETE ")), false);
@@ -114,12 +116,12 @@ test("E2E-279 inconsistent/unreadable created target and conflicts stay unresolv
   }
 });
 
-test("E2E-279 permission loss while the clinical POST is in flight prevents protected inspections and success disclosure", async () => {
+test("E2E-279 permission loss after dispatch does not erase an exact acknowledgement or authorize fresh protected reads", async () => {
   const f = await standaloneBookingFixture();
   try {
     await prepare(f); f.setOnBooking(async () => { f.setPermitted(false); }); await f.drain(); assert.equal(f.posts, 1);
     assert.equal(f.traffic.includes("GET /v1/individual_appointments/91"), false);
-    assert.notEqual(Object.values((await f.state()).actions)[0]!.status, "committed");
+    assert.equal(Object.values((await f.state()).actions)[0]!.status, "committed");
   } finally { await f.close(); }
 });
 
@@ -129,6 +131,27 @@ test("E2E-279 read/cancellation-only proof and unproven staff declarations canno
     try {
       const ref = await f.verify(); await f.propose(ref); await f.drain();
       assert.equal(f.recalls.length, 0); assert.equal(f.posts, 0); assert.deepEqual(f.sourceQueries, []);
+    } finally { await f.close(); }
+  }
+});
+
+test("a validated booking acknowledgement survives host shutdown or observer failure before promise delivery", async () => {
+  for (const failure of ["close", "observer"] as const) {
+    const f = await standaloneBookingFixture();
+    try {
+      await prepare(f);
+      const write = f.writer.writeOnce.bind(f.writer);
+      f.writer.writeOnce = (request, signal, beforeSend, onAccepted, atDispatch) => write(request, signal, beforeSend, receipt => {
+        onAccepted?.(receipt);
+        if (failure === "close") f.host.dispose();
+        else throw new Error("synthetic downstream observer failure");
+      }, atDispatch);
+      assert.ok((await f.drain()).ok);
+      const action = Object.values((await f.state()).actions)[0]!;
+      assert.equal(action.status, "committed");
+      assert.equal(f.posts, 1);
+      assert.equal(f.recalls.length, 1);
+      assert.equal(f.traffic.some(value => value.startsWith("GET /v1/individual_appointments/91")), false);
     } finally { await f.close(); }
   }
 });
@@ -144,6 +167,8 @@ test("E2E-279 opaque issued proof references may begin with either base64url pun
         const value = await verifyOperation(scope, ref === alias ? originalRef : ref, operation, now);
         return value.ok ? { ok: true, value: { ...value.value, verificationRef: alias } } : value;
       };
+      const ownsReference = f.session.proof.ownsLiveReference.bind(f.session.proof);
+      f.session.proof.ownsLiveReference = (ref, operation, now) => ownsReference(ref === alias ? originalRef : ref, operation, now);
       assert.ok((await f.propose(alias)).ok); assert.ok((await f.confirm()).ok); await f.drain();
       assert.equal(f.posts, 1); assert.equal(Object.values((await f.state()).actions)[0]!.status, "committed");
     } finally { await f.close(); }
@@ -169,8 +194,8 @@ test("E2E-279 foreign caller/clinic/session/policy/offer evidence and invalid in
   }
 });
 
-test("E2E-279 close during held offer or post-send conflict work cannot create a late action or confirm a late clear result", async () => {
-  for (const stage of ["offer", "conflict"] as const) {
+test("E2E-279 close during held proposal or before creation acknowledgement cannot manufacture a successful result", async () => {
+  for (const stage of ["offer", "create"] as const) {
     const f = await standaloneBookingFixture(); let release: () => void = () => undefined, entered: () => void = () => undefined;
     const ready = new Promise<void>(resolve => { entered = resolve; });
     try {
@@ -183,7 +208,7 @@ test("E2E-279 close during held offer or post-send conflict work cannot create a
         assert.deepEqual((await f.state()).actions, {}); assert.equal(f.posts, 0); assert.equal(f.recalls.length, 0);
       } else {
         assert.ok((await f.propose(ref)).ok); assert.ok((await f.confirm()).ok);
-        f.setOnConflict(async () => { entered(); await new Promise<void>(resolve => { release = resolve; }); });
+        f.setOnBooking(async () => { entered(); await new Promise<void>(resolve => { release = resolve; }); });
         const pending = f.drain(); await ready; f.host.dispose(); await pending;
         release(); await new Promise<void>(resolve => setImmediate(resolve));
         const action = Object.values((await f.state()).actions)[0]!;

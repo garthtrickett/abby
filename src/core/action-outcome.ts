@@ -1,4 +1,5 @@
 import type { ActionRequest, ActionState } from "./model.ts";
+import { classMovementOutcomeText } from "./class-movement-continuation.ts";
 
 export function confirmedActionText(kind: ActionRequest["kind"]): string {
   switch (kind) {
@@ -6,12 +7,15 @@ export function confirmedActionText(kind: ActionRequest["kind"]): string {
     case "cancel": return "Your appointment cancellation is confirmed.";
     case "reschedule": return "Your appointment move is confirmed.";
     case "intake": return "Your details were saved. No appointment is confirmed yet.";
+    case "patientUpdate": return "Your patient details match the confirmed correction. Your appointments remain unchanged.";
+    case "confirmationResend": return "The mail service accepted your appointment-details email. I can't confirm that it reached your inbox.";
   }
 }
 
 /** Status comes from the committed SAM record, never caller or model wording. */
 export function actionOutcomeText(action: ActionState | undefined): string {
   if (!action) return "I haven't completed an action in this call.";
+  if (action.classMovement) return classMovementOutcomeText(action.classMovement);
   if (action.status === "committed") return confirmedActionText(action.kind);
   if (action.status === "uncertain" || action.status === "needsReview" || action.status === "dispatched")
     return action.kind === "intake" && action.mutation.request.kind === "intake" && action.mutation.request.recoveryContract === "callerMediated"

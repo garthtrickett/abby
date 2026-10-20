@@ -6,8 +6,48 @@ import { EffectWorker } from "../../src/core/effect-worker.ts";
 import type { HostMutation, HostWriteReceipt, ReconcileObservation, StaffItem, StaffTaskReceipt } from "../../src/core/model.ts";
 import { FakeHost, now, setup, success } from "./fixture.ts";
 import type { TimerPort } from "../../src/core/timer.ts";
+import type { HostEffects } from "../../src/core/host.ts";
 
 const deadlineMs = 10;
+
+test("only an already acknowledged matching booking survives a worker deadline", async () => {
+  for (const scenario of ["acknowledged", "afterDeadline", "foreignAction", "otherOperation"] as const) {
+    const app = await setup(`ack-boundary-${scenario}`, { cancel: "execute" });
+    const request = scenario === "otherOperation" ? {
+      kind: "cancel" as const, patient: app.patient,
+      target: { scope: app.scope, appointmentRef: "appointment-1", patientRef: app.patient.patientRef,
+        startsAt: "2026-09-29T11:00:00.000Z", endsAt: "2026-09-29T11:30:00.000Z", timeZone: "Australia/Sydney" },
+      terms: { version: "cancel-terms", approvedText: "Cancel this appointment", expiresAt: "2026-09-29T10:00:00.000Z" },
+    } : app.book();
+    await app.turn("propose", "Change appointment", { kind: "requestAction", request });
+    const action = await app.pendingAction();
+    await app.confirm(action.key);
+    let fire!: () => void;
+    let report!: NonNullable<Parameters<HostEffects["write"]>[3]>;
+    let started!: () => void;
+    const writing = new Promise<void>(resolve => { started = resolve; });
+    const timer: TimerPort = { schedule(callback) { fire = callback; return {}; }, cancel() {} };
+    class Adapter extends FakeHost {
+      override async write(mutation: HostMutation, _at: string, _signal?: AbortSignal,
+        onAcknowledged?: Parameters<HostEffects["write"]>[3]): Promise<HostWriteReceipt> {
+        this.writes.push(mutation);
+        assert.ok(onAcknowledged); report = onAcknowledged; started();
+        return new Promise(() => undefined);
+      }
+    }
+    const host = new Adapter(), worker = new EffectWorker(app.runtime, host, undefined, undefined, { timer });
+    const pending = worker.process(app.callId, `${action.key}:write`, now);
+    await writing;
+    if (scenario !== "afterDeadline") report({ kind: "committed", actionKey: scenario === "foreignAction" ? "foreign-action" : action.key, hostRef: "exact-native-booking" });
+    fire();
+    await pending;
+    if (scenario === "afterDeadline") report({ kind: "committed", actionKey: action.key, hostRef: "too-late" });
+    const state = await app.state();
+    assert.equal(state.actions[action.key]?.status, scenario === "acknowledged" ? "committed" : "uncertain");
+    assert.equal(host.writes.length, 1);
+    if (scenario === "acknowledged") assert.equal(state.effects[`${action.key}:write:reconcile`], undefined);
+  }
+});
 
 test("E2E-306: trusted adapter deadline, default and explicit override bound actual dispatch", async () => {
   for (const [label, declared, override, expected] of [

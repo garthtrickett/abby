@@ -65,6 +65,7 @@ export class TwilioConnectedCall {
   private retriedSilence = false;
   private blockedSilenceChecks = 0;
   private listeningControl: "pause" | "goodbye" | undefined;
+  private confirmationWaitMs: number | undefined;
 
   constructor(config: TwilioConnectedCallConfig) {
     const silenceWaitMs = config.silenceWaitMs ?? 15_000;
@@ -121,7 +122,7 @@ export class TwilioConnectedCall {
     this.cancelSilenceTimer();
     if (this.closed) return;
     const delay = kind === "playback" ? this.playbackDeadlineMs : this.listeningControl === "goodbye" ? 5_000 :
-      this.listeningControl === "pause" ? 30_000 : this.silenceWaitMs;
+      this.listeningControl === "pause" ? 30_000 : this.confirmationWaitMs ?? this.silenceWaitMs;
     const generation = this.silenceGeneration;
     this.silenceHandle = this.silenceTimer.schedule(() => {
       if (generation !== this.silenceGeneration) return;
@@ -144,8 +145,13 @@ export class TwilioConnectedCall {
     this.scheduleSilenceTimer("playback");
   }
 
-  private trackDelivery(delivery: Readonly<{ kind: string; playbackId?: string; conversationControl?: "pause" | "goodbye" }>, kind: "normal" | "retry" | "final" = "normal"): void {
+  private trackDelivery(delivery: Readonly<{ kind: string; playbackId?: string; conversationControl?: "pause" | "goodbye"; confirmationWaitSeconds?: number }>, kind: "normal" | "retry" | "final" = "normal"): void {
     this.listeningControl = delivery.kind === "queued" ? delivery.conversationControl : undefined;
+    // This is an explicit caller-facing wait, starting only after its playback mark.
+    // It does not extend confirmation evidence or execute the pending action.
+    this.confirmationWaitMs = delivery.kind === "queued" && Number.isSafeInteger(delivery.confirmationWaitSeconds) &&
+      delivery.confirmationWaitSeconds! >= 1 && delivery.confirmationWaitSeconds! <= 60 ?
+      delivery.confirmationWaitSeconds! * 1000 + 3000 : undefined;
     if (delivery.kind === "queued" && delivery.playbackId) this.watchPlayback(delivery.playbackId, kind);
     else if (delivery.kind === "none" || delivery.kind === "played") this.scheduleSilenceTimer("listening");
   }
@@ -159,6 +165,7 @@ export class TwilioConnectedCall {
     if (this.pendingPlayback) return;
     if (this.listeningControl === "goodbye") { await this.closeSession("normal"); return; }
     this.listeningControl = undefined;
+    this.confirmationWaitMs = undefined;
     const stage = this.retriedSilence ? "final" : "retry";
     const result = await this.call.silenceTimeout(stage, this.now());
     if (!result.ok) {
@@ -199,6 +206,7 @@ export class TwilioConnectedCall {
     this.cancelSilenceTimer();
     this.pendingPlayback = undefined;
     this.listeningControl = undefined;
+    this.confirmationWaitMs = undefined;
     this.stopCall();
     void this.lease.stop();
     this.stream.close();
@@ -214,11 +222,12 @@ export class TwilioConnectedCall {
   }
 
   private privateInputMode(): "collecting" | "draining" | undefined {
+    if (!this.locationBound) return undefined;
     if (this.privateKeypadInput?.blocked()) return "collecting";
     return this.privateResuming ? "draining" : undefined;
   }
 
-  private async handlePrivateInput(event: TwilioStreamEvent, privateAtArrival: "collecting" | "draining" | undefined):
+  private async handlePrivateInput(event: TwilioStreamEvent, privateAtArrival: "collecting" | "draining" | undefined, digitArrival?: object):
     Promise<Result<TwilioConnectedProgress, TwilioConnectedFailure> | undefined> {
     if (event.kind === "media" && (privateAtArrival || this.privateInputMode())) {
       const discarded = this.call.discardPrivateMedia(event.frame);
@@ -236,11 +245,12 @@ export class TwilioConnectedCall {
       }
       return ok({ kind: "privateInput" });
     }
-    if (event.kind === "dtmf" && (privateAtArrival || this.privateInputMode())) {
+    const privateEdit = event.kind === "dtmf" && this.privateKeypadInput?.handlesDigit?.(event.digit) === true;
+    if (event.kind === "dtmf" && (privateAtArrival || this.privateInputMode() || privateEdit)) {
       if (!this.privateKeypadInput) { await this.failSession(); return err({ kind: "privateInputUnavailable" }); }
       // A queued private digit never becomes an availability choice after verification opens media.
-      if (!this.privateKeypadInput.blocked()) return ok({ kind: "privateInput" });
-      const entered = await this.privateKeypadInput.accept(event.digit);
+      if (!this.privateKeypadInput.blocked() && !privateEdit) return ok({ kind: "privateInput" });
+      const entered = await this.privateKeypadInput.accept(event.digit, digitArrival);
       if (entered === "failed") { await this.failSession(); return err({ kind: "privateInputUnavailable" }); }
       if (entered === "verified") { this.privateResuming = true; this.privateQuietMs = 0; this.privateQuietUntil = undefined; }
       if (!this.pendingPlayback) this.scheduleSilenceTimer("listening");
@@ -249,7 +259,7 @@ export class TwilioConnectedCall {
     return undefined;
   }
 
-  private async handle(received: Result<TwilioStreamEvent, TwilioStreamFailure>, privateAtArrival: "collecting" | "draining" | undefined):
+  private async handle(received: Result<TwilioStreamEvent, TwilioStreamFailure>, privateAtArrival: "collecting" | "draining" | undefined, digitArrival?: object):
     Promise<Result<TwilioConnectedProgress, TwilioConnectedFailure>> {
     if (this.closed) return err({ kind: "streamClosed" });
     if (!received.ok) {
@@ -263,7 +273,7 @@ export class TwilioConnectedCall {
       if (!started.ok) { await this.failSession(); return started; }
       this.begun = true;
       this.locationBound = started.value.kind === "admitted";
-      if (this.privateKeypadInput && (started.value.kind !== "admitted" || !this.privateKeypadInput.start())) {
+      if (this.privateKeypadInput && this.locationBound && !this.privateKeypadInput.start()) {
         await this.failSession(); return err({ kind: "privateInputUnavailable" });
       }
       try { this.lease.start(); }
@@ -271,7 +281,7 @@ export class TwilioConnectedCall {
       this.trackDelivery(started.value.kind === "locationChoice" ? started.value.prompt : started.value.delivery);
       return ok({ kind: "started", value: started.value });
     }
-    const privateInput = await this.handlePrivateInput(event, privateAtArrival);
+    const privateInput = await this.handlePrivateInput(event, privateAtArrival, digitArrival);
     if (privateInput) return privateInput;
     if (event.kind === "media") {
       const progressed = await this.call.acceptMedia(event.frame);
@@ -280,10 +290,16 @@ export class TwilioConnectedCall {
         this.cancelSilenceTimer();
         this.pendingPlayback = undefined;
         this.listeningControl = undefined;
+        this.confirmationWaitMs = undefined;
         this.retriedSilence = false;
         this.blockedSilenceChecks = 0;
       } else if (progressed.value.kind === "turnCompleted") {
-        if (progressed.value.turn.kind === "locationBound") this.locationBound = true;
+        if (progressed.value.turn.kind === "locationBound") {
+          this.locationBound = true;
+          if (this.privateKeypadInput && !this.privateKeypadInput.start()) {
+            await this.failSession(); return err({ kind: "privateInputUnavailable" });
+          }
+        }
         this.trackDelivery(progressed.value.delivery);
       }
       return ok({ kind: "media", value: progressed.value });
@@ -299,6 +315,7 @@ export class TwilioConnectedCall {
       this.cancelSilenceTimer();
       this.pendingPlayback = undefined;
       this.listeningControl = undefined;
+      this.confirmationWaitMs = undefined;
       this.retriedSilence = false;
       this.blockedSilenceChecks = 0;
       if (progressed.value.kind === "turnCompleted") this.trackDelivery(progressed.value.delivery);
@@ -340,6 +357,9 @@ export class TwilioConnectedCall {
     try { privateAtArrival = this.privateInputMode(); }
     catch { this.stopCall(); return this.failSession().then(() => err({ kind: "privateInputUnavailable" })); }
     const received = this.stream.receive(raw);
+    let digitArrival: object | undefined;
+    try { digitArrival = received.ok && received.value.kind === "dtmf" ? this.privateKeypadInput?.captureDigit?.(received.value.digit, this.pendingPlayback !== undefined) : undefined; }
+    catch { this.stopCall(); return this.failSession().then(() => err({ kind: "privateInputUnavailable" })); }
     if (!received.ok) this.stopCall();
     if (received.ok && received.value.kind === "stopped") this.stopCall();
     if (received.ok && received.value.kind === "media" && !privateAtArrival) this.call.observePendingCorrection(received.value.frame);
@@ -355,7 +375,7 @@ export class TwilioConnectedCall {
       });
     }
     this.outstanding += 1;
-    const handled = this.tail.then(() => this.handle(received, privateAtArrival)).catch(async () => {
+    const handled = this.tail.then(() => this.handle(received, privateAtArrival, digitArrival)).catch(async () => {
       try { await this.failSession(); } catch { /* original failure remains authoritative */ }
       return err<TwilioConnectedFailure>({ kind: "streamUnavailable" });
     });

@@ -5,6 +5,7 @@ import type { BookingMenuRead } from "../core/booking-menu.ts";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import { CallerVerificationSession } from "./caller-verification-session.ts";
+import { IntakeBookingProof } from "./intake-booking-proof.ts";
 import { ClinikoBookingOffers } from "./cliniko-booking-offers.ts";
 import type { BookingChoices } from "./cliniko-booking-offers.ts";
 import { clinicDateAt } from "./clinic-clock.ts";
@@ -38,7 +39,12 @@ export class ClinikoBookingMenu implements BookingMenuHost {
     const epoch = ++this.#epoch; this.#menu = undefined;
     this.#previous = undefined;
     const signal = AbortSignal.any([query.signal, this.#lifetime.signal]);
-    const grant = await this.#config.verification.verified(signal);
+    // This is only private routing metadata. The concrete offers reader
+    // revalidates native patient authority before and after reading availability.
+    const verification = this.#config.verification;
+    const grant = (verification instanceof CallerVerificationSession && verification.constructor === CallerVerificationSession ||
+      verification instanceof IntakeBookingProof && verification.constructor === IntakeBookingProof)
+      ? await verification.ownedGrant("appointments.book", signal) : await verification.verified(signal);
     if (!grant || !this.#matches(query) || signal.aborted || epoch !== this.#epoch) return denied();
     const result = await this.#config.offers.list(query.scope, grant.verificationRef, query.from, query.to, query.now, signal, this.#window);
     if (!result.ok || !this.#matches(query) || signal.aborted || epoch !== this.#epoch) return denied();
@@ -46,6 +52,7 @@ export class ClinikoBookingMenu implements BookingMenuHost {
     this.#menu = { turnId: query.turnId, verificationRef: grant.verificationRef, choices };
     const { scope, callId, sessionId, policyVersion, observedAt, timeZone, practitionerName, appointmentTypeName, reservable } = choices;
     return ok({ scope: { ...scope }, callId, sessionId, policyVersion, observedAt, timeZone, practitionerName, appointmentTypeName, reservable, ...(choices.window ? { window: choices.window } : {}),
+      ...(choices.maxSearchDays !== undefined ? { maxSearchDays: choices.maxSearchDays } : {}),
       choices: choices.choices.map(({ startsAt, endsAt, expiresAt }) => ({ startsAt, endsAt, expiresAt })) });
   }
   async selectBookingMenu(incoming: BookingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>):
@@ -55,7 +62,13 @@ export class ClinikoBookingMenu implements BookingMenuHost {
     this.#menu = undefined; ++this.#epoch; // One selection consumes this menu before any asynchronous work.
     const choice = menu.choices.choices[query.choice-1];
     const signal = AbortSignal.any([query.signal, this.#lifetime.signal]);
-    const grant = await this.#config.verification.verified(signal);
+    // Selecting these private references grants no patient access or booking.
+    // The proposal guard validates native authority before it can create SAM
+    // confirmation speech; later send/inspection validates it independently.
+    const verification = this.#config.verification;
+    const grant = (verification instanceof CallerVerificationSession && verification.constructor === CallerVerificationSession ||
+      verification instanceof IntakeBookingProof && verification.constructor === IntakeBookingProof)
+      ? await verification.ownedGrant("appointments.book", signal) : await verification.verified(signal);
     if (!choice || !grant || grant.verificationRef !== menu.verificationRef || !this.#matches(query) || signal.aborted ||
         Date.parse(choice.expiresAt) <= Date.parse(query.now)) return denied();
     this.#previous = menu;

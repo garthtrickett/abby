@@ -1,4 +1,5 @@
 import type { ClinicIntakeAuditPage } from "../core/clinic-intake-setting.ts";
+import type { ClinicPatientCorrectionAuditPage } from "../core/clinic-patient-correction-setting.ts";
 import type { NotificationAuditPage, NotificationCatalogue, NotificationKind, NotificationOwner } from "../core/notification-policy.ts";
 import type { VoiceCatalogue } from "../core/voice-profile.ts";
 import type { VoiceSettingAuditPage } from "../core/clinic-voice-setting.ts";
@@ -63,6 +64,8 @@ export type GatewayCommand =
   | Readonly<{ kind: "settings.appointments.cancellation.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "settings.appointments.rescheduling.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "settings.patients.firstTimeIntake.audit.v1"; afterVersion?: number }>
+  | Readonly<{ kind: "settings.patients.corrections.enabled.change.v1"; expectedVersion: string; enabled: boolean }>
+  | Readonly<{ kind: "settings.patients.corrections.audit.v1"; afterVersion?: number }>
   | Readonly<{ kind: "settings.routing.afterHours.change.v1"; expectedVersion: string;
     mode: AfterHoursMode; infoVersion?: string; approvedText?: string }>
   | Readonly<{ kind: "settings.routing.afterHours.audit.v1"; afterVersion?: number }>
@@ -82,6 +85,8 @@ export type GatewayCommand =
   | Readonly<{ kind: "booking.propose.v2"; turn: FinalCallerTurn; verificationRef: string; offerRef: string; now: string }>
   | Readonly<{ kind: "appointments.change.propose.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; selection: AppointmentChangeSelection; now: string }>
   | Readonly<{ kind: "patients.intake.propose.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; draftRef: string; now: string }>
+  | Readonly<{ kind: "patients.correction.propose.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; correctionRef: string; now: string }>
+  | Readonly<{ kind: "notifications.resend.propose.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; requestRef: string; now: string }>
   | Readonly<{ kind: "calls.urgent.respond.v1"; turn: FinalCallerTurn; now: string }>
   | Readonly<{ kind: "calls.presence.respond.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; now: string }>
   | Readonly<{ kind: "calls.missedCall.respond.v1"; turn: FinalCallerTurn & Readonly<{ sessionId: string }>; now: string }>
@@ -105,8 +110,8 @@ export type GatewayCommand =
   | Readonly<{ kind: "clinic.availability.approval.change.v2"; route: ClinicAvailabilityRoute; selection: ClinicAvailabilitySelection;
     alternatives: readonly ClinicAvailabilitySelection[]; expectedVersion: number }>
   | Readonly<{ kind: "clinic.availability.approval.revoke.v1"; expectedVersion: number }>
-  | Readonly<{ kind: "rescheduling.menu.read.v1"; turn: FinalCallerTurn; stage: "targets" | "offers"; from: string; to: string; now: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null }>
-  | Readonly<{ kind: "rescheduling.menu.select.v1"; turn: FinalCallerTurn; stage: "targets" | "offers"; choice: 1 | 2 | 3; now: string }>
+  | Readonly<{ kind: "rescheduling.menu.read.v1"; turn: FinalCallerTurn; stage: "targets" | "practitioners" | "offers"; from: string; to: string; now: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null; nextPractitioners?: true }>
+  | Readonly<{ kind: "rescheduling.menu.select.v1"; turn: FinalCallerTurn; stage: "targets" | "practitioners" | "offers"; choice: 1 | 2 | 3; now: string }>
   | Readonly<{ kind: "booking.offers.read.v1"; turn: FinalCallerTurn; from: string; to: string; now: string; preference?: import("../core/booking-search-preference.ts").BookingSearchPreference; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null }>
   | Readonly<{ kind: "booking.offers.select.v1"; turn: FinalCallerTurn; choice: 1 | 2 | 3; now: string }>
   | Readonly<{ kind: "availability.read.v2"; turn: FinalCallerTurn; from: string; to: string; now: string }>
@@ -142,6 +147,7 @@ export type GatewayReply =
   | Readonly<{ kind: "cancellationSettingAudit"; page: CancellationSettingAuditPage }>
   | Readonly<{ kind: "reschedulingSettingAudit"; page: ReschedulingSettingAuditPage }>
   | Readonly<{ kind: "firstTimeIntakeSettingAudit"; page: ClinicIntakeAuditPage }>
+  | Readonly<{ kind: "patientCorrectionSettingAudit"; page: ClinicPatientCorrectionAuditPage }>
   | Readonly<{ kind: "afterHoursSettingAudit"; page: AfterHoursSettingAuditPage }>
   | Readonly<{ kind: "urgentSettingAudit"; page: UrgentSettingAuditPage }>
   | Readonly<{ kind: "staffScheduleSettingAudit"; page: StaffScheduleSettingAuditPage }>
@@ -149,6 +155,8 @@ export type GatewayReply =
   | Readonly<{ kind: "bookingProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "appointmentChangeProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "intakeProposal"; progress: CallCommandProgress }>
+  | Readonly<{ kind: "patientCorrectionProposal"; progress: CallCommandProgress }>
+  | Readonly<{ kind: "confirmationResendProposal"; progress: CallCommandProgress }>
   | Readonly<{ kind: "staffRequestProgress"; progress: CallCommandProgress }>
   | Readonly<{ kind: "urgentResponseProgress"; progress: CallCommandProgress }>
   | Readonly<{ kind: "conversationPresenceProgress"; progress: CallCommandProgress }>
@@ -226,6 +234,8 @@ export class CommandGateway {
     const permitted: CapabilityId[] = ["settings.read.v1", "booking.propose.v2", "appointments.change.propose.v1",
       "patients.intake.propose.v1", "knowledge.answer.v2", "calls.urgent.respond.v1", "calls.notifications.outcome.v1", "calls.presence.respond.v1", "calls.missedCall.respond.v1"];
     if (this.reception.bookingHorizonEnabled()) permitted.push("booking.horizon.read.v1");
+    if (this.reception.patientCorrectionEnabled()) permitted.push("patients.correction.propose.v1");
+    if (this.reception.confirmationResendEnabled()) permitted.push("notifications.resend.propose.v1");
     if (this.reception.requestBoundaryEnabled()) permitted.push("calls.requestBoundary.respond.v1");
     if (this.reception.callerIdentityEnabled()) permitted.push("calls.callerIdentity.deny.v1");
     if (this.reception.reschedulingMenuEnabled()) permitted.push("rescheduling.menu.read.v1", "rescheduling.menu.select.v1");
@@ -255,6 +265,7 @@ export class CommandGateway {
         "settings.appointments.cancellation.enabled.change.v1", "settings.appointments.cancellation.audit.v1",
         "settings.appointments.rescheduling.enabled.change.v1", "settings.appointments.rescheduling.audit.v1",
         "settings.patients.firstTimeIntake.enabled.change.v1", "settings.patients.firstTimeIntake.audit.v1",
+        "settings.patients.corrections.enabled.change.v1", "settings.patients.corrections.audit.v1",
         "settings.routing.afterHours.change.v1", "settings.routing.afterHours.audit.v1",
         "settings.routing.urgent.change.v1", "settings.routing.urgent.audit.v1");
       permitted.push("settings.routing.staffSchedule.change.v1", "settings.routing.staffSchedule.audit.v1");
@@ -361,6 +372,14 @@ export class CommandGateway {
       case "settings.patients.firstTimeIntake.audit.v1": {
         const result = await this.policy.listFirstTimeIntakeChanges(this.actor.scope, command.afterVersion);
         return result.ok ? ok({ kind: "firstTimeIntakeSettingAudit", page: result.value }) : result;
+      }
+      case "settings.patients.corrections.enabled.change.v1": {
+        const result = await this.policy.changePatientCorrectionsEnabled(this.actor.scope, command.expectedVersion, command.enabled, this.actor.actorRef);
+        return result.ok ? ok({ kind: "settings", policy: result.value }) : result;
+      }
+      case "settings.patients.corrections.audit.v1": {
+        const result = await this.policy.listPatientCorrectionChanges(this.actor.scope, command.afterVersion);
+        return result.ok ? ok({ kind: "patientCorrectionSettingAudit", page: result.value }) : result;
       }
       case "settings.voice.locale.change.v1": {
         const result = await this.policy.changeVoiceSetting(this.actor.scope, command.expectedVersion, "locale", command.locale, this.actor.actorRef);
@@ -475,6 +494,16 @@ export class CommandGateway {
         if (!Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
         const result = await this.reception.proposeIntake(this.actor.scope, command.turn, command.draftRef, command.now);
         return result.ok ? ok({ kind: "intakeProposal", progress: commandProgress(result.value, command.turn.turnId) }) : result;
+      }
+      case "patients.correction.propose.v1": {
+        if (!Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
+        const result = await this.reception.proposePatientCorrection(this.actor.scope, command.turn, command.correctionRef, command.now);
+        return result.ok ? ok({ kind: "patientCorrectionProposal", progress: commandProgress(result.value, command.turn.turnId) }) : result;
+      }
+      case "notifications.resend.propose.v1": {
+        if (!Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
+        const result = await this.reception.proposeConfirmationResend(this.actor.scope, command.turn, command.requestRef, command.now);
+        return result.ok ? ok({ kind: "confirmationResendProposal", progress: commandProgress(result.value, command.turn.turnId) }) : result;
       }
       case "calls.urgent.respond.v1": {
         if (!Number.isFinite(Date.parse(command.now))) return err({ kind: "invalid" });
@@ -594,7 +623,7 @@ export class CommandGateway {
       }
       case "rescheduling.menu.read.v1": {
         const turn = structuredClone(command.turn);
-        const result = await this.reception.readReschedulingMenu(this.actor.scope, turn, command.stage, command.from, command.to, command.now, false, command.window);
+        const result = await this.reception.readReschedulingMenu(this.actor.scope, turn, command.stage, command.from, command.to, command.now, false, command.window, undefined, command.nextPractitioners);
         return result.ok ? ok({ kind: "appointmentChangeProposal", progress: commandProgress(result.value, turn.turnId) }) : result;
       }
       case "rescheduling.menu.select.v1": {

@@ -6,7 +6,7 @@ import { createServer } from "node:http";
 import test from "node:test";
 import { sql } from "kysely";
 import { connectPostgres } from "../../src/storage/connect.ts";
-import { migrate } from "../../src/storage/migrate.ts";
+import { migrate, migrateTo } from "../../src/storage/migrate.ts";
 import { PostgresPatientVerificationBudget } from "../../src/storage/postgres-patient-verification-budget.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
@@ -74,7 +74,9 @@ test("E2E-269 process-independent clinic budgets survive restart without persist
     assert.equal(await b.reserve(scope, "issue"), true); assert.equal(await a.reserve(scope, "answer"), true);
     assert.deepEqual((await first.selectFrom("patient_verification_budgets").select("attempts").execute()).map(row => row.attempts), [1, 1]);
     // Actual migration rollback and re-up, not hand-written schema changes.
-    await migrate(first, "down");
+    await migrateTo(first, "041_admin_magic_link_identity");
+    const missing = await sql<{ relation: string | null }>`select to_regclass('public.patient_verification_budgets')::text as relation`.execute(first);
+    assert.equal(missing.rows[0]?.relation, null, "rollback actually removes verification budget storage");
     assert.equal(await a.reserve(scope, "issue"), false, "missing budget storage denies issuance");
     await migrate(first); assert.equal(await b.reserve(scope, "issue"), true);
   } finally {

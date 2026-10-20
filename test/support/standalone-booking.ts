@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { ClinikoBookingWriter } from "../../src/cliniko/booking-write.ts";
 import { ClinikoRecallReader } from "../../src/cliniko/recalls.ts";
 import { ClinikoRecallWriter } from "../../src/cliniko/recall-write.ts";
+import { decodeClinikoReview } from "../../src/cliniko/review-request.ts";
 import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 import { ClinikoVerificationContactReader } from "../../src/cliniko/verification-contact.ts";
@@ -18,10 +19,13 @@ import type { PatientVerificationBudget } from "../../src/standalone/email-patie
 import { callerVerificationFixture, verificationCanaries, verificationNow } from "./caller-verification.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 
-export async function standaloneBookingFixture(options: { scope?: LocationScope; verificationBudget?: PatientVerificationBudget; rateBudget?: ClinikoRequestBudget;
+export async function standaloneBookingFixture(options: { activate?: boolean; scope?: LocationScope; verificationBudget?: PatientVerificationBudget; rateBudget?: ClinikoRequestBudget;
+  financialFor?: (config: import("../../src/cliniko/booking-write.ts").ClinikoBookingConfig & { scope: LocationScope; rateBudget: ClinikoRequestBudget }, port: typeof fetch) => import("../../src/standalone/cliniko-financial-booking-preparation.ts").FinancialBookingPreparationConfig;
   fetchPort?: typeof fetch; fetchAround?: (port: typeof fetch) => typeof fetch;
-  authorityFor?: (config: Omit<ClinikoBookingOffersConfig, "policy">, port: typeof fetch) => Promise<ClinikoBookingAuthority>; operation?: PatientOperation; staffWorkEnabled?: boolean; lostRecall?: boolean; lostBooking?: boolean } = {}) {
-  const f = await callerVerificationFixture({ operation: options.operation ?? "appointments.book", bookingExecute: true, ...(options.staffWorkEnabled === undefined ? {} : { staffWorkEnabled: options.staffWorkEnabled }), ...(options.scope ? { scope: options.scope } : {}) });
+  authorityFor?: (config: Omit<ClinikoBookingOffersConfig, "policy">, port: typeof fetch) => Promise<ClinikoBookingAuthority>; operation?: PatientOperation; staffWorkEnabled?: boolean; lostRecall?: boolean; lostBooking?: boolean; appointmentChanges?: true } = {}) {
+  const f = await callerVerificationFixture({ ...(options.activate === undefined ? {} : { activate: options.activate }), operation: options.operation ?? "appointments.book", bookingExecute: true,
+    ...(options.appointmentChanges ? { cancellationExecute: true, reschedulingExecute: true } : {}),
+    ...(options.staffWorkEnabled === undefined ? {} : { staffWorkEnabled: options.staffWorkEnabled }), ...(options.scope ? { scope: options.scope } : {}) });
   f.session.dispose();
   const apiKey = "synthetic-session-au5", base = "https://api.au5.cliniko.com/v1";
   const traffic: string[] = [], mail: { email: string; code: string }[] = [], recalls: Record<string, unknown>[] = [];
@@ -55,7 +59,10 @@ export async function standaloneBookingFixture(options: { scope?: LocationScope;
       assert.equal(action.status, "dispatched"); assert.equal((await f.state()).presentations[action.presentationId]?.status, "played");
       const body = JSON.parse(String(init?.body));
       assert.deepEqual([body.business_id, body.practitioner_id, body.appointment_type_id], ["11", "22", "33"]);
-      stored = { id: "91", notes: body.notes, starts_at: body.starts_at, ends_at: new Date(Date.parse(body.starts_at) + 30 * 60_000).toISOString(), cancelled_at: null, archived_at: null, deleted_at: null,
+      const review = decodeClinikoReview(recalls[0]!.notes); assert.ok(review.ok);
+      assert.ok(review.value.request.operation.kind === "book");
+      assert.equal(body.ends_at, review.value.request.operation.endsAt, "the write must bind the confirmed review's complete interval");
+      stored = { id: "91", notes: body.notes, starts_at: body.starts_at, ends_at: body.ends_at, cancelled_at: null, archived_at: null, deleted_at: null,
         patient: { links: { self: `${base}/patients/${body.patient_id}` } }, business: { links: { self: `${base}/businesses/11` } },
         practitioner: { links: { self: `${base}/practitioners/22` } }, appointment_type: { links: { self: `${base}/appointment_types/33` } } };
       await onBooking(); if (options.lostBooking) throw new Error("synthetic lost booking response");
@@ -83,12 +90,14 @@ export async function standaloneBookingFixture(options: { scope?: LocationScope;
       budget: options.verificationBudget ?? { reserve: async () => true }, delivery: { send: async (email, code) => { mail.push({ email, code }); return true; } } }));
     const writerConfig = { scope: f.scope, apiKey, contactEmail: "test@example.test", businessId: "11", practitionerId: "22", appointmentTypeId: "33", rateBudget };
     const writer = resultValue(ClinikoBookingWriter.create(writerConfig, fetchPort, f.sessionConfig.clock));
-    const authority: ClinikoBookingAuthority = options.authorityFor ? await options.authorityFor({ ...writerConfig, proof: session.proof,
-      callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion, clock: f.sessionConfig.clock }, fetchPort) : { resolve: async query => {
+    const resolve: ClinikoBookingAuthority["resolve"] = async query => {
       sourceQueries.push(query.phase); return authorityPermitted ? ok(structuredClone(evidence)) : { ok: false, error: { kind: "unavailable", target: "offer" } };
-    } };
+    };
+    const authority: ClinikoBookingAuthority = options.authorityFor ? await options.authorityFor({ ...writerConfig, proof: session.proof,
+      callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion, clock: f.sessionConfig.clock }, fetchPort) : { resolve, resolveForSend: resolve };
     host = new ClinikoBookingHost({ scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion,
       ledger: f.ledger, policy: f.policies, proof: session.proof, authority, writer,
+      ...(options.financialFor ? { financial: options.financialFor(writerConfig, fetchPort) } : {}),
       recallWriter: resultValue(ClinikoRecallWriter.create(writerConfig, fetchPort)), recallTypeId: "7", timeZone: "Australia/Sydney", clock: f.sessionConfig.clock });
     const reception = new TextReception(f.ledger, f.policies, host);
     const agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope: f.scope }, f.policies, reception, undefined, undefined, undefined, f.ledger);

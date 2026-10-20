@@ -37,7 +37,8 @@ export async function readClinikoBookingHorizon(c: Config, query: BookingHorizon
         credentialFingerprint: clinikoCredentialFingerprint(c.cliniko.apiKey), directory: c.directory, clock };
       const fees = operation === "reschedule" ? await OwnerFileReschedulingPolicy.capture({ ...binding, path: c.approvals.rescheduling }) : undefined;
       if (operation === "reschedule" && !fees?.ok) return undefined;
-      const catalogue = operation === "book" && c.catalogue ? await OwnerFileBookingCatalogue.capture({ ...binding, path: c.catalogue.approvalPath }) : undefined;
+      const catalogue = operation === "book" && c.catalogue ? await OwnerFileBookingCatalogue.capture({ ...binding, path: c.catalogue.approvalPath,
+        ...(c.catalogue.serviceBinding ? { serviceBinding: c.catalogue.serviceBinding } : {}) }) : undefined;
       const profile = catalogue?.ok ? await catalogue.value.current(query.scope) : undefined;
       if (operation === "book" && c.catalogue && (!profile?.ok || profile.value.practitioners.length !== c.catalogue.practitioners.length ||
           profile.value.practitioners.some((member, index) => member.practitionerId !== c.catalogue!.practitioners[index]?.practitionerId) ||
@@ -48,7 +49,8 @@ export async function readClinikoBookingHorizon(c: Config, query: BookingHorizon
       if (!members.length) return undefined;
       // These are independent public policies; no shared patient verifier IO.
       const captured = await Promise.all(members.map(async member => {
-        const policy = await OwnerFileBookingPolicy.capture({ ...binding, path: member.path, practitionerId: member.practitionerId });
+        const policy = await OwnerFileBookingPolicy.capture({ ...binding, path: member.path, practitionerId: member.practitionerId,
+          ...(c.catalogue?.serviceBinding ? { serviceBinding: c.catalogue.serviceBinding } : {}) });
         const value = policy.ok ? await policy.value.current(query.scope) : undefined;
         return policy.ok && value?.ok ? { policy: policy.value, value: value.value, name: member.name } : undefined;
       }));

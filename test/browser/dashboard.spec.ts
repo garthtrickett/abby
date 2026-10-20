@@ -308,6 +308,31 @@ test("E2E-255 SET-005: unsupported intake and staff edits stay blocked", async (
   } finally { await staff.close(); }
 });
 
+test("E2E-363 correction setting dashboard shares clinic version and audit, rejects stale/forged edits and enforces staff view only", async ({ page, request }) => {
+  const app = await localDashboard("clinicAdmin", undefined, undefined, { patientUpdate: "execute" });
+  const second = await localDashboard("clinicAdmin", undefined, undefined, "requestOnly", { policy: app.policy, locationId: "correction-second" });
+  const staff = await localDashboard("staff", undefined, undefined, "requestOnly", { policy: app.policy, locationId: "correction-staff" });
+  const secondPage = await page.context().newPage();
+  try {
+    await page.goto(app.url);
+    await expect(page.getByText("Patient corrections disabled", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Enable patient corrections", exact: true }).click();
+    await expect(page.getByText("Patient corrections enabled", { exact: true })).toBeVisible();
+    await secondPage.goto(second.url); await expect(secondPage.getByText("Patient corrections enabled", { exact: true })).toBeVisible();
+    assert.equal((await request.post(`${second.url}/api/settings/patient-corrections-enabled`, { data: { expectedVersion: "0", enabled: false } })).status(), 409);
+    assert.equal((await request.post(`${app.url}/api/settings/patient-corrections-enabled`, { data: { expectedVersion: "1", enabled: false, actorRef: "forged" } })).status(), 400);
+    assert.equal((await request.get(`${app.url}/api/settings/patient-corrections-audit?after=-1`)).status(), 400);
+    await secondPage.getByRole("button", { name: "Disable patient corrections", exact: true }).click();
+    await expect(secondPage.getByText("Patient corrections disabled", { exact: true })).toBeVisible();
+    await page.reload(); await expect(page.getByLabel("Patient corrections setting audit")).toContainText("Version 2");
+    const before = await app.ledger.read("before-setting", app.scope); assert.ok(before.ok); assert.equal(before.value.policy.patientCorrectionsEnabled, false);
+    const first = await app.policy.read(app.scope), other = await app.policy.read(second.scope); assert.ok(first.ok && other.ok);
+    assert.equal(first.value.patientCorrectionsVersion, "2"); assert.equal(other.value.patientCorrectionsVersion, "2");
+    await page.goto(staff.url); await expect(page.getByRole("button", { name: "Enable patient corrections", exact: true })).toHaveCount(0);
+    assert.equal((await request.post(`${staff.url}/api/settings/patient-corrections-enabled`, { data: { expectedVersion: "2", enabled: true } })).status(), 403);
+  } finally { await secondPage.close(); await staff.close(); await second.close(); await app.close(); }
+});
+
 test("E2E-255 SET-005: an uncertain intake edit locks controls until current settings can be read", async ({ page }) => {
   const app = await localDashboard("clinicAdmin");
   try {

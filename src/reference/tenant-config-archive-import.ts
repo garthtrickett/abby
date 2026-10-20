@@ -101,7 +101,11 @@ function prepare(data: TenantConfigArchiveData, mapper: ReferenceImportMapper):
       ...(location.omittedTextCalls === undefined ? {} : { omittedTextCalls: location.omittedTextCalls }),
       sourceScope: location.sourceScope, targetScope: location.targetScope,
       timeZone: location.timeZone, mappingProvenance: location.mappingProvenance,
-      policies: location.policies, automation: clinic.automation, clinicIntake: clinic.clinicIntake ?? [], clinicNotifications: clinic.clinicNotifications ?? [], clinicVoice: clinic.clinicVoice ?? [], writeStops: clinic.writeStops,
+      policies: location.policies, automation: clinic.automation, clinicIntake: clinic.clinicIntake ?? [], clinicPatientCorrections: clinic.clinicPatientCorrections ?? [], clinicNotifications: clinic.clinicNotifications ?? [], clinicVoice: clinic.clinicVoice ?? [], writeStops: clinic.writeStops,
+      ...(location.confirmationResends === undefined ? {} : { confirmationResends: location.confirmationResends }),
+      ...(location.financialEffects === undefined ? {} : { financialEffects: location.financialEffects }),
+      ...(location.outboundEffects === undefined ? {} : { outboundEffects: location.outboundEffects }),
+      ...(location.outboundCapacity === undefined ? {} : { outboundCapacity: location.outboundCapacity }),
       knowledge: location.knowledge };
     const mapped = mapConfig(scoped, location.targetScope, mapper);
     if (!mapped.ok) return mapped;
@@ -111,9 +115,11 @@ function prepare(data: TenantConfigArchiveData, mapper: ReferenceImportMapper):
     if (!clinics.has(sourceClinicId)) {
       const head = clinic.automation.find(row => row.isHead);
       const intakeHead = clinic.clinicIntake?.find(row => row.isHead);
+      const correctionHead = clinic.clinicPatientCorrections?.find(row => row.isHead);
       clinics.set(sourceClinicId, { scope: location.targetScope, history: mapped.value.automationHistory,
         sourceVersion: head?.version ?? 0, sourceEnabled: head?.enabled ?? false,
         intake: { history: mapped.value.clinicIntakeHistory, sourceVersion: intakeHead?.version ?? 0, sourceEnabled: intakeHead?.enabled ?? false },
+        patientCorrections: { history: mapped.value.patientCorrectionHistory, sourceVersion: correctionHead?.version ?? 0, sourceEnabled: correctionHead?.enabled ?? false },
         notifications: clinic.clinicNotifications ?? [], voices: clinic.clinicVoice ?? [] });
     }
   }
@@ -132,7 +138,7 @@ function report(data: TenantConfigArchiveData, auditRef: string, prepared: Prepa
     ...(data.sourceFenceVersion === undefined ? {} : { sourceFenceVersion: data.sourceFenceVersion }),
     recordCounts: { locations: data.sectionManifests.locations.recordCount,
       settings: data.sectionManifests.settings.recordCount, knowledge: data.sectionManifests.knowledge.recordCount,
-      calls: data.sectionManifests.calls.recordCount, staffWork: 0 },
+      calls: data.sectionManifests.calls.recordCount, staffWork: data.sectionManifests.staffWork.recordCount },
     sectionDigests: { locations: data.sectionManifests.locations.sha256,
       settings: data.sectionManifests.settings.sha256, knowledge: data.sectionManifests.knowledge.sha256,
       calls: data.sectionManifests.calls.sha256, staffWork: data.sectionManifests.staffWork.sha256 },
@@ -226,7 +232,7 @@ export class ReferenceTenantConfigArchiveImporter {
     const importedVersions = new Map<string, string>();
     for (const location of prepared.value.locations) {
       const effective = await policy.read(location.targetScope);
-      if (!effective.ok || effective.value.bookingEnabled || effective.value.automationEnabled || effective.value.firstTimeIntakeEnabled ||
+      if (!effective.ok || effective.value.bookingEnabled || effective.value.automationEnabled || effective.value.firstTimeIntakeEnabled || effective.value.patientCorrectionsEnabled ||
           effective.value.capabilities.book !== "unavailable") return err({ kind: "invalidConfigArchive" });
       importedVersions.set(JSON.stringify(location.targetScope), effective.value.policyVersion);
     }

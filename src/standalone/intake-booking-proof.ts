@@ -24,6 +24,7 @@ export class IntakeBookingProof {
   #token: string | undefined;
   #grant: Readonly<{ verificationRef: string; expiresAt: string }> | undefined;
   #issuing = false;
+  #contactRevision: Readonly<{ version: number | undefined }> | undefined;
   constructor(config: Config) {
     if (!(config.intake instanceof ClinikoIntakeSession) || !config.intake.matchesCall(config.scope, config.callId, config.sessionId, config.policyVersion) ||
         !(config.contact instanceof ClinikoVerificationContactReader) || typeof config.permission?.allows !== "function" || config.signal.aborted) {
@@ -54,19 +55,23 @@ export class IntakeBookingProof {
     const config = this.#config, signal = AbortSignal.any([request.signal, this.#lifetime.signal, config.signal]);
     if (signal.aborted || !sameScope(request.scope, config.scope) || request.callId !== config.callId ||
         request.sessionId !== config.sessionId || request.policyVersion !== config.policyVersion || request.operation !== "appointments.book") return undefined;
+    const revision = await config.contact.revision(config.scope, signal);
+    if (!revision.ok || this.#contactRevision && this.#contactRevision.version !== revision.value) return undefined;
     const source = await config.intake.createdPatient(signal);
     if (!source || source.phone !== config.presentedCallerNumber || Date.parse(source.expiresAt) <= Date.parse(config.clock()) + 120_000) return undefined;
     const contact = await config.contact.read(config.scope, source.patientId, source.phone, signal);
     if (!contact.ok || contact.value !== source.email || signal.aborted ||
         await config.permission.allows(config.scope, source.patientId, "appointments.book", config.policyVersion, signal) !== true) return undefined;
     const fresh = await config.intake.createdPatient(signal);
-    return !signal.aborted && fresh && fresh.patientId === source.patientId && fresh.email === source.email && fresh.phone === source.phone &&
-      fresh.expiresAt === source.expiresAt && Date.parse(fresh.expiresAt) > Date.parse(config.clock()) + 120_000 ? fresh : undefined;
+    const finalRevision = await config.contact.revision(config.scope, signal);
+    if (signal.aborted || !finalRevision.ok || finalRevision.value !== revision.value || !fresh || fresh.patientId !== source.patientId ||
+        fresh.email !== source.email || fresh.phone !== source.phone || fresh.expiresAt !== source.expiresAt ||
+        Date.parse(fresh.expiresAt) <= Date.parse(config.clock()) + 120_000) return undefined;
+    this.#contactRevision ??= { version: revision.value };
+    return fresh;
   }
-  /** Private grant consumed only by the concrete booking menu/host. Concurrent reads never mint another grant. */
-  async verified(external?: AbortSignal): Promise<Readonly<{ verificationRef: string; expiresAt: string }> | undefined> {
-    if (this.#lifetime.signal.aborted || external?.aborted || this.#issuing) return undefined;
-    const signal = AbortSignal.any([this.#lifetime.signal, this.#config.signal, ...(external ? [external] : [])]);
+  async #grantFor(signal: AbortSignal): Promise<Readonly<{ verificationRef: string; expiresAt: string }> | undefined> {
+    if (signal.aborted || this.#issuing) return undefined;
     if (!this.#grant) {
       if (!await this.#config.intake.createdPatient(signal) || signal.aborted || this.#issuing) return undefined;
       this.#issuing = true; this.#token = randomBytes(32).toString("base64url");
@@ -77,11 +82,30 @@ export class IntakeBookingProof {
         this.#grant = issued.value;
       } finally { this.#issuing = false; this.#token = undefined; signal.removeEventListener("abort", abort); }
     }
-    const checked = await this.proof.verifyOperation(this.#config.scope, this.#grant.verificationRef, "appointments.book", this.#config.clock(), signal);
-    return checked.ok && !signal.aborted ? { ...this.#grant } : undefined;
+    return this.#grant;
+  }
+  /** Private grant consumed only by the concrete booking menu/host. Concurrent reads never mint another grant. */
+  async verified(external?: AbortSignal): Promise<Readonly<{ verificationRef: string; expiresAt: string }> | undefined> {
+    const signal = AbortSignal.any([this.#lifetime.signal, this.#config.signal, ...(external ? [external] : [])]);
+    const grant = await this.#grantFor(signal);
+    if (!grant) return undefined;
+    const checked = await this.proof.verifyOperation(this.#config.scope, grant.verificationRef, "appointments.book", this.#config.clock(), signal);
+    return checked.ok && !signal.aborted && this.#grant === grant ? { ...grant } : undefined;
+  }
+  /** Private routing metadata only. Issuance still proves this owner's exact
+   * registration; native offers/evidence/writes independently revalidate it.
+   * Never use this reference as authority to disclose patient information. */
+  async ownedGrant(operation: "appointments.book", external: AbortSignal): Promise<Readonly<{ verificationRef: string; expiresAt: string }> | undefined> {
+    if (operation !== "appointments.book") return undefined;
+    const signal = AbortSignal.any([this.#lifetime.signal, this.#config.signal, external]);
+    const grant = await this.#grantFor(signal);
+    if (!grant || signal.aborted) return undefined;
+    const checked = await this.proof.currentReference(this.#config.scope, grant.verificationRef, operation, this.#config.clock());
+    return checked.ok && !signal.aborted && this.#grant === grant ? { ...grant } : undefined;
   }
   dispose(): void {
     this.#lifetime.abort(); this.#config.signal.removeEventListener("abort", this.#onClose); this.proof.dispose();
     this.#token = undefined; this.#grant = undefined;
+    this.#contactRevision = undefined;
   }
 }

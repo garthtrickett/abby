@@ -35,6 +35,7 @@ type BeforeRead = (signal: AbortSignal) => Promise<boolean>;
 export type ClinikoRescheduleRequest = ClinikoAppointmentTarget & Readonly<{
   newStartsAt: string;
   newEndsAt: string;
+  newPractitionerId?: string;
 }>;
 
 export type ClinikoAppointmentWriteFailure = Readonly<{
@@ -102,9 +103,10 @@ function validReschedule(value: unknown): value is ClinikoRescheduleRequest {
   const oldEnd = instant(request.endsAt);
   const newStart = instant(request.newStartsAt);
   const newEnd = instant(request.newEndsAt);
+  if (request.newPractitionerId !== undefined && (typeof request.newPractitionerId !== "string" || !idPattern.test(request.newPractitionerId) || request.newPractitionerId === request.practitionerId)) return false;
   return oldStart !== undefined && oldEnd !== undefined &&
     newStart !== undefined && newEnd !== undefined && newEnd > newStart &&
-    newStart !== oldStart && newEnd - newStart === oldEnd - oldStart;
+    (newStart !== oldStart || request.newPractitionerId !== undefined) && newEnd - newStart === oldEnd - oldStart;
 }
 
 async function boundedJson(response: Response): Promise<Result<unknown, ClinikoAppointmentWriteFailure>> {
@@ -370,7 +372,7 @@ class ClinikoAppointmentWriter {
     if (signal.aborted) return err({ kind: "unavailable" });
     if (!validReschedule(request)) return err({ kind: "invalidQuery" });
     if (!sameScope(request.scope, this.#scope)) return err({ kind: "scopeMismatch" });
-    const moved = await this.#read({ ...request, startsAt: request.newStartsAt, endsAt: request.newEndsAt }, signal, beforeRead);
+    const moved = await this.#read({ ...request, practitionerId: request.newPractitionerId ?? request.practitionerId, startsAt: request.newStartsAt, endsAt: request.newEndsAt }, signal, beforeRead);
     if (!moved.ok) return moved;
     if (signal.aborted) return err({ kind: "unavailable" });
     if (moved.value.kind === "active") {
@@ -398,6 +400,7 @@ class ClinikoAppointmentWriter {
   async rescheduleOnce(incoming: ClinikoRescheduleRequest, signal?: AbortSignal, checks?: ClinikoRescheduleChecks):
     Promise<Result<ClinikoRescheduleOutcome, ClinikoAppointmentWriteFailure>> {
     if (!validReschedule(incoming) || (checks !== undefined && (!checks || typeof checks.beforeSend !== "function" || typeof checks.beforeRead !== "function"))) return err({ kind: "invalidQuery" });
+    if (incoming.newPractitionerId !== undefined && checks === undefined) return err({ kind: "forbidden" });
     const request = Object.freeze({ ...incoming, scope: Object.freeze({ ...incoming.scope }) });
     const beforeSend = checks?.beforeSend, beforeRead = checks?.beforeRead;
     if (!sameScope(request.scope, this.#scope)) return err({ kind: "scopeMismatch" });
@@ -426,7 +429,8 @@ class ClinikoAppointmentWriter {
         const received = await untilAbort(this.#fetchPort(`${this.#baseUrl}/individual_appointments/${request.appointmentId}`, {
           method: "PATCH", headers: { Accept: "application/json", Authorization: this.#authorization,
             "Content-Type": "application/json", "User-Agent": this.#userAgent },
-          body: JSON.stringify({ starts_at: request.newStartsAt, ends_at: null }),
+          body: JSON.stringify({ starts_at: request.newStartsAt, ends_at: null,
+            ...(request.newPractitionerId ? { practitioner_id: request.newPractitionerId } : {}) }),
           redirect: "error", signal: requestSignal,
         }), requestSignal);
         if (!received || requestSignal.aborted) return ok({ kind: "uncertain" });
@@ -461,7 +465,7 @@ export class ClinikoCancellationWriter {
     return this.#inner.selection();
   }
 
-  observe(request: ClinikoCancellationRequest, signal?: AbortSignal):
+  observe(request: ClinikoAppointmentTarget | ClinikoCancellationRequest, signal?: AbortSignal):
     Promise<Result<ClinikoAppointmentObservation, ClinikoAppointmentWriteFailure>> {
     return this.#inner.observe(request, signal);
   }

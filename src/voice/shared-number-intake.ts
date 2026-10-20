@@ -95,6 +95,7 @@ export class SharedNumberIntakeService {
       tenantId: identified.value.tenantId, clinicId: identified.value.clinicId,
       candidateLocationIds: identified.value.candidateLocationIds, candidateNames: identified.value.candidateNames,
       routeVersion: identified.value.routeVersion, voiceProfile: profile.value,
+      ...(identified.value.candidateServices ? { candidateServices: identified.value.candidateServices } : {}),
     }, { key: event.key, dialedNumber: event.dialedNumber, acceptedAt,
       deadline: new Date(Date.parse(acceptedAt) + 120_000).toISOString() });
     if (reservation.ok) return reservation.value.pending.status === "pending"
@@ -166,6 +167,32 @@ export class SharedNumberIntakeService {
     });
     if (!chosen.ok) return chosen;
     return this.admission.bindSelected(event, chosen.value, turn.sessionId, expectedLeaseVersion, turn.turnId);
+  }
+
+  /** Public metadata does not admit a location or grant patient disclosure. */
+  async currentDiscovery(event: AuthenticatedInboundCall, turn: FinalCallerTurn, expectedLeaseVersion: number) {
+    if (!validEvent(event) || !turn?.turnId?.trim() || turn.turnId.length > 256 || !Number.isFinite(Date.parse(turn.at)) ||
+        !Number.isSafeInteger(expectedLeaseVersion) || expectedLeaseVersion < 1) return err({ kind: "invalidTransition" as const });
+    const callId = callIdFor(event.key);
+    const readable = (pending: PendingLocationCall | null, now: string) => {
+      const lease = pending?.sessionLease, prompt = pending?.prompt;
+      return !!pending && pending.status === "pending" && matchesEvent(pending.admission, event) &&
+        turn.callId === pending.callId && turn.quality === "clear" && turn.sessionId === lease?.sessionId &&
+        expectedLeaseVersion === lease?.version && prompt?.status === "played" && prompt.sessionId === turn.sessionId &&
+        Number.isFinite(Date.parse(now)) && Date.parse(turn.at) >= Date.parse(prompt.resolvedAt!) && Date.parse(turn.at) <= Date.parse(now) &&
+        Date.parse(now) < Date.parse(pending.admission.deadline) && Date.parse(now) < Date.parse(lease!.expiresAt);
+    };
+    const pending = await this.ledger.findPendingLocation(callId);
+    if (!pending.ok) return pending;
+    if (!readable(pending.value, this.now())) return err({ kind: "locationChoiceUnclear" as const });
+    const current = await this.router.identify(event.key.accountRef, event.dialedNumber);
+    if (!current.ok || current.value.routeVersion !== pending.value!.route.routeVersion || current.value.tenantId !== pending.value!.route.tenantId ||
+        current.value.clinicId !== pending.value!.route.clinicId || JSON.stringify(current.value.candidateServices) !== JSON.stringify(pending.value!.route.candidateServices)) return err({ kind: "staleLocationChoice" as const });
+    const latest = await this.ledger.findPendingLocation(callId);
+    if (!latest.ok) return latest;
+    if (!readable(latest.value, this.now()) || latest.value!.prompt?.playbackId !== pending.value!.prompt?.playbackId ||
+        latest.value!.route.routeVersion !== current.value.routeVersion) return err({ kind: "locationChoiceUnclear" as const });
+    return ok(latest.value!);
   }
 
   /** Media adapters use this entry: no separately supplied location ID can disagree with the caller's final words. */

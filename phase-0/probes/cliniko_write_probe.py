@@ -121,6 +121,10 @@ def main() -> int:
         starts_at = offers[0].get("appointment_start")
         if not isinstance(starts_at, str):
             raise ProbeError("invalid_offer_shape")
+        duration = next(item.get("duration_in_minutes") for item in types if str(item["id"]) == offer_type)
+        if type(duration) is not int or not 1 <= duration <= 480:
+            raise ProbeError("invalid_offer_duration")
+        ends_at = (datetime.fromisoformat(starts_at.replace("Z", "+00:00")) + timedelta(minutes=duration)).isoformat()
         print(json.dumps({"step": "offer", "http_status": 200, "offer_count_in_page": len(offers)}))
 
         patient_body = {"first_name": "Abby", "last_name": "SyntheticProbe" + reference_id, "old_reference_id": reference_id}
@@ -133,7 +137,7 @@ def main() -> int:
         writer_input = {
             "apiKey": key, "contactEmail": contact, "businessId": business_id,
             "practitionerId": practitioner_id, "appointmentTypeId": offer_type,
-            "patientId": patient_id, "startsAt": starts_at, "markerToken": marker_token,
+            "patientId": patient_id, "startsAt": starts_at, "endsAt": ends_at, "markerToken": marker_token,
         }
         repo_root = Path(__file__).resolve().parents[2]
         try:

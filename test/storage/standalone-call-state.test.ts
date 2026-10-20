@@ -37,6 +37,9 @@ test("standalone text response and caller content do not enter PostgreSQL", asyn
   const unsafeStart = await runtime.start(randomUUID(), { ...policy,
     capabilities: { ...policy.capabilities, book: "execute" } });
   assert.deepEqual(unsafeStart, { ok: false, error: { kind: "invalidTransition" } });
+  const unsafeCorrection = await runtime.start(randomUUID(), { ...policy,
+    capabilities: { ...policy.capabilities, patientUpdate: "execute" } });
+  assert.deepEqual(unsafeCorrection, { ok: false, error: { kind: "invalidTransition" } });
 
   const answered = await runtime.acceptTurn({ callId, turnId: randomUUID(), text: callerText, quality: "clear", at: now }, {
     kind: "answer",

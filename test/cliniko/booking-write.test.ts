@@ -8,12 +8,13 @@ const scope = { tenantId: "booking-tenant", clinicId: "booking-clinic", location
 const config: ClinikoBookingConfig = { scope, apiKey: "synthetic-key-au5", contactEmail: "dev@example.test",
   businessId: "11", practitionerId: "22", appointmentTypeId: "33" };
 const request: ClinikoBookingRequest = { scope, patientId: "42", startsAt: "2026-10-08T11:00:00+07:00",
+  endsAt: "2026-10-08T11:30:00+07:00",
   marker: "7a6b240c-94fa-45d8-ae0b-f4ee91cb2bd1" };
 const observedAt = "2026-10-01T10:00:00.000Z";
 const baseUrl = "https://api.au5.cliniko.com/v1";
 
 function appointment(id: string, changes: Record<string, unknown> = {}) {
-  return { id, notes: `Abby booking ${request.marker}`, starts_at: "2026-10-08T04:00:00Z",
+  return { id, notes: `Abby booking ${request.marker}`, starts_at: "2026-10-08T04:00:00Z", ends_at: "2026-10-08T04:30:00Z",
     cancelled_at: null, archived_at: null, deleted_at: null,
     patient: { links: { self: `${baseUrl}/patients/42` } },
     business: { links: { self: `${baseUrl}/businesses/11` } },
@@ -39,7 +40,7 @@ test("one marked booking POST produces a bounded receipt and exact patient-scope
     if (init?.method === "POST") {
       writes += 1;
       assert.deepEqual(JSON.parse(String(init.body)), { business_id: "11", practitioner_id: "22",
-        appointment_type_id: "33", patient_id: "42", starts_at: request.startsAt,
+        appointment_type_id: "33", patient_id: "42", starts_at: request.startsAt, ends_at: request.endsAt,
         notes: `Abby booking ${request.marker}` });
       return Response.json(appointment("91"), { status: 201 });
     }
@@ -107,6 +108,62 @@ test("non-201 or malformed create responses are uncertain, including a rate-limi
     assert.deepEqual(await adapter.writeOnce(request), { ok: true, value: { kind: "uncertain" } });
     assert.equal((await adapter.writeOnce(request)).ok, false);
     assert.equal(writes, 1);
+  }
+});
+
+test("create acknowledgement binds the full interval, exact native identities, marker and active state without a GET", async () => {
+  const mutations: Record<string, unknown>[] = [
+    { starts_at: undefined }, { starts_at: "2026-10-08T04:01:00Z" },
+    { starts_at: "2026-02-30T04:00:00Z" }, { starts_at: "2026-10-08T04:00:00+99:00" },
+    { ends_at: undefined }, { ends_at: null }, { ends_at: "2026-10-08T04:31:00Z" },
+    { ends_at: "2026-02-30T04:30:00Z" }, { ends_at: "2026-10-08T04:30:00" },
+    { ends_at: "2026-10-08T04:30:00+99:00" }, { notes: "different marker" },
+    { id: undefined }, { id: "0" }, { id: "91/other" },
+    ...["patient", "business", "practitioner", "appointment_type"].map(name =>
+      ({ [name]: { links: { self: `${baseUrl}/patients/999` } } })),
+    ...["cancelled_at", "archived_at", "deleted_at"].flatMap(name =>
+      [{ [name]: undefined }, { [name]: "unknown" }, { [name]: observedAt }]),
+  ];
+  for (const changes of mutations) {
+    let posts = 0, gets = 0;
+    const adapter = writer(async (_input, init) => {
+      if (init?.method !== "POST") gets += 1;
+      assert.equal(init?.method, "POST", "a later read cannot fill missing acknowledgement evidence");
+      posts += 1;
+      return Response.json(appointment("91", changes), { status: 201 });
+    });
+    assert.deepEqual(await adapter.writeOnce(request), { ok: true, value: { kind: "uncertain" } },
+      JSON.stringify(changes));
+    assert.equal((await adapter.writeOnce(request)).ok, false);
+    assert.equal(posts, 1);
+    assert.equal(gets, 0);
+  }
+});
+
+test("invalid or incomplete requested intervals fail before quota or provider access", async () => {
+  let claims = 0, sends = 0;
+  const adapter = writer(async () => { sends++; throw new Error("unexpected provider request"); },
+    { rateBudget: { claim: async () => { claims++; return null; },
+      observe429: async () => ({ kind: "rateLimited" }) } });
+  for (const endsAt of [undefined, null, "", request.startsAt, "2026-10-08T03:59:00Z",
+    "2026-10-08T12:01:00Z", "2026-02-30T04:30:00Z", "2026-10-08T04:30:00",
+    "2026-10-08T04:30:00+99:00"]) {
+    const invalid = { ...request, endsAt } as unknown as ClinikoBookingRequest;
+    assert.deepEqual(await adapter.writeOnce(invalid), { ok: false, error: { kind: "invalidQuery" } });
+    assert.deepEqual(await adapter.observe(invalid), { ok: false, error: { kind: "invalidQuery" } });
+  }
+  assert.equal(claims, 0);
+  assert.equal(sends, 0);
+});
+
+test("an oversized, invalid UTF-8 or malformed create body stays uncertain and cannot be replayed", async () => {
+  for (const body of [JSON.stringify(appointment("91", { padding: "x".repeat(1_000_001) })),
+    new Uint8Array([0xff]), "{not valid JSON}"]) {
+    let sends = 0;
+    const adapter = writer(async () => { sends++; return new Response(body, { status: 201 }); });
+    assert.deepEqual(await adapter.writeOnce(request), { ok: true, value: { kind: "uncertain" } });
+    assert.equal((await adapter.writeOnce(request)).ok, false);
+    assert.equal(sends, 1);
   }
 });
 
@@ -256,6 +313,23 @@ test("an abort while reading a successful booking body cannot become an accepted
   releaseBody();
   await Promise.resolve();
   assert.deepEqual(await adapter.writeOnce(request), { ok: false, error: { kind: "invalidQuery" } });
+});
+
+test("an exact validated acknowledgement is established before a later abort or failing observer", async () => {
+  for (const failure of ["abort", "throw"] as const) {
+    const controller = new AbortController();
+    const adapter = writer(async () => Response.json(appointment("91"), { status: 201 }));
+    let established = 0;
+    const result = await adapter.writeOnce(request, controller.signal, undefined, receipt => {
+      assert.equal(receipt.appointmentRef, "cliniko:appointment:91");
+      established += 1;
+      if (failure === "abort") controller.abort();
+      else throw new Error("synthetic observer failure");
+    });
+    assert.deepEqual(result, { ok: true, value: { kind: "accepted", appointmentRef: "cliniko:appointment:91" } });
+    assert.equal(established, 1);
+    assert.equal((await adapter.writeOnce(request)).ok, false);
+  }
 });
 
 test("observation abort before or during the budget claim prevents a patient GET", async () => {

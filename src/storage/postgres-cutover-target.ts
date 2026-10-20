@@ -1,3 +1,9 @@
+import { reconcileOutboundCapacityCarryover } from "./postgres-outbound-capacity-carryover.ts";
+import { reconcileOutboundEffectCarryover } from "./postgres-outbound-effect-carryover.ts";
+import { storedStandalonePolicy } from "./standalone-policy-record.ts";
+import { reconcileFinancialEffectCarryover } from "./postgres-financial-effect-carryover.ts";
+import { reconcileConfirmationResendCarryover } from "./postgres-confirmation-resend-carryover.ts";
+import { reconcilePatientCorrectionCarryover } from "./postgres-patient-correction-carryover.ts";
 import { reconcileVoiceCarryover } from "./postgres-voice-carryover.ts";
 import { createHash } from "node:crypto";
 import { reconcileNotificationCarryover } from "./postgres-notification-carryover.ts";
@@ -60,7 +66,12 @@ type PolicyRow = { version: number; policy: unknown; setting_kind: string;
 type AutomationRow = { version: number; enabled: boolean; changed_by: string | null;
   previous_enabled: boolean | null; changed_at: Date | null };
 
-function samePolicy(actual: unknown, expected: CallPolicy): boolean {
+function samePolicy(actual: unknown, expected: CallPolicy, sourceMinimal = false): boolean {
+  // A verified minimal source may be stored by a standalone target without the
+  // reference host's synthetic capabilities. Match its exact existing storage
+  // projection; extra fields and unapproved values still fail. Preserve the
+  // full representation for an embedded target importing that same source.
+  if (sourceMinimal && isDeepStrictEqual(actual, storedStandalonePolicy(expected.scope, Number(expected.policyVersion), expected))) return true;
   if (!actual || typeof actual !== "object" || Array.isArray(actual)) return false;
   const policy = actual as Record<string, unknown>;
   if (policy.cancellationEnabled !== undefined && typeof policy.cancellationEnabled !== "boolean") return false;
@@ -71,7 +82,7 @@ function samePolicy(actual: unknown, expected: CallPolicy): boolean {
 type KnowledgeRow = { source_ref: string; version: number; status: string; owner_ref: string;
   answer_text: string; effective_from: Date; effective_until: Date; actor_ref: string; changed_at: Date };
 type KnowledgeHead = { source_ref: string; version: number; effective_version: number | null };
-type TargetTotals = { policies: string; automation: string; clinicIntake: string; clinicNotifications: string; clinicVoice: string; knowledgeEvents: string;
+type TargetTotals = { policies: string; automation: string; clinicIntake: string; clinicPatientCorrections: string; clinicNotifications: string; clinicVoice: string; knowledgeEvents: string;
   knowledgeHeads: string; writeStops: string; writeStopEvents: string };
 
 function sameInstant(actual: Date | null, expected: string | null): boolean {
@@ -85,7 +96,7 @@ function importActor(archiveId: string): string {
 /** Reconciles native target rows against the durable import, under the target tenant lock. */
 export async function targetReady(trx: Transaction<Database>, data: TenantConfigArchiveData,
                                   registry: TargetImportRow): Promise<boolean> {
-  if (!receiptMatches(registry, data)) return false;
+  if (!receiptMatches(registry, data) || !await reconcileConfirmationResendCarryover(trx, data) || !await reconcileFinancialEffectCarryover(trx, data) || !await reconcileOutboundEffectCarryover(trx, data) || !await reconcileOutboundCapacityCarryover(trx, data)) return false;
   const activity = await sql<{ calls: boolean; pending: boolean }>`select
     exists(select 1 from calls where tenant_id = ${data.targetTenantId}) as calls,
     exists(select 1 from pending_location_calls where tenant_id = ${data.targetTenantId}) as pending`.execute(trx);
@@ -96,7 +107,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       sameScope(item.sourceScope, sourceScope) && sameScope(item.targetScope, targetScope));
     return decisions.length === 1 ? decisions[0]!.targetRef : null;
   } };
-  const expectedTotals = { policies: 0, automation: 0, clinicIntake: 0, clinicNotifications: 0, clinicVoice: 0, knowledgeEvents: 0, knowledgeHeads: 0,
+  const expectedTotals = { policies: 0, automation: 0, clinicIntake: 0, clinicPatientCorrections: 0, clinicNotifications: 0, clinicVoice: 0, knowledgeEvents: 0, knowledgeHeads: 0,
     writeStops: 0, writeStopEvents: 0 };
   for (const location of data.locations) {
     const clinic = data.clinics.find(item => item.sourceClinicId === location.sourceScope.clinicId);
@@ -105,7 +116,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       automation: clinic.automation, knowledge: location.knowledge }, location.targetScope, mappedRefs);
     if (!mapped.ok) return false;
     const expectedRows = mapped.value.policyRows.length ? mapped.value.policyRows : [
-      { version: 0, isHead: true, policy: mapped.value.policy, changedBy: null,
+      { version: 0, isHead: true, storageShape: "unsafeReference" as const, policy: mapped.value.policy, changedBy: null,
         previousBookingEnabled: null, changedAt: null }];
     const actualPolicies = (await sql<PolicyRow>`select version, policy, setting_kind,
       previous_after_hours_mode, previous_cancellation_enabled, previous_rescheduling_enabled, previous_staffed_destination_ref, changed_by, previous_booking_enabled, changed_at
@@ -117,7 +128,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
     expectedTotals.policies += actualPolicies.length;
     for (const [index, expected] of expectedRows.entries()) {
       const actual = actualPolicies[index];
-      if (!actual || actual.version !== expected.version || !samePolicy(actual.policy, expected.policy) ||
+      if (!actual || actual.version !== expected.version || !samePolicy(actual.policy, expected.policy, expected.storageShape === "standaloneMinimal") ||
           actual.setting_kind !== (expected.settingKind ?? "booking") ||
           actual.previous_after_hours_mode !== (expected.previousAfterHoursMode ?? null) ||
           actual.previous_cancellation_enabled !== (expected.previousCancellationEnabled ?? null) ||
@@ -134,7 +145,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       const actual = actualPolicies[extraIndex++]!;
       const disabled: CallPolicy = { ...current, policyVersion: String(++version), bookingEnabled: false,
         capabilities: { ...current.capabilities, book: "unavailable" } };
-      if (actual.version !== version || !samePolicy(actual.policy, disabled) ||
+      if (actual.version !== version || !samePolicy(actual.policy, disabled, head.storageShape === "standaloneMinimal") ||
           actual.setting_kind !== "booking" || actual.previous_after_hours_mode !== null ||
           actual.previous_cancellation_enabled !== null || actual.previous_rescheduling_enabled !== null || actual.previous_staffed_destination_ref !== null ||
           actual.changed_by !== actor || actual.previous_booking_enabled !== true ||
@@ -145,7 +156,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       const actual = actualPolicies[extraIndex++]!;
       const disabled: CallPolicy = { ...current, policyVersion: String(++version), cancellationEnabled: false,
         capabilities: { ...current.capabilities, cancel: "unavailable" } };
-      if (actual.version !== version || !samePolicy(actual.policy, disabled) ||
+      if (actual.version !== version || !samePolicy(actual.policy, disabled, head.storageShape === "standaloneMinimal") ||
           actual.setting_kind !== "cancellation" || actual.previous_after_hours_mode !== null ||
           actual.previous_booking_enabled !== null || actual.previous_cancellation_enabled !== true ||
           actual.previous_rescheduling_enabled !== null || actual.previous_staffed_destination_ref !== null ||
@@ -156,7 +167,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
       const actual = actualPolicies[extraIndex++]!;
       const disabled: CallPolicy = { ...current, policyVersion: String(++version), reschedulingEnabled: false,
         capabilities: { ...current.capabilities, reschedule: "unavailable" } };
-      if (actual.version !== version || !samePolicy(actual.policy, disabled) ||
+      if (actual.version !== version || !samePolicy(actual.policy, disabled, head.storageShape === "standaloneMinimal") ||
           actual.setting_kind !== "rescheduling" || actual.previous_after_hours_mode !== null ||
           actual.previous_booking_enabled !== null || actual.previous_rescheduling_enabled !== true ||
           actual.previous_cancellation_enabled !== null || actual.previous_staffed_destination_ref !== null ||
@@ -244,6 +255,10 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
     if (!stop || stop.version !== 1 || !stop.stopped || stop.actor_ref !== actor ||
         !["cutover", "Imported configuration awaiting target readiness"].includes(stop.reason) ||
         !(stop.changed_at instanceof Date) || !Number.isFinite(stop.changed_at.getTime())) return false;
+    const correctionRows = await reconcilePatientCorrectionCarryover(trx, location.targetScope, clinic.clinicPatientCorrections,
+      actor, stop.changed_at.toISOString());
+    if (correctionRows === undefined) return false;
+    expectedTotals.clinicPatientCorrections += correctionRows;
     const notificationRows = await reconcileNotificationCarryover(trx, location.targetScope, clinic.clinicNotifications,
       actor, stop.changed_at.toISOString());
     if (notificationRows === undefined) return false;
@@ -269,6 +284,7 @@ export async function targetReady(trx: Transaction<Database>, data: TenantConfig
     (select count(*)::text from clinic_settings where tenant_id = ${data.targetTenantId}) as policies,
     (select count(*)::text from clinic_automation where tenant_id = ${data.targetTenantId}) as automation,
     (select count(*)::text from clinic_intake_settings where tenant_id = ${data.targetTenantId}) as "clinicIntake",
+    (select count(*)::text from clinic_patient_correction_settings where tenant_id = ${data.targetTenantId}) as "clinicPatientCorrections",
     (select count(*)::text from clinic_notification_settings where tenant_id = ${data.targetTenantId}) as "clinicNotifications",
     (select count(*)::text from clinic_voice_settings where tenant_id = ${data.targetTenantId}) as "clinicVoice",
     (select count(*)::text from clinic_knowledge_events where tenant_id = ${data.targetTenantId}) as "knowledgeEvents",

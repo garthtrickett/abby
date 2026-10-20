@@ -1,3 +1,5 @@
+import { ClinikoFinancialBookingPreparation } from "./cliniko-financial-booking-preparation.ts";
+import type { FinancialBookingPreparationConfig } from "./cliniko-financial-booking-preparation.ts";
 import { randomUUID } from "node:crypto";
 import type { ClinikoBookingFailure, ClinikoBookingWrite } from "../cliniko/booking-write.ts";
 import { ClinikoRecallWriter } from "../cliniko/recall-write.ts";
@@ -17,7 +19,7 @@ import { NoStoredKnowledge } from "./no-stored-knowledge.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { preparationMayBeDiscarded } from "./prepared-proposal.ts";
 
-export type ClinikoBookingHostConfig = ClinikoBookingGuardConfig & Readonly<{ recallWriter: ClinikoRecallWriter; recallTypeId: string; timeZone: string; menu?: BookingMenuHost }>;
+export type ClinikoBookingHostConfig = ClinikoBookingGuardConfig & Readonly<{ recallWriter: ClinikoRecallWriter; recallTypeId: string; timeZone: string; menu?: BookingMenuHost; financial?: FinancialBookingPreparationConfig }>;
 
 /** Standalone declared best-effort booking, with one Cliniko-owned review before one possible send.
  * This does not grant exclusive commit permission or activate the live runner. */
@@ -29,10 +31,15 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
   readonly #lifetime = new AbortController();
   #prepared: PreparedClinikoBooking | undefined;
   #preparedRevision = 0;
+  readonly financial: ClinikoFinancialBookingPreparation | undefined;
+  #financialMarker: string | undefined;
   #attempted = false;
   #busy = false;
   constructor(config: ClinikoBookingHostConfig) {
-    super(); this.#guard = new ClinikoBookingGuard(config);
+    super();
+    if (config.financial && !config.writer.sharesRequestBudget(config.financial.native.rateBudget)) throw new TypeError("Financial booking must share the physical Cliniko budget");
+    this.#guard = new ClinikoBookingGuard(config);
+    this.financial = config.financial ? new ClinikoFinancialBookingPreparation(config.financial, config) : undefined;
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }) });
     this.#review = new ClinikoReviewedSend({ scope: config.scope, businessId: config.writer.selection().businessId,
       credentialFingerprint: config.writer.credentialFingerprint(), policyVersion: config.policyVersion, timeZone: config.timeZone,
@@ -40,12 +47,15 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
   }
   bookingMenuAvailable(): boolean { return !this.#lifetime.signal.aborted && this.#config.menu?.bookingMenuAvailable() === true; }
   async readBookingMenu(query: BookingMenuReadQuery) {
+    this.financial?.invalidate();
     return this.bookingMenuAvailable() ? this.#config.menu!.readBookingMenu(query) : err({ kind: "unavailable" as const, target: "offer" as const });
   }
   async selectBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>) {
+    this.financial?.invalidate();
     return this.bookingMenuAvailable() ? this.#config.menu!.selectBookingMenu(query) : err({ kind: "unavailable" as const, target: "offer" as const });
   }
   async correctBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; startsAt: string }>) {
+    this.financial?.invalidate();
     return this.bookingMenuAvailable() && this.#config.menu?.correctBookingMenu
       ? this.#config.menu.correctBookingMenu(query) : err({ kind: "unavailable" as const, target: "offer" as const });
   }
@@ -61,15 +71,27 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
         return err({ kind: "unavailable", target: "offer" });
       this.#prepared = undefined;
       const selected = await this.#guard.resolve(scope, verificationRef, offerRef, now, "proposal", signal);
-      if (!selected.ok) return selected;
+      if (!selected.ok) { this.financial?.invalidate(); return selected; }
       const after = await awaitUntilAbort(this.#config.ledger.read(this.#config.callId, this.#config.scope), signal);
       if (!after?.ok || after.value.conversationRevision !== before.value.conversationRevision || signal.aborted ||
           selected.value.evidence.timeZone !== this.#config.timeZone) return err({ kind: "unavailable", target: "offer" });
       this.#preparedRevision = before.value.conversationRevision;
-      this.#prepared = selected.value; return ok(structuredClone(selected.value.request));
+      this.#prepared = selected.value;
+      if (this.financial) {
+        const financial = await this.financial.prepare({ ...selected.value, booking: { kind: "book" } }, signal);
+        if (!financial) return err({ kind: "unavailable", target: "offer" });
+        const current = await awaitUntilAbort(this.#config.ledger.read(this.#config.callId, this.#config.scope), signal);
+        if (!current?.ok || current.value.conversationRevision !== before.value.conversationRevision || signal.aborted) {
+          this.financial.invalidate(); return err({ kind: "unavailable", target: "offer" });
+        }
+        this.#financialMarker = financial.marker;
+        if (financial.kind === "pending") return err({ kind: "financialConsentRequired", target: "offer" });
+      }
+      return ok(structuredClone(selected.value.request));
     } finally { this.#busy = false; }
   }
-  async write(mutation: HostMutation, now: string, external?: AbortSignal): Promise<HostWriteReceipt> {
+  async write(mutation: HostMutation, now: string, external?: AbortSignal,
+    onBookingAcknowledged?: Parameters<HostEffects["write"]>[3]): Promise<HostWriteReceipt> {
     const reject = (): HostWriteReceipt => ({ kind: "rejected", actionKey: mutation.actionKey, reason: "forbidden" });
     const config = this.#config, prepared = this.#prepared;
     if (this.#lifetime.signal.aborted || this.#busy || this.#attempted || !prepared || mutation.kind !== "book" || mutation.request.kind !== "book" ||
@@ -86,20 +108,33 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
       termsVersion: source.bookingPolicyVersion, timeZone: source.timeZone, createdAt: now,
       operation: { kind: "book", practitionerId: source.practitionerId, appointmentTypeId: source.appointmentTypeId,
         startsAt: prepared.request.offer.startsAt, endsAt: source.endsAt } };
-    const providerRequest = bookingProviderRequest(prepared, randomUUID());
+    const providerRequest = bookingProviderRequest(prepared, this.#financialMarker ?? randomUUID());
+    const financialCapture = this.financial ? await this.financial.capture(signal) : undefined;
+    if (this.financial && !financialCapture) return reject();
+    let acknowledged: Extract<ClinikoBookingWrite, { kind: "accepted" }> | undefined;
+    let committed: Extract<HostWriteReceipt, { kind: "committed" }> | undefined;
     const result = await this.#review.run(confirmed, {
       authorize: async (_request, stop) => this.#guard.authorize(prepared, mutation, this.#now(), stop),
+      acknowledgedBooking: () => acknowledged ? ok(acknowledged) : undefined,
       send: async (_request, stop): Promise<Result<ClinikoBookingWrite, ClinikoBookingFailure>> => {
-        const sent = await config.writer.writeOnce(providerRequest, stop, finalStop => this.#guard.authorize(prepared, mutation, this.#now(), finalStop));
-        if (!sent.ok || sent.value.kind !== "accepted") return sent;
-        if (!await this.#guard.mayInspect(prepared, mutation, this.#now(), stop)) return ok({ kind: "uncertain" });
-        const readBack = await config.writer.inspectCreated(providerRequest, sent.value.appointmentRef, source.endsAt, stop, finalStop => this.#guard.mayInspect(prepared, mutation, this.#now(), finalStop));
-        if (!readBack.ok || !readBack.value || !await this.#guard.mayInspect(prepared, mutation, this.#now(), stop)) return ok({ kind: "uncertain" });
-        const conflicts = await config.writer.inspectConflicts(sent.value.appointmentRef, stop, finalStop => this.#guard.mayInspect(prepared, mutation, this.#now(), finalStop));
-        if (!conflicts.ok || conflicts.value || !await this.#guard.mayInspect(prepared, mutation, this.#now(), stop)) return ok({ kind: "uncertain" });
-        return sent;
+        if (this.financial && !await this.financial.beforeSend(stop)) return err({ kind: "forbidden" });
+        const acknowledgedReceipt = (receipt: Extract<ClinikoBookingWrite, { kind: "accepted" }>) => {
+          acknowledged = receipt;
+          committed = Object.freeze({ kind: "committed", actionKey: mutation.actionKey, hostRef: receipt.appointmentRef });
+          try { onBookingAcknowledged?.(committed); } catch { /* Observers cannot veto this receipt. */ }
+        };
+        const beforeSend = (finalStop: AbortSignal) => this.#guard.authorizeForSend(prepared, mutation, this.#now(), finalStop);
+        const current = (finalStop: AbortSignal) => this.#guard.currentForSend(prepared, this.#now(), finalStop) && (!this.financial || this.financial.currentForSend(finalStop));
+        if (financialCapture?.kind === "required") {
+          const captured = await financialCapture.capture.book(config.writer, providerRequest, stop, { beforeSend, current, acknowledged: acknowledgedReceipt });
+          if (!captured.ok) return err({ kind: "forbidden" });
+          if (captured.value.observation.kind === "captured") await this.financial!.retain(financialCapture, captured.value.observation.notes);
+          return captured.value.native;
+        }
+        return config.writer.writeOnce(providerRequest, stop, beforeSend, acknowledgedReceipt, current);
       },
     }, signal);
+    if (committed) return committed;
     if (!result.ok) return result.error.kind === "reviewUncertain" || result.error.kind === "mutationUncertain" ? uncertain() : reject();
     if (!result.value.outcome.ok) return reject();
     if (result.value.outcome.value.kind !== "accepted" || signal.aborted) return uncertain();
@@ -110,5 +145,5 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
   }
   async openTask(item: StaffItem, _signal?: AbortSignal): Promise<StaffTaskReceipt> { return { kind: "rejected", taskKey: item.key }; }
   async reconcileTask(item: StaffItem, _signal?: AbortSignal): Promise<StaffTaskObservation> { return { kind: "stillUnknown", taskKey: item.key }; }
-  dispose(): void { this.#lifetime.abort(); this.#review.close(); this.#guard.dispose(); this.#prepared = undefined; }
+  dispose(): void { this.#lifetime.abort(); this.financial?.dispose(); this.#review.close(); this.#guard.dispose(); this.#prepared = undefined; }
 }

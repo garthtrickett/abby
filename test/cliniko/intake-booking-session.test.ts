@@ -1,9 +1,61 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { SyntheticContactRevision } from "../support/contact-revision.ts";
+import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
+import { intakeCredential } from "../support/intake-edge.ts";
 import { ClinikoIntakeBookingSession } from "../../src/standalone/cliniko-intake-booking-session.ts";
 import { intakeBookingSessionFixture } from "../support/intake-booking-session.ts";
 import { intakeDraft } from "../support/intake-edge.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
+
+for (const withdrawn of ["permission", "contact", "registrationApproval", "membership", "owner"] as const)
+test(`intake menu routing cannot reuse availability after ${withdrawn} is withdrawn`, async () => {
+  const f = await intakeBookingSessionFixture();
+  try {
+    await f.register(); await f.playPending();
+    const query = { scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: f.config.policyVersion,
+      turnId: "first-private-menu", from: "2026-10-08", to: "2026-10-08", now: f.now, signal: new AbortController().signal };
+    const first = await f.owner.readBookingMenu(query);
+    assert.ok(first.ok && first.value.choices.length > 0);
+    const availabilityReads = f.provider.traffic.filter(row => row.includes("/available_times")).length;
+    assert.ok(availabilityReads > 0);
+    if (withdrawn === "permission") f.setPermitted(false);
+    if (withdrawn === "contact") f.provider.changePatient({ email: "changed@example.test" });
+    if (withdrawn === "registrationApproval") await f.replaceApproval({ enabled: false });
+    if (withdrawn === "membership") await f.replaceAccount({ membershipVersion: "changed" });
+    if (withdrawn === "owner") f.owner.dispose();
+    const second = await f.owner.readBookingMenu({ ...query, turnId: "second-private-menu" });
+    assert.equal(second.ok, false);
+    assert.equal(f.provider.traffic.filter(row => row.includes("/available_times")).length, availabilityReads,
+      "a private routing reference cannot authorize another native availability read");
+    assert.equal(f.provider.bookingPosts, 0);
+    assert.equal(f.provider.recalls.length, 0);
+  } finally { await f.close(); }
+});
+
+for (const phase of ["duringContact", "afterProof"] as const) {
+  test(`E2E-364 account correction ${phase} invalidates the new-registration booking proof`, async () => {
+    const scope = { tenantId: `intake-revision-${crypto.randomUUID()}`, clinicId: "clinic", locationId: "main" };
+    const owner = new SyntheticContactRevision(scope.tenantId, [clinikoCredentialFingerprint(intakeCredential)]);
+    const f = await intakeBookingSessionFixture({ scope, contactRevision: owner });
+    try {
+      await f.register(); await f.playPending();
+      const change = async () => { const ref = resultValue(await owner.begin()); resultValue(await owner.complete(ref)); };
+      if (phase === "duringContact") {
+        let changed = false;
+        f.provider.onContact(async () => { if (!changed) { changed = true; await change(); } });
+        await f.readMenu(); resultValue(await f.drain());
+        assert.equal(Object.values((await f.state()).actions).some(a => a.kind === "book"), false);
+      } else {
+        await f.readMenu(); resultValue(await f.drain()); await f.playPending();
+        resultValue(await f.select()); await change();
+        await f.confirm("book"); resultValue(await f.drain());
+      }
+      assert.equal(f.provider.patientPosts, 1);
+      assert.equal(f.provider.bookingPosts, 0);
+    } finally { await f.close(); }
+  });
+}
 
 test("E2E-296 one admitted caller privately registers then separately selects, confirms and creates one reviewed booking", async () => {
   const f = await intakeBookingSessionFixture();
@@ -83,14 +135,16 @@ test("E2E-296 independent permission, original OTP expiry, contact, public appro
   }
 });
 
-test("E2E-296 rejected booking, failed review and lost responses retain the created patient and never replay, compensate or claim an exact appointment", async () => {
+test("E2E-296 booking failures retain the created patient; exact creation acknowledgement survives later inspection or conflicts", async () => {
   for (const cause of ["slot", "bookingRejected", "reviewRejected", "reviewLoss", "bookingLoss", "inspection", "conflict"] as const) {
     const f = await intakeBookingSessionFixture();
     try {
       await f.register(); await f.playPending(); resultValue(await f.readMenu()); await f.playPending(); resultValue(await f.select());
       resultValue(await f.confirm("book")); f.provider.fail(cause); resultValue(await f.drain());
       const action = Object.values((await f.state()).actions).find(action => action.kind === "book")!;
-      assert.equal(action.status, cause === "slot" ? "rejected" : "uncertain", cause);
+      const acknowledged = cause === "inspection" || cause === "conflict";
+      assert.equal(action.status, acknowledged ? "committed" : cause === "slot" ? "rejected" : "uncertain", cause);
+      if (acknowledged) assert.equal(f.provider.traffic.some(item => item.startsWith("GET /v1/individual_appointments/91")), false);
       assert.equal(f.provider.patientPosts, 1); assert.ok(f.provider.patient); assert.equal(f.mail.length, 1);
       assert.equal(f.provider.bookingPosts, cause.startsWith("review") || cause === "slot" ? 0 : 1);
       assert.equal(f.provider.recalls.length, ["slot", "reviewRejected"].includes(cause) ? 0 : 1);
@@ -98,7 +152,7 @@ test("E2E-296 rejected booking, failed review and lost responses retain the crea
       assert.equal(Object.values((await f.state()).actions).find(item => item.kind === "book")!.status, action.status);
       assert.equal(f.provider.traffic.some(item => /^(DELETE|PATCH)/.test(item)), false);
       const shown = (await f.state()).presentations[(await f.state()).pendingPresentationId!];
-      if (shown?.kind === "notice") assert.doesNotMatch(shown.approvedText, /appointment is booked|successfully booked/i);
+      if (shown?.kind === "notice" && !acknowledged) assert.doesNotMatch(shown.approvedText, /appointment is booked|successfully booked/i);
     } finally { await f.close(); }
   }
 });

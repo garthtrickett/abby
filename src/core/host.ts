@@ -1,11 +1,18 @@
 import type { ClinicIntakeAuditPage } from "./clinic-intake-setting.ts";
+import type { ClinicPatientCorrectionAuditPage } from "./clinic-patient-correction-setting.ts";
 import type { StaffedDestinationAuditPage, StaffedDestinationCatalogue } from "./staffed-destination.ts";
 import type { ActionRequest, AfterHoursMode, ApprovedAfterHoursInfo, ApprovedGreeting, ApprovedStaffSchedule, ApprovedUrgentResponse, ApprovedKnowledge, AppointmentRead, AppointmentReadFailure, AvailabilityRead, AvailabilityReadFailure, BookableOffer, CallPolicy, HostMutation, HostWriteReceipt, LocationScope, OperatorAlert, OperatorAlertObservation, OperatorAlertReceipt, ReconcileObservation, Result, StaffChange, StaffChangeObservation, StaffChangeReceipt, StaffItem, StaffTaskObservation, StaffTaskReceipt, VerifiedPatient } from "./model.ts";
 import type { ReadinessFailure } from "./readiness.ts";
 import type { CallState, FinalCallerTurn } from "./model.ts";
 
-export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable"; target: "patient" | "offer" | "appointment" }> |
+export type HostReadFailure = Readonly<{ kind: "notFound" | "ambiguous" | "expired" | "unavailable" | "financialConsentRequired"; target: "patient" | "offer" | "appointment" }> |
   Readonly<{ kind: "outsideHorizon"; target: "offer"; snapshot: import("./booking-horizon.ts").BookingHorizonRead }>;
+export type ClassMovementPreparationQuery = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
+  actionKey: string; now: string; signal: AbortSignal }>;
+export interface ClassMovementContinuationHost {
+  /** Prepare only the private owner's next stage; this grants no send. */
+  prepareClassMovement(query: ClassMovementPreparationQuery): Promise<Result<import("./class-movement-consent.ts").ClassMovementPreparation, HostReadFailure>>;
+}
 export type PolicyFailure = Readonly<{ kind: "versionConflict" | "invalidValue" | "storageFailure" }> | ReadinessFailure;
 export type AutomationSettingAuditEntry = Readonly<{
   version: string;
@@ -123,6 +130,7 @@ export type BookingMenuQuery = Readonly<{ scope: LocationScope; callId: string; 
   turnId: string; now: string; signal: AbortSignal }>;
 export type ReschedulingMenuQuery = BookingMenuQuery & Readonly<{ stage: import("./rescheduling-menu.ts").ReschedulingMenuStage }>;
 export type ReschedulingMenuReadQuery = ReschedulingMenuQuery & Readonly<{ from: string; to: string; window?: BookingSearchWindow | null; priorTurnId?: string;
+  nextPractitioners?: true;
   /** Derived from the canceled SAM request, never a caller/model provider ID. */
   correctingAppointmentRef?: string }>;
 export interface ReschedulingMenuHost {
@@ -132,7 +140,9 @@ export interface ReschedulingMenuHost {
   readReschedulingMenu(query: ReschedulingMenuReadQuery):
     Promise<Result<import("./rescheduling-menu.ts").ReschedulingMenuRead, HostReadFailure>>;
   selectReschedulingMenu(query: ReschedulingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>):
-    Promise<Result<Readonly<{ kind: "targetSelected"; snapshot: import("./rescheduling-menu.ts").ReschedulingMenuRead }> |
+    Promise<Result<Readonly<{ kind: "targetSelected"; snapshot: Exclude<import("./rescheduling-menu.ts").ReschedulingMenuRead, import("./rescheduling-menu.ts").ReschedulingPractitionerRead> }> |
+      Readonly<{ kind: "practitionerSelected"; snapshot: import("./rescheduling-menu.ts").ReschedulingPractitionerRead }> |
+      Readonly<{ kind: "selectionWait"; seconds: number }> |
       Readonly<{ kind: "actionSelection"; verificationRef: string; targetRef: string; offerRef: string }>, HostReadFailure>>;
 }
 export interface BookingMenuHost {
@@ -153,13 +163,20 @@ export interface BookingEvidenceHost {
 }
 
 export type WorkflowQuery = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
-  operation: import("./model.ts").WorkflowOperation; signal: AbortSignal; replaceCanceledChange?: true; expectedConversationRevision?: number }>;
+  operation: import("./model.ts").WorkflowOperation; signal: AbortSignal; replaceCanceledChange?: true; expectedConversationRevision?: number;
+  serviceChoice?: import("./booking-service-choice.ts").BookingServiceChoice; forAnotherPerson?: true; classAttendance?: true; classSelectionRef?: string; turnId?: string }>;
 /** Trusted workflow routing issues neither patient proof nor a clinical action. */
 export interface WorkflowHost {
-  startWorkflow(query: WorkflowQuery): Promise<Result<Readonly<{ kind: "codeRequired" | "intakeRequired" }>, Readonly<{ kind: "workflowUnavailable" }>>>;
+  completeWorkflowStart?(query: WorkflowQuery & Readonly<{ turnId: string; advanceTask?: true }>): Promise<boolean>;
+  abandonWorkflowStart?(query: WorkflowQuery & Readonly<{ turnId: string }>): Promise<void>;
+  startWorkflow(query: WorkflowQuery): Promise<Result<Readonly<{ kind: "codeRequired" | "intakeRequired" | "representativeRequired"; advanceTask?: true }>, Readonly<{ kind: "workflowUnavailable" }>>>;
 }
 
 export type AppointmentEnquiryQuery = Omit<WorkflowQuery, "operation" | "replaceCanceledChange"> & Readonly<{ now: string }>;
+export interface PreviousPractitionerHost {
+  readPreviousPractitioner(query: AppointmentEnquiryQuery & Readonly<{ turnId: string }>): Promise<Result<
+    Readonly<{ kind: "codeRequired" }> | Readonly<{ kind: "history"; snapshot: import("./previous-practitioner.ts").PreviousPractitionerRead }>, Readonly<{ kind: "historyUnavailable" }>>>;
+}
 /** An operation-bound read owner resolves its private proof. Caller/model commands never supply it. */
 export interface AppointmentEnquiryHost {
   readAppointmentEnquiry(query: AppointmentEnquiryQuery & Readonly<{ from: string; to: string }>): Promise<Result<Readonly<{
@@ -196,9 +213,19 @@ export interface IntakeEvidenceHost {
   resolveIntake(query: IntakeEvidenceQuery): Promise<Result<Extract<ActionRequest, { kind: "intake" }>, HostReadFailure>>;
 }
 
+export type PatientCorrectionEvidenceQuery = Omit<IntakeEvidenceQuery, "draftRef"> & Readonly<{ correctionRef: string }>;
+export interface PatientCorrectionEvidenceHost {
+  /** Resolve privately collected/read-back details, consent and current patient authority. */
+  resolvePatientCorrection(query: PatientCorrectionEvidenceQuery): Promise<Result<Extract<ActionRequest, { kind: "patientUpdate" }>, HostReadFailure>>;
+}
+export type ConfirmationResendEvidenceQuery = Omit<IntakeEvidenceQuery, "draftRef"> & Readonly<{ requestRef: string }>;
+export interface ConfirmationResendEvidenceHost {
+  resolveConfirmationResend(query: ConfirmationResendEvidenceQuery): Promise<Result<Extract<ActionRequest, { kind: "confirmationResend" }>, HostReadFailure>>;
+}
+
 /** The host issues this proof after its own caller verification; a provider ID is never proof. */
 export interface PatientProofHost {
-  verifyPatient(scope: LocationScope, verificationRef: string, now: string): Promise<Result<VerifiedPatient, HostReadFailure>>;
+  verifyPatient(scope: LocationScope, verificationRef: string, now: string, signal?: AbortSignal): Promise<Result<VerifiedPatient, HostReadFailure>>;
 }
 
 export type StaffRequestQuery = Readonly<{
@@ -220,11 +247,23 @@ export interface StaffRequestHost {
 }
 
 export interface HostEffects {
+  /** Advisory capacity before caller affirmation. This does not reserve a slot,
+   * grant consent, or replace any authorization at the eventual write. */
+  checkConfirmationCapacity?(query: BookingMenuQuery & Readonly<{ actionKey: string; digest: string }>):
+    Promise<Result<Readonly<{ kind: "ready" }> | Readonly<{ kind: "wait"; seconds: number }>, HostReadFailure>>;
   /** Trusted adapter budget for its complete effect protocol, including review
    * and readback. Dispatcher validates 1..120000 ms; absent means 15000 ms.
    * This is not caller/model input and cannot extend proof or call lifetimes. */
   readonly effectDeadlineMs?: number;
-  write(mutation: HostMutation, now: string, signal?: AbortSignal): Promise<HostWriteReceipt>;
+  /** Trusted in-process notification only after a booking's exact native acknowledgement
+   * is validated. It preserves that result through wrapper cancellation; it grants no
+   * authority, replay or persistence and never applies to another operation. */
+  write(mutation: HostMutation, now: string, signal?: AbortSignal,
+    onBookingAcknowledged?: (receipt: Extract<HostWriteReceipt, { kind: "committed" }>) => void): Promise<HostWriteReceipt>;
+  /** Continue only the existing live stage owner. An adapter without this
+   * method cannot dispatch a staged effect through the initial write path. */
+  continueClassMovement?(mutation: HostMutation, consent: import("./class-movement-consent.ts").ClassMovementConsent,
+    now: string, signal?: AbortSignal): Promise<HostWriteReceipt>;
   reconcile(mutation: HostMutation, signal?: AbortSignal): Promise<ReconcileObservation>;
   openTask(item: StaffItem, signal?: AbortSignal): Promise<StaffTaskReceipt>;
   reconcileTask(item: StaffItem, signal?: AbortSignal): Promise<StaffTaskObservation>;
@@ -270,6 +309,9 @@ export interface PolicyStore {
   changeFirstTimeIntakeEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean,
                               actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
   listFirstTimeIntakeChanges(scope: LocationScope, afterVersion?: number): Promise<Result<ClinicIntakeAuditPage, PolicyFailure>>;
+  changePatientCorrectionsEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean,
+                                 actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
+  listPatientCorrectionChanges(scope: LocationScope, afterVersion?: number): Promise<Result<ClinicPatientCorrectionAuditPage, PolicyFailure>>;
   changeBookingEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>>;
   listBookingChanges(scope: LocationScope, afterVersion?: number): Promise<Result<BookingSettingAuditPage, PolicyFailure>>;
   changeCancellationEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean,

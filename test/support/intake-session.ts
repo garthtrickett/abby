@@ -1,3 +1,5 @@
+import { OwnerFileIntakePolicy } from "../../src/standalone/owner-file-intake-policy.ts";
+import type { IntakeApproval } from "../../src/standalone/owner-file-intake-policy.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { CallRuntime } from "../../src/core/runtime.ts";
@@ -17,8 +19,10 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 import { intakePolicyFixture } from "./intake-policy.ts";
 import { intakeCredential, intakeDraft, intakeNow } from "./intake-edge.ts";
 
-export async function intakeSessionFixture(options: { rateBudget?: ClinikoRequestBudget; verificationBudget?: PatientVerificationBudget; timeoutMs?: number; fetchPort?: typeof fetch; folder?: string; bookingExecute?: boolean } = {}) {
-  const f = await intakePolicyFixture(options.folder), scope = f.scope;
+export async function intakeSessionFixture(options: { requiredFields?: IntakeApproval["requiredFields"]; scope?: LocationScope; rateBudget?: ClinikoRequestBudget; verificationBudget?: PatientVerificationBudget; timeoutMs?: number; fetchPort?: typeof fetch; folder?: string; bookingExecute?: boolean } = {}) {
+  const f = await intakePolicyFixture(options.folder, options.scope), scope = f.scope;
+  if (options.requiredFields) await f.replaceApproval({ requiredFields: options.requiredFields });
+  const intakePolicy = options.requiredFields ? resultValue(await OwnerFileIntakePolicy.capture(f.config)) : f.policy;
   let now = intakeNow, allowed = true, played = true, posts = 0, claims = 0, candidates = 0, loss = false, readMismatch = false;
   let mailAccepted = true, row: Record<string, unknown> | undefined;
   let onMail: () => Promise<void> = async () => undefined, onSearch: () => Promise<void> = async () => undefined, onPost: () => Promise<void> = async () => undefined, onRead: () => Promise<void> = async () => undefined;
@@ -56,7 +60,7 @@ export async function intakeSessionFixture(options: { rateBudget?: ClinikoReques
     return Response.json(readMismatch ? { ...row, email: "someone-else@example.test" } : row);
   };
   const lifetime = new AbortController();
-  const config: ClinikoIntakeSessionConfig = { receipt, inbound, sessionId, policyVersion: "policy-1", ledger, policies, policy: f.policy,
+  const config: ClinikoIntakeSessionConfig = { receipt, inbound, sessionId, policyVersion: "policy-1", ledger, policies, policy: intakePolicy,
     permission: { allows: async input => { permissionDrafts.push(structuredClone(input.draft)); await onPermission(); return allowed; } },
     verificationBudget: options.verificationBudget ?? { reserve: async () => true },
     delivery: { send: async (email, code) => { mail.push({ email, code }); await onMail(); return mailAccepted; } },
@@ -80,7 +84,7 @@ export async function intakeSessionFixture(options: { rateBudget?: ClinikoReques
       if (play) { resultValue(await runtime.startPresentation(callId, action.presentationId, sessionId, now)); resultValue(await runtime.resolvePresentation(callId, action.presentationId, "played", sessionId, now)); }
       return reception.affirm(scope, turn("affirm", "Yes"), action.key, action.digest, now);
     }
-    return { ...f, scope, ledger, policies, runtime, receipt, inbound, callId, sessionId, owner, config, lifetime, mail, presented, traffic, permissionDrafts, state, reception, agent, turn, prepare, propose, confirm,
+    return { ...f, policy: intakePolicy, scope, ledger, policies, runtime, receipt, inbound, callId, sessionId, owner, config, lifetime, mail, presented, traffic, permissionDrafts, state, reception, agent, turn, prepare, propose, confirm,
       drain: () => reception.drain(scope, callId, now), get posts() { return posts; }, get claims() { return claims; }, get row() { return row; },
       setTime: (value: string) => { now = value; f.setTime(value); }, setAllowed: (value: boolean) => { allowed = value; }, setPlayed: (value: boolean) => { played = value; },
       setCandidates: (value: number) => { candidates = value; }, setLoss: () => { loss = true; }, setReadMismatch: () => { readMismatch = true; }, setMailAccepted: (value: boolean) => { mailAccepted = value; },

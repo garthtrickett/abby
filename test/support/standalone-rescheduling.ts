@@ -25,7 +25,8 @@ export async function standaloneReschedulingFixture(options: { scope?: LocationS
   verificationBudget?: PatientVerificationBudget; rateBudget?: ClinikoRequestBudget; fetchPort?: typeof fetch;
   fetchAround?: (port: typeof fetch) => typeof fetch;
   authorityFor?: (config: Omit<ClinikoReschedulingAuthorityConfig, "policy" | "feePolicy">, port: typeof fetch) => Promise<AppointmentChangeAuthority>;
-  staffWorkEnabled?: boolean; lostRecall?: boolean; lostMove?: boolean; cancellationExecute?: boolean } = {}) {
+  staffWorkEnabled?: boolean; lostRecall?: boolean; lostMove?: boolean; cancellationExecute?: boolean; destinationPractitionerId?: string; sameTime?: boolean;
+  practitionerChoices?: readonly string[] } = {}) {
   const f = await callerVerificationFixture({ operation: options.operation ?? "appointments.reschedule", reschedulingExecute:true,
     ...(options.cancellationExecute ? { cancellationExecute: true } : {}),
     ...(options.scope ? { scope:options.scope } : {}), ...(options.folder ? { folder:options.folder } : {}),
@@ -34,6 +35,7 @@ export async function standaloneReschedulingFixture(options: { scope?: LocationS
   const apiKey = "synthetic-session-au5", base = "https://api.au5.cliniko.com/v1", traffic:string[] = [], sourceQueries:string[] = [];
   const mail:{email:string;code:string}[] = [], recalls:Record<string,unknown>[] = [];
   let patches = 0, claims = 0, moved = false, inspected = "exact", conflict = "clear", authorityPermitted = true;
+  let appliedPractitioner = "22";
   let onRecall = async () => {}, onMove = async () => {}, onTarget = async () => {}, onConflict = async () => {};
   let host:ClinikoReschedulingHost | undefined, session:CallerVerificationSession | undefined;
   let evidence:AppointmentChangeAuthorityEvidence = { kind:"reschedule", scope:f.scope, callId:f.callId, sessionId:f.sessionId,
@@ -42,10 +44,11 @@ export async function standaloneReschedulingFixture(options: { scope?: LocationS
     target:{scope:f.scope,patientRef:verificationCanaries[2]!,appointmentRef:"91",startsAt:"2026-10-08T04:00:00.000Z",endsAt:"2026-10-08T04:30:00.000Z",timeZone:"Australia/Sydney"},
     terms:{version:"move-fee-1",approvedText:"No fee applies to this move.",expiresAt:"2026-10-04T06:04:00.000Z"},
     offer:{scope:f.scope,offerRef:"approved-offer",serviceRef:"physiotherapy",startsAt:"2026-10-08T05:00:00.000Z",expiresAt:"2026-10-04T06:04:00.000Z"} };
-  const providerAppointment = () => ({ id:"91",starts_at:moved ? "2026-10-08T05:00:00.000Z" : "2026-10-08T04:00:00.000Z",
-    ends_at:moved ? "2026-10-08T05:30:00.000Z" : "2026-10-08T04:30:00.000Z",cancelled_at:null,archived_at:null,deleted_at:null,
+  const newStart = options.sameTime ? "2026-10-08T04:00:00.000Z" : "2026-10-08T05:00:00.000Z";
+  const providerAppointment = () => ({ id:"91",starts_at:moved ? newStart : "2026-10-08T04:00:00.000Z",
+    ends_at:moved ? new Date(Date.parse(newStart) + 1_800_000).toISOString() : "2026-10-08T04:30:00.000Z",cancelled_at:null,archived_at:null,deleted_at:null,
     patient:{links:{self:`${base}/patients/${verificationCanaries[2]}`}},business:{links:{self:`${base}/businesses/11`}},
-    practitioner:{links:{self:`${base}/practitioners/22`}},appointment_type:{links:{self:`${base}/appointment_types/33`}},notes:verificationCanaries[1] });
+    practitioner:{links:{self:`${base}/practitioners/${moved ? appliedPractitioner : "22"}`}},appointment_type:{links:{self:`${base}/appointment_types/33`}},notes:verificationCanaries[1] });
   const fakeProvider:typeof fetch = async (value,init) => {
     const url=new URL(String(value)), method=init?.method ?? "GET";
     if (url.pathname.startsWith("/v1/patients/")) return Response.json({ id:verificationCanaries[2],email:verificationCanaries[0],archived_at:null,
@@ -66,7 +69,12 @@ export async function standaloneReschedulingFixture(options: { scope?: LocationS
     if(method==="PATCH") {
       assert.equal(recalls.length,1); const state=await f.state(), action=Object.values(state.actions)[0]!;
       assert.equal(action.status,"dispatched"); assert.equal(state.presentations[action.presentationId]?.status,"played");
-      assert.deepEqual(JSON.parse(String(init?.body)),{starts_at:"2026-10-08T05:00:00.000Z",ends_at:null});
+      const body = JSON.parse(String(init?.body));
+      if (options.practitionerChoices !== undefined) {
+        assert.deepEqual(body, { starts_at: newStart, ends_at: null, ...(body.practitioner_id === undefined ? {} : { practitioner_id: body.practitioner_id }) });
+        if (body.practitioner_id !== undefined) assert.ok(options.practitionerChoices.includes(body.practitioner_id));
+      } else assert.deepEqual(body,{starts_at:newStart,ends_at:null, ...(options.destinationPractitionerId ? { practitioner_id: options.destinationPractitionerId } : {})});
+      appliedPractitioner = body.practitioner_id ?? "22";
       patches++; moved=true; await onMove(); if(options.lostMove) throw new Error("synthetic lost move response");
       return Response.json(providerAppointment());
     }

@@ -18,7 +18,7 @@ import { VoiceSession } from "../../src/voice/voice-session.ts";
 import { approvedSyntheticPolicy, syntheticSpeech } from "./approved-voice.ts";
 import { callerVerificationFixture, verificationNow } from "./caller-verification.ts";
 
-export async function privateKeypadCallFixture(options: Parameters<typeof callerVerificationFixture>[0] & { privateMode?: boolean } = {}) {
+export async function privateKeypadCallFixture(options: Parameters<typeof callerVerificationFixture>[0] & { privateMode?: boolean; wrapPrivateInput?: (input: import("../../src/voice/private-keypad-input.ts").PrivateKeypadInput) => import("../../src/voice/private-keypad-input.ts").PrivateKeypadInput } = {}) {
   let resolveMail!: () => void;
   const delivered = new Promise<void>(resolve => { resolveMail = resolve; });
   const mail: { email: string; code: string }[] = [];
@@ -59,7 +59,7 @@ export async function privateKeypadCallFixture(options: Parameters<typeof caller
   let owner: CallerVerificationSession | undefined, detailReads = 0, normalKeys = 0;
   const privateInput = new PrivateKeypadVerification({ callId, sessionId, owner: () => owner });
   const callConfig: TwilioConnectedCallConfig = { event, streamStartedAt: verificationNow, sessionId, ledger, intake,
-    ...(options.privateMode === false ? {} : { privateKeypadInput: privateInput }),
+    ...(options.privateMode === false ? {} : { privateKeypadInput: options.wrapPrivateInput?.(privateInput) ?? privateInput }),
     onCallStop: () => owner?.dispose(),
     keypadAvailabilityRange: () => { normalKeys++; return null; },
     fullFactory(receipt, actualSessionId, playback) {

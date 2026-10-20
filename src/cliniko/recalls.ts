@@ -4,6 +4,7 @@ import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import { claimClinikoBudget, ClinikoReadBudget, isClinikoRequestBudget, observeCliniko429 } from "./read-budget.ts";
 import type { ClinikoRequestBudget } from "./read-budget.ts";
+import { clinikoCredentialFingerprint } from "./read-budget.ts";
 import type { ClinikoClinicScope } from "./patients.ts";
 import { matchesRecallMarker, validRecallDate, validRecallMarker } from "./recall-note.ts";
 import { decodeClinikoReview } from "./review-request.ts";
@@ -48,6 +49,7 @@ export type ClinikoReviewDiscovery = Readonly<{
   scanned: number;
   pending: readonly ClinikoPendingReview[];
 }>;
+export type ClinikoReviewRecord = Readonly<{ recallRef: string; recalled: boolean; updatedAt: string; envelope: ClinikoDecodedReview }>;
 type ActiveRecall = Readonly<{ id: string; patientId: string; typeId: string;
   recalled: boolean | null; recallAt: string; notes: unknown }>;
 
@@ -76,15 +78,47 @@ export class ClinikoRecallReader {
   private readonly rateBudget: ClinikoRequestBudget;
   private readonly fetchPort: typeof fetch;
   private readonly clock: () => string;
+  readonly #fingerprint: string;
 
   private constructor(config: ClinikoRecallConfig, fetchPort: typeof fetch, clock: () => string, shard: string) {
     this.scope = { tenantId: config.scope.tenantId, clinicId: config.scope.clinicId };
+    this.#fingerprint = clinikoCredentialFingerprint(config.apiKey);
     this.baseUrl = `https://api.${shard}.cliniko.com/v1`;
     this.authorization = `Basic ${Buffer.from(`${config.apiKey}:`).toString("base64")}`;
     this.userAgent = `Abby (${config.contactEmail})`;
     this.rateBudget = config.rateBudget ?? new ClinikoReadBudget();
     this.fetchPort = fetchPort;
     this.clock = clock;
+  }
+
+  selection() { return { scope: { ...this.scope }, credentialFingerprint: this.#fingerprint }; }
+
+  /** Exact native recall read for an authenticated staff adapter. Notes remain untrusted context. */
+  async readReview(scope: ClinikoClinicScope, recallRef: string, recallTypeId: string, signal: AbortSignal):
+    Promise<Result<ClinikoReviewRecord, ClinikoRecallFailure>> {
+    if (!validScope(scope) || scope.tenantId !== this.scope.tenantId || scope.clinicId !== this.scope.clinicId) return err({ kind: "scopeMismatch" });
+    const id = typeof recallRef === "string" ? /^cliniko:recall:([1-9][0-9]{0,18})$/.exec(recallRef)?.[1] : undefined;
+    if (!id || !/^[1-9][0-9]{0,18}$/.test(recallTypeId) || signal.aborted) return err({ kind: "invalidQuery" });
+    const limited = await claimClinikoBudget(this.rateBudget);
+    if (limited || signal.aborted) return limited ? err(limited) : err({ kind: "unavailable" });
+    try {
+      const response = await this.fetchPort(`${this.baseUrl}/recalls/${id}`, { method: "GET", redirect: "error",
+        signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+        headers: { Accept: "application/json", Authorization: this.authorization, "User-Agent": this.userAgent } });
+      if (response.status === 429) return err(await observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset")));
+      if (response.status === 401 || response.status === 403) return err({ kind: "forbidden" });
+      if (response.status !== 200) return err({ kind: "unavailable" });
+      const parsed = await boundedRecallJson(response);
+      if (!parsed.ok || signal.aborted) return err({ kind: "unavailable" });
+      const row = record(parsed.value), links = record(row?.links), patient = record(row?.patient), type = record(row?.recall_type);
+      const decoded = decodeClinikoReview(row?.notes);
+      if (!row || row.id !== id || row.archived_at !== null || typeof row.recalled !== "boolean" || !decoded.ok ||
+          typeof row.updated_at !== "string" || !/^\d{4}-\d{2}-\d{2}T/.test(row.updated_at) || !Number.isFinite(Date.parse(row.updated_at)) ||
+          links?.self !== `${this.baseUrl}/recalls/${id}` || record(patient?.links)?.self !== `${this.baseUrl}/patients/${decoded.value.request.patientId}` ||
+          record(type?.links)?.self !== `${this.baseUrl}/recall_types/${recallTypeId}` ||
+          decoded.value.request.scope.tenantId !== scope.tenantId || decoded.value.request.scope.clinicId !== scope.clinicId) return err({ kind: "malformed" });
+      return ok({ recallRef, recalled: row.recalled, updatedAt: row.updated_at, envelope: decoded.value });
+    } catch { return err({ kind: "unavailable" }); }
   }
 
   static create(config: ClinikoRecallConfig, fetchPort: typeof fetch = fetch,

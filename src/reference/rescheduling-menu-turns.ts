@@ -36,7 +36,7 @@ export class ReschedulingMenuTurns {
         live.value.conversationRevision !== state.value.conversationRevision) return err({ kind: "invalidTransition" });
     return live;
   }
-  async run(incomingScope: LocationScope, incomingTurn: FinalCallerTurn, now: string, stage: "targets" | "offers", incomingOperation: Readonly<{ from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null; correcting?: true }> | Readonly<{ choice: 1|2|3 }>, external?: AbortSignal):
+  async run(incomingScope: LocationScope, incomingTurn: FinalCallerTurn, now: string, stage: "targets" | "practitioners" | "offers", incomingOperation: Readonly<{ from: string; to: string; window?: import("../core/booking-search-window.ts").BookingSearchWindow | null; correcting?: true; nextPractitioners?: true }> | Readonly<{ choice: 1|2|3 }>, external?: AbortSignal):
     Promise<Result<CallState, Failure>> {
     const scope = Object.freeze({ ...incomingScope }), turn = Object.freeze(structuredClone(incomingTurn));
     const operation = Object.freeze({ ...incomingOperation, ...("window" in incomingOperation && validBookingSearchWindow(incomingOperation.window)
@@ -58,9 +58,10 @@ export class ReschedulingMenuTurns {
           const action = Object.values(initial.value.actions).at(-1);
           const correctingAppointmentRef = operation.correcting && stage === "offers" && action?.status === "canceled" &&
             action.mutation.request.kind === "reschedule" ? action.mutation.request.target.appointmentRef : undefined;
-          const blocked = operation.correcting ? !correctingAppointmentRef : stage === "offers" && prior?.status !== "played";
+          const blocked = operation.correcting ? !correctingAppointmentRef : stage !== "targets" && prior?.status !== "played";
           const read = blocked ? undefined : await untilAbort(this.host.readReschedulingMenu!({ ...query,
             from: operation.from, to: operation.to, ...(operation.window !== undefined ? { window: operation.window } : {}), ...(priorTurnId ? { priorTurnId } : {}),
+            ...(operation.nextPractitioners ? { nextPractitioners: operation.nextPractitioners } : {}),
             ...(correctingAppointmentRef ? { correctingAppointmentRef } : {}) }), signal);
           const expectedWindow = operation.window;
           const matchesWindow = expectedWindow === undefined || expectedWindow === null ?
@@ -74,7 +75,8 @@ export class ReschedulingMenuTurns {
           if (menuTurnId && notice?.status === "played" && notice.kind === "notice") {
             const selected = await untilAbort(this.host.selectReschedulingMenu!({ ...query, menuTurnId, choice: operation.choice }), signal);
             if (selected?.ok && !signal.aborted) {
-              if (selected.value.kind === "targetSelected") interpretation = { kind: "reschedulingMenu", snapshot: structuredClone(selected.value.snapshot) };
+              if (selected.value.kind === "selectionWait") interpretation = { kind: "reschedulingMenuWait", seconds: selected.value.seconds };
+              else if (selected.value.kind === "targetSelected" || selected.value.kind === "practitionerSelected") interpretation = { kind: "reschedulingMenu", snapshot: structuredClone(selected.value.snapshot) };
               else {
                 const evidence = await untilAbort(this.host.resolveAppointmentChange!({ scope, callId: turn.callId, sessionId: turn.sessionId!,
                   policyVersion: query.policyVersion, now, kind: "reschedule", verificationRef: selected.value.verificationRef,

@@ -18,7 +18,7 @@ import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 
 type Member = Readonly<{ practitionerId: string; name: string; host: ClinikoBookingHost }>;
 type Config = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string; ledger: LedgerStore;
-  catalogue: OwnerFileBookingCatalogue; members: readonly Member[] }>;
+  catalogue: OwnerFileBookingCatalogue; members: readonly Member[]; initialPreference?: BookingSearchPreference }>;
 const denied = <T>(): Result<T, HostReadFailure> => err({ kind: "unavailable", target: "offer" });
 
 /** One admitted location, one patient verifier and one possible send. Every
@@ -38,8 +38,11 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
   constructor(config: Config) {
     super();
     if (!(config.catalogue instanceof OwnerFileBookingCatalogue) || !config.members.length || config.members.length > 3 || config.members.some(member => !(member.host instanceof ClinikoBookingHost))) throw new TypeError("invalid approved catalogue composition");
+    if (config.initialPreference !== undefined && !validBookingSearchPreference(config.initialPreference)) throw new TypeError("invalid initial practitioner preference");
+    this.#preference = config.initialPreference && Object.freeze({ ...config.initialPreference });
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }), members: Object.freeze(config.members.map(member => Object.freeze({ ...member }))) });
   }
+  get financial() { return this.#selection?.member.host.financial ?? this.#prepared?.member.host.financial; }
   bookingMenuAvailable(): boolean { return !this.#lifetime.signal.aborted && !this.#attempted; }
   async searchProfile() { return this.#lifetime.signal.aborted ? undefined : this.#profile(); }
   currentSearchPreference(): BookingSearchPreference | undefined { return this.#preference && { ...this.#preference }; }
@@ -57,6 +60,7 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
     if (query.window !== undefined) this.#window = query.window === null ? undefined : copyBookingSearchWindow(query.window);
     const bound = { ...query, window: this.#window ?? null, signal: AbortSignal.any([incoming.signal, this.#lifetime.signal]) };
     if (!this.#matches(bound) || this.#attempted || this.#busy || query.preference !== undefined && !validBookingSearchPreference(query.preference)) return denied();
+    for (const member of this.#config.members) member.host.financial?.invalidate();
     const epoch = ++this.#epoch; this.#menu = undefined; this.#selection = undefined;
     if (query.preference !== undefined) this.#preference = Object.freeze({ ...this.#preference, ...query.preference });
     const profile = await this.#profile();
@@ -85,7 +89,9 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
     this.#menu = { turnId: query.turnId, member: winner.member };
     return ok({ ...winner.read, locationName: profile.locationName, searchScope: { locationName: profile.locationName,
       practitioners: members.map(member => member.name), from: query.from, to: query.to,
-      selection: preference?.practitioner === "any" ? "earliestApproved" : preference?.practitioner ? "preferred" : "default" } });
+      selection: preference?.practitioner === "any" ? "earliestApproved" : preference?.practitioner ? "preferred" : "default" },
+      ...(completed.some(item => item.read.maxSearchDays !== undefined)
+        ? { maxSearchDays: Math.min(...completed.map(item => item.read.maxSearchDays ?? 7)) } : {}) });
   }
   async selectBookingMenu(query: BookingMenuQuery & Readonly<{ menuTurnId: string; choice: 1 | 2 | 3 }>) {
     const menu = this.#menu;
@@ -118,6 +124,8 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
       if (!state?.ok || this.#prepared && !preparationMayBeDiscarded(state.value, this.#prepared.request, this.#prepared.revision) || !await this.#profile()) return denied();
       const resolved = await selected.member.host.resolveBooking(scope, verificationRef, offerRef, now, signal);
       const after = await awaitUntilAbort(c.ledger.read(c.callId, c.scope), signal);
+      if (!resolved.ok && resolved.error.kind === "financialConsentRequired" && after?.ok && after.value.conversationRevision === state.value.conversationRevision &&
+          !signal.aborted && this.#selection === selected && !this.#lifetime.signal.aborted) return resolved;
       if (!resolved.ok || !after?.ok || after.value.conversationRevision !== state.value.conversationRevision || signal.aborted ||
           this.#lifetime.signal.aborted || !await this.#profile()) return denied();
       if (signal.aborted || this.#lifetime.signal.aborted || this.#selection !== selected) return denied();
@@ -125,13 +133,14 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
       return resolved;
     } finally { this.#busy = false; }
   }
-  async write(mutation: HostMutation, now: string, signal?: AbortSignal): Promise<HostWriteReceipt> {
+  async write(mutation: HostMutation, now: string, signal?: AbortSignal,
+    onBookingAcknowledged?: Parameters<HostEffects["write"]>[3]): Promise<HostWriteReceipt> {
     const prepared = this.#prepared;
     if (this.#attempted || this.#busy || this.#lifetime.signal.aborted || !prepared || mutation.kind !== "book" ||
         mutation.payloadDigest !== digestActionRequest(prepared.request) || digestActionRequest(mutation.request) !== mutation.payloadDigest)
       return { kind: "rejected", actionKey: mutation.actionKey, reason: "forbidden" };
     this.#attempted = true;
-    return prepared.member.host.write(mutation, now, signal);
+    return prepared.member.host.write(mutation, now, signal, onBookingAcknowledged);
   }
   async reconcile(mutation: HostMutation) { return { kind: "stillUnknown" as const, actionKey: mutation.actionKey }; }
   async openTask(item: StaffItem) { return { kind: "rejected" as const, taskKey: item.key }; }

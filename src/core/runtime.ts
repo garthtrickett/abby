@@ -117,6 +117,18 @@ export class CallRuntime {
   privateIntakePrompt(callId: string, presentationId: string, sessionId: string, now: string) {
     return this.update(callId, { kind: "privateIntakePrompt", presentationId, sessionId, now });
   }
+  privateCorrectionPrompt(callId: string, presentationId: string, sessionId: string, now: string) {
+    return this.update(callId, { kind: "privateCorrectionPrompt", presentationId, sessionId, now });
+  }
+  privateFinancialBookingPrompt(callId: string, presentationId: string, sessionId: string, now: string) {
+    return this.update(callId, { kind: "privateFinancialBookingPrompt", presentationId, sessionId, now });
+  }
+  privateResendPrompt(callId: string, presentationId: string, sessionId: string, now: string) {
+    return this.update(callId, { kind: "privateResendPrompt", presentationId, sessionId, now });
+  }
+  privateRepresentativePrompt(callId: string, presentationId: string, sessionId: string, operation: "book" | "cancel" | "reschedule" | "appointments.read", now: string) {
+    return this.update(callId, { kind: "privateRepresentativePrompt", presentationId, sessionId, operation, now });
+  }
 
   acceptModelResult(callId: string, effectId: string,
                     result: Extract<TransitionAction, { kind: "modelResolved" }>["result"], now: string): Promise<Result<CallState, TransitionFailure>> {
@@ -144,6 +156,16 @@ export class CallRuntime {
 
   markHostPossiblySent(callId: string, effectId: string, now: string): Promise<Result<CallState, TransitionFailure>> {
     return this.update(callId, { kind: "markHostPossiblySent", effectId, now });
+  }
+
+  prepareClassMovementConsent(callId: string, actionKey: string,
+    evidence: import("./class-movement-consent.ts").ClassMovementConsentEvidence, now: string,
+    expectedConversationRevision: number): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "classMovementConsentPrepared", actionKey, evidence, now, expectedConversationRevision });
+  }
+
+  blockHostWrite(callId: string, effectId: string, now: string, reason?: "unsupported"): Promise<Result<CallState, TransitionFailure>> {
+    return this.update(callId, { kind: "hostWriteBlocked", effectId, ...(reason ? { reason } : {}), now });
   }
 
   notificationAction(callId: string, action: import("./notification-effects.ts").NotificationTransitionAction):

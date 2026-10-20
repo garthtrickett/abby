@@ -8,6 +8,7 @@ import { normalizeEmailAddress } from "../shared/email-address.ts";
 import { sameScope } from "./appointment-change-authority.ts";
 import type { PatientAuthority, PatientAuthorityDecision, PatientAuthorityRequest, PatientAuthorityRecheck, PatientOperation,
   VerificationPolicyGate } from "./transient-patient-proof.ts";
+import { patientOperations } from "./transient-patient-proof.ts";
 
 export interface PatientVerificationBudget {
   /** Shared clinic/account limit, never keyed by patient, email, phone, call or their hashes. */
@@ -32,10 +33,10 @@ type Config = Readonly<{
   clock?: () => number; deadlineMs?: number;
 }>;
 type Challenge = Readonly<{ patientId: string; email: string; salt: string; digest: Buffer;
-  operation: PatientOperation; expiresAt: number }>;
+  operation: PatientOperation; expiresAt: number; contactRevision: number | undefined }>;
 type Grant = Readonly<{ token: string; challenge: Challenge }>;
 type Denied = Readonly<{ kind: "denied" }>;
-const allowedOperations: readonly PatientOperation[] = ["appointments.read", "appointments.book", "appointments.cancel", "appointments.reschedule", "staff.request"];
+const allowedOperations: readonly PatientOperation[] = patientOperations;
 const codeDigest = (salt: string, code: string): Buffer => createHash("sha256").update(`${salt}\0${code}`).digest();
 
 async function untilAbort<Value>(pending: Promise<Value>, signal: AbortSignal): Promise<Value | undefined> {
@@ -56,7 +57,7 @@ export class EmailPatientAuthority implements PatientAuthority {
   #busy = false;
   #answers = 0;
   #challenge: Challenge | undefined;
-  #attested: Pick<Challenge, "patientId" | "email" | "operation" | "expiresAt"> | undefined;
+  #attested: Pick<Challenge, "patientId" | "email" | "operation" | "expiresAt" | "contactRevision"> | undefined;
   #grant: Grant | undefined;
   constructor(config: Config) {
     if (!config.scope || ![config.scope.tenantId, config.scope.clinicId, config.scope.locationId,
@@ -79,13 +80,16 @@ export class EmailPatientAuthority implements PatientAuthority {
     if (!Number.isSafeInteger(now) || now < 0 || now > 8_640_000_000_000_000 - 300_000) throw new Error("verification clock unavailable");
     return now;
   }
-  async #current(operation: PatientOperation, patientId?: string, email?: string, signal = this.#lifetime.signal): Promise<Readonly<{ patientId: string; email: string }> | undefined> {
+  async #current(operation: PatientOperation, patientId?: string, email?: string, signal = this.#lifetime.signal,
+    expectedRevision?: number): Promise<Readonly<{ patientId: string; email: string; contactRevision: number | undefined }> | undefined> {
     const config = this.#config;
     if (signal.aborted) return undefined;
+    const revision = config.contact.revision ? await config.contact.revision(config.scope, signal) : ok(undefined);
+    if (!revision.ok || signal.aborted || patientId !== undefined && revision.value !== expectedRevision) return undefined;
     const policy = await config.policy.current(config.scope);
     if (!policy.ok || policy.value.enabled !== true || policy.value.version !== config.policyVersion ||
         !sameScope(policy.value.scope, config.scope) || signal.aborted) return undefined;
-    const candidates = await config.lookup.candidates(config.scope, config.presentedNumber);
+    const candidates = await config.lookup.candidates(config.scope, config.presentedNumber, signal);
     if (!candidates.ok || !validCallerCandidates(candidates.value) || candidates.value.kind !== "one" || candidates.value.candidateIds.length !== 1 ||
         signal.aborted) return undefined;
     const selected = candidates.value.candidateIds[0]!;
@@ -95,8 +99,10 @@ export class EmailPatientAuthority implements PatientAuthority {
         (email !== undefined && email !== contact.value) || signal.aborted) return undefined;
     if (await config.permission.allows(config.scope, selected, operation, config.policyVersion, signal) !== true || signal.aborted) return undefined;
     const finalPolicy = await config.policy.current(config.scope);
+    const finalRevision = config.contact.revision ? await config.contact.revision(config.scope, signal) : ok(undefined);
     return finalPolicy.ok && finalPolicy.value.enabled === true && finalPolicy.value.version === config.policyVersion &&
-      sameScope(finalPolicy.value.scope, config.scope) && !signal.aborted ? { patientId: selected, email: contact.value } : undefined;
+      finalRevision.ok && finalRevision.value === revision.value && sameScope(finalPolicy.value.scope, config.scope) && !signal.aborted
+      ? { patientId: selected, email: contact.value, contactRevision: revision.value } : undefined;
   }
 
   async #bounded<Value>(run: (signal: AbortSignal) => Promise<Value>, external?: AbortSignal): Promise<Value | undefined> {
@@ -136,7 +142,7 @@ export class EmailPatientAuthority implements PatientAuthority {
         const challenge = this.#challenge;
         if (!challenge || this.#now() >= challenge.expiresAt || !/^[0-9]{6}$/.test(code) ||
             !timingSafeEqual(challenge.digest, codeDigest(challenge.salt, code))) return undefined;
-        const current = await this.#current(challenge.operation, challenge.patientId, challenge.email, signal);
+        const current = await this.#current(challenge.operation, challenge.patientId, challenge.email, signal, challenge.contactRevision);
         if (!current || this.#now() >= challenge.expiresAt || signal.aborted) return undefined;
         return { token: randomBytes(32).toString("base64url"), challenge };
       });
@@ -158,11 +164,11 @@ export class EmailPatientAuthority implements PatientAuthority {
     try {
       const current = await this.#bounded(async signal => {
         if (this.#now() >= grant.challenge.expiresAt) return undefined;
-        const contact = await this.#current(grant.challenge.operation, grant.challenge.patientId, grant.challenge.email, signal);
+        const contact = await this.#current(grant.challenge.operation, grant.challenge.patientId, grant.challenge.email, signal, grant.challenge.contactRevision);
         return this.#now() < grant.challenge.expiresAt ? contact : undefined;
       }, request.signal);
       if (!current || this.#lifetime.signal.aborted || request.signal.aborted) return err({ kind: "denied" });
-      this.#attested = { patientId: current.patientId, email: current.email, operation: grant.challenge.operation, expiresAt: grant.challenge.expiresAt };
+      this.#attested = { patientId: current.patientId, email: current.email, contactRevision: current.contactRevision, operation: grant.challenge.operation, expiresAt: grant.challenge.expiresAt };
       return ok({ scope: this.#config.scope, callId: this.#config.callId, sessionId: this.#config.sessionId,
         policyVersion: this.#config.policyVersion, patientId: current.patientId, operations: [grant.challenge.operation] });
     } finally { this.#busy = false; }
@@ -177,7 +183,7 @@ export class EmailPatientAuthority implements PatientAuthority {
     try {
       const current = await this.#bounded(async signal => {
         if (this.#now() >= attested.expiresAt) return undefined;
-        const fresh = await this.#current(attested.operation, attested.patientId, attested.email, signal);
+        const fresh = await this.#current(attested.operation, attested.patientId, attested.email, signal, attested.contactRevision);
         return this.#now() < attested.expiresAt ? fresh : undefined;
       }, request.signal);
       if (!current || request.signal.aborted || this.#lifetime.signal.aborted || this.#attested !== attested) {

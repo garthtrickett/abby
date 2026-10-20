@@ -1,8 +1,10 @@
+import { confirmationResendEvidenceFailure } from "../core/confirmation-resend.ts";
 import { validStaffMessageNotice } from "../core/staff-message-notice.ts";
 import { StaffOutcomeTurns } from "./staff-outcome-turns.ts";
 import { ReschedulingMenuTurns } from "./rescheduling-menu-turns.ts";
 import { AppointmentEnquiryTurns } from "./appointment-enquiry-turns.ts";
 import { BookingMenuTurns } from "./booking-menu-turns.ts";
+import { ClassMovementTurns } from "./class-movement-turns.ts";
 import { EffectWorker } from "../core/effect-worker.ts";
 import { EffectCallLeaseCoordinator } from "../core/effect-call-lease.ts";
 import type { EffectCallLeaseStore } from "../core/effect-call-lease.ts";
@@ -21,9 +23,10 @@ import { CallRuntime } from "../core/runtime.ts";
 import { appointmentChangeEvidenceFailure, noticePresentationId } from "../core/transition.ts";
 import { modelTaskRef } from "../model/work.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
+import { patientCorrectionEvidenceFailure } from "../core/patient-correction.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").StaffReviewProcessHost & import("../core/host.ts").BookingHorizonHost & import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").ClassMovementContinuationHost & import("../core/host.ts").StaffReviewProcessHost & import("../core/host.ts").BookingHorizonHost & import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").PreviousPractitionerHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost & import("../core/host.ts").PatientCorrectionEvidenceHost & import("../core/host.ts").ConfirmationResendEvidenceHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 export const appointmentProposalEvidenceDeadlineMs = 15_000;
@@ -138,7 +141,7 @@ export class TextReception {
   }
 
   async startWorkflow(scope: LocationScope, turn: FinalCallerTurn, operation: import("../core/model.ts").WorkflowOperation, now: string,
-    expectedConversationRevision?: number, external?: AbortSignal, replaceCanceledChange = false) {
+    expectedConversationRevision?: number, external?: AbortSignal, replaceCanceledChange = false, serviceChoice?: import("../core/booking-service-choice.ts").BookingServiceChoice, forAnotherPerson?: true, classAttendance?: true, classSelectionRef?: string) {
     const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision);
     if (denied) return denied;
     const state = await this.ledger.read(turn.callId, scope);
@@ -148,15 +151,40 @@ export class TextReception {
     if (state.value.processedTurnIds.includes(turn.turnId)) return state;
     const signal = AbortSignal.any([AbortSignal.timeout(20_000), ...(external ? [external] : [])]);
     if (signal.aborted) return err({ kind: "staleTurn" as const });
-    let selected;
-    try { selected = await awaitUntilAbort(this.host.startWorkflow({ scope, callId: turn.callId, sessionId: turn.sessionId,
-      policyVersion: state.value.policy.policyVersion, operation, signal, expectedConversationRevision: state.value.conversationRevision,
-      ...(replaceCanceledChange ? { replaceCanceledChange: true as const } : {}) }), signal); }
-    catch { selected = undefined; }
-    if (external?.aborted) return err({ kind: "staleTurn" as const });
-    const runtime = new CallRuntime(this.ledger, scope);
-    return selected?.ok ? runtime.acceptTurn(turn, { kind: "workflowStarted", operation, next: selected.value.kind }, now, expectedConversationRevision)
-      : runtime.acceptTurn(turn, operation === "appointments.read" ? { kind: "appointmentsFailure", reason: "notConfigured" } : { kind: "unavailableAction", actionKind: operation }, now, expectedConversationRevision);
+    const query = { scope, callId: turn.callId, sessionId: turn.sessionId, policyVersion: state.value.policy.policyVersion,
+      operation, signal, expectedConversationRevision: state.value.conversationRevision, turnId: turn.turnId,
+      ...(serviceChoice ? { serviceChoice } : {}), ...(forAnotherPerson ? { forAnotherPerson } : {}), ...(classAttendance ? { classAttendance } : {}), ...(classSelectionRef ? { classSelectionRef } : {}), ...(replaceCanceledChange ? { replaceCanceledChange: true as const } : {}) };
+    let selected, completed = false;
+    try {
+      try { selected = await awaitUntilAbort(this.host.startWorkflow(query), signal); } catch { selected = undefined; }
+      if (external?.aborted) return err({ kind: "staleTurn" as const });
+      const runtime = new CallRuntime(this.ledger, scope);
+      const result = selected?.ok ? await runtime.acceptTurn(turn, { kind: "workflowStarted", operation, next: selected.value.kind,
+        ...(selected.value.advanceTask ? { advanceTask: true as const } : {}) }, now, expectedConversationRevision)
+        : await runtime.acceptTurn(turn, operation === "appointments.read" ? { kind: "appointmentsFailure", reason: "notConfigured" }
+          : { kind: "unavailableAction", actionKind: operation }, now, expectedConversationRevision);
+      if (!result.ok || !selected?.ok) return result;
+      if (this.host.completeWorkflowStart && !await this.host.completeWorkflowStart({ ...query, ...(selected.value.advanceTask ? { advanceTask: true as const } : {}) })) return err({ kind: "staleTurn" as const });
+      completed = true; return result;
+    } catch { return err({ kind: "staleTurn" as const }); }
+    finally { if (!completed) await this.host.abandonWorkflowStart?.(query); }
+  }
+
+  async readPreviousPractitioner(scope: LocationScope, turn: FinalCallerTurn, expectedRevision: number, external: AbortSignal) {
+    const denied = await this.patientAccessDenied(scope, turn, expectedRevision); if (denied) return denied;
+    const state = await this.ledger.read(turn.callId, scope); if (!state.ok) return state;
+    const now = this.currentInstant();
+    if (!now || turn.quality !== "clear" || !turn.sessionId || state.value.conversationRevision !== expectedRevision || state.value.sessionLease?.sessionId !== turn.sessionId) return err({ kind: "staleTurn" as const });
+    const signal = AbortSignal.any([external, AbortSignal.timeout(20000)]);
+    let result;
+    try { result = await awaitUntilAbort(this.host.readPreviousPractitioner?.({ scope, callId: turn.callId, sessionId: turn.sessionId,
+      policyVersion: state.value.policy.policyVersion, turnId: turn.turnId, expectedConversationRevision: expectedRevision, now, signal }) ?? Promise.resolve(undefined), signal); }
+    catch { result = undefined; }
+    if (signal.aborted) return err({ kind: "staleTurn" as const });
+    const interpretation: TurnInterpretation = result?.ok ? result.value.kind === "codeRequired"
+      ? { kind: "workflowStarted", operation: "appointments.read", next: "codeRequired" }
+      : { kind: "previousPractitioner", snapshot: result.value.snapshot } : { kind: "previousPractitionerUnavailable" };
+    return new CallRuntime(this.ledger, scope).acceptTurn(turn, interpretation, now, expectedRevision);
   }
 
   appointmentEnquiryEnabled(): boolean { return !!this.host.startWorkflow && new AppointmentEnquiryTurns(this.ledger, this.host).enabled(); }
@@ -232,12 +260,12 @@ export class TextReception {
     return new StaffOutcomeTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, expectedRevision, external);
   }
   staffRequestEnabled(): boolean { return typeof this.host.prepareStaffRequest === "function"; }
-  async readReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", from: string, to: string, now: string, correcting = false, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null, signal?: AbortSignal) {
+  async readReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "practitioners" | "offers", from: string, to: string, now: string, correcting = false, window?: import("../core/booking-search-window.ts").BookingSearchWindow | null, signal?: AbortSignal, nextPractitioners?: true) {
     const denied = await this.patientAccessDenied(scope, turn, undefined);
     if (denied) return denied;
-    return new ReschedulingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, stage, { from, to, ...(window !== undefined ? { window } : {}), ...(correcting ? { correcting: true as const } : {}) }, signal);
+    return new ReschedulingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, stage, { from, to, ...(window !== undefined ? { window } : {}), ...(correcting ? { correcting: true as const } : {}), ...(nextPractitioners ? { nextPractitioners } : {}) }, signal);
   }
-  async selectReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "offers", choice: 1 | 2 | 3, now: string, signal?: AbortSignal) {
+  async selectReschedulingMenu(scope: LocationScope, turn: FinalCallerTurn, stage: "targets" | "practitioners" | "offers", choice: 1 | 2 | 3, now: string, signal?: AbortSignal) {
     const denied = await this.patientAccessDenied(scope, turn, undefined);
     if (denied) return denied;
     return new ReschedulingMenuTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, now, stage, { choice }, signal);
@@ -383,6 +411,8 @@ export class TextReception {
       if (!evidence) return err({ kind: "effectFailure" as const });
       if (evidence.ok) {
         interpretation = { kind: "requestAction", request: evidence.value };
+      } else if (evidence.error.kind === "financialConsentRequired") {
+        interpretation = { kind: "financialConsentRequired" };
       } else if (evidence.error.kind === "ambiguous" || evidence.error.kind === "expired") {
         interpretation = { kind: "ambiguousTarget" };
       } else {
@@ -474,6 +504,52 @@ export class TextReception {
         interpretation = { kind: "intakeFailure", reason: "unavailable" };
       }
     }
+    return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);
+  }
+
+  patientCorrectionEnabled(): boolean { return typeof this.host.resolvePatientCorrection === "function"; }
+  async proposePatientCorrection(scope: LocationScope, turn: FinalCallerTurn, correctionRef: string, now: string,
+                                expectedConversationRevision?: number, external?: AbortSignal): Promise<Result<CallState, TextReceptionFailure>> {
+    const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision); if (denied) return denied;
+    const runtime = this.runtime(scope), state = await runtime.read(turn.callId); if (!state.ok) return state;
+    if (state.value.policy.capabilities.patientUpdate !== "execute" || !this.host.resolvePatientCorrection) {
+      return runtime.acceptTurn(turn, { kind: "unavailableAction", actionKind: "patientUpdate" }, now, expectedConversationRevision);
+    }
+    if (turn.quality !== "clear" || typeof turn.sessionId !== "string" || state.value.sessionLease?.sessionId !== turn.sessionId ||
+        typeof correctionRef !== "string" || !/^[A-Za-z0-9][A-Za-z0-9:_-]{0,127}$/.test(correctionRef)) return err({ kind: "invalidTransition" });
+    const signal = external ? AbortSignal.any([external, AbortSignal.timeout(appointmentProposalEvidenceDeadlineMs)]) : AbortSignal.timeout(appointmentProposalEvidenceDeadlineMs);
+    let interpretation: TurnInterpretation = { kind: "readFailure", target: "patient", failure: "unavailable" };
+    try {
+      const evidence = await awaitUntilAbort(this.host.resolvePatientCorrection({ scope, callId: turn.callId, sessionId: turn.sessionId,
+        policyVersion: state.value.policy.policyVersion, correctionRef, now }), signal);
+      if (external?.aborted) return err({ kind: "staleTurn" });
+      if (evidence?.ok && evidence.value.correctionRef === correctionRef && !patientCorrectionEvidenceFailure(scope, evidence.value, now)) {
+        interpretation = { kind: "requestAction", request: evidence.value };
+      }
+    } catch { if (external?.aborted) return err({ kind: "staleTurn" }); }
+    return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);
+  }
+
+  confirmationResendEnabled(): boolean { return typeof this.host.resolveConfirmationResend === "function"; }
+  async proposeConfirmationResend(scope: LocationScope, turn: FinalCallerTurn, requestRef: string, now: string,
+    expectedConversationRevision?: number, external?: AbortSignal): Promise<Result<CallState, TextReceptionFailure>> {
+    const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision); if (denied) return denied;
+    const runtime = this.runtime(scope), state = await runtime.read(turn.callId); if (!state.ok) return state;
+    if (state.value.policy.capabilities.confirmationResend !== "execute" || !this.host.resolveConfirmationResend) {
+      return runtime.acceptTurn(turn, { kind: "unavailableAction", actionKind: "confirmationResend" }, now, expectedConversationRevision);
+    }
+    if (turn.quality !== "clear" || typeof turn.sessionId !== "string" || state.value.sessionLease?.sessionId !== turn.sessionId ||
+        typeof requestRef !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(requestRef)) return err({ kind: "invalidTransition" });
+    const signal = external ? AbortSignal.any([external, AbortSignal.timeout(appointmentProposalEvidenceDeadlineMs)]) : AbortSignal.timeout(appointmentProposalEvidenceDeadlineMs);
+    let interpretation: TurnInterpretation = { kind: "readFailure", target: "patient", failure: "unavailable" };
+    try {
+      const evidence = await awaitUntilAbort(this.host.resolveConfirmationResend({ scope, callId: turn.callId, sessionId: turn.sessionId,
+        policyVersion: state.value.policy.policyVersion, requestRef, now }), signal);
+      if (external?.aborted) return err({ kind: "staleTurn" });
+      if (evidence?.ok && evidence.value.requestRef === requestRef && !confirmationResendEvidenceFailure(state.value.policy, evidence.value, now)) {
+        interpretation = { kind: "requestAction", request: evidence.value };
+      }
+    } catch { if (external?.aborted) return err({ kind: "staleTurn" }); }
     return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);
   }
 
@@ -593,8 +669,34 @@ export class TextReception {
     return this.runtime(scope).completeTextPresentation(callId, presentationId, now);
   }
 
-  affirm(scope: LocationScope, turn: FinalCallerTurn, actionKey: string, digest: string, now: string, expectedConversationRevision?: number): Promise<Result<CallState, TransitionFailure>> {
-    return this.runtime(scope).acceptTurn(turn, { kind: "affirm", actionKey, digest, affirmative: true }, now, expectedConversationRevision);
+  continueClassMovement(scope: LocationScope, turn: FinalCallerTurn, expectedConversationRevision?: number, external?: AbortSignal) {
+    return new ClassMovementTurns(this.ledger, this.policy, this.host, this.clock).run(scope, turn, expectedConversationRevision, external);
+  }
+  async affirm(scope: LocationScope, turn: FinalCallerTurn, actionKey: string, digest: string, now: string, expectedConversationRevision?: number, external?: AbortSignal): Promise<Result<CallState, TransitionFailure>> {
+    const runtime = this.runtime(scope);
+    if (this.host.prepareClassMovement) {
+      const found = await runtime.read(turn.callId);
+      const phase = found.ok ? found.value.actions[actionKey] : undefined;
+      if (phase?.classMovementConsent && phase.classMovement?.outcome === "pending")
+        return runtime.acceptTurn(turn, { kind: "classMovementAffirm", actionKey, digest }, now, expectedConversationRevision);
+    }
+    if (!this.host.checkConfirmationCapacity) return runtime.acceptTurn(turn, { kind: "affirm", actionKey, digest, affirmative: true }, now, expectedConversationRevision);
+    const state = await runtime.read(turn.callId); if (!state.ok) return state;
+    if (expectedConversationRevision !== undefined && expectedConversationRevision !== state.value.conversationRevision) return err({ kind: "staleTurn" });
+    const action = state.value.actions[actionKey];
+    if (!turn.sessionId || action?.status !== "awaitingConfirmation" || action.digest !== digest || state.value.presentations[action.presentationId]?.status !== "played" || state.value.pendingPresentationId) return err({ kind: "confirmationMissing" });
+    const revision = state.value.conversationRevision;
+    const signal = AbortSignal.any([AbortSignal.timeout(5000), ...(external ? [external] : [])]);
+    let interpretation: TurnInterpretation = { kind: "readFailure", target: "appointment", failure: "unavailable" };
+    try {
+      const capacity = await awaitUntilAbort(this.host.checkConfirmationCapacity({ scope, callId: turn.callId, sessionId: turn.sessionId,
+        turnId: turn.turnId, policyVersion: state.value.policy.policyVersion, now, signal, actionKey, digest }), signal);
+      if (external?.aborted) return err({ kind: "staleTurn" });
+      if (capacity?.ok && capacity.value.kind === "ready") interpretation = { kind: "affirm", actionKey, digest, affirmative: true };
+      else if (capacity?.ok && capacity.value.kind === "wait") interpretation = { kind: "confirmationWait", actionKey, digest, seconds: capacity.value.seconds };
+      else if (capacity && !capacity.ok && capacity.error.kind === "expired") interpretation = { kind: "clarify", reason: "menuUnavailable" };
+    } catch { if (external?.aborted) return err({ kind: "staleTurn" }); }
+    return runtime.acceptTurn(turn, interpretation, now, revision);
   }
 
   async drain(scope: LocationScope, callId: string, now: string): Promise<Result<CallState, TextReceptionFailure>> {

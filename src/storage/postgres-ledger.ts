@@ -87,7 +87,11 @@ function auditPayload(action: TransitionAction): Record<string, string> {
     case "silenceTimeout": return { sessionId: action.sessionId, stage: action.stage };
     case "callEnded": return { sessionId: action.sessionId, reason: action.reason };
     case "textPresentationWritten": return { presentationId: action.presentationId };
-    case "privateIntakePrompt": return { presentationId: action.presentationId, sessionId: action.sessionId };
+    case "privateIntakePrompt":
+    case "privateCorrectionPrompt":
+    case "privateRepresentativePrompt":
+    case "privateFinancialBookingPrompt":
+    case "privateResendPrompt": return { presentationId: action.presentationId, sessionId: action.sessionId };
     case "admissionExpired": return {};
     case "callerTurn": return { turnId: action.turn.turnId, interpretation: action.interpretation.kind };
     case "nonAffirmativeFinal": return { turnId: action.turn.turnId };
@@ -95,6 +99,7 @@ function auditPayload(action: TransitionAction): Record<string, string> {
     case "transferPossiblySent": return { presentationId: action.presentationId };
     case "presentationResolved": return { presentationId: action.presentationId, status: action.status };
     case "reconciliationDeadline": return { actionKey: action.actionKey };
+    case "classMovementConsentPrepared": return { actionKey: action.actionKey };
     case "staffChangeRequested": return { taskKey: action.taskKey, actorRef: action.actorRef, operation: action.change.kind };
     case "staffAlertRequested": return { taskKey: action.taskKey, reason: action.reason };
     default: return { effectId: action.effectId };

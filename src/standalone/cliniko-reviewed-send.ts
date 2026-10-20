@@ -16,6 +16,9 @@ export type ReviewedSendPorts<Value> = Readonly<{
   authorize(request: ClinikoReviewRequest, signal: AbortSignal): Promise<boolean>;
   /** One possible clinical send. Returns the operation's own inspected outcome; no receipt is minted here. */
   send(request: ClinikoReviewRequest, signal: AbortSignal): Promise<Value>;
+  /** Individual/class creation only: an exact acknowledgement already validated inside send.
+   * No headers, pending parse or outcome from another operation may use this path. */
+  acknowledgedBooking?(): Value | undefined;
 }>;
 type Config = Readonly<{
   scope: LocationScope;
@@ -111,6 +114,8 @@ export class ClinikoReviewedSend {
       // Once invoked, a timeout/throw cannot prove that the provider did not commit.
       const sent = ports.send(request, signal);
       const outcome = await untilAbort(sent, signal);
+      const acknowledged = request.operation.kind === "book" || request.operation.kind === "classBook" ? ports.acknowledgedBooking?.() : undefined;
+      if (acknowledged !== undefined) return ok({ recallRef: opened.value.recallRef, outcome: acknowledged });
       if (outcome === undefined || signal.aborted) return err({ kind: "mutationUncertain" });
       return ok({ recallRef: opened.value.recallRef, outcome });
     } catch { return err({ kind: "mutationUncertain" }); }

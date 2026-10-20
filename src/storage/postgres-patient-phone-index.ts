@@ -9,16 +9,19 @@ import type { PatientPhoneIndexClinicId, PatientPhoneIndexNormalizedPhone, Patie
 import type { PatientPhoneSyncClinicId, PatientPhoneSyncTenantId } from "./generated/public/PatientPhoneSync.ts";
 import type { PatientPhoneScanClinicId, PatientPhoneScanTenantId } from "./generated/public/PatientPhoneScan.ts";
 import type { PatientPhoneClinicStatusClinicId, PatientPhoneClinicStatusTenantId } from "./generated/public/PatientPhoneClinicStatus.ts";
+import { lockContactAccount, readContactRevision } from "./postgres-cliniko-contact-revision.ts";
+import type { ContactRevision } from "./postgres-cliniko-contact-revision.ts";
 
 export type PatientPhoneLink = Readonly<{ normalizedPhone: string; patientId: string }>;
 export type PatientPhoneClinicScope = Pick<LocationScope, "tenantId" | "clinicId">;
-export type PhoneIndexFailure = Readonly<{ kind: "invalidInput" | "storageFailure" | "generationChanged" | "clinicDisconnected" }>;
+export type PhoneIndexFailure = Readonly<{ kind: "invalidInput" | "storageFailure" | "generationChanged" | "clinicDisconnected" | "contactChanged" }>;
 export type PhoneIndexHead = Readonly<{
   generation: number;
   completedAt: Date;
   countryCallingCode: string | null;
   normalizationVersion: number | null;
   credentialFingerprint: string | null;
+  contactVersion: number;
 }>;
 export type PhoneCandidates = Readonly<{
   kind: "stale" | "none" | "one" | "multiple" | "tooMany";
@@ -46,7 +49,7 @@ export class PostgresPatientPhoneIndex {
     if (!validScope(scope)) return err({ kind: "invalidInput" });
     try {
       const row = await this.db.selectFrom("patient_phone_sync")
-        .select(["generation", "completed_at", "country_calling_code", "normalization_version", "credential_fingerprint"])
+        .select(["generation", "completed_at", "country_calling_code", "normalization_version", "credential_fingerprint", "contact_version"])
         .where("tenant_id", "=", scope.tenantId as PatientPhoneSyncTenantId)
         .where("clinic_id", "=", scope.clinicId as PatientPhoneSyncClinicId).executeTakeFirst();
       if (!row) return ok(null);
@@ -54,9 +57,16 @@ export class PostgresPatientPhoneIndex {
         row.completed_at instanceof Date && Number.isFinite(row.completed_at.getTime())
         ? ok({ generation: row.generation, completedAt: row.completed_at,
           countryCallingCode: row.country_calling_code, normalizationVersion: row.normalization_version,
-          credentialFingerprint: row.credential_fingerprint })
+          credentialFingerprint: row.credential_fingerprint, contactVersion: row.contact_version })
         : err({ kind: "storageFailure" });
     } catch { return err({ kind: "storageFailure" }); }
+  }
+
+  /** Capture before reading native pages; a completed scan cannot adopt a later revision. */
+  async contactRevision(scope: PatientPhoneClinicScope, fingerprint: string): Promise<Result<ContactRevision, PhoneIndexFailure>> {
+    if (!validScope(scope) || !fingerprintPattern.test(fingerprint)) return err({ kind: "invalidInput" });
+    try { return ok(await readContactRevision(this.db, scope.tenantId, fingerprint)); }
+    catch { return err({ kind: "storageFailure" }); }
   }
 
   async completedAt(scope: PatientPhoneClinicScope, countryCallingCode: string, credentialFingerprint: string): Promise<Result<Date | null, PhoneIndexFailure>> {
@@ -68,6 +78,9 @@ export class PostgresPatientPhoneIndex {
     if (!head.value || head.value.countryCallingCode !== countryCallingCode ||
         head.value.normalizationVersion !== PHONE_NORMALIZATION_VERSION ||
         head.value.credentialFingerprint !== credentialFingerprint) return ok(null);
+    const revision = await this.contactRevision(scope, credentialFingerprint);
+    if (!revision.ok) return revision;
+    if (revision.value.blocked || revision.value.version !== head.value.contactVersion) return ok(null);
     return ok(head.value?.completedAt ?? null);
   }
 
@@ -86,9 +99,10 @@ export class PostgresPatientPhoneIndex {
   }
 
   async publish(scope: PatientPhoneClinicScope, links: readonly PatientPhoneLink[], countryCallingCode: string,
-                credentialFingerprint: string, expectedGeneration?: number | null): Promise<Result<number, PhoneIndexFailure>> {
+                credentialFingerprint: string, expectedGeneration?: number | null, contactVersion = 0): Promise<Result<number, PhoneIndexFailure>> {
     if (!validScope(scope) || !Array.isArray(links) || links.length > 100_000 ||
         !/^[1-9][0-9]{0,2}$/.test(countryCallingCode) || !fingerprintPattern.test(credentialFingerprint) ||
+        !Number.isSafeInteger(contactVersion) || contactVersion < 0 || contactVersion > 2_147_483_647 ||
         (expectedGeneration !== undefined && expectedGeneration !== null &&
           (!Number.isSafeInteger(expectedGeneration) || expectedGeneration < 1)) ||
         links.some(link => !link || !phonePattern.test(link.normalizedPhone) || !patientIdPattern.test(link.patientId) ||
@@ -98,6 +112,9 @@ export class PostgresPatientPhoneIndex {
     const unique = [...new Map(links.map(link => [`${link.normalizedPhone}\0${link.patientId}`, link])).values()];
     try {
       return await this.db.transaction().execute(async trx => {
+        await lockContactAccount(trx, scope.tenantId, credentialFingerprint);
+        const revision = await readContactRevision(trx, scope.tenantId, credentialFingerprint);
+        if (revision.blocked || revision.version !== contactVersion) return err({ kind: "contactChanged" });
         await sql`select pg_advisory_xact_lock(hashtext(${scope.tenantId}), hashtext(${scope.clinicId}))`.execute(trx);
         const connection = await trx.selectFrom("patient_phone_clinic_status").select("enabled")
           .where("tenant_id", "=", scope.tenantId as PatientPhoneClinicStatusTenantId)
@@ -124,11 +141,11 @@ export class PostgresPatientPhoneIndex {
         await trx.insertInto("patient_phone_sync").values({ tenant_id: scope.tenantId as PatientPhoneSyncTenantId,
           clinic_id: scope.clinicId as PatientPhoneSyncClinicId, generation, completed_at: new Date(),
           country_calling_code: countryCallingCode,
-          normalization_version: PHONE_NORMALIZATION_VERSION, credential_fingerprint: credentialFingerprint })
+          normalization_version: PHONE_NORMALIZATION_VERSION, credential_fingerprint: credentialFingerprint, contact_version: contactVersion })
           .onConflict(conflict => conflict.columns(["tenant_id", "clinic_id"])
             .doUpdateSet({ generation, completed_at: new Date(), country_calling_code: countryCallingCode,
               normalization_version: PHONE_NORMALIZATION_VERSION,
-              credential_fingerprint: credentialFingerprint })).execute();
+              credential_fingerprint: credentialFingerprint, contact_version: contactVersion })).execute();
         return ok(generation);
       });
     } catch { return err({ kind: "storageFailure" }); }
@@ -192,10 +209,11 @@ export class PostgresPatientPhoneIndex {
           .where("clinic_id", "=", scope.clinicId as PatientPhoneClinicStatusClinicId).executeTakeFirst();
         if (connection?.enabled === false) return ok({ kind: "stale", patientIds: [] });
         const sync = await trx.selectFrom("patient_phone_sync")
-          .select(["generation", "completed_at", "country_calling_code", "normalization_version", "credential_fingerprint"])
+          .select(["generation", "completed_at", "country_calling_code", "normalization_version", "credential_fingerprint", "contact_version"])
           .where("tenant_id", "=", scope.tenantId as PatientPhoneSyncTenantId)
           .where("clinic_id", "=", scope.clinicId as PatientPhoneSyncClinicId).executeTakeFirst();
-        if (!sync || sync.country_calling_code !== countryCallingCode ||
+        const revision = await readContactRevision(trx, scope.tenantId, credentialFingerprint);
+        if (!sync || revision.blocked || sync.contact_version !== revision.version || sync.country_calling_code !== countryCallingCode ||
             sync.normalization_version !== PHONE_NORMALIZATION_VERSION ||
             sync.credential_fingerprint !== credentialFingerprint ||
             !(sync.completed_at instanceof Date) || now.getTime() - sync.completed_at.getTime() > maxAgeMs ||

@@ -4,6 +4,8 @@ import { claimClinikoBudget, ClinikoReadBudget, clinikoCredentialFingerprint, is
 import type { ClinikoRequestBudget } from "./read-budget.ts";
 import { normalizePatientPhone } from "./phone-number.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
+import type { ClinikoContactRevisionReader } from "./contact-revision.ts";
+import type { ClinikoCostBinding } from "./request-cost.ts";
 
 export type ClinikoClinicScope = Pick<LocationScope, "tenantId" | "clinicId">;
 export type ClinikoPatientConfig = Readonly<{
@@ -11,6 +13,7 @@ export type ClinikoPatientConfig = Readonly<{
   apiKey: string;
   contactEmail: string;
   rateBudget?: ClinikoRequestBudget;
+  contactRevision?: ClinikoContactRevisionReader;
 }>;
 
 /** A candidate is never a verification proof or permission to disclose a record. */
@@ -121,6 +124,13 @@ export class ClinikoPatientCandidateReader {
   }
 
   credentialFingerprint(): string { return this.credentialHash; }
+
+  /** Exact cost of this native single-patient phone recheck, not a patient grant. */
+  nativePhoneRequestCostCeiling(binding: ClinikoCostBinding): number | undefined {
+    return Object.getPrototypeOf(this) === ClinikoPatientCandidateReader.prototype && this.hasCurrentPhone === nativePhoneRead &&
+      this.rateBudget === binding.budget && this.credentialHash === binding.credentialFingerprint &&
+      this.scope.tenantId === binding.scope.tenantId && this.scope.clinicId === binding.scope.clinicId ? 1 : undefined;
+  }
 
   /** Search by two documented exact filters; no phone or partial-name scan is attempted. */
   async findByEmailAndBirthDate(scope: ClinikoClinicScope, email: string, dateOfBirth: string, signal?: AbortSignal):
@@ -295,20 +305,22 @@ export class ClinikoPatientCandidateReader {
   }
 
   /** Rechecks an indexed candidate against Cliniko before any identity workflow uses it. */
-  async hasCurrentPhone(scope: ClinikoClinicScope, patientId: string, normalizedPhone: string, countryCallingCode: string):
+  async hasCurrentPhone(scope: ClinikoClinicScope, patientId: string, normalizedPhone: string, countryCallingCode: string, signal?: AbortSignal):
     Promise<Result<boolean, ClinikoPatientFailure>> {
     if (!validScope(scope) || scope.tenantId !== this.scope.tenantId || scope.clinicId !== this.scope.clinicId) {
       return err({ kind: "scopeMismatch" });
     }
     if (!patientIdPattern.test(patientId) || !/^\+[1-9][0-9]{7,14}$/.test(normalizedPhone) ||
         !/^[1-9][0-9]{0,2}$/.test(countryCallingCode)) return err({ kind: "invalidQuery" });
+    if (signal?.aborted) return err({ kind: "unavailable" });
     const limited = await claimClinikoBudget(this.rateBudget);
     if (limited) return err(limited);
+    if (signal?.aborted) return err({ kind: "unavailable" });
     let response: Response;
     try {
       response = await this.fetchPort(`${this.baseUrl}/patients/${patientId}`, {
         method: "GET", headers: { Accept: "application/json", Authorization: this.authorization,
-          "User-Agent": this.userAgent }, redirect: "error", signal: AbortSignal.timeout(15_000),
+          "User-Agent": this.userAgent }, redirect: "error", signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
       });
     } catch { return err({ kind: "unavailable" }); }
     if (response.status === 404) return ok(false);
@@ -338,3 +350,4 @@ export class ClinikoPatientCandidateReader {
     return ok(false);
   }
 }
+const nativePhoneRead = ClinikoPatientCandidateReader.prototype.hasCurrentPhone;

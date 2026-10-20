@@ -1,0 +1,165 @@
+{
+  "schema": "abby.synthetic-speech-comparison.aggregate.v1",
+  "date": "2026-10-14",
+  "patientFree": true,
+  "sourceHead": "70d58980ed8442659147fb3400e9dd77d3b91cec",
+  "sourceFiles": [
+    {
+      "path": "src/voice/openai-realtime-transcription.ts",
+      "sha256": "2104a7321c544d8fddd5939b7613c00968979dc888d22aa61730bb6c721c1df0"
+    },
+    {
+      "path": "src/voice/transcription-evaluation.ts",
+      "sha256": "3ea30413b80cd28ecf337aaf9ad156dc6d5fd946ee74f81678654f9f2a41943d"
+    },
+    {
+      "path": "src/voice/transcription-evaluation-gate.ts",
+      "sha256": "44f7973d65f8de8261db8030bfbb14ce827a0c14b9b35756c2640133c956357c"
+    },
+    {
+      "path": "scripts/evaluate-transcription.ts",
+      "sha256": "0ccffb2847436140c6da8403f96b39b77b561dd76d905e827ede85c5c36413b4"
+    }
+  ],
+  "currentSourceInputsMatch": true,
+  "corpusVersion": "transcription-noise-v1",
+  "corpusSha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+  "independentArtifactVerification": "all 54 unique repeat/case results, pinned audio/source hashes and unchanged machine assessments verified",
+  "reports": [
+    {
+      "path": "eval/results/20261014-original-noise-recheck18.json",
+      "sha256": "188a63f008df6474a207ddf7e6c32857e9577713c511fb736c0539851deef928",
+      "model": "gpt-live-transcribe",
+      "counts": {
+        "match": 3,
+        "mismatch": 4,
+        "critical": 11,
+        "providerFailure": 0
+      },
+      "assessment": {
+        "status": "fail",
+        "failures": [
+          "critical",
+          "wordErrorRate"
+        ],
+        "metrics": {
+          "cases": 6,
+          "runs": 18,
+          "critical": 11,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0.4166666666666667,
+          "finalP95Ms": 1170,
+          "missingRepeats": []
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      },
+      "log": "4590eee3-1792007998300.log",
+      "exitCode": 1
+    },
+    {
+      "path": "eval/results/20261014-near-field-noise-recheck18.json",
+      "sha256": "7b73ac2dbe1b0976d7259ed98ac46c8f52f8e9c34966f384fd96f4ec2486f206",
+      "model": "gpt-live-transcribe",
+      "noiseReduction": "near_field",
+      "counts": {
+        "match": 1,
+        "mismatch": 6,
+        "critical": 11,
+        "providerFailure": 0
+      },
+      "assessment": {
+        "status": "fail",
+        "failures": [
+          "critical",
+          "wordErrorRate"
+        ],
+        "metrics": {
+          "cases": 6,
+          "runs": 18,
+          "critical": 11,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0.5075757575757576,
+          "finalP95Ms": 1048,
+          "missingRepeats": []
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      },
+      "log": "4590eee3-1792007998413.log",
+      "exitCode": 1
+    },
+    {
+      "path": "eval/results/20261014-committed-model-noise18.json",
+      "sha256": "2f3b7ae83e73005123f95361057af27ac5a9b109919073398d81c56f20afe558",
+      "model": "gpt-transcribe",
+      "counts": {
+        "match": 7,
+        "mismatch": 1,
+        "critical": 10,
+        "providerFailure": 0
+      },
+      "assessment": {
+        "status": "fail",
+        "failures": [
+          "critical",
+          "wordErrorRate"
+        ],
+        "metrics": {
+          "cases": 6,
+          "runs": 18,
+          "critical": 10,
+          "providerFailures": 0,
+          "empty": 0,
+          "truncated": 0,
+          "delayed": 0,
+          "wordErrorRate": 0.30303030303030304,
+          "finalP95Ms": 1117,
+          "missingRepeats": []
+        },
+        "thresholds": {
+          "version": "transcription-synthetic-gate-v1",
+          "minRepeatsPerCase": 3,
+          "maxCritical": 0,
+          "maxProviderFailures": 0,
+          "maxEmpty": 0,
+          "maxTruncated": 0,
+          "maxWordErrorRate": 0.1,
+          "maxFinalP95Ms": 2500,
+          "maxIndividualFinalMs": 5000
+        }
+      },
+      "log": "4590eee3-1792008079677.log",
+      "exitCode": 1
+    }
+  ],
+  "productionAdmission": "hold",
+  "releaseGate": "unverified",
+  "carrierEvidence": false,
+  "humanEvidence": false,
+  "interpretation": "The current baseline still fails. Near-field noise reduction worsens WER. The committed-turn model improves WER but still misses critical terms. None is promoted; prior October5-8 filter/context investigations and voice-specific audio evidence must be reviewed before further changes. No corpus, threshold or production adapter changed."
+}

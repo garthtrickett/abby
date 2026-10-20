@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { ClinikoFinancialConsumer } from "../src/standalone/cliniko-financial-consumer.ts";
 import { sql } from "kysely";
 import { ClinikoAvailabilityReader } from "../src/cliniko/availability.ts";
 import { ok } from "../src/core/model.ts";
@@ -13,6 +14,8 @@ import { PostgresOperationalCounters } from "../src/storage/postgres-operational
 import type { ClinikoVoiceServerConfig } from "../src/standalone/cliniko-voice-server.ts";
 import { boundedHealthCheck } from "../src/standalone/bounded-health-check.ts";
 import { clinikoCredentialFingerprint } from "../src/cliniko/read-budget.ts";
+import { ClinikoVoiceClinicalHost } from "../src/standalone/cliniko-voice-clinical-host.ts";
+import type { LocationScope } from "../src/core/model.ts";
 export { clinicDateAt } from "../src/standalone/clinic-clock.ts";
 
 function required(name: string): string {
@@ -39,8 +42,15 @@ function bindingKey(): Buffer {
   return Buffer.from(hex, "hex");
 }
 
-/** Test provider ports and an optional host-owned operational store. */
+/** Provider ports and independently provisioned clinic/operational hosts. */
+export type ClinicalHostContext = Readonly<{ serviceSignal: AbortSignal; db: ReturnType<typeof connectPostgres>; scope: LocationScope;
+  apiKey: string; contactEmail: string; rateBudget: PostgresClinikoRequestBudget;
+  contactRevision: import("../src/storage/postgres-cliniko-contact-revision.ts").PostgresClinikoContactRevision }>;
+export type ClinicalRunnerLocation = Readonly<{ scope: LocationScope; spokenName: string; host: ClinikoVoiceClinicalHost }>;
 export type VoiceRunnerPorts = Readonly<{
+  /** Complete owner-provisioned Cliniko credential fingerprint set for this tenant/account.
+   * Never discovered from caller input or selected through an environment variable. */
+  clinikoCredentialAliases?: readonly string[];
   clinikoFetch?: typeof fetch;
   openaiFetch?: typeof fetch;
   transcriptionSocketFactory?: NonNullable<ClinikoVoiceServerConfig["openai"]["transcriptionSocketFactory"]>;
@@ -50,8 +60,21 @@ export type VoiceRunnerPorts = Readonly<{
   /** Patient-free synthetic evidence, admitted only by the isolated fixture guard. */
   speechQuality?: NonNullable<ClinikoVoiceServerConfig["speechQuality"]>;
   operationalCounters?: OperationalCounterStore;
+  /** A deploying host's qualified registry and matching adapter factory. */
+  voiceProfiles?: NonNullable<ClinikoVoiceServerConfig["voiceProfiles"]>;
   /** Synthetic provider selection for the isolated voice runner. */
   speechModels?: Readonly<{ primary: string; fallback?: string; primaryFirstChunkMs?: number }>;
+  /** Isolated synthetic runner clock; never configured through the environment. */
+  syntheticClock?: NonNullable<ClinikoVoiceServerConfig["now"]>;
+  /** Deployment host owns clinic approvals, verification delivery and permission.
+   * No environment flag or catalogue setting can supply this authority. */
+  clinicalHost?: (context: ClinicalHostContext) => ClinikoVoiceClinicalHost;
+  /** Independent clinic financial grants and provider/sender provisioning. No
+   * environment flag or clinical catalogue approval constructs this owner. */
+  financialConsumer?: (context: ClinicalHostContext) => ClinikoFinancialConsumer | Promise<ClinikoFinancialConsumer>;
+  /** Independently provisioned locations of one clinic sharing the configured number.
+   * Each host retains its own approval, caller permission and private input. */
+  clinicalLocations?: (context: ClinicalHostContext) => readonly ClinicalRunnerLocation[];
 }>;
 
 export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<void> {
@@ -73,7 +96,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       ports.transcriptionSocketFactory)) {
     throw new RangeError("synthetic transcription requires an isolated fixture");
   }
-  if ((ports.speechQuality || ports.speechModels || ports.speechSocketFactory) && (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || mode !== "1" ||
+  if ((ports.speechQuality || ports.speechModels || ports.speechSocketFactory || ports.syntheticClock) && (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || mode !== "1" ||
       !["synthetic-key-au5", "synthetic-rotated-key-au5"].includes(apiKey) ||
       !connectionString.includes("/abby_test_voice_") || accountSid !== `AC${"1".repeat(32)}`)) {
     throw new RangeError("synthetic speech configuration requires an isolated fixture");
@@ -94,6 +117,8 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
   const key = bindingKey();
   const db = connectPostgres(connectionString);
   const operationalCounters = ports.operationalCounters ?? new PostgresOperationalCounters(db);
+  const service = new AbortController();
+  let financialConsumer: ClinikoFinancialConsumer | undefined;
   let retentionTimer: NodeJS.Timeout | undefined;
   let retentionRun: Promise<void> | undefined;
   try {
@@ -106,30 +131,61 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       },
       ...(process.env.ABBY_CLINIKO_BUDGET_USER_REF
         ? { sharedUserRef: process.env.ABBY_CLINIKO_BUDGET_USER_REF } : {}) });
-    const configured = createStandaloneClinikoSetup({ db, scope, apiKey, contactEmail, rateBudget,
-      route: { accountRef: accountSid, dialedNumber, routeVersion },
-      ...(ports.clinikoFetch ? { fetch: ports.clinikoFetch } : {}) });
-    if (!configured.ok) throw new RangeError(`invalid Cliniko catalogue configuration: ${configured.error.kind}`);
+    if (ports.clinicalHost && ports.clinicalLocations) throw new RangeError("conflicting clinical runner hosts");
+    const { PostgresClinikoContactRevision } = await import("../src/storage/postgres-cliniko-contact-revision.ts");
+    const credentialFingerprint = clinikoCredentialFingerprint(apiKey);
+    const contactRevision = new PostgresClinikoContactRevision(db, scope.tenantId, ports.clinikoCredentialAliases ?? [credentialFingerprint],
+      { scope, credentialFingerprint, budget: rateBudget });
+    if (!contactRevision.matches(scope.tenantId, credentialFingerprint)) throw new RangeError("configured credential missing from account aliases");
+    const context = { serviceSignal: service.signal, db, scope: Object.freeze({ ...scope }), apiKey, contactEmail, rateBudget, contactRevision };
+    const clinicalHost = ports.clinicalHost?.(context);
+    const locations = ports.clinicalLocations?.(context)?.map(row => ({ ...row, scope: Object.freeze({ ...row.scope }) }));
+    if (locations && (!locations.length || locations.length > 32 ||
+        !locations.some(row => row.scope.locationId === scope.locationId) ||
+        new Set(locations.map(row => row.scope.locationId)).size !== locations.length ||
+        locations.some(row => row.scope.tenantId !== scope.tenantId || row.scope.clinicId !== scope.clinicId ||
+          !row.scope.locationId || !row.spokenName.trim() || !(row.host instanceof ClinikoVoiceClinicalHost)))) {
+      throw new RangeError("invalid clinical runner locations");
+    }
+    const configuredRoutes = (locations ?? [{ scope, host: clinicalHost }]).map(location => {
+      const currentScope = location.scope, host = location.host?.withContactRevision(contactRevision);
+      const configured = createStandaloneClinikoSetup({ db, scope: currentScope, apiKey, contactEmail, rateBudget,
+        ...(host ? { runtimePolicy: host.cataloguePolicy } : {}),
+        route: { accountRef: accountSid, dialedNumber, routeVersion },
+        ...(ports.clinikoFetch ? { fetch: ports.clinikoFetch } : {}) });
+      if (!configured.ok) throw new RangeError(`invalid Cliniko catalogue configuration: ${configured.error.kind}`);
+      return { dialedNumber, scope: currentScope, routeVersion,
+        ...("spokenName" in location ? { spokenName: location.spokenName } : {}),
+        ...(host ? { clinicalHost: host } : {}),
+        approval: configured.value.setup, rateBudget, credentialFingerprint: clinikoCredentialFingerprint(apiKey),
+        availabilityForSelection: (choice: import("../src/cliniko/catalogue.ts").ClinikoSelection) => {
+          const reader = ClinikoAvailabilityReader.create({ scope: currentScope, apiKey, rateBudget, contactEmail,
+            onProviderUnavailable: () => operationalCounters.record(currentScope, "clinikoProviderUnavailable"),
+            businessId: choice.businessId, practitionerId: choice.practitionerId,
+            appointmentTypeId: choice.appointmentTypeId }, ports.clinikoFetch);
+          return reader.ok ? reader.value : null;
+        },
+        keypadAvailabilityGreeting: { scope: currentScope, version: required("ABBY_GREETING_VERSION"),
+          ownerRef: required("ABBY_GREETING_APPROVAL_OWNER_REF"), approved: true as const,
+          approvedText: required("ABBY_GREETING_APPROVED_TEXT") },
+        sevenDayAvailabilityEnabled: weekMode === "1" };
+    });
+    const provisionedFinancial = await ports.financialConsumer?.(context);
+    if (ports.financialConsumer && !(provisionedFinancial instanceof ClinikoFinancialConsumer)) {
+      throw new RangeError("financial consumer unavailable");
+    }
+    if (provisionedFinancial && !provisionedFinancial.matchesAccount(scope, credentialFingerprint, rateBudget)) {
+      throw new RangeError("financial consumer account mismatch");
+    }
     const prepared = await createStandaloneClinikoVoiceServer({ db,
       activeCallClaims: new PostgresActiveCallClaims(connectionString, key),
       twilio: { accountSid,
         authToken: required("ABBY_TWILIO_AUTH_TOKEN"),
         publicWebhookUrl: required("ABBY_TWILIO_PUBLIC_WEBHOOK_URL"),
         publicStreamUrl: required("ABBY_TWILIO_PUBLIC_STREAM_URL"),
-        fallbackNumbers: { [dialedNumber]: fallbackNumber }, bindingKey: key },
-      routes: [{ dialedNumber, scope, routeVersion,
-        approval: configured.value.setup, rateBudget, credentialFingerprint: clinikoCredentialFingerprint(apiKey),
-        availabilityForSelection: choice => {
-          const reader = ClinikoAvailabilityReader.create({ scope, apiKey, rateBudget, contactEmail,
-            onProviderUnavailable: () => operationalCounters.record(scope, "clinikoProviderUnavailable"),
-            businessId: choice.businessId, practitionerId: choice.practitionerId,
-            appointmentTypeId: choice.appointmentTypeId }, ports.clinikoFetch);
-          return reader.ok ? reader.value : null;
-        },
-        keypadAvailabilityGreeting: { scope, version: required("ABBY_GREETING_VERSION"),
-          ownerRef: required("ABBY_GREETING_APPROVAL_OWNER_REF"), approved: true,
-          approvedText: required("ABBY_GREETING_APPROVED_TEXT") },
-        sevenDayAvailabilityEnabled: weekMode === "1" }],
+        fallbackNumbers: { [dialedNumber]: fallbackNumber }, bindingKey: key,
+        ...(ports.syntheticClock ? { now: () => new Date(ports.syntheticClock!()) } : {}) },
+      routes: configuredRoutes,
       openai: { apiKey: required("ABBY_OPENAI_API_KEY"), intentModel: required("ABBY_OPENAI_INTENT_MODEL"),
         ...(ports.openaiFetch ? { fetch: ports.openaiFetch } : {}),
         ...(ports.speechSocketFactory ? { speechSocketFactory: ports.speechSocketFactory } : {}),
@@ -138,14 +194,17 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
           ...(ports.speechModels.primaryFirstChunkMs !== undefined ? { speechPrimaryFirstChunkMs: ports.speechModels.primaryFirstChunkMs } : {}) } : {}),
         ...(ports.transcriptionSocketFactory ? { transcriptionSocketFactory: ports.transcriptionSocketFactory } : {}) },
       ...(ports.transcriptionFactory ? { transcriptionFactory: ports.transcriptionFactory } : {}),
+      ...(ports.voiceProfiles ? { voiceProfiles: ports.voiceProfiles } : {}),
       ...(ports.speechQuality ? { speechQuality: ports.speechQuality } : {}),
-      readiness: testCaller ? async current => current.tenantId === scope.tenantId &&
-        current.clinicId === scope.clinicId && current.locationId === scope.locationId
+      ...(ports.syntheticClock ? { now: ports.syntheticClock } : {}),
+      readiness: testCaller ? async current => configuredRoutes.some(route => current.tenantId === route.scope.tenantId &&
+        current.clinicId === route.scope.clinicId && current.locationId === route.scope.locationId)
         ? ok(true) : unprovenReadiness(current) : unprovenReadiness,
       admitWebhook: async event => !!testCaller && !!event && event.key.accountRef === accountSid &&
         event.dialedNumber === dialedNumber && event.presentedCallerNumber === testCaller && await healthy(),
       health: healthy,
       operationalCounters,
+      ...(provisionedFinancial ? { stripeWebhook: provisionedFinancial.handle } : {}),
       ...(operationalTokenHex ? { operationalRead: { tokenHex: operationalTokenHex, scope } } : {}),
     });
     if (!prepared.ok) throw new Error(`standalone storage unavailable: ${prepared.error.kind}`);
@@ -160,6 +219,16 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       retentionTimer.unref();
     }
     const server = prepared.value;
+    if (provisionedFinancial) {
+      const started = provisionedFinancial.start(service.signal);
+      if (!started.ok) {
+        // This listener never opened, and the supplied consumer still belongs
+        // to whoever started it. Retire only our unused transport.
+        await new Promise<void>(resolve => server.close(() => resolve()));
+        throw new Error("financial consumer unavailable");
+      }
+      financialConsumer = provisionedFinancial;
+    }
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
       server.listen(port, "127.0.0.1", () => { server.off("error", reject); resolve(); });
@@ -172,12 +241,18 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
       process.once("SIGINT", resolve);
       process.once("SIGTERM", resolve);
     });
-    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    service.abort();
+    try { await financialConsumer?.close(); }
+    finally { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
   } finally {
-    if (retentionTimer) clearInterval(retentionTimer);
-    await retentionRun;
-    await operationalCounters.drain?.().catch(() => undefined);
-    await db.destroy();
+    service.abort();
+    try { await financialConsumer?.close(); }
+    finally {
+      if (retentionTimer) clearInterval(retentionTimer);
+      await retentionRun;
+      await operationalCounters.drain?.().catch(() => undefined);
+      await db.destroy();
+    }
   }
 }
 

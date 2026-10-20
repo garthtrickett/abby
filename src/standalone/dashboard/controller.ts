@@ -1,3 +1,4 @@
+import type { ClinicPatientCorrectionAuditPage } from "../../core/clinic-patient-correction-setting.ts";
 import { initialVoiceProfileState, VoiceProfileControl } from "./voice-profile-control.ts";
 import type { ClinicIntakeAuditPage } from "../../core/clinic-intake-setting.ts";
 import { render } from "lit-html";
@@ -101,7 +102,7 @@ export class DashboardController {
     voice: initialVoiceProfileState(),
     knowledge: undefined, knowledgeSourceRef: "", knowledgeOwnerRef: "", knowledgeText: "",
     knowledgeFrom: new Date().toISOString(), knowledgeUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-    writeStop: undefined, stopReasonInput: "", auditPage: undefined, cancellationAuditPage: undefined, reschedulingAuditPage: undefined, firstTimeIntakeAuditPage: undefined,
+    writeStop: undefined, stopReasonInput: "", auditPage: undefined, cancellationAuditPage: undefined, reschedulingAuditPage: undefined, firstTimeIntakeAuditPage: undefined, patientCorrectionsAuditPage: undefined,
     afterHoursAuditPage: undefined, afterHoursInfoVersion: "", afterHoursApprovedText: "",
     urgentAuditPage: undefined, urgentVersion: "", urgentText: "",
     urgentFrom: new Date().toISOString(), urgentUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
@@ -140,12 +141,15 @@ export class DashboardController {
       toggleCancellation: () => { void this.toggleCancellation(); },
       toggleRescheduling: () => { void this.toggleRescheduling(); },
       toggleFirstTimeIntake: () => { void this.toggleFirstTimeIntake(); },
+      togglePatientCorrections: () => { void this.togglePatientCorrections(); },
       loadCancellationAudit: () => { void this.loadCancellationAudit(); },
       loadReschedulingAudit: () => { void this.loadReschedulingAudit(); },
       loadFirstTimeIntakeAudit: () => { void this.loadFirstTimeIntakeAudit(); },
+      loadPatientCorrectionsAudit: () => { void this.loadPatientCorrectionsAudit(); },
       loadMoreCancellationAudit: () => { void this.loadCancellationAudit(true); },
       loadMoreReschedulingAudit: () => { void this.loadReschedulingAudit(true); },
       loadMoreFirstTimeIntakeAudit: () => { void this.loadFirstTimeIntakeAudit(true); },
+      loadMorePatientCorrectionsAudit: () => { void this.loadPatientCorrectionsAudit(true); },
       loadAudit: () => { void this.loadAudit(); },
       loadMoreAudit: () => { void this.loadMoreAudit(); },
       setAfterHoursField: (field, value) => { this.state[field] = value; this.draw(); },
@@ -238,6 +242,11 @@ export class DashboardController {
     if (capabilities.ok && capabilities.value.some(item => item.id === "settings.patients.firstTimeIntake.audit.v1")) {
       const audit = await this.port.firstTimeIntakeAudit();
       if (audit.ok) this.state.firstTimeIntakeAuditPage = audit.value;
+      else this.state.error = message(audit.error);
+    }
+    if (capabilities.ok && capabilities.value.some(item => item.id === "settings.patients.corrections.audit.v1")) {
+      const audit = await this.port.patientCorrectionsAudit();
+      if (audit.ok) this.state.patientCorrectionsAuditPage = audit.value;
       else this.state.error = message(audit.error);
     }
     if (capabilities.ok && capabilities.value.some(item => item.id === "settings.routing.afterHours.audit.v1")) {
@@ -745,6 +754,32 @@ export class DashboardController {
     this.draw();
   }
 
+  private async togglePatientCorrections(): Promise<void> {
+    const current = this.state.policy;
+    if (this.state.busy || !current || !this.state.capabilities.some(item => item.id === "settings.patients.corrections.enabled.change.v1")) return;
+    this.state.busy = true;
+    this.state.error = undefined;
+    this.state.notice = undefined;
+    this.draw();
+    const result = await this.port.changePatientCorrectionsEnabled((current.patientCorrectionsVersion ?? "0"), current.patientCorrectionsEnabled !== true);
+    if (result.ok) {
+      this.state.policy = result.value;
+      this.state.notice = result.value.patientCorrectionsEnabled ? "Patient corrections enabled for new calls at every clinic location." : "Patient corrections disabled at every clinic location. Active correction calls are also stopped.";
+      const audit = await this.port.patientCorrectionsAudit();
+      if (audit.ok) this.state.patientCorrectionsAuditPage = audit.value;
+      else this.state.error = message(audit.error);
+    } else {
+      this.state.error = message(result.error);
+      // A lost or malformed reply may follow a committed edit. Never repeat from stale state.
+      this.state.policy = undefined;
+      const inspected = await this.port.settings();
+      if (inspected.ok) this.state.policy = inspected.value;
+      else this.state.error = "The setting could not be confirmed. Reload to inspect current settings before another edit.";
+    }
+    this.state.busy = false;
+    this.draw();
+  }
+
   private async loadFirstTimeIntakeAudit(more = false): Promise<void> {
     const previous = this.state.firstTimeIntakeAuditPage;
     if (this.state.busy || (more && previous?.nextAfterVersion === undefined)) return;
@@ -755,6 +790,21 @@ export class DashboardController {
       const page: ClinicIntakeAuditPage = { ...result.value,
         entries: more && previous ? [...previous.entries, ...result.value.entries] : result.value.entries };
       this.state.firstTimeIntakeAuditPage = page;
+    } else this.state.error = message(result.error);
+    this.state.busy = false;
+    this.draw();
+  }
+
+  private async loadPatientCorrectionsAudit(more = false): Promise<void> {
+    const previous = this.state.patientCorrectionsAuditPage;
+    if (this.state.busy || (more && previous?.nextAfterVersion === undefined)) return;
+    this.state.busy = true;
+    this.draw();
+    const result = await this.port.patientCorrectionsAudit(more ? previous?.nextAfterVersion : undefined);
+    if (result.ok) {
+      const page: ClinicPatientCorrectionAuditPage = { ...result.value,
+        entries: more && previous ? [...previous.entries, ...result.value.entries] : result.value.entries };
+      this.state.patientCorrectionsAuditPage = page;
     } else this.state.error = message(result.error);
     this.state.busy = false;
     this.draw();

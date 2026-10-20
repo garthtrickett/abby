@@ -36,6 +36,8 @@ export default interface PatientPhoneScanTable {
   normalization_version: ColumnType<number | null, number | null, number | null>;
 
   credential_fingerprint: ColumnType<string | null, string | null, string | null>;
+
+  contact_version: ColumnType<number, number | undefined, number>;
 }
 
 export type PatientPhoneScan = Selectable<PatientPhoneScanTable>;

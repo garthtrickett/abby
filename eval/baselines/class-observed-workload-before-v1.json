@@ -1,0 +1,18 @@
+{
+  "schema": "abby.class-observed-workload-before.v1",
+  "sourceHead": "b5dc63b4af1e964ed8ee372842b02561eca99fba",
+  "patientFree": true,
+  "passAssociations": 999,
+  "addedCancelledRosterRowsPerClass": 201,
+  "activePlacesUnchanged": true,
+  "reportedMinimumNativeRequests": 161,
+  "claimedRequests": 181,
+  "outcome": "needsReview",
+  "clinicalWrites": [
+    "replacement",
+    "original",
+    "association"
+  ],
+  "originalCancellationSent": true,
+  "originalCancelled": true
+}

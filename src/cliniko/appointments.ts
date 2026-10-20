@@ -14,6 +14,9 @@ export type ClinikoAppointmentConfig = Readonly<{
   maxStartAdvanceDays?: number;
 }>;
 
+export type ClinikoCancelledAppointmentRead = Omit<AppointmentRead, "appointments"> & Readonly<{
+  appointments: readonly Readonly<{ appointmentRef: string; startsAt: string; endsAt: string; cancelledAt: string }>[];
+}>;
 export type { AppointmentRead, AppointmentReadFailure } from "../core/model.ts";
 
 const maxBodyBytes = 1_000_000;
@@ -123,6 +126,18 @@ export class ClinikoAppointmentReader {
   }
 
   async list(scope: LocationScope, verificationRef: string, from: string, to: string, now: string): Promise<Result<AppointmentRead, AppointmentReadFailure>> {
+    return this.listBound(scope, verificationRef, from, to, now, false);
+  }
+  /** Explicit cancelled-history read. Its caller must independently authorize this purpose.
+   * Ordinary appointment reads retain their upcoming-active-only range and result semantics. */
+  async listCancelled(scope: LocationScope, verificationRef: string, from: string, to: string, now: string): Promise<Result<ClinikoCancelledAppointmentRead, AppointmentReadFailure>> {
+    const found = await this.listBound(scope, verificationRef, from, to, now, true);
+    if (!found.ok) return found;
+    const appointments = found.value.appointments as (AppointmentRead["appointments"][number] & { cancelledAt?: string })[];
+    if (appointments.some(row => typeof row.cancelledAt !== "string")) return err({ kind: "malformed" });
+    return ok({ ...found.value, appointments: appointments as ClinikoCancelledAppointmentRead["appointments"] });
+  }
+  private async listBound(scope: LocationScope, verificationRef: string, from: string, to: string, now: string, cancelled: boolean): Promise<Result<AppointmentRead, AppointmentReadFailure>> {
     if (!sameScope(this.scope, scope)) return err({ kind: "scopeMismatch" });
     if (typeof verificationRef !== "string" || !verificationRef.trim() || verificationRef.length > 256) return err({ kind: "invalidProof" });
     const fromMs = instant(from);
@@ -134,7 +149,7 @@ export class ClinikoAppointmentReader {
     const suppliedNowMs = instant(now);
     if (fromMs === undefined || toMs === undefined || nowMs === undefined || toMs <= fromMs || toMs - fromMs > maxRangeMs ||
         suppliedNowMs === undefined || Math.abs(suppliedNowMs - nowMs) > 30_000 ||
-        fromMs < nowMs - 30_000 || fromMs - nowMs > this.maxStartAdvanceMs) return err({ kind: "invalidRange" });
+        fromMs < nowMs - (cancelled ? maxRangeMs + 30_000 : 30_000) || fromMs - nowMs > this.maxStartAdvanceMs) return err({ kind: "invalidRange" });
 
     let verified: Awaited<ReturnType<PatientProofHost["verifyPatient"]>>;
     try { verified = await this.proof.verifyPatient(scope, verificationRef, observedAt); }
@@ -152,15 +167,16 @@ export class ClinikoAppointmentReader {
     try { new Intl.DateTimeFormat("en-AU", { timeZone: business.time_zone_identifier }); }
     catch { return err({ kind: "malformed" }); }
 
-    const appointments: { appointmentRef: string; startsAt: string; endsAt: string }[] = [];
+    const appointments: { appointmentRef: string; startsAt: string; endsAt: string; cancelledAt?: string }[] = [];
     const seen = new Set<string>();
     let total: number | undefined;
     for (let page = 1; page <= maxPages; page += 1) {
       const query = new URLSearchParams({ page: String(page), per_page: String(perPage), sort: "starts_at" });
+      if (cancelled) query.append("q[]", "cancelled_at:*");
       query.append("q[]", `patient_id:=${patient.patientRef}`);
       query.append("q[]", `business_id:=${this.businessId}`);
-      query.append("q[]", `starts_at:>${from}`);
-      query.append("q[]", `starts_at:<${to}`);
+      query.append("q[]", `starts_at:${cancelled ? ">=" : ">"}${from}`);
+      query.append("q[]", `starts_at:${cancelled ? "<=" : "<"}${to}`);
       const fetched = await this.get(`/individual_appointments?${query}`);
       if (!fetched.ok) return fetched;
       const body = record(fetched.value);
@@ -179,13 +195,19 @@ export class ClinikoAppointmentReader {
         if (!row || !validId(row.id) || seen.has(row.id) ||
             patientSelf !== `${this.baseUrl}/patients/${patient.patientRef}` ||
             businessSelf !== `${this.baseUrl}/businesses/${this.businessId}` ||
-            start === undefined || end === undefined || end <= start || start <= fromMs || start >= toMs ||
+            start === undefined || end === undefined || end <= start || (cancelled ? start < fromMs || start > toMs : start <= fromMs || start >= toMs) ||
             (row.cancelled_at !== null && row.cancelled_at !== undefined && instant(row.cancelled_at) === undefined) ||
             (row.archived_at !== null && row.archived_at !== undefined && instant(row.archived_at) === undefined) ||
             (row.deleted_at !== null && row.deleted_at !== undefined && instant(row.deleted_at) === undefined)) return err({ kind: "malformed" });
         seen.add(row.id);
-        if (row.cancelled_at || row.archived_at || row.deleted_at) continue;
-        appointments.push({ appointmentRef: row.id, startsAt: new Date(start).toISOString(), endsAt: new Date(end).toISOString() });
+        if (cancelled) {
+          const at = instant(row.cancelled_at);
+          if (at === undefined || at > nowMs || row.archived_at !== null || row.deleted_at !== null) return err({ kind: "malformed" });
+          appointments.push({ appointmentRef: row.id, startsAt: new Date(start).toISOString(), endsAt: new Date(end).toISOString(), cancelledAt: new Date(at).toISOString() });
+        } else {
+          if (row.cancelled_at || row.archived_at || row.deleted_at) continue;
+          appointments.push({ appointmentRef: row.id, startsAt: new Date(start).toISOString(), endsAt: new Date(end).toISOString() });
+        }
       }
       if (seen.size > total) return err({ kind: "malformed" });
       if (seen.size >= total) break;

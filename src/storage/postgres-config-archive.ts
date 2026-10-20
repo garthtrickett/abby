@@ -1,3 +1,13 @@
+import { readOutboundCapacityCarryover, carryOutboundCapacityOrigins } from "./postgres-outbound-capacity-carryover.ts";
+import { outboundCapacityArchiveRecord } from "../portability/outbound-capacity-history.ts";
+import { readOutboundEffectCarryover, carryOutboundEffectOrigins } from "./postgres-outbound-effect-carryover.ts";
+import { outboundEffectArchiveRecord } from "../portability/outbound-effect-history.ts";
+import { readFinancialEffectCarryover, carryFinancialEffectOrigins } from "./postgres-financial-effect-carryover.ts";
+import { financialEffectArchiveRecord } from "../portability/financial-effect-history.ts";
+import { carryConfirmationResendOrigins } from "./postgres-confirmation-resend-import-history.ts";
+import { confirmationResendArchiveRecord } from "../portability/confirmation-resend-history.ts";
+import { readConfirmationResendCarryover } from "./postgres-confirmation-resend-carryover.ts";
+import { readPatientCorrectionCarryover } from "./postgres-patient-correction-carryover.ts";
 import { readVoiceCarryover } from "./postgres-voice-carryover.ts";
 import { validClinicIntakeArchiveHistory } from "../portability/clinic-intake-history.ts";
 import { readNotificationCarryover } from "./postgres-notification-carryover.ts";
@@ -296,9 +306,14 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
       if ([...callScan.value.locationKeys].some(key => !byLocation.has(key))) throw new ExportAbort("scopeIncomplete");
       const observedLocations = await sql<{ clinic_id: string; location_id: string }>`select clinic_id, location_id from clinic_settings
         where tenant_id = ${sourceTenantId} union select clinic_id, location_id from clinic_knowledge_events
+        where tenant_id = ${sourceTenantId} union select clinic_id, location_id from confirmation_resend_journal
+        where tenant_id = ${sourceTenantId} union select clinic_id, location_id from financial_effect_barriers
+        where tenant_id = ${sourceTenantId} union select clinic_id, location_id from outbound_effect_barriers
+        where tenant_id = ${sourceTenantId} union select clinic_id, location_id from outbound_capacity_allocations
         where tenant_id = ${sourceTenantId}`.execute(trx);
       const observedClinics = await sql<{ clinic_id: string }>`select clinic_id from clinic_automation where tenant_id = ${sourceTenantId}
         union select clinic_id from clinic_intake_settings where tenant_id = ${sourceTenantId}
+        union select clinic_id from clinic_patient_correction_settings where tenant_id = ${sourceTenantId}
         union select clinic_id from clinic_notification_settings where tenant_id = ${sourceTenantId}
         union select clinic_id from clinic_voice_settings where tenant_id = ${sourceTenantId}
         union select clinic_id from clinic_write_stop where tenant_id = ${sourceTenantId}
@@ -312,8 +327,24 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
         from clinic_automation where tenant_id = ${sourceTenantId} order by clinic_id, version`.execute(trx);
       const clinicIntake = await sql<AutomationRow>`select clinic_id, version, enabled, changed_by, previous_enabled, changed_at
         from clinic_intake_settings where tenant_id = ${sourceTenantId} order by clinic_id, version`.execute(trx);
+      let clinicPatientCorrections: Awaited<ReturnType<typeof readPatientCorrectionCarryover>>;
+      try { clinicPatientCorrections = await readPatientCorrectionCarryover(trx, sourceTenantId); }
+      catch { throw new ExportAbort("storageCorrupt"); }
       let clinicNotifications: Awaited<ReturnType<typeof readNotificationCarryover>>;
       try { clinicNotifications = await readNotificationCarryover(trx, sourceTenantId); }
+      catch { throw new ExportAbort("storageCorrupt"); }
+      let outboundCapacity: Awaited<ReturnType<typeof readOutboundCapacityCarryover>>;
+      try { outboundCapacity = await carryOutboundCapacityOrigins(trx, sourceTenantId, await readOutboundCapacityCarryover(trx, sourceTenantId)); }
+      catch { throw new ExportAbort("storageCorrupt"); }
+      let outboundEffects: Awaited<ReturnType<typeof readOutboundEffectCarryover>>;
+      try { outboundEffects = await carryOutboundEffectOrigins(trx, sourceTenantId, await readOutboundEffectCarryover(trx, sourceTenantId)); }
+      catch { throw new ExportAbort("storageCorrupt"); }
+      let financialEffects: Awaited<ReturnType<typeof readFinancialEffectCarryover>>;
+      try { financialEffects = await carryFinancialEffectOrigins(trx, sourceTenantId, await readFinancialEffectCarryover(trx, sourceTenantId)); }
+      catch { throw new ExportAbort("storageCorrupt"); }
+      let confirmationResends: Awaited<ReturnType<typeof readConfirmationResendCarryover>>;
+      try { confirmationResends = await carryConfirmationResendOrigins(trx, sourceTenantId,
+        await readConfirmationResendCarryover(trx, sourceTenantId)); }
       catch { throw new ExportAbort("storageCorrupt"); }
       const stops = await sql<StopRow>`select clinic_id, version, stopped, actor_ref, reason, changed_at
         from clinic_write_stop_events where tenant_id = ${sourceTenantId} order by clinic_id, version`.execute(trx);
@@ -335,7 +366,7 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
           effective_from, effective_until, actor_ref, changed_at from clinic_knowledge_events
           where tenant_id = ${sourceTenantId} and status in ('approved', 'revoked')
           order by clinic_id, location_id, source_ref, version`.execute(trx)).rows;
-      return { schemaVersion, settings: settings.rows, automation: automation.rows, clinicIntake: clinicIntake.rows, clinicNotifications, clinicVoice, stops: stops.rows,
+      return { schemaVersion, settings: settings.rows, automation: automation.rows, clinicIntake: clinicIntake.rows, clinicPatientCorrections, clinicNotifications, clinicVoice, confirmationResends, financialEffects, outboundEffects, outboundCapacity, stops: stops.rows,
         knowledge, omittedTextCalls: callScan.value.count,
         omittedTextCallsByLocation: callScan.value.countsByLocation,
         sourceFenceVersion: request.expectedFenceVersion };
@@ -394,6 +425,8 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
         sourceClinicId: row.clinic_id, kind: "clinicIntake", version: row.version,
         isHead: intakeHeads.get(row.clinic_id) === row.version, enabled: row.enabled,
         changedBy: row.changed_by, previousEnabled: row.previous_enabled, changedAt: instant(row.changed_at) })),
+      ...snapshot.clinicPatientCorrections.map(row => ({ ...common(recordId("patientCorrections", row.sourceClinicId, row.version)),
+        kind: "clinicPatientCorrections", ...row })),
       ...snapshot.clinicNotifications.map(row => ({ ...common(recordId("notifications", row.sourceClinicId, row.version)),
         kind: "clinicNotifications", ...row })),
       ...snapshot.clinicVoice.map(row => ({ ...common(recordId("voice", row.sourceClinicId, row.version)),
@@ -426,7 +459,15 @@ async function buildTenantAuthorized(db: Kysely<Database>, request: TenantConfig
         kind: "omittedTextCallCount", sourceClinicId: mapping.sourceScope.clinicId,
         sourceLocationId: mapping.sourceScope.locationId, notRetained: count }];
     });
-    const records: Record<ArchiveSection, readonly RecordData[]> = { locations, settings, knowledge, calls, staffWork: [] };
+    const staffWork: RecordData[] = snapshot.confirmationResends.map(row => confirmationResendArchiveRecord(
+      { tenantId: sourceTenantId, clinicId: row.clinicId, locationId: row.locationId }, row.submission));
+    staffWork.push(...snapshot.financialEffects.map(row => financialEffectArchiveRecord(
+      { tenantId: sourceTenantId, clinicId: row.clinicId, locationId: row.locationId }, row.barrier)));
+    staffWork.push(...snapshot.outboundCapacity.map(row => outboundCapacityArchiveRecord(
+      { tenantId: sourceTenantId, clinicId: row.clinicId, locationId: row.locationId }, row.allocation)));
+    staffWork.push(...snapshot.outboundEffects.map(row => outboundEffectArchiveRecord(
+      { tenantId: sourceTenantId, clinicId: row.clinicId, locationId: row.locationId }, row.barrier)));
+    const records: Record<ArchiveSection, readonly RecordData[]> = { locations, settings, knowledge, calls, staffWork };
     const bytes = Object.fromEntries(ARCHIVE_SECTIONS.map(name => [name, sectionBytes(records[name])])) as Record<ArchiveSection, Buffer>;
     const manifest = { archiveVersion: 2, archiveId: request.archiveId, createdAt: request.createdAt,
       sourceSystem: "abby-postgres", sourceSchemaVersion: snapshot.schemaVersion, sourceTenantId,

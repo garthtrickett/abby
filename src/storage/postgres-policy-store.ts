@@ -1,4 +1,6 @@
 import { PostgresClinicIntakeSettingStore } from "./postgres-clinic-intake-setting.ts";
+import { PostgresClinicPatientCorrectionSettingStore } from "./postgres-clinic-patient-correction-setting.ts";
+import type { ClinicPatientCorrectionState, ClinicPatientCorrectionAuditPage } from "../core/clinic-patient-correction-setting.ts";
 import { PostgresClinicNotificationSettingStore } from "./postgres-clinic-notification-settings.ts";
 import { PostgresClinicVoiceSettingStore } from "./postgres-clinic-voice-settings.ts";
 import { captureVoicePolicy } from "../core/voice-policy.ts";
@@ -117,8 +119,9 @@ function decodePolicy(value: unknown, scope: LocationScope, version: number): Re
       (policy.greeting !== undefined && !validGreetingShape(policy.greeting, scope)) ||
       !["execute", "requestOnly", "unavailable"].includes(policy.capabilities.transfer) ||
       !policy.staffDestination || !policy.operatorQueue) return err({ kind: "storageFailure" });
-  const { firstTimeIntakeEnabled, firstTimeIntakeVersion, transferDestinationVersion, ...local } = policy;
+  const { firstTimeIntakeEnabled, firstTimeIntakeVersion, patientCorrectionsEnabled, patientCorrectionsVersion, transferDestinationVersion, ...local } = policy;
   void firstTimeIntakeEnabled; void firstTimeIntakeVersion;
+  void patientCorrectionsEnabled; void patientCorrectionsVersion;
   void transferDestinationVersion;
   return ok(structuredClone({ ...local, automationVersion: "0", automationEnabled: false }));
 }
@@ -134,6 +137,7 @@ export class PostgresPolicyStore implements PolicyStore {
   private readonly hostCancellationMode: CapabilityMode;
   private readonly hostReschedulingMode: CapabilityMode;
   private readonly hostIntakeMode: CapabilityMode;
+  private readonly hostPatientUpdateMode: CapabilityMode;
   private readonly staffedDestinationRegistry: StaffedDestinationRegistry;
   private readonly notificationRegistry: NotificationRegistry;
   private readonly voiceRegistry: VoiceProfileRegistry;
@@ -155,15 +159,17 @@ export class PostgresPolicyStore implements PolicyStore {
     this.hostCancellationMode = typeof hostPatientModes === "string" ? hostPatientModes : hostPatientModes.cancellation ?? "unavailable";
     this.hostReschedulingMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.rescheduling ?? "unavailable";
     this.hostIntakeMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.intake ?? "unavailable";
+    this.hostPatientUpdateMode = typeof hostPatientModes === "string" ? "unavailable" : hostPatientModes.patientUpdate ?? "unavailable";
     this.staffedDestinationRegistry = staffedDestinationRegistry;
     this.notificationRegistry = storageMode === "standaloneMinimal" ? unprovenNotificationRegistry : notificationRegistry;
     this.voiceRegistry = voiceRegistry;
   }
 
   private defaultFor(scope: LocationScope): CallPolicy {
-    const { firstTimeIntakeEnabled, firstTimeIntakeVersion, transferDestinationVersion,
+    const { firstTimeIntakeEnabled, firstTimeIntakeVersion, patientCorrectionsEnabled, patientCorrectionsVersion, transferDestinationVersion,
       notificationSettings, notificationBindings, voiceSettings, voiceProfile, ...policy } = this.defaultPolicy(scope);
     void firstTimeIntakeEnabled; void firstTimeIntakeVersion;
+    void patientCorrectionsEnabled; void patientCorrectionsVersion;
     void transferDestinationVersion;
     void notificationSettings; void notificationBindings;
     void voiceSettings; void voiceProfile;
@@ -178,13 +184,14 @@ export class PostgresPolicyStore implements PolicyStore {
       ? decodeStandalonePolicy(value, scope, version, scope => this.defaultFor(scope)) : decodePolicy(value, scope, version);
   }
 
-  private compose(policy: CallPolicy, intake: ClinicIntakeState, automation?: Readonly<{ version: number; enabled: boolean }>): CallPolicy {
+  private compose(policy: CallPolicy, intake: ClinicIntakeState, corrections: ClinicPatientCorrectionState, automation?: Readonly<{ version: number; enabled: boolean }>): CallPolicy {
     const patientModes = this.hostBookingMode === "unavailable"
       ? { cancel: "unavailable", reschedule: "unavailable", intake: "unavailable" } as const : {};
     return { ...policy, cancellationEnabled: policy.cancellationEnabled ?? false, reschedulingEnabled: policy.reschedulingEnabled ?? false,
       afterHoursMode: policy.afterHoursMode ?? "staffRequest", staffWorkEnabled: this.staffWorkEnabled,
       automationVersion: String(automation?.version ?? 0), automationEnabled: automation?.enabled ?? false,
       firstTimeIntakeVersion: intake.version, firstTimeIntakeEnabled: intake.enabled,
+      patientCorrectionsVersion: corrections.version, patientCorrectionsEnabled: corrections.enabled,
       capabilities: { ...policy.capabilities, ...patientModes,
         book: policy.bookingEnabled ? this.hostBookingMode : "unavailable",
         cancel: policy.cancellationEnabled === true && this.storageMode === "unsafeReference"
@@ -192,18 +199,28 @@ export class PostgresPolicyStore implements PolicyStore {
         reschedule: policy.reschedulingEnabled === true && this.storageMode === "unsafeReference"
           ? this.hostReschedulingMode : "unavailable",
         intake: intake.enabled && this.storageMode === "unsafeReference" ? this.hostIntakeMode : "unavailable",
+        ...(corrections.version !== "0" || this.hostPatientUpdateMode !== "unavailable" || policy.capabilities.patientUpdate !== undefined
+          ? { patientUpdate: corrections.enabled && this.storageMode === "unsafeReference" ? this.hostPatientUpdateMode : "unavailable" } : {}),
         transfer: this.staffWorkEnabled ? policy.capabilities.transfer : "unavailable" } };
   }
 
   private async capture(policy: CallPolicy, automation?: Readonly<{ version: number; enabled: boolean }>,
                         db: Kysely<Database> = this.db): Promise<CallPolicy> {
-    const intake = await new PostgresClinicIntakeSettingStore(db).read(policy.scope);
+    // These independently scoped, read-only settings do not depend on one
+    // another. Keep every fresh read/decoder and failure gate, while avoiding
+    // four serial database round trips at each protected policy boundary.
+    // A transaction still uses its own connection and existing isolation.
+    const [intake, corrections, notifications, voice] = await Promise.all([
+      new PostgresClinicIntakeSettingStore(db).read(policy.scope),
+      new PostgresClinicPatientCorrectionSettingStore(db).read(policy.scope),
+      new PostgresClinicNotificationSettingStore(db).read(policy.scope),
+      new PostgresClinicVoiceSettingStore(db).read(voiceClinicScope(policy.scope)),
+    ]);
     if (!intake.ok) throw new Error("clinic intake configuration unavailable");
-    const notifications = await new PostgresClinicNotificationSettingStore(db).read(policy.scope);
+    if (!corrections.ok) throw new Error("clinic correction configuration unavailable");
     if (!notifications.ok) throw new Error("clinic notification configuration unavailable");
-    const voice = await new PostgresClinicVoiceSettingStore(db).read(voiceClinicScope(policy.scope));
     if (!voice.ok) throw new Error("clinic voice configuration unavailable");
-    const captured = await captureVoicePolicy(await captureNotificationPolicy(this.compose(policy, intake.value, automation),
+    const captured = await captureVoicePolicy(await captureNotificationPolicy(this.compose(policy, intake.value, corrections.value, automation),
       notifications.value, this.notificationRegistry), voice.value, this.voiceRegistry);
     if (!captured.ok) throw new Error("clinic voice profile unavailable");
     const composed = captured.value;
@@ -372,6 +389,17 @@ export class PostgresPolicyStore implements PolicyStore {
   async listFirstTimeIntakeChanges(scope: LocationScope, afterVersion?: number): Promise<Result<ClinicIntakeAuditPage, PolicyFailure>> {
     if (this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope)) return err({ kind: "invalidValue" });
     return new PostgresClinicIntakeSettingStore(this.db).listChanges(scope, afterVersion);
+  }
+
+  async changePatientCorrectionsEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean,
+                                       actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {
+    if (this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope)) return err({ kind: "invalidValue" });
+    const changed = await new PostgresClinicPatientCorrectionSettingStore(this.db).changeEnabled(scope, expectedVersion, enabled, actorRef);
+    return changed.ok ? this.read(scope) : changed;
+  }
+  async listPatientCorrectionChanges(scope: LocationScope, afterVersion?: number): Promise<Result<ClinicPatientCorrectionAuditPage, PolicyFailure>> {
+    if (this.storageMode === "standaloneMinimal" && !validStandaloneScope(scope)) return err({ kind: "invalidValue" });
+    return new PostgresClinicPatientCorrectionSettingStore(this.db).listChanges(scope, afterVersion);
   }
 
   async changeBookingEnabled(scope: LocationScope, expectedVersion: string, enabled: boolean, actorRef: string): Promise<Result<CallPolicy, PolicyFailure>> {

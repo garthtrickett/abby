@@ -1,3 +1,14 @@
+import { validOutboundCapacityHistory } from "../portability/outbound-capacity-history.ts";
+import { writeOutboundCapacityCarryover, reconcileOutboundCapacityCarryover } from "./postgres-outbound-capacity-carryover.ts";
+import { validOutboundEffectHistory } from "../portability/outbound-effect-history.ts";
+import { writeOutboundEffectCarryover, reconcileOutboundEffectCarryover } from "./postgres-outbound-effect-carryover.ts";
+import { storedStandalonePolicy } from "./standalone-policy-record.ts";
+import { validFinancialEffectHistory } from "../portability/financial-effect-history.ts";
+import { writeFinancialEffectCarryover, reconcileFinancialEffectCarryover } from "./postgres-financial-effect-carryover.ts";
+import { writeConfirmationResendCarryover, reconcileConfirmationResendCarryover } from "./postgres-confirmation-resend-carryover.ts";
+import { validConfirmationResendArchiveHistory } from "../portability/confirmation-resend-history.ts";
+import { validPatientCorrectionArchiveHistory } from "../portability/patient-correction-history.ts";
+import { writePatientCorrectionCarryover } from "./postgres-patient-correction-carryover.ts";
 import { validVoiceArchiveHistory } from "../portability/voice-history.ts";
 import { writeVoiceCarryover } from "./postgres-voice-carryover.ts";
 import { validClinicIntakeArchiveHistory } from "../portability/clinic-intake-history.ts";
@@ -24,28 +35,12 @@ type RegistryRow = { archive_id: string; manifest_digest: string; receipt: Refer
   source_history: TenantConfigArchiveData };
 
 function minimalHistory(data: TenantConfigArchiveData): boolean {
-  return Array.isArray(data?.clinics) && data.clinics.every(clinic => validClinicIntakeArchiveHistory(clinic.clinicIntake) && validNotificationArchiveHistory(clinic.clinicNotifications) && validVoiceArchiveHistory(clinic.clinicVoice)) &&
+  return Array.isArray(data?.clinics) && data.clinics.every(clinic => validClinicIntakeArchiveHistory(clinic.clinicIntake) && validPatientCorrectionArchiveHistory(clinic.clinicPatientCorrections) && validNotificationArchiveHistory(clinic.clinicNotifications) && validVoiceArchiveHistory(clinic.clinicVoice)) &&
     Array.isArray(data?.locations) && data.locations.length > 0 && data.locations.every(location =>
+    validConfirmationResendArchiveHistory(location.confirmationResends) && validFinancialEffectHistory(location.financialEffects) && validOutboundEffectHistory(location.outboundEffects) && validOutboundCapacityHistory(location.outboundCapacity) &&
     Array.isArray(location.policies) && location.policies.length > 0 &&
     location.policies.every((row: ConfigArchiveData["policies"][number]) => row.storageShape === "standaloneMinimal") &&
     Array.isArray(location.knowledge) && location.knowledge.length === 0);
-}
-
-function storedPolicy(scope: LocationScope, version: number, policy: CallPolicy):
-  Readonly<{ scope: LocationScope; policyVersion: string; bookingEnabled: boolean; cancellationEnabled: boolean; reschedulingEnabled: boolean;
-    afterHoursMode: NonNullable<CallPolicy["afterHoursMode"]>; afterHoursInfo?: NonNullable<CallPolicy["afterHoursInfo"]>;
-    urgentResponse?: NonNullable<CallPolicy["urgentResponse"]>;
-    staffSchedule?: NonNullable<CallPolicy["staffSchedule"]>;
-    transferDestinationRef?: string;
-    greeting: NonNullable<CallPolicy["greeting"]> | null }> {
-  return { scope: { ...scope }, policyVersion: String(version), bookingEnabled: policy.bookingEnabled,
-    cancellationEnabled: policy.cancellationEnabled ?? false, reschedulingEnabled: policy.reschedulingEnabled ?? false,
-    afterHoursMode: policy.afterHoursMode ?? "staffRequest",
-    ...(policy.afterHoursInfo ? { afterHoursInfo: policy.afterHoursInfo } : {}),
-    ...(policy.urgentResponse ? { urgentResponse: policy.urgentResponse } : {}),
-    ...(policy.staffSchedule ? { staffSchedule: policy.staffSchedule } : {}),
-    ...(policy.transferDestinationRef === undefined ? {} : { transferDestinationRef: policy.transferDestinationRef }),
-    greeting: policy.greeting ?? null };
 }
 
 /** Public route refs require reviewed host mapping even when patient work is unavailable. */
@@ -73,9 +68,14 @@ async function existing(db: Kysely<Database> | Transaction<Database>, tenantId: 
 async function occupied(db: Kysely<Database> | Transaction<Database>, tenantId: string): Promise<boolean> {
   const result = await sql<{ occupied: boolean }>`select (
     exists(select 1 from tenant_portability_fences where tenant_id = ${tenantId}) or
+    exists(select 1 from confirmation_resend_journal where tenant_id = ${tenantId}) or
+    exists(select 1 from financial_effect_barriers where tenant_id = ${tenantId}) or
+    exists(select 1 from outbound_effect_barriers where tenant_id = ${tenantId}) or
+    exists(select 1 from outbound_capacity_allocations where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_settings where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_automation where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_intake_settings where tenant_id = ${tenantId}) or
+    exists(select 1 from clinic_patient_correction_settings where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_notification_settings where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_voice_settings where tenant_id = ${tenantId}) or
     exists(select 1 from clinic_knowledge_heads where tenant_id = ${tenantId}) or
@@ -104,11 +104,11 @@ async function writeLocation(trx: Transaction<Database>, location: TenantConfigA
     knowledge: location.knowledge };
   const mapped = mapConfig(scoped, scope, mapper);
   if (!mapped.ok) throw new Error("validated mapping changed");
-  const policyRows = mapped.value.policyRows.length ? mapped.value.policyRows : [
-    { version: 0, isHead: true, policy: mapped.value.policy, changedBy: null,
+  const policyRows: typeof mapped.value.policyRows = mapped.value.policyRows.length ? mapped.value.policyRows : [
+    { version: 0, isHead: true, storageShape: mode, policy: mapped.value.policy, changedBy: null,
       previousBookingEnabled: null, changedAt: null }];
   for (const row of policyRows) {
-    const value = mode === "standaloneMinimal" ? storedPolicy(scope, row.version, row.policy) : row.policy;
+    const value = mode === "standaloneMinimal" ? storedStandalonePolicy(scope, row.version, row.policy) : row.policy;
     await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy,
       setting_kind, previous_after_hours_mode, previous_cancellation_enabled, previous_rescheduling_enabled, previous_staffed_destination_ref, changed_by, previous_booking_enabled, changed_at) values
       (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, ${row.version},
@@ -120,7 +120,7 @@ async function writeLocation(trx: Transaction<Database>, location: TenantConfigA
   let current = head.policy;
   let currentVersion = head.version;
   if (head.policy.bookingEnabled) {
-    const next = mode === "standaloneMinimal" ? storedPolicy(scope, head.version + 1,
+    const next = mode === "standaloneMinimal" ? storedStandalonePolicy(scope, head.version + 1,
       { ...head.policy, bookingEnabled: false }) :
       { ...head.policy, policyVersion: String(head.version + 1), bookingEnabled: false,
         capabilities: { ...head.policy.capabilities, book: "unavailable" as const } };
@@ -135,7 +135,7 @@ async function writeLocation(trx: Transaction<Database>, location: TenantConfigA
   if (current.cancellationEnabled === true) {
     const disabled: CallPolicy = { ...current, policyVersion: String(currentVersion + 1), cancellationEnabled: false,
       capabilities: { ...current.capabilities, cancel: "unavailable" } };
-    const value = mode === "standaloneMinimal" ? storedPolicy(scope, currentVersion + 1, disabled) : disabled;
+    const value = mode === "standaloneMinimal" ? storedStandalonePolicy(scope, currentVersion + 1, disabled) : disabled;
     await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy,
       setting_kind, changed_by, previous_cancellation_enabled, changed_at) values
       (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, ${currentVersion + 1},
@@ -146,7 +146,7 @@ async function writeLocation(trx: Transaction<Database>, location: TenantConfigA
   if (current.reschedulingEnabled === true) {
     const disabled: CallPolicy = { ...current, policyVersion: String(currentVersion + 1), reschedulingEnabled: false,
       capabilities: { ...current.capabilities, reschedule: "unavailable" } };
-    const value = mode === "standaloneMinimal" ? storedPolicy(scope, currentVersion + 1, disabled) : disabled;
+    const value = mode === "standaloneMinimal" ? storedStandalonePolicy(scope, currentVersion + 1, disabled) : disabled;
     await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy,
       setting_kind, changed_by, previous_rescheduling_enabled, changed_at) values
       (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, ${currentVersion + 1},
@@ -210,6 +210,7 @@ async function writeClinic(trx: Transaction<Database>, scope: LocationScope,
        ${actorRef}, true, ${importedAt}::timestamptz)`.execute(trx);
   }
   const reason = mode === "standaloneMinimal" ? "cutover" : "Imported configuration awaiting target readiness";
+  await writePatientCorrectionCarryover(trx, scope, clinic.clinicPatientCorrections, actorRef, importedAt);
   await writeNotificationCarryover(trx, scope, clinic.clinicNotifications, actorRef, importedAt);
   await writeVoiceCarryover(trx, { tenantId: scope.tenantId, clinicId: scope.clinicId }, clinic.clinicVoice, actorRef, importedAt);
   await sql`insert into clinic_write_stop (tenant_id, clinic_id, version, stopped, actor_ref, reason, changed_at)
@@ -266,6 +267,8 @@ export class PostgresTenantConfigArchiveImporter {
     try {
       const row = await existing(this.db, targetTenantId);
       if (row && this.mode === "standaloneMinimal" && !minimalHistory(row.source_history)) return err({ kind: "storageFailure" });
+      if (row && row.archive_id === validated.value.archiveId && row.manifest_digest === validated.value.manifestDigest &&
+          (!await reconcileConfirmationResendCarryover(this.db, row.source_history) || !await reconcileFinancialEffectCarryover(this.db, row.source_history) || !await reconcileOutboundEffectCarryover(this.db, row.source_history) || !await reconcileOutboundCapacityCarryover(this.db, row.source_history))) return err({ kind: "storageFailure" });
       if (row) return row.archive_id === validated.value.archiveId && row.manifest_digest === validated.value.manifestDigest
         ? ok({ ...row.receipt, status: "alreadyStaged" })
         : err({ kind: row.archive_id === validated.value.archiveId ? "archiveConflict" : "targetOccupied" });
@@ -292,6 +295,8 @@ export class PostgresTenantConfigArchiveImporter {
         await sql`select pg_advisory_xact_lock(172934501, hashtext(${targetTenantId}))`.execute(trx);
         const row = await existing(trx, targetTenantId);
         if (row && this.mode === "standaloneMinimal" && !minimalHistory(row.source_history)) return err({ kind: "storageFailure" });
+        if (row && row.archive_id === data.archiveId && row.manifest_digest === data.manifestDigest &&
+            (!await reconcileConfirmationResendCarryover(trx, row.source_history) || !await reconcileFinancialEffectCarryover(trx, row.source_history) || !await reconcileOutboundEffectCarryover(trx, row.source_history) || !await reconcileOutboundCapacityCarryover(trx, row.source_history))) return err({ kind: "storageFailure" });
         if (row) return row.archive_id === data.archiveId && row.manifest_digest === data.manifestDigest
           ? ok(row.receipt)
           : err({ kind: row.archive_id === data.archiveId ? "archiveConflict" : "targetOccupied" });
@@ -302,6 +307,10 @@ export class PostgresTenantConfigArchiveImporter {
           const clinic = data.clinics.find(item => item.sourceClinicId === location.sourceScope.clinicId);
           if (!clinic) throw new Error("validated clinic absent");
           await writeLocation(trx, location, clinic, mapperFromReceipt, actor, importedAt, this.mode);
+          await writeConfirmationResendCarryover(trx, location.targetScope, location.confirmationResends);
+          await writeFinancialEffectCarryover(trx, location.targetScope, location.financialEffects);
+          await writeOutboundEffectCarryover(trx, location.targetScope, location.outboundEffects);
+          await writeOutboundCapacityCarryover(trx, location.targetScope, location.outboundCapacity);
         }
         for (const clinic of data.clinics) {
           const location = data.locations.find(item => item.sourceScope.clinicId === clinic.sourceClinicId);

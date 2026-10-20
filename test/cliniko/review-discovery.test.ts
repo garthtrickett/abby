@@ -8,12 +8,12 @@ const scope = { tenantId: "review-tenant", clinicId: "clinic" };
 const base = "https://api.au5.cliniko.com/v1";
 const marker = "7a6b240c-94fa-45d8-ae0b-f4ee91cb2bd1";
 const config = { scope, apiKey: "synthetic-review-key-au5", contactEmail: "dev@example.test" };
-const request: ClinikoReviewRequest = { scope: { ...scope, locationId: "requested-location" }, patientId: "42",
+const request: ClinikoReviewRequest & { operation: Extract<ClinikoReviewRequest["operation"], { kind: "book" }> } = { scope: { ...scope, locationId: "requested-location" }, patientId: "42",
   businessId: "11", credentialFingerprint: "a".repeat(64), policyVersion: "policy-1", termsVersion: "terms-1",
   timeZone: "Asia/Jakarta", createdAt: "2026-10-04T04:00:00Z",
   operation: { kind: "book", practitionerId: "22", appointmentTypeId: "33",
     startsAt: "2026-10-08T04:00:00Z", endsAt: "2026-10-08T04:30:00Z" } };
-function notes(value = request) {
+function notes(value: ClinikoReviewRequest = request) {
   const result = encodeClinikoReview(marker, value); assert.ok(result.ok); return result.value;
 }
 function row(id: number, changes: Record<string, unknown> = {}) {

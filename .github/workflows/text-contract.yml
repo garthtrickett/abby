@@ -25,6 +25,12 @@ jobs:
           node-version: '22.23.0'
           cache: npm
       - run: npm ci
+      - name: Prepare PostgreSQL fixture image
+        run: docker pull postgres:17-alpine
+      - name: Install audio fixture tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
       - run: npm run test:text
 
   postgres-proof:
@@ -51,6 +57,13 @@ jobs:
           node-version: '22.23.0'
           cache: npm
       - run: npm ci
+      - name: Install audio and PostgreSQL fixture tooling
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          /usr/lib/postgresql/17/bin/pg_dump --version
       - run: npm run db:migrate
       - run: npm run db:migrate -- down
       - run: npm run db:migrate

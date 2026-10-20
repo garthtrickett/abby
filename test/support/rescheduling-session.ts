@@ -19,6 +19,8 @@ export async function reschedulingSessionFixture(options: Parameters<typeof resc
       permission: f.sessionConfig.permission, verificationBudget: options.verificationBudget ?? { reserve: async () => true },
       delivery: { send: async (email, code) => { f.mail.push({ email, code }); return true; } },
       directory: f.directory, callerApprovalPath: join(f.folder, "approval.json"), bookingApprovalPath: f.destinationPath, reschedulingApprovalPath: f.path,
+      ...(options.destinationPractitionerId ? { destination: { practitionerId: options.destinationPractitionerId, bookingApprovalPath: f.destinationPath } } : {}),
+      ...(options.practitionerChoices !== undefined ? { practitioners: f.practitionerPaths } : {}),
       cliniko: { apiKey: "synthetic-session-au5", contactEmail: "test@example.test", businessId: "11", practitionerId: "22", appointmentTypeId: "33",
         recallTypeId: "7", timeZone: "Australia/Sydney", countryCallingCode: "61", rateBudget: f.ownerPorts.rateBudget },
       signal: lifetime.signal, fetchPort: f.ownerPorts.fetchPort, clock: f.sessionConfig.clock,
@@ -26,14 +28,19 @@ export async function reschedulingSessionFixture(options: Parameters<typeof resc
     owner = resultValue(await ClinikoReschedulingSession.create(config));
     const reception = new TextReception(f.ledger, f.policies, owner.effects);
     const agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope: f.scope }, f.policies, reception, undefined, undefined, undefined, f.ledger);
+    let phase = "constructed", lastResult = "none";
+    const started = Date.now();
+    const diagnostic = () => JSON.stringify({ phase, lastResult, elapsedMs: Date.now() - started,
+      nativeRequests: f.traffic.length, claims: f.claims, mailDelivered: f.mail.length > 0 });
     async function verify() {
+      phase = "verification";
       owner!.beginVerification(); const deadline = Date.now()+5000;
       while (!f.mail.length && Date.now() < deadline) await new Promise<void>(resolve => setTimeout(resolve, 5));
-      assert.ok(f.mail[0]); assert.equal((await owner!.submitCode(f.mail[0].code)).verified, true);
-      const grant = await owner!.verified(); assert.ok(grant); return grant.verificationRef;
+      assert.ok(f.mail[0], diagnostic()); assert.equal((await owner!.submitCode(f.mail[0].code)).verified, true, diagnostic());
+      const grant = await owner!.verified(); assert.ok(grant, diagnostic()); return grant.verificationRef;
     }
     async function playPending() {
-      const presentation = (await f.state()).pendingPresentationId!; assert.ok(presentation);
+      const presentation = (await f.state()).pendingPresentationId!; assert.ok(presentation, diagnostic());
       resultValue(await f.runtime.startPresentation(f.callId, presentation, f.sessionId, verificationNow));
       resultValue(await f.runtime.resolvePresentation(f.callId, presentation, "played", f.sessionId, verificationNow));
     }
@@ -43,9 +50,17 @@ export async function reschedulingSessionFixture(options: Parameters<typeof resc
     }
     if ((await f.state()).pendingPresentationId) await playPending(); // Rehearse the actual initial greeting receipt.
     return { ...f, owner, config, lifetime, reception, agent, verify, playPending, confirm,
-      readMenu: (stage: "targets" | "offers", turnId = `menu-${stage}`) => agent.submit({ kind: "rescheduling.menu.read.v1", turn: f.turn(turnId, "What appointments or times can I move?"), stage,
-        from: stage === "targets" ? verificationNow : "2026-10-08", to: stage === "targets" ? "2026-10-09T06:00:00.000Z" : "2026-10-08", now: verificationNow }),
-      selectMenu: (stage: "targets" | "offers", choice: 1|2|3 = 1, turnId = `select-${stage}`) => agent.submit({ kind: "rescheduling.menu.select.v1", turn: f.turn(turnId, "Option one"), stage, choice, now: verificationNow }),
+      readMenu: async (stage: "targets" | "practitioners" | "offers", turnId = `menu-${stage}`) => {
+        phase = `read-${stage}`;
+        const result = await agent.submit({ kind: "rescheduling.menu.read.v1", turn: f.turn(turnId, "What appointments or times can I move?"), stage,
+          from: stage === "targets" ? verificationNow : "2026-10-08", to: stage === "targets" ? "2026-10-09T06:00:00.000Z" : "2026-10-08", now: verificationNow });
+        lastResult = result.ok ? "accepted" : result.error.kind; return result;
+      },
+      selectMenu: async (stage: "targets" | "practitioners" | "offers", choice: 1|2|3 = 1, turnId = `select-${stage}`) => {
+        phase = `select-${stage}`;
+        const result = await agent.submit({ kind: "rescheduling.menu.select.v1", turn: f.turn(turnId, "Option one"), stage, choice, now: verificationNow });
+        lastResult = result.ok ? "accepted" : result.error.kind; return result;
+      },
       get patches() { return f.patches; }, get claims() { return f.claims; }, drain: () => reception.drain(f.scope, f.callId, verificationNow),
       proposalJourney: async () => {
         assert.ok((await agent.submit({ kind: "rescheduling.menu.read.v1", turn: f.turn("menu-targets"), stage: "targets", from: verificationNow, to: "2026-10-09T06:00:00.000Z", now: verificationNow })).ok);

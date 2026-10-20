@@ -41,6 +41,52 @@ function candidateList(total: number) {
   })) };
 }
 
+test("E2E-369 intake binds and inspects every supplied address field without changing legacy bodies", async () => {
+  const extra = { address1: "1 Private Road", address2: "Private Flat", address3: "Private Building", city: "Private City",
+    state: "VIC", postCode: "3999", countryCode: "AU" };
+  const input = { ...request, ...extra }, native = { address_1: extra.address1, address_2: extra.address2, address_3: extra.address3,
+    city: extra.city, state: extra.state, post_code: extra.postCode, country_code: extra.countryCode };
+  let posts = 0;
+  const adapter = edge(async (url, init) => {
+    if (init?.method === "POST") {
+      posts++; const body = JSON.parse(String(init.body));
+      for (const [key, value] of Object.entries(native)) assert.equal(body[key], value);
+      assert.equal(Object.keys(body).length, 13); assert.equal(Object.hasOwn(body, "notes"), false);
+      return Response.json({ ...createdRow(input), ...native }, { status: 201 });
+    }
+    return Response.json(String(url).endsWith("/42") ? { ...createdRow(input), ...native } : candidateList(0));
+  });
+  assert.deepEqual(await adapter.createOnce(input), { ok: true, value: { kind: "created", patientRef: "cliniko:patient:42" } });
+  assert.equal(posts, 1);
+  for (const field of Object.keys(extra)) assert.notEqual(clinikoIntakeDraftDigest(input), clinikoIntakeDraftDigest({ ...input, [field]: "changed" }));
+});
+
+test("E2E-369 old base-only attestations and unsupported or empty registration values fail before HTTP", async () => {
+  let reads = 0;
+  const fetchPort: typeof fetch = async () => { reads++; throw new Error("must not read"); };
+  assert.deepEqual(await edge(fetchPort, { attest: async () => attestation(request) }).createOnce({ ...request, address1: "1 Private Road" }),
+    { ok: false, error: { kind: "unauthorized" } });
+  for (const invalid of [{ address1: "" }, { postCode: null }, { countryCode: "Australia" }, { address1: "x\u202e" }, { clinicalNotes: "private" }]) {
+    assert.deepEqual(await edge(fetchPort).createOnce({ ...request, ...invalid } as ClinikoIntakeRequest), { ok: false, error: { kind: "invalidQuery" } });
+  }
+  assert.equal(reads, 0);
+});
+
+test("E2E-369 missing created/inspected address fields remain uncertain and cannot retry creation", async () => {
+  for (const phase of ["response", "inspection"] as const) {
+    let posts = 0;
+    const input = { ...request, address1: "1 Private Road", postCode: "3999", countryCode: "AU" };
+    const row = { ...createdRow(input), address_1: input.address1, post_code: input.postCode, country_code: input.countryCode };
+    const adapter = edge(async (url, init) => {
+      if (init?.method === "POST") { posts++; return Response.json(phase === "response" ? { ...row, post_code: null } : row, { status: 201 }); }
+      return Response.json(String(url).endsWith("/42") ? { ...row, address_1: "changed" } : candidateList(0));
+    });
+    assert.deepEqual(await adapter.createOnce(input), { ok: true, value: { kind: "uncertain" } });
+    assert.deepEqual(await adapter.createOnce(input), { ok: false, error: { kind: "invalidQuery" } });
+    assert.equal(posts, 1);
+  }
+});
+
 test("first-time intake checks exact candidates and returns only the Cliniko patient reference", async () => {
   const methods: string[] = [];
   const fetchPort: typeof fetch = async (input, init) => {

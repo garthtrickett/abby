@@ -19,6 +19,6 @@ export function hasSentPatientWork(state: CallState): boolean {
     ["possiblySent", "completed", "uncertain"].includes(effect.status));
 }
 export function requestBoundaryText(state: CallState, reason: RequestBoundary): string {
-  const sent = Object.values(state.actions).filter(action => ["dispatched", "committed", "uncertain", "needsReview"].includes(action.status)).at(-1);
+  const sent = Object.values(state.actions).filter(action => action.classMovement || ["dispatched", "committed", "uncertain", "needsReview"].includes(action.status)).at(-1);
   return sent ? `${actionOutcomeText(sent)} ${notices[reason]}` : notices[reason];
 }

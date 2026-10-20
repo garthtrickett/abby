@@ -10,7 +10,7 @@ import { ClinikoReviewedSend } from "../../src/standalone/cliniko-reviewed-send.
 const scope = { tenantId: "cancel-review-tenant", clinicId: "clinic", locationId: "location" };
 const apiKey = "synthetic-cancel-review-au5", base = "https://api.au5.cliniko.com/v1";
 const now = "2026-10-04T04:00:00Z", marker = "7a6b240c-94fa-45d8-ae0b-f4ee91cb2bd1";
-const request: ClinikoReviewRequest = { scope, patientId: "42", businessId: "11",
+const request: ClinikoReviewRequest & { operation: Extract<ClinikoReviewRequest["operation"], { kind: "cancel" }> } = { scope, patientId: "42", businessId: "11",
   credentialFingerprint: clinikoCredentialFingerprint(apiKey), policyVersion: "policy", termsVersion: "fee-terms",
   timeZone: "Asia/Jakarta", createdAt: now, operation: { kind: "cancel", appointmentId: "71", cancellationReason: 10,
     practitionerId: "22", appointmentTypeId: "33", startsAt: "2026-10-08T04:00:00Z", endsAt: "2026-10-08T04:30:00Z" } };
