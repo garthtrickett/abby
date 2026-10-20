@@ -70,6 +70,7 @@ export class TwilioAbbyOutboundRuntime implements OutboundVoiceRuntimeAdapter {
     this.#context = new TwilioOutboundContext(input.contextKey, this.#binding, input.accountSid, input.from);
   }
   binding(): OutboundProviderBinding { return this.#binding; }
+  acceptsAccount(accountSid: string): boolean { return accountSid === this.#config.accountSid; }
   paths(): Readonly<{ answer: string; status: string; stream: string }> {
     return Object.freeze({ answer: this.#answer.pathname, status: this.#status.pathname, stream: this.#stream.pathname });
   }

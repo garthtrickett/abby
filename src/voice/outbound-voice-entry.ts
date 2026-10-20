@@ -22,6 +22,9 @@ export type OutboundConversationCall = Readonly<{
 }>;
 export type OutboundConversationApproval = Readonly<{
   purpose: "outboundContact";
+  /** Optional physical stop-producer/source/key/recognizer selection. Absence
+   * preserves the existing profile projection; it proves no stop coverage. */
+  stopSpeechBinding?: string;
   policy: CallPolicy;
   /** Trusted physical host's model/runtime configuration, in addition to the
    * speech profile's own fully validated primary/fallback configuration hash. */
@@ -49,6 +52,7 @@ export function outboundConversationProfileRef(approval: OutboundConversationApp
   try {
     const { policy, runtimeConfigurationHash } = approval;
     if (approval.purpose !== "outboundContact" || !/^[a-f0-9]{64}$/.test(runtimeConfigurationHash) ||
+        approval.stopSpeechBinding !== undefined && !/^[a-f0-9]{64}$/.test(approval.stopSpeechBinding) ||
         !policy || !validVoicePolicy(policy, policy.scope) || !policy.voiceProfile ||
         !validGreetingShape(policy.greeting, policy.scope) ||
         !policy.greeting.effectiveFrom || !policy.greeting.effectiveUntil ||
@@ -56,7 +60,8 @@ export function outboundConversationProfileRef(approval: OutboundConversationApp
         typeof policy.automationVersion !== "string" || !policy.automationVersion) return;
     const projection = { version: 1, scope: policy.scope, policyVersion: policy.policyVersion, automationVersion: policy.automationVersion,
       voiceSettings: policy.voiceSettings, voiceProfile: policy.voiceProfile, greeting: policy.greeting, runtimeConfigurationHash,
-      mediaOptions: approval.mediaOptions ?? {}, playbackOptions: approval.playbackOptions ?? {} };
+      mediaOptions: approval.mediaOptions ?? {}, playbackOptions: approval.playbackOptions ?? {},
+      ...(approval.stopSpeechBinding !== undefined ? { stopSpeechBinding: approval.stopSpeechBinding } : {}) };
     return `abby-outbound-v1:${createHash("sha256").update(JSON.stringify(canonical(projection))).digest("hex")}`;
   } catch { return; }
 }

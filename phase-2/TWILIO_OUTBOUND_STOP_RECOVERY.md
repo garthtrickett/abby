@@ -19,3 +19,15 @@ The current combined prerequisite refinement preserves all656 serving artifacts 
 ## Actual optional receiver composition
 
 The [signed HTTP receiver](TWILIO_OUTBOUND_STOP_RECEIVER.md) now supplies the concrete bounded server composition for terminal delivery. It uses the recovery owner's separate missing/no-stop/stop observation result while preserving the original `recoverStatus` outcome interface. Missing evidence and uncertain native decisions stay retryable; authentic no-stop acknowledges delivery only. This does not add a speech producer, automatic hold release or default activation. Receiver source/strict/emitted SQL/privacy qualification is recorded separately in EXECUTION_PROGRESS.md; its own exact-head cloud checks still follow.
+
+
+The [optional positive speech-stop producer](TWILIO_OUTBOUND_STOP_SPEECH.md) now
+connects the actual assembled outbound turn to native report production and the
+same DNC recovery engine. Its selected profile is approved before speech, and
+the owned disconnect tail awaits independent bounded native retention after
+voice closure.62 focused source controls and strict fixture types pass;
+whole strict/667 serving build,129 existing voice controls and9 emitted SQL/privacy cases also pass. Publication/cloud qualification follow. This supplies no no-stop
+coverage, complete all-call/provider finality, hold release or clinical authority.
+Report/recovery/receiver foundations through PR565 are normally merged with all
+exact-head cloud jobs green; actual merged-main qualification is separately
+recorded in EXECUTION_PROGRESS.md.

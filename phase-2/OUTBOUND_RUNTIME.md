@@ -60,3 +60,15 @@ The [concrete signed native stop recovery](TWILIO_OUTBOUND_STOP_RECOVERY.md) now
 PR564's combined prerequisite/secret-fixture refinement preserves its serving source and656 artifacts.26 current source controls, focused strict and16 combined emitted SQL cases (report9/recovery7) pass with actual MAC/context keys and Twilio token included in all-column/raw-backup checks beside the legitimate public profile. Exact combined-head cloud qualification follows. No HTTP receiver or actual speech producer is inferred; those remain subsequent composition work.
 
 The [actual optional signed stop receiver](TWILIO_OUTBOUND_STOP_RECEIVER.md) now runs concrete native recovery inside the existing authenticated Node request lifetime/current grants. An explicit opt-in hook owns private signed material; ordinary progress keeps two arguments. Terminal missing/uncertain evidence is retryable503, authentic no-stop is delivery-only204, and accepted/discovered DNC is204 without hold release.59 source controls, final complete strict/657 build and7 emitted two-server SQL/callback/patient/backup privacy cases pass locally; publication/cloud qualification follows. No default route, detached task or local private retry ledger is activated. Actual speech stop production, complete finality and independently verified clinical handoff remain separate.
+
+
+The [optional positive speech-stop producer](TWILIO_OUTBOUND_STOP_SPEECH.md) now
+connects the actual assembled outbound turn to native report production and the
+same DNC recovery engine. Its selected profile is approved before speech, and
+the owned disconnect tail awaits independent bounded native retention after
+voice closure.62 focused source controls and strict fixture types pass;
+whole strict/667 serving build,129 existing voice controls and9 emitted SQL/privacy cases also pass. Publication/cloud qualification follow. This supplies no no-stop
+coverage, complete all-call/provider finality, hold release or clinical authority.
+Report/recovery/receiver foundations through PR565 are normally merged with all
+exact-head cloud jobs green; actual merged-main qualification is separately
+recorded in EXECUTION_PROGRESS.md.

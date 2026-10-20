@@ -9,6 +9,7 @@ import { TwilioOutboundReportAuthentication } from "../cliniko/twilio-outbound-r
 import type { ClinikoRequestBudget } from "../cliniko/read-budget.ts";
 import { TwilioAbbyOutboundRuntime } from "../voice/twilio-outbound-runtime.ts";
 import type { SignedTwilioWebhook } from "../voice/twilio-signed-ingress.ts";
+import type { TwilioOriginalCall } from "../voice/twilio-outbound-context.ts";
 import { ClinikoOutboundStopOwner } from "./cliniko-outbound-stop-owner.ts";
 import type { OutboundStopOwnerConfig, OutboundStopOutcome } from "./cliniko-outbound-stop-owner.ts";
 
@@ -28,12 +29,14 @@ export class ClinikoTwilioOutboundStopRecovery {
   readonly #ports: Ports;
   readonly #authenticate: TwilioAbbyOutboundRuntime["authenticateStatus"];
   readonly #binding: TwilioAbbyOutboundRuntime["binding"];
+  readonly #account: TwilioAbbyOutboundRuntime["acceptsAccount"];
   readonly #selected: ReturnType<TwilioAbbyOutboundRuntime["binding"]>;
   readonly #policyMethod: OutboundStopOwnerConfig["policy"]["currentFor"];
   private constructor(config: TwilioOutboundStopRecoveryConfig, ports: Ports) {
     this.#config = config; this.#ports = ports;
     this.#authenticate = ports.runtime.authenticateStatus.bind(ports.runtime);
     this.#binding = ports.runtime.binding.bind(ports.runtime);
+    this.#account = ports.runtime.acceptsAccount.bind(ports.runtime);
     this.#selected = Object.freeze({ ...this.#binding() });
     this.#policyMethod = config.stop.policy.currentFor;
   }
@@ -81,11 +84,24 @@ export class ClinikoTwilioOutboundStopRecovery {
    * authentic no-stop observation without treating either as hold clearance. */
   async recoverStatusEvidence(request: SignedTwilioWebhook, external: AbortSignal): Promise<Result<ObservedRecovery, Failure>> {
     try {
-      if (!(external instanceof AbortSignal) || external.aborted || !isDeepStrictEqual(this.#binding(), this.#selected) ||
-          this.#config.stop.policy.currentFor !== this.#policyMethod) return err({ kind: "unavailable" });
       const authenticated = this.#authenticate(structuredClone(request));
       if (!authenticated.ok) return err({ kind: "forbidden" });
-      const call = authenticated.value.call, original = call.context, a = original.original.attempt, p = this.#ports, c = this.#config;
+      const call = authenticated.value.call;
+      return this.recoverRetainedReport(call.context, call.accountSid, call.callSid, external);
+    } catch { return err({ kind: "unavailable" }); }
+  }
+  /** Internal producer recovery does not require inventing a signed callback.
+   * Input correlation is no positive authority: the SAME exact native MAC
+   * report/history, immutable origin and independent current grants remain
+   * mandatory before any restrictive write. No clinical/contact release grant. */
+  async recoverRetainedReport(input: TwilioOriginalCall, accountSid: string, callSid: string,
+    external: AbortSignal): Promise<Result<ObservedRecovery, Failure>> {
+    try {
+      if (!(external instanceof AbortSignal) || external.aborted || !isDeepStrictEqual(this.#binding(), this.#selected) ||
+          this.#config.stop.policy.currentFor !== this.#policyMethod) return err({ kind: "unavailable" });
+      if (!this.#account(accountSid) || !/^CA[0-9a-f]{32}$/.test(callSid)) return err({ kind: "forbidden" });
+      const original = structuredClone(input), call = Object.freeze({ accountSid, callSid, recipientNumber: original.number });
+      const a = original.original.attempt, p = this.#ports, c = this.#config;
       const grants = new Map<string, TwilioOutboundReportHistoryQuery | TwilioOutboundReportQuery>();
       let reportSeen = false, claims = 0;
       let evidence: ObservedRecovery["evidence"] = "missing";
