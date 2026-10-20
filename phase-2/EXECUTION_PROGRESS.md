@@ -2424,7 +2424,7 @@ main merge or deployment. Independent review and clinic acceptance stay open.
 ### Current host scheduling supersedes the historical handoff notes
 
 The operator replaced shared conventions after the above natural terminal.
-`/home/gust/infra/docs/shared-compute.md` is authoritative for future CPU/RAM
+`/home/gust/code/infra/docs/shared-compute.md` is authoritative for future CPU/RAM
 scheduling. All old one-heavy/empty-peer-board/any-Node-process/manual-release
 rules recorded above are historical, not current admission requirements.
 Old frozen runners/results are preserved. Future launchers use live host and
@@ -5839,3 +5839,31 @@ Initial PR566/c0d's PR-event browser job118543964679 failed two existing Postgre
 Local1792487582410 first used the unchanged real disposable-database helper with a controlled11-second pre-launch cold-image delay. It returned the expected killed/SIGTERM at the existing10-second bound before any physical container launch. This isolates the failing phase; it is NOT a local reproduction of GitHub's actual network throughput. The runner then verified the already cached pinned PostgreSQL image without pulling/retagging shared host images, prepared dashboard assets and ran the TWO ORIGINAL magic-link Cliniko and operations browser journeys, with real disposable PostgreSQL/TLS and unchanged assertions. Both passed,45.1s, terminal09:14:03.304419UTC. Node/Chromium762589184B under2GiB, separate DB87654400B/512MiB, CPU100%each, heap768MiB, Swap0/allOOMhighmax0. Owned containers/slice ended naturally; source and667 serving artifacts stayed pinned. Revised actual cloud qualification remains required; no cloud pass is inferred from the controlled local boundary probe or warm browser run.
 
 The original c0d browser failure and initial source/artifact qualification remain separately preserved. Final reviewed facts/scenario/naming/source checks and a narrow corrective commit on the same PR follow. Complete provider/all-call/contact finality, actual ASR/source/restore acceptance, independent exact clinical handoff and gap13 remain open; no activation or real provider/clinic traffic is included.
+
+
+## Conditional concrete positive Twilio finality — 20 October 2026
+
+PR566's conservative uncertain-stop correction is merged as `d7f251cd6150262cbed575f63401e37049b75476` after all eight exact `3ef2cde` checks passed. Each event passed4563 text controls with256 existing mode-only skips and5575 PostgreSQL controls with one existing skip, plus six ordered checks; typecheck and browser jobs passed. Raw job logs/counts/hashes are preserved. Actual merged-main qualification is separately monitored; the PR result is not substituted for it.
+
+The next [positive finality composition](TWILIO_OUTBOUND_FINALITY.md) now has local engineering qualification. Cold native recovery accepts only the original runtime effect/capacity pair and fixed selected account, under a new independently granted broad collection read. Bounded complete history authenticates every selected native report, independently rereads each original attempt and checks its WHOLE canonical digest against the immutable MAC assertion; full rescan/original rereads and all strongest grants remain current. No lost session/report identifiers are fabricated.
+
+The optional runtime adapter uses the actual inner Twilio account/token/from/binding/transport for fixed read-only GETs. Complete current all-creation/mutation/fallback/TwiML/transfer/restore source approval is independent of observed call/list data. The fixed single-root profile needs two exact completed root reads and two complete empty child pages; any child/pagination, active/missing/malformed/foreign data, unsupported time, current-grant loss, changed native context or absent producer keeps finality unknown. An authentic positive can supply final STOP after complete provider closure without rewriting its early report. Complete no-stop is never emitted by this adapter.
+
+One bounded recovery purpose composes the actual native contact-settlement owner and separate call-capacity owner with the same physical API-user budget and cumulative180-claim ceiling across every native read/write. Native outcome retention uses the original preallocated action before contact release. The separate call owner still needs its own scope/provider/current release proof. Response loss does not replay a consumed action; each known result survives uncertainty in the other owner. Default runtime inspection remains unknown unless the explicit new adapter is selected.
+
+| Owned work | Exact check/result |
+| --- | --- |
+|1792490019483 | Initial cold native history source39/39; first strip-only syntax failure1792490002581 corrected by an explicit error field. |
+|1792490070495 | Focused strict history graph passed after readonly capture inference was corrected;1792490030805 remains failed evidence. |
+|1792490403056 /1792490414790 | Native/provider/finality source67/67 and strict graph passed. |
+|1792490791787 | Complete source77/77, no skips. Initial76/77 run1792490709145 expected cold replay before real native headroom; only the source fixture budget clock advanced for the replay. Native180 was unchanged. |
+|1792490901160 | Whole `npm run typecheck && npm run build:voice-tests`,672 artifacts;4m29s, peak1,636,225,024B under2GiB/heap1536MiB/CPU100/Swap0, no OOM/high/max events. |
+|1792491192058 | First emitted SQL nine-case run FAILED at a missing admitted-session privacy canary getter after behavior assertions. No green privacy claim. |
+|1792491532409 /1792491540913 | Corrected actual getter, stronger full-note privacy and real crash witness strict graph passed; required current672-artifact serving fixture build passed in1m48s at1,118,212,096B. No production behavior or deadline change. |
+|1792491694697 | Actual emitted signed voice/native owner/SQL ten-case cohort10/10, no skips;5m30s including real physical-headroom waits. Node/child156,618,752B/1GiB and DB104,669,184B/512MiB, CPU100 each/Swap0, OOM/high/max0. |
+|1792491901099 /1792491919985 | Independent actual physical-budget-clock rollover witness reaches exactly180 native dispatches, no outcome and both holds retained; current complete inherited strict graph passed. |
+|1792492386029 /1792492409791 | Final current81 source controls pass, including actual provider deadline on held fetch/body, late response cancellation and redirected/foreign response refusal; complete current inherited strict graph passes. |
+
+The ten SQL cases cover accepted, source denial, unexpected child, stored/unstored outcome response loss, independent call/contact release denial, parallel cold owners, unclear stop, and real SIGKILL after stored native outcome before acknowledgement. The child runs the actual emitted adapter, native readers, owner-file policy/account, physical budget and SQL owners from an empty directory, using remote transport/grants over IPC only. It receives no sealed lost session/report context, emits no raw output and writes no private journal. After kill, both holds remain; fresh cold recovery finds exactly one native outcome/report/DNC and separately releases. Every SQL case scans all columns plus a raw unfiltered `pg_dump` for complete native notes, key/MAC, ciphertext callbacks/forms, patient/phone and raw call/session witnesses in raw/COPY/JSON/COPY(JSON) encodings.
+
+The preserved source/serving manifests remain unchanged. On adopting actual merged-main `d7f251c`, the baseline tree matched qualified `3ef2cde`; every working byte and672 artifacts remained identical. New documentation/fact/source guards and this branch's exact-head cloud qualification still precede normal merge. No live provider/acoustic/clinic/restore acceptance or activation follows. Actual OpenAI transcription remains uncertain; complete negative speech/drain and independent exact clinical handoff remain open, followed by approved gap13.
