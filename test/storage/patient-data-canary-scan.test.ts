@@ -113,9 +113,11 @@ test("database canary scan identifies current patient-data leaks without returni
 });
 
 test("six-digit verification canaries distinguish legitimate clock substrings and still expose actual code payloads", async () => {
-  const schema = `otp_clock_${randomUUID().replaceAll("-", "")}`;
-  await sql.raw(`create schema "${schema}"`).execute(db);
-  const target = new URL(url!); target.searchParams.set("options", `-csearch_path=${schema}`);
+  // A complete backup must retain every schema; give this deliberate injection
+  // its own database rather than filtering unrelated concurrent fixtures out.
+  const database = `abby_test_otp_clock_${randomUUID().replaceAll("-", "")}`;
+  await sql.raw(`create database "${database}"`).execute(db);
+  const target = new URL(url!); target.pathname = `/${database}`;
   const isolated = connectPostgres(target.toString());
   try {
     await sql`create table epoch_values (sent_at_ms jsonb, echo text)`.execute(isolated);
@@ -125,12 +127,16 @@ test("six-digit verification canaries distinguish legitimate clock substrings an
     assert.deepEqual(await scanPatientDataCanaries(isolated, [{ label: "code", value: String(collision) }]),
       { ok: true, value: [{ label: "code", table: "epoch_values", column: "sent_at_ms" }] },
       "the unchanged raw scanner can flag a purely public clock value as an apparent OTP match");
+    assert.deepEqual(await scanDisposableBackupCanaries(target.toString(), [{ label: "code", value: String(collision) }]), ["code"]);
     let draws = 0;
     const safe = drawDistinctCode(() => draws++ === 0 ? collision : 0, window), code = String(safe).padStart(6, "0");
     assert.equal(distinctFromClock(safe, window), true); assert.equal(draws, 2);
     assert.deepEqual(await scanPatientDataCanaries(isolated, [{ label: "code", value: code }]), { ok: true, value: [] });
+    assert.deepEqual(await scanDisposableBackupCanaries(target.toString(), [{ label: "code", value: code }]), []);
     await sql`update epoch_values set echo = ${"private code " + code}`.execute(isolated);
     assert.deepEqual(await scanPatientDataCanaries(isolated, [{ label: "code", value: code }]),
       { ok: true, value: [{ label: "code", table: "epoch_values", column: "echo" }] }, "actual code data remains detectable");
-  } finally { await isolated.destroy(); await sql.raw(`drop schema "${schema}" cascade`).execute(db); }
+    assert.deepEqual(await scanDisposableBackupCanaries(target.toString(), [{ label: "code", value: code }]), ["code"],
+      "the actual raw code remains detectable in the unfiltered backup too");
+  } finally { await isolated.destroy(); await sql.raw(`drop database "${database}"`).execute(db); }
 });
