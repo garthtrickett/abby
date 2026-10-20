@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { OutboundContactStopPolicy } from "./outbound-contact-stop.ts";
 import { clearAffirmation } from "../core/caller-affirmation.ts";
 export { clearAffirmation } from "../core/caller-affirmation.ts";
 import type { LedgerStore } from "../core/ledger.ts";
@@ -71,7 +72,7 @@ export type TransferPort = Readonly<{ request(transferId: string, destinationRef
 /** Speech content is kept in this live session; durable presentation rows may contain only status and opaque IDs. */
 export type TransientPresentationConfig = Readonly<{ greeting: ApprovedGreeting; staffWorkUnavailable?: true }>;
 export type VoiceSessionFailure = TransitionFailure | TextReceptionFailure | TranscriptFailure |
-  Readonly<{ kind: "sessionUnknown" | "deliveryBlocked" | "playbackUnknown" | "transportUnavailable" | "intentUnavailable" | "automatedCallUnavailable" }>;
+  Readonly<{ kind: "sessionUnknown" | "deliveryBlocked" | "playbackUnknown" | "transportUnavailable" | "intentUnavailable" | "automatedCallUnavailable" | "outboundContactStopped" }>;
 export type DispatchResult = Readonly<{ kind: "none" | "queued" | "played" | "failed" | "unproven" | "interrupted" | "transferConnected" | "transferFailed" | "transferUnproven" | "transferCanceled"; playbackId?: string; conversationControl?: "pause" | "goodbye"; confirmationWaitSeconds?: number }>;
 
 type ActivePlayback = { id: string; presentationId: string; generation: number };
@@ -115,6 +116,18 @@ export class VoiceSession {
   private consecutivePauses = 0;
   private controlPresentation: Readonly<{ id: string; mode: "pause" | "goodbye" }> | undefined;
   private readonly privatePlayback = new Map<string, (played: boolean) => void>();
+  private outboundStopPolicy: OutboundContactStopPolicy | undefined;
+  private outboundContactStopped = false;
+
+  /** Installed once by the selected trusted host before attach. The attach
+   * fence independently requires an actual outbound admission. */
+  protectOutboundContact(policy: OutboundContactStopPolicy): void {
+    if (this.attached || this.outboundStopPolicy || typeof policy?.inspect !== "function" || typeof policy.retainStop !== "function" ||
+        !Number.isSafeInteger(policy.retentionDeadlineMs) || policy.retentionDeadlineMs < 1 || policy.retentionDeadlineMs > 120000)
+      throw Error("Unavailable outbound contact policy");
+    this.outboundStopPolicy = Object.freeze({ retentionDeadlineMs: policy.retentionDeadlineMs,
+      inspect: policy.inspect.bind(policy), retainStop: policy.retainStop.bind(policy) });
+  }
 
   /** A qualified new speech onset may fence a still-pending classifier or menu operation before wire-order work resumes. */
   supersedePendingIntent(): boolean {
@@ -199,6 +212,7 @@ export class VoiceSession {
   }
 
   private canSend(): boolean {
+    if (this.outboundContactStopped) return false;
     const currentMs = this.monotonicNow();
     return this.attached && this.localSendDeadlineMs !== undefined && Number.isFinite(currentMs) && currentMs < this.localSendDeadlineMs;
   }
@@ -226,6 +240,11 @@ export class VoiceSession {
 
   async attach(now: string): Promise<Result<CallState, VoiceSessionFailure>> {
     if (this.attached) return err({ kind: "invalidTransition" });
+    if (this.outboundStopPolicy) {
+      const state = await this.runtime.read(this.callId);
+      if (!state.ok) return state;
+      if (state.value.admission?.direction !== "outbound") return err({ kind: "invalidTransition" });
+    }
     if (this.transientGreeting) {
       const read = await this.runtime.read(this.callId);
       if (!read.ok) return read;
@@ -312,6 +331,25 @@ export class VoiceSession {
     const final = this.assembler.finish(now);
     if (!final.ok) return final;
     const turn = final.value;
+    if (this.outboundStopPolicy) {
+      const observed = Object.freeze({ ...turn });
+      let disposition: "continue" | "stop" | undefined;
+      try { disposition = this.outboundStopPolicy.inspect(observed); }
+      catch { /* Classifier failure is no positive durable stop assertion. */ }
+      if (disposition !== "continue") {
+        // Fence future speech, intent/model work and clinical dispatch BEFORE
+        // any native retention wait. Durable failure never reopens this call.
+        this.outboundContactStopped = true; this.speechOpen = false;
+        this.cachedIntent = undefined; this.stopTransientWork();
+        if (disposition === "stop") {
+          const controller = new AbortController(), timer = setTimeout(() => controller.abort(), this.outboundStopPolicy.retentionDeadlineMs);
+          try { await awaitUntilAbort(Promise.resolve().then(() => this.outboundStopPolicy!.retainStop(observed, controller.signal)), controller.signal); }
+          catch { /* No durable success is invented. */ }
+          finally { clearTimeout(timer); controller.abort(); }
+        }
+        return err({ kind: "outboundContactStopped" });
+      }
+    }
     let existing = await this.runtime.read(this.callId);
     if (!existing.ok) return existing;
     if (generation !== this.assembler.currentGeneration()) return err({ kind: "staleTurn" });

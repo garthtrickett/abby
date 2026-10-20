@@ -5248,3 +5248,29 @@ The stop-recovery candidate now incorporates report prerequisite242267e with unc
 ### Gap12 actual optional signed HTTP stop recovery — 20 October 2026
 
 The [receiver](TWILIO_OUTBOUND_STOP_RECEIVER.md) composes the actual server and native DNC recovery through an explicit authenticated-status hook, preserving ordinary progress observers and existing deadlines/current grants. Terminal delivery before native report production stays retryable; committed ACK loss discovers the same decision; uncertain unobserved writes never replay. No-stop delivery acknowledgement grants no contact/hold release.59 source controls, final strict/657 build and7 emitted two-server PostgreSQL/full-callback/19-digit-patient/all-column/unfiltered-backup cases pass locally. Publication/cloud qualification follows. Actual speech producer, immutable complete provider/contact/all-call/tail reporting, retained verifier/source/restore qualification, independent clinical authority and gap13 remain open. No activation or real acceptance is inferred.
+
+
+### Gap12 positive speech-stop producer, 20 October 2026
+
+The [concrete positive producer](TWILIO_OUTBOUND_STOP_SPEECH.md) now composes
+actual signed outbound voice, assembled whole-turn gating, one original native
+MAC report and the existing clinic-approved restrictive DNC owner. Source62
+and focused strict typing,129 existing voice controls, full strict/667 serving
+build and9 actual emitted PostgreSQL/privacy cases pass. Publication and
+exact-head cloud qualification follow. A stopped voice does not prove a
+saved decision, no-stop coverage, complete finality, hold release or patient
+identity. The preterminal report action cannot be replayed to add closure;
+complete all-call/provider/contact/ASR/private-interval/shutdown-tail evidence,
+retained source/verifier/restore qualification and independent exact clinical
+handoff remain open before gap13. Foundations through565 are normally merged
+and exact-head green, with actual main separately recorded. No activation.
+
+
+The subsequent approved-profile version2 conservatively closes an exact whole
+stop phrase at uncertain ASR quality without report/DNC retention. The real
+OpenAI adapter's uncertain quality is unchanged. Revised63 source, focused
+strict types, full strict/667 serving build and10 emitted SQL/privacy cases
+pass. Two original PostgreSQL/TLS browser login journeys pass after explicit
+image preparation outside the unchanged10-second launch deadline. Revised
+exact-head cloud qualification follows; this does not promote NoStop/finality,
+clinical authority, real acoustic acceptance or activation.

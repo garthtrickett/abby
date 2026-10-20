@@ -31,3 +31,25 @@ Concrete runtime adapters must supply trustworthy durable observations and compo
 The [signed native recovery owner](TWILIO_OUTBOUND_STOP_RECOVERY.md) supplies the concrete Twilio + Abby stop observation from an actual signed callback and independently granted MAC-authenticated clinic-owned report history. It binds the original pre-send digest and actual physical call, then invokes this same conditional DNC owner. Its focused source, complete strict serving build and emitted PostgreSQL/privacy checks pass locally; cloud qualification follows. Report grant loss remains fenced through decision preparation. Completed status alone is insufficient, positive stops may precede closure, and missing/no-stop evidence leaves holds intact. Actual speech/report production and an approved receiver composition remain separate; no route/default activation is added. The independent complete-source number-wide reader/guarded launch still owns cross-patient suppression and unresolved-contact admission.
 
 The [optional signed HTTP receiver](TWILIO_OUTBOUND_STOP_RECEIVER.md) composes that concrete native recovery in the actual ingress server request lifetime. It is locally qualified separately and does not activate the CLI, supply a speech producer or release holds. Ordinary historical observers retain their original contract; private signed recovery is explicitly configured under independent native grants.
+
+
+The [optional positive speech-stop producer](TWILIO_OUTBOUND_STOP_SPEECH.md) now
+connects the actual assembled outbound turn to native report production and the
+same DNC recovery engine. Its selected profile is approved before speech, and
+the owned disconnect tail awaits independent bounded native retention after
+voice closure.62 focused source controls and strict fixture types pass;
+whole strict/667 serving build,129 existing voice controls and9 emitted SQL/privacy cases also pass. Publication/cloud qualification follow. This supplies no no-stop
+coverage, complete all-call/provider finality, hold release or clinical authority.
+Report/recovery/receiver foundations through PR565 are normally merged with all
+exact-head cloud jobs green; actual merged-main qualification is separately
+recorded in EXECUTION_PROGRESS.md.
+
+
+The subsequent approved-profile version2 conservatively closes an exact whole
+stop phrase at uncertain ASR quality without report/DNC retention. The real
+OpenAI adapter's uncertain quality is unchanged. Revised63 source, focused
+strict types, full strict/667 serving build and10 emitted SQL/privacy cases
+pass. Two original PostgreSQL/TLS browser login journeys pass after explicit
+image preparation outside the unchanged10-second launch deadline. Revised
+exact-head cloud qualification follows; this does not promote NoStop/finality,
+clinical authority, real acoustic acceptance or activation.

@@ -15,6 +15,7 @@ import { TwilioAbbyOutboundRuntime } from "../voice/twilio-outbound-runtime.ts";
 import { TwilioConnectedCall } from "../voice/twilio-connected-call.ts";
 import type { TwilioConnectedCallConfig } from "../voice/twilio-connected-call.ts";
 import type { PlaybackPort, VoiceSession } from "../voice/voice-session.ts";
+import { TwilioOutboundStopSpeech } from "./twilio-outbound-stop-speech.ts";
 
 export type TwilioAbbyOutboundConversationConfig = Readonly<{
   runtime: TwilioAbbyOutboundRuntime;
@@ -22,6 +23,7 @@ export type TwilioAbbyOutboundConversationConfig = Readonly<{
   /** Physical model/runtime configuration selected by this trusted host. */
   runtimeConfigurationHash: string;
   speech: SpeechAdapterFactory;
+  stopSpeech?: TwilioOutboundStopSpeech;
   readiness: AutomationReadiness;
   knowledge?: ModelKnowledgeContextHost;
   /** Original native routing context remains private and is not a verified
@@ -40,22 +42,28 @@ export function twilioAbbyOutboundConversation(config: TwilioAbbyOutboundConvers
     close: (kind?: "normal" | "failure") => void, signal: AbortSignal) => Promise<TwilioWireCall> {
   if (!(config.runtime instanceof TwilioAbbyOutboundRuntime) || !/^[a-f0-9]{64}$/.test(config.runtimeConfigurationHash) ||
       typeof config.source?.read !== "function" || typeof config.source.current !== "function" ||
-      typeof config.speech?.create !== "function" || typeof config.session !== "function") throw Error("Invalid outbound conversation configuration");
+      typeof config.speech?.create !== "function" || typeof config.session !== "function" ||
+      config.stopSpeech !== undefined && (!(config.stopSpeech instanceof TwilioOutboundStopSpeech) || !config.stopSpeech.matchesRuntime(config.runtime)))
+    throw Error("Invalid outbound conversation configuration");
   const provider = Object.freeze({ ...config.runtime.binding() }), now = config.now ?? (() => new Date().toISOString());
   const runtimeConfigurationHash = config.runtimeConfigurationHash, readiness = config.readiness;
   const readApproval = config.source.read.bind(config.source), currentApproval = config.source.current.bind(config.source);
   const createSpeech = config.speech.create.bind(config.speech), createSession = config.session.bind(config);
+  const stopBinding = config.stopSpeech?.profileBinding(), stopCurrent = config.stopSpeech?.matchesRuntime.bind(config.stopSpeech);
+  const bindStop = config.stopSpeech?.bindPolicy.bind(config.stopSpeech), selectedRuntime = config.runtime;
   const settings = structuredClone({ ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}),
     ...(config.playbackOptions ? { playbackOptions: config.playbackOptions } : {}) });
   const source: OutboundConversationPolicySource = {
     read: async (call, signal) => {
       const loaded = await readApproval(call, signal);
-      return loaded.ok && (loaded.value.runtimeConfigurationHash !== runtimeConfigurationHash ||
+      return loaded.ok && (loaded.value.runtimeConfigurationHash !== runtimeConfigurationHash || loaded.value.stopSpeechBinding !== stopBinding ||
+        stopCurrent?.(selectedRuntime) === false ||
         !isDeepStrictEqual({ mediaOptions: loaded.value.mediaOptions ?? {}, playbackOptions: loaded.value.playbackOptions ?? {} },
           { mediaOptions: settings.mediaOptions ?? {}, playbackOptions: settings.playbackOptions ?? {} }))
         ? err({ kind: "unavailable" }) : loaded;
     },
-    current: (call, approval) => approval.runtimeConfigurationHash === runtimeConfigurationHash && currentApproval(call, approval),
+    current: (call, approval) => approval.runtimeConfigurationHash === runtimeConfigurationHash && approval.stopSpeechBinding === stopBinding &&
+      stopCurrent?.(selectedRuntime) !== false && currentApproval(call, approval),
   };
   return async (stream, send, close, ingressSignal) => {
     const lifetime = new AbortController(), signal = AbortSignal.any([ingressSignal, lifetime.signal]);
@@ -99,7 +107,11 @@ export function twilioAbbyOutboundConversation(config: TwilioAbbyOutboundConvers
         } };
       } };
       const call = new TwilioConnectedCall({ entry, sessionId: randomUUID(), ledger, speech,
-        fullFactory: (receipt, sessionId, playback) => createSession(ledger, receipt, sessionId, playback, signal, stream.call.context.original),
+        fullFactory: (receipt, sessionId, playback) => {
+          const session = createSession(ledger, receipt, sessionId, playback, signal, stream.call.context.original);
+          if (bindStop) session.protectOutboundContact(bindStop(stream, receipt, sessionId, () => close("normal")));
+          return session;
+        },
         streamStartedAt: stream.streamStartedAt, now, ...settings,
         ...(config.monotonicNow ? { monotonicNow: config.monotonicNow } : {}),
         send: json => current() ? send(json) : "notSent", closeTransport: close, onCallStop: () => lifetime.abort() });

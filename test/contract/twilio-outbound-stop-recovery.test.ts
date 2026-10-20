@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { twilioOutboundStopRecoveryFixture } from "../support/twilio-outbound-stop-recovery.ts";
 import { value } from "../support/outbound-records.ts";
 import { decodeOutboundContactReview } from "../../src/cliniko/outbound-contact-review.ts";
-import { encodeOutboundLaunchAttempt } from "../../src/cliniko/outbound-launch-attempt.ts";
+import { encodeOutboundLaunchAttempt, outboundLaunchAttemptDigest } from "../../src/cliniko/outbound-launch-attempt.ts";
 import { encodeTwilioOutboundReport } from "../../src/cliniko/twilio-outbound-report.ts";
 
 test("signed Twilio correlation plus an authentic retained pre-terminal stop writes one restrictive Cliniko decision", async t => {
@@ -117,4 +117,30 @@ test("capture does not let replaced report grants or policy methods become new a
   f.policy.currentFor = async () => ({ ok: true, value: f.policyApproval });
   assert.equal((await captured.recoverStatus(f.request(), new AbortController().signal)).ok, false); assert.equal(f.dncPosts.length, 0);
   f.policy.currentFor = original;
+});
+test("an internal producer can recover its retained authentic report without fabricating a provider callback", async t => {
+  const f = await twilioOutboundStopRecoveryFixture(); t.after(f.close);
+  const result = value(await value(f.makeRecovery()).recoverRetainedReport(f.context, f.carrier.accountSid, f.callSid, new AbortController().signal));
+  assert.equal(result.evidence, "stop"); assert.equal(result.outcome.kind, "accepted"); assert.equal(f.dncPosts.length, 1);
+  assert.equal(f.released.size, 0);
+});
+test("internal correlation without a retained authentic report is never a positive stop authority", async t => {
+  const f = await twilioOutboundStopRecoveryFixture(); t.after(f.close);
+  f.contactControls.rows.splice(f.contactControls.rows.indexOf(f.reportRow), 1);
+  assert.deepEqual(value(await value(f.makeRecovery()).recoverRetainedReport(f.context, f.carrier.accountSid, f.callSid, new AbortController().signal)),
+    { evidence: "missing", outcome: { kind: "unresolved" } });
+  assert.equal(f.dncPosts.length, 0); assert.equal(f.dncBurned.size, 0);
+});
+test("internal recovery refuses a different configured Twilio account before native access", async t => {
+  const f = await twilioOutboundStopRecoveryFixture(); t.after(f.close);
+  const before = f.claims;
+  assert.equal((await value(f.makeRecovery()).recoverRetainedReport(f.context, "AC" + "f".repeat(32), f.callSid, new AbortController().signal)).ok, false);
+  assert.equal(f.claims, before); assert.equal(f.reportQueries.length, 0); assert.equal(f.dncPosts.length, 0);
+});
+test("caller-supplied edited internal context cannot redirect an authentic original report", async t => {
+  const f = await twilioOutboundStopRecoveryFixture(); t.after(f.close);
+  const attempt = { ...f.context.original.attempt, dncReferences: { actionRef: randomUUID(), approvalRef: randomUUID() } };
+  const context = { ...f.context, original: { ...f.context.original, attempt }, attemptDigest: outboundLaunchAttemptDigest(attempt)! };
+  assert.equal((await value(f.makeRecovery()).recoverRetainedReport(context, f.carrier.accountSid, f.callSid, new AbortController().signal)).ok, false);
+  assert.equal(f.dncPosts.length, 0); assert.equal(f.dncBurned.size, 0);
 });

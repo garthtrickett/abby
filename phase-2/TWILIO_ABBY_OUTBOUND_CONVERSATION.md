@@ -36,3 +36,25 @@ bash scripts/with-postgres.sh bash -c 'npm run db:migrate && ABBY_LEDGER=postgre
 Complete immutable provider/contact/speech reporting, automatic authenticated at-number stop recovery from that producer, independently verified original-patient/exact clinical handoff, live default wiring, approved gap13 and real clinic/provider/public-route/acoustic/source/restore acceptance remain separate work. The existing native settlement/stop owners are reused by that work. Twilio's [WebSocket messages](https://www.twilio.com/docs/voice/media-streams/websocket-messages) distinguish stream closure from call closure and report marks after clear as well as playback; [Call status](https://www.twilio.com/docs/voice/api/call-resource) does not identify a verified patient. Neither source provides a shortcut around Abby's complete report/independent authority requirements.
 
 Consult the preserved Karen reference at `/home/gust/code/karen-website-dev` when useful; do not copy its private local call journals, raw customer logging or fail-open consent/DNC behavior. No real provider/clinic traffic, deployment, credential activation or Karen deletion is part of this qualification.
+
+
+The [optional positive speech-stop producer](TWILIO_OUTBOUND_STOP_SPEECH.md) now
+connects the actual assembled outbound turn to native report production and the
+same DNC recovery engine. Its selected profile is approved before speech, and
+the owned disconnect tail awaits independent bounded native retention after
+voice closure.62 focused source controls and strict fixture types pass;
+whole strict/667 serving build,129 existing voice controls and9 emitted SQL/privacy cases also pass. Publication/cloud qualification follow. This supplies no no-stop
+coverage, complete all-call/provider finality, hold release or clinical authority.
+Report/recovery/receiver foundations through PR565 are normally merged with all
+exact-head cloud jobs green; actual merged-main qualification is separately
+recorded in EXECUTION_PROGRESS.md.
+
+
+The subsequent approved-profile version2 conservatively closes an exact whole
+stop phrase at uncertain ASR quality without report/DNC retention. The real
+OpenAI adapter's uncertain quality is unchanged. Revised63 source, focused
+strict types, full strict/667 serving build and10 emitted SQL/privacy cases
+pass. Two original PostgreSQL/TLS browser login journeys pass after explicit
+image preparation outside the unchanged10-second launch deadline. Revised
+exact-head cloud qualification follows; this does not promote NoStop/finality,
+clinical authority, real acoustic acceptance or activation.
