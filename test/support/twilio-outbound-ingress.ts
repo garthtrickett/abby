@@ -5,7 +5,7 @@ import WebSocket from "ws";
 import { getExpectedTwilioSignature } from "twilio/lib/webhooks/webhooks.js";
 import { TwilioAbbyOutboundRuntime } from "../../src/voice/twilio-outbound-runtime.ts";
 import { TwilioOutboundIngress } from "../../src/voice/twilio-outbound-ingress.ts";
-import type { TwilioOutboundIngressQuery } from "../../src/voice/twilio-outbound-ingress.ts";
+import type { TwilioOutboundIngressConfig, TwilioOutboundIngressQuery } from "../../src/voice/twilio-outbound-ingress.ts";
 import { TwilioSignedIngress } from "../../src/voice/twilio-signed-ingress.ts";
 import { TwilioMediaStream } from "../../src/voice/twilio-media-stream.ts";
 import { createTwilioIngressServer } from "../../src/voice/twilio-ingress-server.ts";
@@ -13,11 +13,12 @@ import { outboundLaunchValue } from "./outbound-launch.ts";
 
 export async function twilioOutboundIngressFixture(options: {
   claimWait?: () => Promise<void>; allow?: (query: TwilioOutboundIngressQuery) => Promise<boolean>; deadlineMs?: number;
-  createWait?: () => Promise<void>;
+  createWait?: () => Promise<void>; profileRef?: string;
+  conversation?: (runtime: TwilioAbbyOutboundRuntime) => TwilioOutboundIngressConfig["createCall"];
 } = {}) {
   const state = { allowed: true, current: true, created: 0, disconnected: 0, progress: [] as string[],
     claims: [] as string[], burned: new Set<string>(), frames: [] as string[], queries: [] as TwilioOutboundIngressQuery[] };
-  const config = { ref: "twilio-abby", profileRef: "generic-outbound", accountSid: `AC${"a".repeat(32)}`, authToken: "synthetic-twilio-token",
+  const config = { ref: "twilio-abby", profileRef: options.profileRef ?? "generic-outbound", accountSid: `AC${"a".repeat(32)}`, authToken: "synthetic-twilio-token",
     from: "+61255550100", publicAnswerUrl: "https://clinic.example.invalid/outbound/answer", publicStatusUrl: "https://clinic.example.invalid/outbound/status",
     publicStreamUrl: "wss://clinic.example.invalid/outbound/stream", contextKey: new Uint8Array(32).fill(7), now: () => "2026-11-01T10:00:00.000Z" };
   const callSid = `CA${"b".repeat(32)}`, streamSid = `MZ${"c".repeat(32)}`; let form!: URLSearchParams;
@@ -36,12 +37,16 @@ export async function twilioOutboundIngressFixture(options: {
     authority: { allows: async query => { state.queries.push(query); return state.allowed && (!options.allow || await options.allow(query)); }, current: () => state.current },
     sessionEffects: (scope, binding) => ({ matches: (s, b) => JSON.stringify(s) === JSON.stringify(scope) && b === binding,
       async claimOnce(ref) { await options.claimWait?.(); state.claims.push(ref); const claimed = !state.burned.has(ref); state.burned.add(ref); return { ok: true, value: { claimed } }; } }),
-    async createCall(stream, send) {
+    async createCall(stream, send, close, signal) {
       assert.equal(stream.call.kind, "authenticatedOutboundCall"); assert.equal("event" in stream, false);
       assert.equal(state.burned.has(stream.call.context.sessionActionRef), true);
       assert.equal(state.burned.has(stream.call.context.reportActionRef), false);
       assert.notEqual(stream.call.context.sessionActionRef, stream.call.context.reportActionRef);
       state.created++; await options.createWait?.();
+      if (options.conversation) {
+        const owned = await options.conversation(selected)(stream, send, close, signal);
+        return { receive: owned.receive, async disconnect() { state.disconnected++; await owned.disconnect(); } };
+      }
       const media = new TwilioMediaStream({ accountSid: stream.call.accountSid, callSid: stream.call.callSid,
         sessionId: randomUUID(), startedAt: stream.streamStartedAt, send });
       return { async receive(raw) { const result = media.receive(raw); if (result.ok) {

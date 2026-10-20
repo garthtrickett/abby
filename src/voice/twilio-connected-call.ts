@@ -3,7 +3,7 @@ import type { PrivateKeypadInput } from "./private-keypad-input.ts";
 import { err, ok } from "../core/model.ts";
 import type { CallState, PendingLocationCall, Result } from "../core/model.ts";
 import { ConnectedVoiceCall } from "./connected-voice-call.ts";
-import type { ConnectedVoiceCallConfig, ConnectedVoiceFailure, ConnectedVoiceProgress,
+import type { ConnectedVoiceCallCommonConfig, VoiceCallAdmissionConfig, ConnectedVoiceFailure, ConnectedVoiceProgress,
   ConnectedVoiceStart } from "./connected-voice-call.ts";
 import { TwilioMediaStream } from "./twilio-media-stream.ts";
 import type { TwilioStreamConfig, TwilioStreamEvent, TwilioStreamFailure } from "./twilio-media-stream.ts";
@@ -11,7 +11,7 @@ import { VoiceLeaseLoop } from "./voice-lease-loop.ts";
 import { systemTimer } from "./timer.ts";
 import type { TimerPort } from "./timer.ts";
 
-export type TwilioConnectedCallConfig = Omit<ConnectedVoiceCallConfig, "output"> & Readonly<{
+export type TwilioConnectedCallConfig = Omit<ConnectedVoiceCallCommonConfig, "output"> & VoiceCallAdmissionConfig & Readonly<{
   streamStartedAt: string;
   /** Opt-in trusted secret entry; the production standalone runner leaves it unset. */
   privateKeypadInput?: PrivateKeypadInput;
@@ -68,13 +68,14 @@ export class TwilioConnectedCall {
   private confirmationWaitMs: number | undefined;
 
   constructor(config: TwilioConnectedCallConfig) {
+    const key = config.entry ? config.entry.key : config.event.key;
     const silenceWaitMs = config.silenceWaitMs ?? 15_000;
     const playbackDeadlineMs = config.playbackDeadlineMs ?? 60_000;
     if (!Number.isSafeInteger(silenceWaitMs) || silenceWaitMs < 3_000 || silenceWaitMs > 60_000 ||
         !Number.isSafeInteger(playbackDeadlineMs) || playbackDeadlineMs < 5_000 || playbackDeadlineMs > 120_000) {
       throw new RangeError("invalid silence timeout configuration");
     }
-    if (config.privateKeypadInput && (!config.privateKeypadInput.claim(callIdFor(config.event.key), config.sessionId) ||
+    if (config.privateKeypadInput && (!config.privateKeypadInput.claim(callIdFor(key), config.sessionId) ||
         config.privateKeypadInput.blocked() !== true)) throw new TypeError("invalid private input ownership");
     this.privateKeypadInput = config.privateKeypadInput;
     this.silenceTimer = config.silenceTimer ?? systemTimer;
@@ -87,18 +88,10 @@ export class TwilioConnectedCall {
       this.call.requestStop();
       try { config.onCallStop?.(); } catch { /* Call shutdown remains required. */ }
     };
-    this.stream = new TwilioMediaStream({ accountSid: config.event.key.accountRef,
-      callSid: config.event.key.providerCallRef, sessionId: config.sessionId,
+    this.stream = new TwilioMediaStream({ accountSid: key.accountRef,
+      callSid: key.providerCallRef, sessionId: config.sessionId,
       startedAt: config.streamStartedAt, send: config.send });
-    this.call = new ConnectedVoiceCall({ event: config.event, sessionId: config.sessionId,
-      ledger: config.ledger, intake: config.intake, fullFactory: config.fullFactory,
-      speech: config.speech, output: this.stream,
-      ...(config.monotonicNow ? { monotonicNow: config.monotonicNow } : {}),
-      ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}),
-      ...(config.playbackOptions ? { playbackOptions: config.playbackOptions } : {}),
-      ...(config.callerCandidateLookup ? { callerCandidateLookup: config.callerCandidateLookup } : {}),
-      onCallStop: this.stopCall,
-    });
+    this.call = new ConnectedVoiceCall({ ...config, output: this.stream, onCallStop: this.stopCall });
     this.now = config.now ?? (() => new Date().toISOString());
     this.keypadAvailabilityRange = config.keypadAvailabilityRange;
     this.closeTransport = config.closeTransport;

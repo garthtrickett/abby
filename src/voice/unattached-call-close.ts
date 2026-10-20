@@ -11,20 +11,26 @@ export async function closeUnattachedCall(config: Readonly<{
   receipt?: AdmissionReceipt; sessionId: string; now: string; reason: "callerDisconnected" | "sessionClosed";
 }>): Promise<Result<CallState | PendingLocationCall, TransitionFailure>> {
   const { ledger, intake, event, receipt, sessionId, now, reason } = config;
-  if (receipt) {
-    const runtime = new CallRuntime(ledger, receipt.scope);
-    const current = await runtime.read(receipt.callId);
-    if (!current.ok) return current;
-    if (current.value.lifecycle === "starting") {
-      const activated = await runtime.activate(receipt.callId, sessionId, now);
-      if (!activated.ok) return activated;
-    }
-    // endCall checks the session owner; a failed duplicate must never close someone else's active call.
-    return runtime.endCall(receipt.callId, sessionId, now, reason);
-  }
+  if (receipt) return closeAdmittedCall({ ledger, receipt, sessionId, now, reason });
   const attached = await intake.attachSession(event, sessionId);
   if (!attached.ok) return attached;
   const lease = attached.value.sessionLease;
   if (!lease || lease.sessionId !== sessionId) return err({ kind: "leaseLost" });
   return ledger.closePendingLocationSession(attached.value.callId, sessionId, lease.version, reason, now);
+}
+
+/** Retires an already-admitted session without manufacturing an incoming event. */
+export async function closeAdmittedCall(config: Readonly<{
+  ledger: LedgerStore; receipt: AdmissionReceipt; sessionId: string; now: string; reason: "callerDisconnected" | "sessionClosed";
+}>): Promise<Result<CallState, TransitionFailure>> {
+  const { ledger, receipt, sessionId, now, reason } = config;
+  const runtime = new CallRuntime(ledger, receipt.scope);
+  const current = await runtime.read(receipt.callId);
+  if (!current.ok) return current;
+  if (current.value.lifecycle === "starting") {
+    const activated = await runtime.activate(receipt.callId, sessionId, now);
+    if (!activated.ok) return activated;
+  }
+  // endCall checks the session owner; a failed duplicate must never close someone else's active call.
+  return runtime.endCall(receipt.callId, sessionId, now, reason);
 }

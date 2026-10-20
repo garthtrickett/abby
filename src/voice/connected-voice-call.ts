@@ -3,12 +3,13 @@ import type { SpeechAdapterFactory } from "./call-speech-binding.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import { err, ok } from "../core/model.ts";
 import type { CallState, LocationScope, PendingLocationCall, Result } from "../core/model.ts";
-import { callIdFor } from "./admission.ts";
 import type { AuthenticatedInboundCall } from "./admission.ts";
 import { MediaTurnController } from "./media-turn-controller.ts";
 import type { MediaFailure, MediaFrame, MediaTurnOptions } from "./media-turn-controller.ts";
 import { SharedNumberIntakeService } from "./shared-number-intake.ts";
-import { SharedNumberVoiceCall } from "./shared-number-voice-call.ts";
+import { incomingVoiceEntry } from "./shared-number-voice-call.ts";
+import { ReceptionVoiceCall } from "./reception-voice-call.ts";
+import type { VoiceCallEntry } from "./voice-call-entry.ts";
 import type { FullVoiceSessionFactory, SharedVoiceFailure, SharedVoiceStart, SharedVoiceTurn } from "./shared-number-voice-call.ts";
 import { StreamedPlaybackPort } from "./streamed-playback-port.ts";
 import type { AudioOutputPort, PlaybackCompletion, PlaybackEvidenceFailure,
@@ -18,21 +19,23 @@ import type { PrelocationPromptResult } from "./prelocation-voice-session.ts";
 import { validCallerCandidates } from "./caller-candidates.ts";
 import type { CallerCandidateLookup, CallerCandidates } from "./caller-candidates.ts";
 
-export type ConnectedVoiceCallConfig = Readonly<{
-  event: AuthenticatedInboundCall;
+export type ConnectedVoiceCallCommonConfig = Readonly<{
   sessionId: string;
   ledger: LedgerStore;
-  intake: SharedNumberIntakeService;
   fullFactory: FullVoiceSessionFactory;
   speech: SpeechAdapterFactory;
   output: AudioOutputPort;
   monotonicNow?: () => number;
   mediaOptions?: MediaTurnOptions;
   playbackOptions?: StreamedPlaybackOptions;
-  callerCandidateLookup?: CallerCandidateLookup;
   /** Synchronous host cleanup, such as aborting a call-scoped provider write, before awaiting media shutdown. */
   onCallStop?: () => void;
 }>;
+
+export type VoiceCallAdmissionConfig =
+  | Readonly<{ event: AuthenticatedInboundCall; intake: SharedNumberIntakeService; entry?: never; callerCandidateLookup?: CallerCandidateLookup }>
+  | Readonly<{ entry: VoiceCallEntry; event?: never; intake?: never; callerCandidateLookup?: never }>;
+export type ConnectedVoiceCallConfig = ConnectedVoiceCallCommonConfig & VoiceCallAdmissionConfig;
 
 export type ConnectedVoiceFailure = SharedVoiceFailure | MediaFailure | PlaybackEvidenceFailure |
   Readonly<{ kind: "notStarted" | "locationUnbound" }>;
@@ -50,7 +53,7 @@ function deliveryLost(result: DispatchResult | PrelocationPromptResult): boolean
 
 /** Owns one authenticated call's synthetic media, durable playback evidence, and disconnect cleanup. */
 export class ConnectedVoiceCall {
-  private readonly call: SharedNumberVoiceCall;
+  private readonly call: ReceptionVoiceCall;
   private readonly media: MediaTurnController<SharedVoiceTurn, SharedVoiceFailure>;
   private readonly playback: StreamedPlaybackPort;
   private readonly ledger: LedgerStore;
@@ -67,9 +70,12 @@ export class ConnectedVoiceCall {
   private terminal: PendingLocationCall | CallState | undefined;
 
   constructor(config: ConnectedVoiceCallConfig) {
+    if (config.entry && (config.event !== undefined || config.intake !== undefined || config.callerCandidateLookup !== undefined))
+      throw new TypeError("mixed voice admission configuration");
     this.ledger = config.ledger;
-    this.callId = callIdFor(config.event.key);
-    this.presentedCallerNumber = config.event.presentedCallerNumber;
+    const entry = config.entry ?? incomingVoiceEntry(config.event, config.ledger, config.intake);
+    this.callId = entry.callId;
+    this.presentedCallerNumber = config.event?.presentedCallerNumber;
     this.callerCandidateLookup = config.callerCandidateLookup;
     this.onCallStop = config.onCallStop;
     const gatedOutput: AudioOutputPort = {
@@ -83,7 +89,7 @@ export class ConnectedVoiceCall {
       ...(config.playbackOptions ? { playbackOptions: config.playbackOptions } : {}) });
     const speech = new CallSpeechBinding(config.speech, config.sessionId, runtime);
     this.playback = new StreamedPlaybackPort(speech.synthesis, gatedOutput, runtime.playbackOptions);
-    this.call = new SharedNumberVoiceCall(config.event, config.sessionId, config.ledger, config.intake,
+    this.call = new ReceptionVoiceCall(entry, config.sessionId, config.ledger,
       this.playback, config.fullFactory, profile => speech.bind(profile), config.monotonicNow);
     this.media = new MediaTurnController(config.sessionId, this.call, speech.transcription, runtime.mediaOptions);
   }
