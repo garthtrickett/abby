@@ -1,3 +1,4 @@
+import type { LocationScope } from "../../src/core/model.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -21,14 +22,14 @@ const { outboundContactGuardOwnerBinding } = await import(new URL("core/outbound
 const { TwilioAbbyOutboundRuntime } = await import(new URL("voice/twilio-outbound-runtime.js", emitted).href) as typeof import("../../src/voice/twilio-outbound-runtime.ts");
 const { bindOutboundVoiceRuntime } = await import(new URL("voice/outbound-runtime.js", emitted).href) as typeof import("../../src/voice/outbound-runtime.ts");
 
-export async function postgresTwilioOutboundFixture(db: Kysely<Database>, mode: "accepted" | "lostAck" | "foreignAck" = "accepted") {
+export async function postgresTwilioOutboundFixture(db: Kysely<Database>, mode: "accepted" | "lostAck" | "foreignAck" = "accepted", options: { profileRef?: (scope: LocationScope) => string } = {}) {
   const apiKey = `synthetic-twilio-${randomUUID()}-au5`, scope = { tenantId: `twilio-${randomUUID()}`, clinicId: "clinic", locationId: "one" }, guardRef = randomUUID();
   const budget = new PostgresClinikoRequestBudget(db, { apiKey, maxPerMinute: 180 });
   const contactCapacity = new PostgresOutboundCapacity(db, scope, outboundContactGuardOwnerBinding(guardRef)!);
   const f = await outboundContactLifecycleFixture({ apiKey, scope, guardRef, budget, capacity: contactCapacity,
     runtime: { ClinikoOutboundLaunchOwner, OwnerFileOutboundCampaign, OwnerFileOutboundContactAccount },
     effectFactory: (s, b) => new PostgresOutboundEffectBarrier(db, s, b), capacityFactory: (s, b) => new PostgresOutboundCapacity(db, s, b) });
-  const config = { ref: f.controls.providerRef, profileRef: "generic-clinic-greeting", accountSid: `AC${"a".repeat(32)}`, authToken: "synthetic-twilio-auth",
+  const config = { ref: f.controls.providerRef, profileRef: options.profileRef?.(scope) ?? "generic-clinic-greeting", accountSid: `AC${"a".repeat(32)}`, authToken: "synthetic-twilio-auth",
     from: "+61255550100", publicAnswerUrl: "https://clinic.example.invalid/outbound/answer", publicStatusUrl: "https://clinic.example.invalid/outbound/status",
     publicStreamUrl: "wss://clinic.example.invalid/outbound/stream", contextKey: new Uint8Array(32).fill(7) };
   let requests = 0, form!: URLSearchParams; const callSid = `CA${"b".repeat(32)}`;
@@ -58,9 +59,9 @@ export async function postgresTwilioOutboundFixture(db: Kysely<Database>, mode: 
     get posts() { return f.posts; }, get claims() { return f.claims; },
     launch: () => owner.launchOnce(f.binding, new AbortController().signal) };
 }
-export async function postgresTwilioOutboundPrivacy(db: Kysely<Database>, f: Awaited<ReturnType<typeof postgresTwilioOutboundFixture>>) {
+export async function postgresTwilioOutboundPrivacy(db: Kysely<Database>, f: Awaited<ReturnType<typeof postgresTwilioOutboundFixture>>, extraCanaries: readonly string[] = []) {
   const { row, attempt } = f.retained();
-  const markers = [f.apiKey, f.twilioConfig.authToken, f.request.recipient.number, "cliniko:recall:30", "Abby possible outbound launch v4"];
+  const markers = [f.apiKey, f.twilioConfig.authToken, f.request.recipient.number, "cliniko:recall:30", "Abby possible outbound launch v4", ...extraCanaries];
   assert.deepEqual(await scanPatientDataCanaries(db, markers.map((value, i) => ({ label: `twilio_${i}`, value }))), { ok: true, value: [] });
   const dump = execFileSync("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"], { timeout: 10000, maxBuffer: 8000000 }).toString();
   const token = new URL(f.form.get("Url")!).searchParams.get("abbyContext")!;

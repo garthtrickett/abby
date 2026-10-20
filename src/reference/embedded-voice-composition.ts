@@ -1,3 +1,4 @@
+import type { AuthenticatedInboundCall } from "../voice/admission.ts";
 import type { LedgerStore } from "../core/ledger.ts";
 import type { EffectCallLeaseStore } from "../core/effect-call-lease.ts";
 import type { AppointmentHost, AvailabilityHost, KnowledgeHost, ModelKnowledgeContextHost,
@@ -32,9 +33,9 @@ export type EmbeddedVoiceHostConfig = Readonly<{
   knowledge?: KnowledgeHost & ModelKnowledgeContextHost;
   now?: () => string;
 }>;
-export type EmbeddedVoiceCompositionConfig = Omit<ConnectedVoiceCallConfig,
+export type EmbeddedVoiceCompositionConfig = Omit<Extract<ConnectedVoiceCallConfig, { event: AuthenticatedInboundCall }>,
   "ledger" | "intake" | "fullFactory"> & EmbeddedVoiceHostConfig;
-export type EmbeddedTwilioVoiceCompositionConfig = Omit<TwilioConnectedCallConfig,
+export type EmbeddedTwilioVoiceCompositionConfig = Omit<Extract<TwilioConnectedCallConfig, { event: AuthenticatedInboundCall }>,
   "ledger" | "intake" | "fullFactory"> & EmbeddedVoiceHostConfig;
 
 function hostVoiceServices(config: EmbeddedVoiceHostConfig &

@@ -35,7 +35,8 @@
     "test/support/start-synthetic-resend-runner.ts",
     "test/support/standalone-cancellation-worker.ts",
     "test/support/standalone-rescheduling-worker.ts",
-    "src/storage/postgres-ledger.ts"
+    "src/storage/postgres-ledger.ts",
+    "src/standalone/twilio-outbound-conversation.ts"
   ],
   "include": []
 }
