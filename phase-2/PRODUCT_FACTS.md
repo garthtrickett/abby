@@ -1,6 +1,6 @@
 # Implemented product facts for operators
 
-**Verified:** 20 October 2026, Foundations through cancellation PR572 and clock correction PR573 are normally merged. Actual cancellation main484a00f is independently monitored; its result is not inferred from the eight green exact97715f3 branch jobs. The local terminal candidate now passes118 distinct source controls, full strict/683 serving build and32 emitted SQL/process-loss cases, including recognition after the real provider end. The unchanged compiled clock fixtures retain4 source and19 SQL/privacy controls. Actual normal-parent integration, publication and own-head cloud/review remain required. Complete no-stop/private/all-ASR, approved gap13, all thirteen gaps and real acceptance remain open.
+**Verified:** 20 October 2026, Foundations through cancellation PR572 and clock correction PR573 are normally merged. Actual cancellation main484a00f is independently monitored; its result is not inferred from the eight green exact97715f3 branch jobs. The local terminal candidate now passes118 distinct source controls, full strict/683 serving build and32 emitted SQL/process-loss cases, including recognition after the real provider end. The unchanged compiled clock fixtures retain4 source and19 SQL/privacy controls. Actual normally merged cancellation parent is integrated; terminal publication and own-head cloud/review remain required. Complete no-stop/private/all-ASR, approved gap13, all thirteen gaps and real acceptance remain open.
 
 | Fact | Implemented behavior | Source and witnesses |
 | --- | --- | --- |
