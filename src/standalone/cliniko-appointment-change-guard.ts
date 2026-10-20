@@ -1,3 +1,4 @@
+import { ClinikoOutboundClinicalContext } from "./cliniko-outbound-clinical-context.ts";
 import { ClinikoCancellationAuthority } from "./cliniko-cancellation-authority.ts";
 import { ClinikoReschedulingAuthority } from "./cliniko-rescheduling-authority.ts";
 import { ClinikoCancellationWriter } from "../cliniko/cancellation-write.ts";
@@ -27,6 +28,7 @@ export type ClinikoAppointmentChangeGuardConfig = Readonly<{
   credentialFingerprint: string;
   cancellation: ClinikoCancellationWriter;
   rescheduling?: ClinikoRescheduleWriter;
+  outboundCancellation?: ClinikoOutboundClinicalContext;
   clock?: () => string;
 }>;
 
@@ -78,6 +80,7 @@ export class ClinikoAppointmentChangeGuard {
   readonly #cancellation: ClinikoCancellationWriter;
   readonly #rescheduling: ClinikoRescheduleWriter | undefined;
   readonly #clock: () => string;
+  readonly #outboundCancellation: ClinikoOutboundClinicalContext | undefined;
   #closed = false;
   constructor(config: ClinikoAppointmentChangeGuardConfig) {
     if (!validScope(config.scope) ||
@@ -96,6 +99,11 @@ export class ClinikoAppointmentChangeGuard {
         (config.clock !== undefined && typeof config.clock !== "function")) {
       throw new TypeError("invalid appointment change guard configuration");
     }
+    if (config.outboundCancellation && (!(config.outboundCancellation instanceof ClinikoOutboundClinicalContext) ||
+        !config.outboundCancellation.current("appointments.cancel") || !config.outboundCancellation.matchesWorkflow({
+          scope: config.scope, callId: config.callId, credentialFingerprint: config.credentialFingerprint, businessId: config.businessId })))
+      throw new TypeError("invalid outgoing cancellation guard");
+    this.#outboundCancellation = config.outboundCancellation;
     this.#scope = Object.freeze(structuredClone(config.scope));
     this.#callId = config.callId;
     this.#sessionId = config.sessionId;
@@ -130,7 +138,7 @@ export class ClinikoAppointmentChangeGuard {
   }
 
   async #active(now: number, signal: AbortSignal): Promise<CallState | undefined> {
-    if (this.#closed || signal.aborted) return undefined;
+    if (this.#closed || signal.aborted || this.#outboundCancellation && !this.#outboundCancellation.current("appointments.cancel")) return undefined;
     try {
       const state = await untilAbort(this.#ledger.read(this.#callId, this.#scope), signal);
       const leaseExpiry = instant(state?.ok ? state.value.sessionLease?.expiresAt : undefined);
@@ -139,11 +147,14 @@ export class ClinikoAppointmentChangeGuard {
         sameScope(state.value.policy.scope, this.#scope) &&
         state.value.policy.policyVersion === this.#policyVersion &&
         state.value.sessionLease?.sessionId === this.#sessionId &&
-        leaseExpiry !== undefined && leaseExpiry > now ? state.value : undefined;
+        leaseExpiry !== undefined && leaseExpiry > now && (!this.#outboundCancellation ||
+          this.#outboundCancellation.current("appointments.cancel") && this.#outboundCancellation.matchesAdmission({
+            callId: state.value.callId, scope: this.#scope, admission: state.value.admission, lifecycle: state.value.lifecycle })) ? state.value : undefined;
     } catch { return undefined; }
   }
 
   async #ready(kind: Kind, now: number, signal: AbortSignal, mutation?: HostMutation): Promise<boolean> {
+    if (this.#outboundCancellation && (kind !== "cancel" || !this.#outboundCancellation.current("appointments.cancel"))) return false;
     const state = await this.#active(now, signal);
     if (!state || !state.policy.automationEnabled || !state.policy.staffWorkEnabled ||
         state.policy.capabilities[kind] !== "execute") return false;
@@ -165,6 +176,7 @@ export class ClinikoAppointmentChangeGuard {
       const current = await untilAbort(this.#policy.read(this.#scope), signal);
       return !!current?.ok && !this.#closed && !signal.aborted &&
         sameScope(current.value.scope, this.#scope) &&
+        (!this.#outboundCancellation || this.#outboundCancellation.current("appointments.cancel")) &&
         current.value.policyVersion === this.#policyVersion &&
         current.value.automationEnabled === true && current.value.staffWorkEnabled === true &&
         current.value.capabilities[kind] === "execute";
