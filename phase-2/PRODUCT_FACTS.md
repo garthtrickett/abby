@@ -1,6 +1,6 @@
 # Implemented product facts for operators
 
-**Verified:** 20 October 2026, foundations through PR568 are normally merged after eight exact-head checks; actual main447962 independent checks are pending. PR569 integrates that main with prepared input and passes123 source controls, strict/675 serving build and5 actual combined emitted PostgreSQL180/session-exclusion/privacy cases. New-head cloud/review gates remain required. Signed clinical voice is separate locally qualified pending integration/publication work. Full no-stop/all-ASR drain, follow-up booking/exact cancellation, gap13 and all thirteen gaps' real acceptance remain open. Default activation stays inactive.
+**Verified:** 20 October 2026, foundations through PR568 are normally merged; actual main447962 independent checks remain pending. Integrated PR569 passes123 source controls, strict/675 build and5 combined SQL cases. Its inherited pending-discovery fixed-tenant alias is reproduced and corrected with39 controls, affected strict types and9 actual combined SQL cases; all675 artifacts remain unchanged. Fresh new-head cloud/review remains required. Signed clinical voice is separately locally qualified pending publication/integration; complete no-stop, follow-up booking/exact cancellation, gap13 and all thirteen gaps' real acceptance remain open. Default activation stays inactive.
 
 | Fact | Implemented behavior | Source and witnesses |
 | --- | --- | --- |
