@@ -5,7 +5,7 @@ import { captureOutboundOriginalSend } from "./outbound-original-send.ts";
 import type { OutboundOriginalSend } from "./outbound-original-send.ts";
 import type { OutboundProviderBinding, OutboundRuntimeCall } from "./outbound-runtime.ts";
 
-export type TwilioOriginalCall = Readonly<{ original: OutboundOriginalSend; attemptDigest: string; number: string; reportActionRef: string }>;
+export type TwilioOriginalCall = Readonly<{ original: OutboundOriginalSend; attemptDigest: string; number: string; reportActionRef: string; sessionActionRef: string }>;
 const phone = (s: unknown): s is string => typeof s === "string" && /^\+[1-9][0-9]{7,14}$/.test(s);
 const canonical = (s: unknown): s is string => typeof s === "string" && Number.isFinite(Date.parse(s)) && new Date(s).toISOString() === s;
 const callSid = (s: unknown): s is string => typeof s === "string" && /^CA[0-9a-f]{32}$/.test(s);
@@ -36,24 +36,24 @@ export class TwilioOutboundContext {
     cipher.setAAD(Buffer.from(`abby.twilio-outbound.${purpose}.v1`)); cipher.setAuthTag(bytes.subarray(12, 28));
     return JSON.parse(Buffer.concat([cipher.update(bytes.subarray(28)), cipher.final()]).toString("utf8"));
   }
-  sealLaunch(original: OutboundOriginalSend, call: OutboundRuntimeCall, reportActionRef: string): string {
+  sealLaunch(original: OutboundOriginalSend, call: OutboundRuntimeCall, reportActionRef: string, sessionActionRef: string): string {
     const captured = captureOutboundOriginalSend(original, call, this.#binding);
-    if (!captured || !phone(call.number) || !validRecallMarker(reportActionRef)) throw Error("Unavailable original send context");
+    if (!captured || !phone(call.number) || !validRecallMarker(reportActionRef) || !validRecallMarker(sessionActionRef) || sessionActionRef === reportActionRef) throw Error("Unavailable original send context");
     const encoded = encodeOutboundLaunchAttempt(captured.attempt);
     if (!encoded.ok) throw Error("Unavailable original send context");
-    return this.#seal("launch", [1, this.#binding.bindingDigest, this.#binding.profileRef, this.#account, this.#from,
-      call.number, reportActionRef, captured.recallRef, encoded.value]);
+    return this.#seal("launch", [2, this.#binding.bindingDigest, this.#binding.profileRef, this.#account, this.#from,
+      call.number, reportActionRef, captured.recallRef, encoded.value, sessionActionRef]);
   }
   openLaunch(token: unknown): TwilioOriginalCall | undefined {
     try {
       const a = this.#open("launch", token);
-      if (!Array.isArray(a) || a.length !== 9 || a[0] !== 1 || a[1] !== this.#binding.bindingDigest || a[2] !== this.#binding.profileRef ||
-          a[3] !== this.#account || a[4] !== this.#from || !phone(a[5]) || !validRecallMarker(a[6])) return;
+      if (!Array.isArray(a) || a.length !== 10 || a[0] !== 2 || a[1] !== this.#binding.bindingDigest || a[2] !== this.#binding.profileRef ||
+          a[3] !== this.#account || a[4] !== this.#from || !phone(a[5]) || !validRecallMarker(a[6]) || !validRecallMarker(a[9]) || a[9] === a[6]) return;
       const decoded = decodeOutboundLaunchAttempt(a[8]); if (!decoded.ok || !decoded.value.capacityAllocationRef) return;
       const call = { effectRef: decoded.value.effectRef, capacityAllocationRef: decoded.value.capacityAllocationRef, number: a[5], profileRef: this.#binding.profileRef };
       const original = captureOutboundOriginalSend({ recallRef: a[7], attempt: decoded.value }, call, this.#binding);
       const digest = original && outboundLaunchAttemptDigest(original.attempt); if (!original || !digest) return;
-      return Object.freeze({ original, attemptDigest: digest, number: a[5], reportActionRef: a[6] });
+      return Object.freeze({ original, attemptDigest: digest, number: a[5], reportActionRef: a[6], sessionActionRef: a[9] });
     } catch { return; }
   }
   sealStream(launch: string, sid: string, issuedAt: string): string {

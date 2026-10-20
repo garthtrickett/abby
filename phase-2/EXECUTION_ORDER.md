@@ -103,6 +103,8 @@ Use the roadmap's [gap 12 requirements](THIRTEEN_GAP_IMPLEMENTATION.md#requireme
 
 The owner selected separate clinic-approved Cliniko contact reviews for voice consent and opt-out/DNC, distinct from financial reviews; marketing flags are not voice consent. Authenticated provider opt-outs at the dialled number may automatically write dedicated Cliniko DNC decisions under clinic-approved policy; future calls stay blocked and reconsent requires clinic approval. Qualify that concrete source and its current grants. Define approved audience and contact policy, then build opt-out, quiet-hours/timezone handling, scheduling, cancellation, capacity limits and per-action recovery. Bind each callback/sick-day action to the exact fresh appointment and independently verified authority. Existing recall requests do not establish campaign support; a shared phone or campaign record does not establish patient permission.
 
+The [carrier transport](TWILIO_OUTBOUND_TRANSPORT.md) and [optional signed HTTP/media ingress](TWILIO_OUTBOUND_INGRESS.md) are separate qualified foundations at the replaceable runtime seam. Continue actual conversation and immutable complete final provider/contact reporting before independently verified exact clinical handoff. Neither signed progress nor a consumed session exclusion proves complete all-call truth or permits hold release/activation.
+
 **Exit:** Patient-free end-to-end campaign/sick-day cases cover stale targets, changed appointments, opt-out, duplicate delivery and interruption. Actual outbound contact and carrier admission require their applicable acceptance; do not add a local patient-bearing campaign database.
 
 ### 10 Build gap 13 approved communication and document writeback

@@ -34,6 +34,14 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** The single supported bidirectional audio profile. This checks format and
+ * track selection only; provider authentication and wire ordering are separate. */
+export function supportsTwilioBidirectionalAudio(start: unknown): boolean {
+  return record(start) && Array.isArray(start.tracks) && start.tracks.length === 1 && start.tracks[0] === "inbound" &&
+    record(start.mediaFormat) && start.mediaFormat.encoding === "audio/x-mulaw" &&
+    start.mediaFormat.sampleRate === 8000 && start.mediaFormat.channels === 1;
+}
+
 function decimal(value: unknown, minimum: number, maximum: number): number | undefined {
   if (typeof value !== "string" || !/^(?:0|[1-9]\d*)$/.test(value)) return undefined;
   const number = Number(value);
@@ -139,10 +147,7 @@ export class TwilioMediaStream implements AudioOutputPort {
       if (event.event !== "start" || !record(start) || sequence !== 1 ||
           typeof event.streamSid !== "string" || !/^MZ[0-9a-f]{32}$/i.test(event.streamSid) ||
           start.streamSid !== event.streamSid || start.accountSid !== this.config.accountSid ||
-          start.callSid !== this.config.callSid || !Array.isArray(start.tracks) ||
-          start.tracks.length !== 1 || start.tracks[0] !== "inbound" ||
-          !record(start.mediaFormat) || start.mediaFormat.encoding !== "audio/x-mulaw" ||
-          start.mediaFormat.sampleRate !== 8000 || start.mediaFormat.channels !== 1) return this.fail();
+          start.callSid !== this.config.callSid || !supportsTwilioBidirectionalAudio(start)) return this.fail();
       this.streamSid = event.streamSid;
       this.phase = "started";
       return ok({ kind: "started" });
