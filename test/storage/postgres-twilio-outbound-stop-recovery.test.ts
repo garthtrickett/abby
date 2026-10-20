@@ -54,7 +54,8 @@ test(`emitted signed native stop recovery with independent SQL and unfiltered ba
   assert.equal(effects.some(r => r.effect_ref === f.attempt.dncReferences!.approvalRef || r.effect_ref === f.context.reportActionRef), false);
   const holds = (await sql<{ released_at: Date | null }>`select released_at from outbound_capacity_allocations where tenant_id = ${scope.tenantId}`.execute(db)).rows;
   assert.equal(holds.length, 1); assert.equal(holds[0]!.released_at, null); assert.equal(f.calls.length, 1);
-  const canaries = [apiKey, f.context.number, f.callSid, f.context.attemptDigest, f.report.authentication, String(f.reportRow.notes), ...f.dncPosts.map(p => String(p.notes))];
+  const canaries = [apiKey, f.context.number, f.callSid, f.context.attemptDigest, f.report.authentication, f.key.toString("hex"),
+    f.carrier.contextKey.toString("hex"), f.carrier.authToken, String(f.reportRow.notes), ...f.dncPosts.map(p => String(p.notes))];
   const chunks = canaries.flatMap((text, index) => Array.from({ length: Math.ceil(text.length / 256) }, (_, part) => {
     const chunk = text.slice(part * 256, (part + 1) * 256);
     return { label: `stop_recovery_${index}_${part}`, value: chunk.length < 4 ? text.slice(-4) : chunk };

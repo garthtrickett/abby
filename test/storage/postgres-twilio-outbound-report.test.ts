@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { sql } from "kysely";
 import { connectPostgres } from "../../src/storage/connect.ts";
@@ -9,9 +9,19 @@ import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 import { twilioOutboundReportValue } from "../support/twilio-outbound-report.ts";
 import { value } from "../support/outbound-records.ts";
 import type { TwilioOutboundReportQuery } from "../../src/cliniko/twilio-outbound-report-records.ts";
+import { referenceDefaultPolicy } from "../../src/reference/policy-store.ts";
+import { approvedSyntheticPolicy } from "../support/approved-voice.ts";
 if (!process.env.DATABASE_URL) throw Error("DATABASE_URL required");
 const db = connectPostgres(process.env.DATABASE_URL), peer = connectPostgres(process.env.DATABASE_URL);
-after(async () => { await Promise.all([db.destroy(), peer.destroy()]); });
+const publicScope = { tenantId: `report-public-profile-${randomUUID()}`, clinicId: "clinic", locationId: "main" };
+const publicPolicy = approvedSyntheticPolicy({ ...referenceDefaultPolicy(publicScope), policyVersion: "1" });
+assert.equal(publicPolicy.voiceProfile!.configurationHash, "1".repeat(64));
+// This legitimate public fixture already exists elsewhere in the shared CI
+// cohort. Keep it present during every all-column and unfiltered backup check.
+await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy)
+  values (${publicScope.tenantId}, ${publicScope.clinicId}, ${publicScope.locationId}, 1, ${JSON.stringify(publicPolicy)}::jsonb)`.execute(db);
+after(async () => { await sql`delete from clinic_settings where tenant_id = ${publicScope.tenantId}`.execute(db);
+  await Promise.all([db.destroy(), peer.destroy()]); });
 const emitted = new URL("../../dist/runtime/src/", import.meta.url);
 const { ClinikoTwilioOutboundReportRecords, twilioOutboundReportRecordBinding } = await import(new URL("cliniko/twilio-outbound-report-records.js", emitted).href) as typeof import("../../src/cliniko/twilio-outbound-report-records.ts");
 const { TwilioOutboundReportAuthentication, encodeTwilioOutboundReport } = await import(new URL("cliniko/twilio-outbound-report.js", emitted).href) as typeof import("../../src/cliniko/twilio-outbound-report.ts");
@@ -23,7 +33,8 @@ for (const scenario of ["concurrent", "lostAck", "unstored", "edited", "quota", 
   test(`emitted native Twilio report native180 independent SQL and backup privacy: ${scenario}`, { timeout: 30000 }, async () => {
     const apiKey = `synthetic-provider-report-${randomUUID()}-au5`, scope = { tenantId: `report-${randomUUID()}`, clinicId: "clinic", locationId: "main" };
     const patientId = (BigInt("0x" + randomUUID().replaceAll("-", "")) % 1_000_000_000_000_000_000n + 1_000_000_000_000_000_000n).toString();
-    const f = twilioOutboundReportValue(scenario !== "noStop", { credentialFingerprint: clinikoCredentialFingerprint(apiKey), scope, patientId, Authentication: TwilioOutboundReportAuthentication });
+    const f = twilioOutboundReportValue(scenario !== "noStop", { credentialFingerprint: clinikoCredentialFingerprint(apiKey), scope, patientId,
+      Authentication: TwilioOutboundReportAuthentication, key: randomBytes(32) });
     if (scenario === "preterminalStop") f.report = value(f.auth.sign({ ...f.unsigned, terminal: null,
       reportedAt: "2026-11-01T10:01:10.000Z", recordedAt: "2026-11-01T10:01:11.000Z" }));
     const budget = new PostgresClinikoRequestBudget(db, { apiKey, maxPerMinute: 180 });
@@ -99,3 +110,24 @@ for (const scenario of ["concurrent", "lostAck", "unstored", "edited", "quota", 
     const dump = execFileSync("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"], { timeout: 10000, maxBuffer: 8000000 }).toString();
     for (const c of canaries) assert.equal(dump.includes(c), false);
   });
+
+test("a distinct actual private report key remains detectable beside legitimate repeated public profile hashes", { timeout: 30000 }, async t => {
+  const f = twilioOutboundReportValue(true, { key: randomBytes(32), Authentication: TwilioOutboundReportAuthentication });
+  const key = f.key.toString("hex"), publicHash = publicPolicy.voiceProfile!.configurationHash;
+  assert.notEqual(key, publicHash);
+  const publicHits = value(await scanPatientDataCanaries(db, [{ label: "public_profile_hash", value: publicHash }]));
+  assert.ok(publicHits.some(h => h.table === "clinic_settings" && h.column === "policy"));
+  assert.deepEqual(await scanPatientDataCanaries(db, [{ label: "actual_private_key", value: key }]), { ok: true, value: [] });
+  const scope = { ...publicScope, tenantId: `report-key-injection-${randomUUID()}` };
+  const policy = { ...publicPolicy, scope, voiceProfile: { ...publicPolicy.voiceProfile!, configurationHash: key } };
+  const cleanup = () => sql`delete from clinic_settings where tenant_id = ${scope.tenantId}`.execute(db); t.after(cleanup);
+  await sql`insert into clinic_settings (tenant_id, clinic_id, location_id, version, policy)
+    values (${scope.tenantId}, ${scope.clinicId}, ${scope.locationId}, 1, ${JSON.stringify(policy)}::jsonb)`.execute(db);
+  assert.deepEqual(await scanPatientDataCanaries(db, [{ label: "actual_private_key", value: key }]),
+    { ok: true, value: [{ label: "actual_private_key", table: "clinic_settings", column: "policy" }] });
+  const backup = () => execFileSync("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"], { timeout: 10000, maxBuffer: 8000000 }).toString();
+  assert.equal(backup().includes(key), true);
+  await cleanup();
+  assert.deepEqual(await scanPatientDataCanaries(db, [{ label: "actual_private_key", value: key }]), { ok: true, value: [] });
+  const clean = backup(); assert.equal(clean.includes(key), false); assert.equal(clean.includes(publicHash), true);
+});

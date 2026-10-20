@@ -8,13 +8,14 @@ import { value } from "./outbound-records.ts";
 
 export function twilioOutboundReportValue(stopped = false, options: Readonly<{
   credentialFingerprint?: string; scope?: LocationScope; patientId?: string; Authentication?: typeof TwilioOutboundReportAuthentication;
+  key?: Uint8Array;
 }> = {}) {
   const { possible, outcome } = outboundContactOutcomeValue(options.credentialFingerprint), a = { ...possible.attempt,
     ...(options.scope ? { scope: options.scope } : {}), ...(options.patientId ? { patientId: options.patientId } : {}) };
   const original = { ...outcome.attempt, digest: outboundLaunchAttemptDigest(a)! };
   const context = { original: { recallRef: possible.recallRef, attempt: a }, attemptDigest: original.digest,
     number: "+12025550123", reportActionRef: randomUUID(), sessionActionRef: randomUUID() };
-  const key = Buffer.alloc(32, 17), auth = new (options.Authentication ?? TwilioOutboundReportAuthentication)(key, a.provider);
+  const key = Buffer.from(options.key ?? Buffer.alloc(32, 17)), auth = new (options.Authentication ?? TwilioOutboundReportAuthentication)(key, a.provider);
   const unsigned: Omit<TwilioOutboundReport, "authentication"> = { actionRef: context.reportActionRef, scope: a.scope,
     businessId: a.businessId, credentialFingerprint: a.credentialFingerprint, patientId: a.patientId, original,
     accountSid: "AC" + "1".repeat(32), callSid: "CA" + "2".repeat(32), number: context.number, terminal: outcome.terminal,
