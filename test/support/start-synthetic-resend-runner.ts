@@ -1,3 +1,4 @@
+import { installResendVerificationCanaries } from "./verification-code-canary.ts";
 import { CallerVerificationSession } from "../../src/standalone/caller-verification-session.ts";
 import { ClinikoConfirmationEvidenceReader } from "../../src/standalone/cliniko-confirmation-evidence.ts";
 import { ClinikoConfirmationResendSession } from "../../src/standalone/cliniko-confirmation-resend-session.ts";
@@ -26,6 +27,7 @@ const url = process.env.DATABASE_URL, apiKey = process.env.ABBY_CLINIKO_API_KEY;
 if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
     process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION !== "confirmationResend" || apiKey !== "synthetic-key-au5" ||
     !url?.includes("/abby_test_voice_") || process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}`) throw new Error("isolated synthetic resend fixture required");
+process.send?.({ kind: "verificationCanaryWindow", diagnostic: installResendVerificationCanaries() });
 const db = connectPostgres(url);
 const restoreStageObservers: (() => void)[] = [];
 try {

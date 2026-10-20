@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import crypto from "node:crypto";
-import { distinctFromClock, drawDistinctCode, installClinicalVerificationCanaries, installStagedVerificationCanaries } from "../support/verification-code-canary.ts";
+import { distinctFromClock, drawDistinctCode, installClinicalVerificationCanaries, installResendVerificationCanaries, installStagedVerificationCanaries } from "../support/verification-code-canary.ts";
 
 test("numeric verification canaries reject every real timestamp substring across decimal rollovers", () => {
   for (const sinceMs of [1792470200000, 1792470990000, 1792479990000]) {
@@ -24,6 +24,13 @@ test("clinical canary sampling cannot change crypto outside the isolated compile
   process.env.ABBY_VOICE_TEST_MODE = "0";
   try { assert.throws(() => installClinicalVerificationCanaries(), /isolated clinical/); assert.equal(crypto.randomInt, before); }
   finally { if (prior === undefined) delete process.env.ABBY_VOICE_TEST_MODE; else process.env.ABBY_VOICE_TEST_MODE = prior; }
+});
+
+test("resend canary sampling cannot change crypto for another workflow", () => {
+  const before = crypto.randomInt, prior = process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION;
+  process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION = "book";
+  try { assert.throws(() => installResendVerificationCanaries(), /isolated resend/); assert.equal(crypto.randomInt, before); }
+  finally { if (prior === undefined) delete process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION; else process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION = prior; }
 });
 test("synthetic canary sampling remains bounded and requires the isolated staged class process", () => {
   const window = { sinceMs: 1792470200000, throughMs: 1792470860000 };

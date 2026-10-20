@@ -48,6 +48,14 @@ export function installClinicalVerificationCanaries(): CanaryClockWindow {
   return install();
 }
 
+export function installResendVerificationCanaries(): CanaryClockWindow {
+  if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
+      process.env.ABBY_CLINIKO_API_KEY !== "synthetic-key-au5" || !process.env.DATABASE_URL?.includes("/abby_test_voice_") ||
+      process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION !== "confirmationResend")
+    throw Error("Verification canary sampling requires an isolated resend fixture");
+  return install();
+}
+
 function install(): CanaryClockWindow {
   if (installed) throw Error("Synthetic verification canary sampling already installed");
   const now = Date.now(), window = Object.freeze({ sinceMs: now - 60_000, throughMs: now + 600_000 });
