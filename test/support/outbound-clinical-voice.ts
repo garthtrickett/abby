@@ -21,6 +21,7 @@ import { clinikoOutboundVoice } from "../../src/standalone/cliniko-outbound-voic
 import type { ClinikoCallFlow } from "../../src/standalone/cliniko-call-flow.ts";
 import type { VoiceIntent } from "../../src/voice/voice-session.ts";
 import { approvedSyntheticPolicy, syntheticSpeech } from "./approved-voice.ts";
+import { cancellationSessionFixture } from "./cancellation-session.ts";
 import { reschedulingSessionFixture } from "./rescheduling-session.ts";
 import { outboundRequestValue } from "./outbound-recipient-request.ts";
 import { value } from "./outbound-records.ts";
@@ -39,7 +40,7 @@ async function until(check: () => boolean | Promise<boolean>, label: string, tim
 /** Real signed carrier HTTP/WebSocket, clinical prepared bundle, private keypad,
  * native decoders and ordinary review/write owners. Clinic grants, remote native
  * HTTP, email, clear-final speech recognition and synthesis are synthetic. */
-export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: ClinikoRequestBudget; apiKey?: string; recipientNumber?: string; purpose?: "followUp" | "sickDay"; services?: boolean;
+export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: ClinikoRequestBudget; apiKey?: string; recipientNumber?: string; purpose?: "followUp" | "sickDay"; services?: boolean; sickDayAction?: "reschedule" | "cancel"; lostCancellationResponse?: boolean;
   intent?: (owner: ClinikoCallFlow) => IntentResolver;
   financial?: (context: Readonly<{ scope: LocationScope; cliniko: ClinikoOutboundCallFlowConfig["cliniko"]; clock: () => string;
     directory: ClinikoCallFlowConfig["directory"]; policyVersion: string; folder: string; clinicalReviews: () => readonly Record<string, unknown>[] }>) =>
@@ -50,17 +51,19 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
   const purpose = options.purpose ?? "sickDay";
   const service = purpose === "followUp" && options.services ? await serviceBookingFixture({ ...(options.budget ? { budget: options.budget } : {}) }) : undefined;
   const f = service ?? (purpose === "followUp" ? await bookingSessionFixture({ ...(options.budget ? { budget: options.budget } : {}) }) :
+    options.sickDayAction === "cancel" ? await cancellationSessionFixture({ multiple: true, ...(options.budget ? { rateBudget: options.budget } : {}) }) :
     await reschedulingSessionFixture({ multiple: true, ...(options.budget ? { rateBudget: options.budget } : {}) }));
   f.owner.dispose();
   service?.flow.dispose();
   const baseConfig = f.config;
-  const ownerPort = service ? service.flowConfig.fetchPort! : f.ownerPorts.fetchPort;
-  const lifetime = new AbortController(), c = { ...baseConfig.cliniko, ...(options.apiKey ? { apiKey: options.apiKey } : {}) }, base = "https://api.au5.cliniko.com/v1";
+  const ownerPort = service ? service.flowConfig.fetchPort! : "ownerPorts" in f ? f.ownerPorts.fetchPort : f.config.fetchPort!;
+  const lifetime = new AbortController(), c = { practitionerId: "22", appointmentTypeId: "33", ...baseConfig.cliniko, ...(options.apiKey ? { apiKey: options.apiKey } : {}) }, base = "https://api.au5.cliniko.com/v1";
   if (options.apiKey) {
-    await f.replacePolicy({ credentialFingerprint: clinikoCredentialFingerprint(c.apiKey) });
+    if ("replacePolicy" in f) await f.replacePolicy({ credentialFingerprint: clinikoCredentialFingerprint(c.apiKey) });
+    else await f.replaceCancellation({ credentialFingerprint: clinikoCredentialFingerprint(c.apiKey) });
     if ("replaceDestination" in f) await f.replaceDestination({ credentialFingerprint: clinikoCredentialFingerprint(c.apiKey) });
   }
-  let mediaElapsedMs = 0, nowOffset = 0, notes = "", requestVersion = verificationNow, moved = false, patches = 0, bookings = 0;
+  let mediaElapsedMs = 0, nowOffset = 0, notes = "", requestVersion = verificationNow, moved = false, patches = 0, bookings = 0, cancellations = 0;
   let booked: Record<string, unknown> | undefined;
   const bookingRequests: Readonly<Record<string, unknown>>[] = [];
   let targetVersion = "2026-10-02T00:00:00.000Z", contactNumber = options.recipientNumber ?? "+61481927364", lastTarget: Record<string, unknown> | undefined;
@@ -78,6 +81,22 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
     if (url.pathname === `/v1/recalls/${requestId}` && method === "GET") return Response.json({ id: requestId, links: { self: `${base}/recalls/${requestId}` },
       patient: { links: { self: `${base}/patients/${verificationCanaries[2]}` } }, recall_type: { links: { self: `${base}/recall_types/61` } },
       notes, recall_at: "2026-10-05", recalled: false, recalled_at: null, archived_at: null, created_at: verificationNow, updated_at: requestVersion });
+    if (url.pathname === "/v1/individual_appointments/91/cancel" && method === "PATCH") {
+      assert.ok(ledger && actualCallId);
+      const current = value(await ledger.read(actualCallId, f.scope)), action = Object.values(current.actions)[0]!;
+      assert.equal(action.kind, "cancel"); assert.equal(action.status, "dispatched");
+      assert.equal(current.presentations[action.presentationId]?.status, "played");
+      assert.equal(f.recalls.length, 1); assert.equal(cancellations, 0);
+      assert.deepEqual(JSON.parse(String(init?.body)), { cancellation_note: null, cancellation_reason: 50, apply_to_repeats: false });
+      const review = value(decodeClinikoReview(f.recalls[0]!.notes)); assert.equal(review.request.operation.kind, "cancel");
+      if (review.request.operation.kind !== "cancel") throw Error("Expected reviewed cancellation");
+      assert.equal(review.request.patientId, request.patientId); assert.equal(review.request.operation.appointmentId, "91");
+      assert.equal(review.request.operation.cancellationReason, 50);
+      assert.deepEqual([review.request.operation.startsAt, review.request.operation.endsAt], ["2026-10-08T04:00:00.000Z", "2026-10-08T04:30:00.000Z"]);
+      cancellations++;
+      if (options.lostCancellationResponse) throw Error("Synthetic response lost after cancellation send");
+      return new Response(null, { status: 204 });
+    }
     if (url.pathname === "/v1/individual_appointments/91" && method === "PATCH") {
       assert.ok(ledger && actualCallId);
       const current = value(await ledger.read(actualCallId, f.scope)), action = Object.values(current.actions)[0]!;
@@ -106,7 +125,7 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
     if (url.pathname === `/v1/patients/${verificationCanaries[2]}` && method === "GET" && response.ok)
       return Response.json({ ...await response.json(), patient_phone_numbers: [{ number: contactNumber, phone_type: "Mobile" }] });
     if (url.pathname === "/v1/individual_appointments/91" && method === "GET" && response.ok) {
-      lastTarget = { ...await response.json(), ...(moved ? { starts_at: "2026-10-08T05:00:00.000Z", ends_at: "2026-10-08T05:30:00.000Z" } : {}),
+      lastTarget = { ...await response.json(), ...(cancellations ? { cancelled_at: verificationNow } : {}), ...(moved ? { starts_at: "2026-10-08T05:00:00.000Z", ends_at: "2026-10-08T05:30:00.000Z" } : {}),
         links: { self: `${base}/individual_appointments/91` }, created_at: "2026-10-01T00:00:00.000Z", updated_at: targetVersion,
         did_not_arrive: null, patient_arrived: false };
       return Response.json(lastTarget);
@@ -134,7 +153,13 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
   const approval: OutboundConversationApproval = { purpose: "outboundContact", runtimeConfigurationHash: "a".repeat(64),
     mediaOptions: { silenceMs: 100 }, policy: policy(basePolicy) };
   const { inbound: _, representative: __, ...clinical } = baseConfig;
-  const reschedulingApprovalPath = "reschedulingApprovalPath" in f.config ? f.config.reschedulingApprovalPath : f.config.bookingApprovalPath;
+  const approvalPath = (name: string): string | undefined => {
+    const path = Reflect.get(baseConfig, name); return typeof path === "string" ? path : undefined;
+  };
+  const fallbackApprovalPath = approvalPath("bookingApprovalPath") ?? approvalPath("reschedulingApprovalPath") ?? approvalPath("cancellationApprovalPath");
+  assert.ok(fallbackApprovalPath);
+  const reschedulingApprovalPath = approvalPath("reschedulingApprovalPath") ?? fallbackApprovalPath;
+  const cancellationApprovalPath = approvalPath("cancellationApprovalPath") ?? fallbackApprovalPath;
   const finances = await options.financial?.({ scope: f.scope, cliniko: c, clock: now, directory: clinical.directory,
     policyVersion: clinical.policyVersion, folder: f.folder, clinicalReviews: () => f.recalls });
   const provider = finances ? finances.wrap(native) : native;
@@ -142,7 +167,7 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
   const inputs: { text: string; intent: VoiceIntent }[] = [];
   const prepare = clinikoOutboundVoice({ clinical: { ...clinical, ...(service ? { serviceCatalogue: service.flowConfig.serviceCatalogue } : {}), cliniko: c, policies, fetchPort: provider,
       approvals: { bookCaller: f.config.callerApprovalPath, cancelCaller: f.config.callerApprovalPath, rescheduleCaller: f.config.callerApprovalPath,
-        booking: f.config.bookingApprovalPath, cancellation: reschedulingApprovalPath, rescheduling: reschedulingApprovalPath } },
+        booking: fallbackApprovalPath, cancellation: cancellationApprovalPath, rescheduling: reschedulingApprovalPath } },
     context: { requests, records: { allows: async () => true, current: () => state.nativeLive },
       authority: { allows: async () => true, current: () => state.originalLive }, ...(observed ? { target } : {}) },
     ...(finances ? { financial: finances.provision } : {}),
@@ -196,7 +221,7 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
       const target = Date.parse(instant); assert.ok(Number.isFinite(target) && new Date(target).toISOString() === instant && target >= Date.parse(now()));
       nowOffset = target - Date.parse(verificationNow) - mediaElapsedMs;
     },
-    get patches() { return patches; }, get bookings() { return bookings; }, get flow() { assert.ok(flow); return flow; }, get sessionId() { assert.ok(sessionId); return sessionId; },
+    get patches() { return patches; }, get cancellations() { return cancellations; }, get bookings() { return bookings; }, get flow() { assert.ok(flow); return flow; }, get sessionId() { assert.ok(sessionId); return sessionId; },
     get actualCallId() { assert.ok(actualCallId); return actualCallId; }, current,
     changeTarget() { targetVersion = "2026-10-03T00:00:00.000Z"; }, changeRequest() { requestVersion = "2026-10-04T06:00:01.000Z"; },
     changeContact() { contactNumber = "+61481927365"; }, expire() { nowOffset += 300_000; },

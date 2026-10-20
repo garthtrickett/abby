@@ -5,6 +5,7 @@ import { isDeepStrictEqual } from "node:util";
 import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
 import { validGreetingAt } from "../core/greeting.ts";
 import type { ApprovedGreeting } from "../core/model.ts";
+import { err } from "../core/model.ts";
 import { TextReception } from "../reference/text-reception.ts";
 import { callIdFor } from "../voice/admission.ts";
 import type { PreparedVoiceSession } from "../voice/reception-voice-call.ts";
@@ -85,8 +86,11 @@ export function clinikoOutboundVoice(config: ClinikoOutboundVoiceConfig):
           const made = ClinikoCallFlow.createOutbound({ ...clinical, receipt, sessionId, ledger,
             outbound: context!, signal, clock, ...(provision ? { financial: provision } : {}) });
           if (!made.ok) throw Error("Clinical conversation unavailable");
-          flow = made.value;
-          const reception = new TextReception(ledger, clinical.policies, flow, undefined, undefined, undefined,
+          const owner = made.value; flow = owner;
+          const reception = new TextReception(ledger, clinical.policies, owner, undefined, {
+            list: (...args) => owner.appointments?.list(...args) ?? Promise.resolve(err({ kind: "unavailable" as const })),
+            select: (...args) => owner.appointments?.select(...args) ?? Promise.resolve(err({ kind: "unavailable" as const })),
+          }, undefined,
             clinical.publicKnowledge, clock);
           voice = new VoiceSession(callId, sessionId, receipt.scope, ledger, reception, playback, intent(flow), undefined,
             monotonicNow, { greeting, staffWorkUnavailable: true });

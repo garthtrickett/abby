@@ -745,7 +745,8 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     const context = this.#config.outbound;
     if (!context) return true;
     return operation === "book" ? context.current("appointments.book") :
-      operation === "reschedule" && context.current("appointments.reschedule");
+      operation === "reschedule" ? context.current("appointments.reschedule") :
+      operation === "cancel" && context.current("appointments.cancel");
   }
   async #active(operation: ClinikoWorkflow, external?: AbortSignal): Promise<boolean> {
     const config = this.#config, scope = config.receipt.scope;
@@ -907,7 +908,8 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
         callerApprovalPath: paths.bookCaller, bookingApprovalPath: paths.booking }) : operation === "reschedule" ? ClinikoReschedulingSession.createOutbound({ ...config,
         ...(config.reschedulingDestination ? { destination: config.reschedulingDestination } : {}),
         ...(config.reschedulingPractitioners !== undefined ? { practitioners: config.reschedulingPractitioners } : {}),
-        callerApprovalPath: paths.rescheduleCaller, bookingApprovalPath: paths.booking, reschedulingApprovalPath: paths.rescheduling }) : undefined :
+        callerApprovalPath: paths.rescheduleCaller, bookingApprovalPath: paths.booking, reschedulingApprovalPath: paths.rescheduling }) :
+        operation === "cancel" ? ClinikoCancellationSession.createOutbound({ ...config, callerApprovalPath: paths.cancelCaller, cancellationApprovalPath: paths.cancellation }) : undefined :
         classAttendance && classes ? operation === "book" ? ClinikoClassSession.create({ ...config, operation: "book", callerApprovalPath: paths.bookCaller,
         classApprovalPath: classes.approvalPath, classPermission: classes.bookPermission,
         ...(classes.passAuthority ? { classPassAuthority: classes.passAuthority } : {}),
