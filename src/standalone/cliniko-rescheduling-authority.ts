@@ -13,9 +13,10 @@ import { OwnerFileReschedulingPolicy } from "./owner-file-rescheduling-policy.ts
 import { OwnerFileBookingPolicy } from "./owner-file-booking-policy.ts";
 import { ClinikoAvailabilityReader } from "../cliniko/availability.ts";
 import { normalizedSpokenName } from "../core/pending-location.ts";
+import type { ClinikoOutboundClinicalContext } from "./cliniko-outbound-clinical-context.ts";
 
 export type ClinikoReschedulingAuthorityConfig = Omit<ClinikoBookingOffersConfig, "operation"> &
-  Readonly<{ feePolicy: OwnerFileReschedulingPolicy; practitionerPolicies?: readonly OwnerFileBookingPolicy[] }>;
+  Readonly<{ feePolicy: OwnerFileReschedulingPolicy; practitionerPolicies?: readonly OwnerFileBookingPolicy[]; outbound?: ClinikoOutboundClinicalContext }>;
 const denied = <T>(): Result<T, HostReadFailure> => err({ kind: "unavailable", target: "offer" });
 type PractitionerDirectory = Readonly<{ choices: readonly Readonly<{ practitionerId: string; name: string; expiresAt: string }>[];
   hasMore: boolean; timeZone: string }>;

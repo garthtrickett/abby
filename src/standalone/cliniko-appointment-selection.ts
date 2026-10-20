@@ -12,10 +12,12 @@ import type { AppointmentChangeAuthority, AppointmentChangeAuthorityEvidence } f
 import { OwnerFileReschedulingPolicy } from "./owner-file-rescheduling-policy.ts";
 import { OwnerFileCancellationPolicy } from "./owner-file-cancellation-policy.ts";
 import { TransientPatientProofHost } from "./transient-patient-proof.ts";
+import { ClinikoOutboundClinicalContext } from "./cliniko-outbound-clinical-context.ts";
 
 export type ClinikoAppointmentSelectionConfig = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string; apiKey: string;
   contactEmail: string; businessId: string; proof: TransientPatientProofHost; policy: OwnerFileCancellationPolicy | OwnerFileReschedulingPolicy;
-  rateBudget?: ClinikoRequestBudget; clock?: () => string; timeoutMs?: number }>;
+  rateBudget?: ClinikoRequestBudget; clock?: () => string; timeoutMs?: number;
+  outbound?: ClinikoOutboundClinicalContext }>;
 type Config = ClinikoAppointmentSelectionConfig;
 export type SelectedAppointmentEvidence = Omit<AppointmentChangeAuthorityEvidence, "kind" | "offer" | "cancellationReason"> &
   Readonly<{ cancellationReason?: 10 | 20 | 30 | 40 | 50 | 60 }>;
@@ -63,7 +65,10 @@ export class ClinikoAppointmentSelection implements AppointmentHost {
           !(config.policy instanceof OwnerFileCancellationPolicy || config.policy instanceof OwnerFileReschedulingPolicy) ||
           typeof fetchPort !== "function" || (config.clock !== undefined && typeof config.clock !== "function") ||
           (config.rateBudget !== undefined && !isClinikoRequestBudget(config.rateBudget)) ||
-          (config.timeoutMs !== undefined && (!Number.isSafeInteger(config.timeoutMs) || config.timeoutMs < 1 || config.timeoutMs > 20_000))) return err({ kind: "invalidConfig" });
+          (config.timeoutMs !== undefined && (!Number.isSafeInteger(config.timeoutMs) || config.timeoutMs < 1 || config.timeoutMs > 20_000)) ||
+          config.outbound !== undefined && (!(config.outbound instanceof ClinikoOutboundClinicalContext) || !config.outbound.matchesWorkflow({
+            scope: config.scope, callId: config.callId, credentialFingerprint: clinikoCredentialFingerprint(config.apiKey), businessId: config.businessId }) ||
+            !config.rateBudget || !config.outbound.usesBudget(config.rateBudget))) return err({ kind: "invalidConfig" });
       return ok(new ClinikoAppointmentSelection(config, shard, fetchPort));
     } catch { return err({ kind: "invalidConfig" }); }
   }
@@ -106,7 +111,17 @@ export class ClinikoAppointmentSelection implements AppointmentHost {
           !this.#currentTime(now) || !(await this.#config.policy.current(scope)).ok) return undefined;
       const verified = await this.#config.proof.verifyOperation(scope, verificationRef, this.#operation(), this.#now(), signal);
       if (!verified.ok || signal.aborted || epoch !== this.#listing || verified.value.patientRef !== result.value.patientRef) return undefined;
-      const appointments = [...result.value.appointments].sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+      const original = this.#config.outbound ? await this.#config.outbound.inspectAppointment(this.#operation(), signal) : undefined;
+      if (this.#config.outbound && (!original?.ok || verified.value.patientRef !== original.value.target.patientId || signal.aborted || epoch !== this.#listing)) return undefined;
+      if (this.#config.outbound) {
+        const finalProof = await this.#config.proof.verifyOperation(scope, verificationRef, this.#operation(), this.#now(), signal);
+        if (!finalProof.ok || finalProof.value.patientRef !== verified.value.patientRef || signal.aborted || epoch !== this.#listing ||
+            !this.#config.outbound.current(this.#operation())) return undefined;
+      }
+      const appointments = result.value.appointments.filter(item => !original?.ok ||
+        item.appointmentRef === original.value.target.appointmentRef.slice("cliniko:appointment:".length) &&
+        Date.parse(item.startsAt) === Date.parse(original.value.target.startsAt) && Date.parse(item.endsAt) === Date.parse(original.value.target.endsAt))
+        .sort((left, right) => left.startsAt.localeCompare(right.startsAt));
       if (appointments.some(target => instant(target.startsAt) === undefined || instant(target.endsAt) === undefined || instant(target.endsAt)! <= instant(target.startsAt)!) ||
           new Set(appointments.map(target => instant(target.startsAt))).size !== appointments.length) return undefined;
       const targets = appointments.map(target => {
@@ -183,6 +198,12 @@ export class ClinikoAppointmentSelection implements AppointmentHost {
       if (!business || business.id !== config.businessId || business.archived_at !== null || business.time_zone_identifier !== selected.timeZone ||
           business.time_zone_identifier !== policy.value.timeZone || signal.aborted) return undefined;
       const appointment = await this.#get(`/individual_appointments/${selected.appointmentId}`, signal);
+      const original = config.outbound ? await config.outbound.inspectAppointment(this.#operation(), signal) : undefined;
+      if (config.outbound && (!original?.ok || original.value.target.appointmentRef !== `cliniko:appointment:${selected.appointmentId}` ||
+          original.value.target.patientId !== selected.patientId || !appointment ||
+          ["starts_at", "ends_at", "created_at", "updated_at", "archived_at", "cancelled_at", "deleted_at", "did_not_arrive", "patient_arrived"].some((key, i) =>
+            appointment[key] !== [original.value.target.startsAt, original.value.target.endsAt, original.value.target.createdAt, original.value.target.updatedAt,
+              original.value.target.archivedAt, original.value.target.cancelledAt, original.value.target.deletedAt, original.value.target.didNotArrive, original.value.target.patientArrived][i]))) return undefined;
       const link = (name: string) => row(row(appointment?.[name])?.links)?.self;
       const linkedId = (name: string, collection: string): string | undefined => {
         const value = link(name), prefix = `${this.#base}/${collection}/`;
@@ -192,6 +213,7 @@ export class ClinikoAppointmentSelection implements AppointmentHost {
       if (!appointment || appointment.id !== selected.appointmentId || appointment.archived_at !== null || appointment.deleted_at !== null ||
           appointment.cancelled_at !== null || link("patient") !== `${this.#base}/patients/${selected.patientId}` ||
           link("business") !== `${this.#base}/businesses/${config.businessId}` || !practitionerId || !appointmentTypeId ||
+          original?.ok && (practitionerId !== original.value.target.practitionerId || appointmentTypeId !== original.value.target.appointmentTypeId) ||
           instant(appointment.starts_at) !== instant(selected.startsAt) || instant(appointment.ends_at) !== instant(selected.endsAt) ||
           !this.#currentTime(query.now) || Date.parse(selected.expiresAt) <= Date.parse(this.#now()) || signal.aborted) return undefined;
       const terms = OwnerFileReschedulingPolicy.termsFor(policy.value, selected.startsAt, this.#now());
