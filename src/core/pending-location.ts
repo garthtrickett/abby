@@ -1,10 +1,11 @@
+import { isInboundAdmission } from "./call-admission.ts";
 import { normalizedSpokenName } from "./spoken-name.ts";
 export { normalizedSpokenName } from "./spoken-name.ts";
 import { validLocationServices } from "./location-services.ts";
 import { validVoiceProfile, validVoicePolicy, sameVoiceProfile } from "./voice-profile.ts";
 import { createHash } from "node:crypto";
 import { err, ok } from "./model.ts";
-import type { Admission, CallPolicy, PendingLocationCall, PendingLocationPrompt, PendingLocationRoute, Result, TransitionFailure } from "./model.ts";
+import type { Admission, InboundAdmission, CallPolicy, PendingLocationCall, PendingLocationPrompt, PendingLocationRoute, Result, TransitionFailure } from "./model.ts";
 
 export const LOCATION_CHOICE_TIMEOUT_MS = 120_000;
 export const PENDING_LOCATION_LEASE_MS = 30_000;
@@ -42,14 +43,8 @@ export function pendingCallId(key: Admission["key"]): string {
   return createHash("sha256").update(JSON.stringify([key.accountRef, key.providerCallRef])).digest("hex");
 }
 
-export function validPendingAdmission(callId: string, admission: unknown): admission is Admission {
-  if (!admission || typeof admission !== "object") return false;
-  const value = admission as Partial<Admission>;
-  return !!value.key && validRef(value.key.accountRef) && validRef(value.key.providerCallRef) &&
-    pendingCallId(value.key) === callId && validRef(value.dialedNumber) &&
-    typeof value.acceptedAt === "string" && Number.isFinite(Date.parse(value.acceptedAt)) &&
-    typeof value.deadline === "string" && Number.isFinite(Date.parse(value.deadline)) &&
-    Date.parse(value.deadline) > Date.parse(value.acceptedAt);
+export function validPendingAdmission(callId: string, admission: unknown): admission is InboundAdmission {
+  return isInboundAdmission(admission) && pendingCallId(admission.key) === callId;
 }
 
 export function validPendingLocation(value: unknown, callId: string): value is PendingLocationCall {
@@ -150,7 +145,7 @@ export function pendingDueAt(pending: PendingLocationCall): number {
 }
 
 export function pendingMatchesAdmission(pending: PendingLocationCall, admission: Admission): boolean {
-  return pending.admission.key.accountRef === admission.key.accountRef &&
+  return isInboundAdmission(admission) && pending.admission.key.accountRef === admission.key.accountRef &&
     pending.admission.key.providerCallRef === admission.key.providerCallRef &&
     pending.admission.dialedNumber === admission.dialedNumber;
 }

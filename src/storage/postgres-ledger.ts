@@ -1,10 +1,11 @@
+import { validAdmission, admissionAudit } from "../core/call-admission.ts";
 import { validCallerIdentityDenial } from "../core/caller-identity.ts";
 import { validRequestBoundary } from "../core/request-boundary.ts";
 import { validStaffRequestSubject } from "../core/staff-request-subject.ts";
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import { CALL_TERMINAL_REASONS, POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "../core/model.ts";
-import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, Effect, LocationScope, PendingLocationCall, PendingLocationExpiryResult, PendingLocationPrompt, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffItem, StaffQueueEntry, TransitionAction, TransitionFailure } from "../core/model.ts";
+import type { ActiveSessionReceipt, Admission, InboundAdmission, AdmissionReceipt, AdmissionResult, CallPolicy, CallState, Effect, LocationScope, PendingLocationCall, PendingLocationExpiryResult, PendingLocationPrompt, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffItem, StaffQueueEntry, TransitionAction, TransitionFailure } from "../core/model.ts";
 import { admissionReceipt, initialAdmittedState, initialState, sameAdmission } from "../core/ledger.ts";
 import { validApprovedGreeting } from "../core/greeting.ts";
 import { LOCATION_CHOICE_TIMEOUT_MS, PENDING_LOCATION_LEASE_MS, closePendingLocationState, expiredPendingLocationState, pendingDueAt, pendingMatchesAdmission, policyMatchesPending, resolveLocationPrompt, startLocationPrompt, validPendingAdmission, validPendingLocation, validPendingRoute } from "../core/pending-location.ts";
@@ -46,6 +47,7 @@ function validModelEffect(value: unknown, effectId: string): boolean {
 function decodeState(value: unknown, callId: string): Result<CallState, TransitionFailure> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return err({ kind: "storageCorrupt" });
   const data = value as Record<string, unknown>;
+  if (data.admission !== undefined && !validAdmission(data.admission)) return err({ kind: "storageCorrupt" });
   if (data.staffItems && typeof data.staffItems === "object" && Object.values(data.staffItems).some(item =>
     item && typeof item === "object" && item.requestSubject !== undefined && (!validStaffRequestSubject(item.requestSubject) ||
       item.reason !== "callerRequested" || item.linkedActionKey !== undefined || item.request !== undefined))) return err({ kind: "storageCorrupt" });
@@ -488,7 +490,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
         if (!pending.sessionLease || pending.sessionLease.sessionId !== sessionId ||
             pending.sessionLease.version !== expectedLeaseVersion) return err({ kind: "leaseLost" });
         if (!policyMatchesPending(pending, policy)) return err({ kind: "scopeMismatch" });
-        const admission: Admission = { ...pending.admission, acceptedAt,
+        const admission: InboundAdmission = { ...pending.admission, acceptedAt,
           deadline: new Date(Date.parse(acceptedAt) + 30_000).toISOString() };
         if (!validApprovedGreeting(policy)) return err({ kind: "invalidTransition" });
         const state = initialAdmittedState(callId, policy, admission);
@@ -743,8 +745,8 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
 
   async admit(callId: string, policy: CallPolicy, admission: Admission): Promise<Result<AdmissionResult, TransitionFailure>> {
     if (this.mode === "standaloneText") return err({ kind: "invalidTransition" });
-    if (!callId || !admission.key.accountRef || !admission.key.providerCallRef || !admission.dialedNumber ||
-        !Number.isFinite(Date.parse(admission.acceptedAt)) || Date.parse(admission.deadline) <= Date.parse(admission.acceptedAt)) return err({ kind: "invalidTransition" });
+    if (!callId || !validAdmission(admission)) return err({ kind: "invalidTransition" });
+    admission = structuredClone(admission);
     try {
       return await this.db.transaction().execute(async trx => {
         await this.lockCall(trx, callId);
@@ -770,7 +772,7 @@ export class PostgresLedger implements LedgerStore, EffectCallLeaseStore {
             tenant_id: policy.scope.tenantId,
             sequence: 0 as CallEventsSequence,
             kind: "callAdmitted",
-            payload: { accountRef: admission.key.accountRef, providerCallRef: admission.key.providerCallRef, dialedNumber: admission.dialedNumber },
+            payload: admissionAudit(storedAdmission),
           }).execute();
           return ok({ kind: "created", receipt: admissionReceipt(state)! });
         }
