@@ -30,10 +30,26 @@ let installed = false;
  * issuer, hash/salt, delivery and verification. Production crypto is untouched.
  * Every raw code remains subject to all-column and unfiltered backup scans. */
 export function installStagedVerificationCanaries(): CanaryClockWindow {
-  if (installed || process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
+  if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
       process.env.ABBY_SYNTHETIC_CLASS_QUOTA_STAGING !== "1" || process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION !== "reschedule" ||
       process.env.ABBY_CLINIKO_API_KEY !== "synthetic-key-au5" || !process.env.DATABASE_URL?.includes("/abby_test_voice_"))
     throw Error("Verification canary sampling requires an isolated staged class fixture");
+  return install();
+}
+
+/** The separately compiled clinical fixture uses the same unchanged issuer and
+ * privacy scanner. Only its synthetic code draw is separated from public clocks. */
+export function installClinicalVerificationCanaries(): CanaryClockWindow {
+  if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
+      process.env.ABBY_CLINIKO_API_KEY !== "synthetic-key-au5" || !process.env.DATABASE_URL?.includes("/abby_test_voice_") ||
+      !["book", "cancel", "reschedule", "intake", "patientUpdate", "appointments.read", "staff.request"]
+        .includes(process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION ?? ""))
+    throw Error("Verification canary sampling requires an isolated clinical fixture");
+  return install();
+}
+
+function install(): CanaryClockWindow {
+  if (installed) throw Error("Synthetic verification canary sampling already installed");
   const now = Date.now(), window = Object.freeze({ sinceMs: now - 60_000, throughMs: now + 600_000 });
   const randomInt = crypto.randomInt, descriptor = Object.getOwnPropertyDescriptor(crypto, "randomInt");
   if (!descriptor?.writable) throw Error("Synthetic verification crypto is unavailable");
