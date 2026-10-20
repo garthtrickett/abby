@@ -1,3 +1,4 @@
+import type { ClinikoOutboundClinicalContext } from "./cliniko-outbound-clinical-context.ts";
 import { ClinikoBookingWriter } from "../cliniko/booking-write.ts";
 import { ClinikoRecallWriter } from "../cliniko/recall-write.ts";
 import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
@@ -14,7 +15,7 @@ import type { CallerVerificationSession } from "./caller-verification-session.ts
 
 export type ApprovedBookingComposition = Readonly<{ offers: ClinikoBookingOffers;
   host: ClinikoBookingHost | ClinikoCatalogueBookingHost; dispose(): void }>;
-type Config = Pick<ClinikoBookingSessionConfig, "receipt" | "sessionId" | "policyVersion" | "cliniko" | "ledger" | "policies" | "bookingApprovalPath" | "directory" | "catalogue" | "timeoutMs" | "fetchPort" | "financial"> & Readonly<{ clock: () => string }>;
+type Config = Pick<ClinikoBookingSessionConfig, "receipt" | "sessionId" | "policyVersion" | "cliniko" | "ledger" | "policies" | "bookingApprovalPath" | "directory" | "catalogue" | "timeoutMs" | "fetchPort" | "financial"> & Readonly<{ clock: () => string; outbound?: ClinikoOutboundClinicalContext }>;
 
 /** Share exact approved member selection and native write guards for returning
  * and newly registered patients; the caller owns the operation-specific proof. */
@@ -37,7 +38,7 @@ export async function createApprovedBookingComposition(config: Config, terms: Ow
       config.catalogue.practitioners[0]?.bookingApprovalPath !== config.bookingApprovalPath)) return denied();
     if (stopped()) return denied();
     const source = ClinikoBookingOffers.create({ ...config.cliniko, scope, callId: config.receipt.callId,
-      sessionId: config.sessionId, policyVersion: config.policyVersion, proof: verification.proof,
+      sessionId: config.sessionId, policyVersion: config.policyVersion, proof: verification.proof, ...(config.outbound ? { outboundBooking: config.outbound } : {}),
       policy: terms, clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) }, fetchPort);
     const booking = ClinikoBookingWriter.create({ ...config.cliniko, scope }, fetchPort, config.clock);
     const recalls = ClinikoRecallWriter.create({ ...config.cliniko, scope }, fetchPort);
@@ -46,7 +47,7 @@ export async function createApprovedBookingComposition(config: Config, terms: Ow
     menu = new ClinikoBookingMenu({ verification, offers: authority, scope, callId: config.receipt.callId, sessionId: config.sessionId, policyVersion: config.policyVersion });
     resources.push(menu);
     host = new ClinikoBookingHost({ scope, callId: config.receipt.callId, sessionId: config.sessionId,
-      policyVersion: config.policyVersion, ledger: config.ledger, policy: config.policies, proof: verification.proof, authority: catalogue ? catalogueBookingAuthority(authority, catalogue, scope, config.cliniko.practitionerId) : authority,
+      policyVersion: config.policyVersion, ledger: config.ledger, policy: config.policies, proof: verification.proof, ...(config.outbound ? { outboundBooking: config.outbound } : {}), authority: catalogue ? catalogueBookingAuthority(authority, catalogue, scope, config.cliniko.practitionerId) : authority,
       menu,
       timeZone: config.cliniko.timeZone, recallTypeId: config.cliniko.recallTypeId, writer: booking.value,
       recallWriter: recalls.value, ...(config.financial ? { financial: config.financial } : {}), clock: config.clock });
@@ -61,14 +62,14 @@ export async function createApprovedBookingComposition(config: Config, terms: Ow
           ...(config.catalogue.serviceBinding ? { serviceBinding: config.catalogue.serviceBinding } : {}) });
         if (!terms.ok || stopped()) return denied();
         const offers = ClinikoBookingOffers.create({ ...selection, scope, callId: config.receipt.callId, sessionId: config.sessionId,
-          policyVersion: config.policyVersion, proof: verification.proof, policy: terms.value, clock: config.clock }, fetchPort);
+          policyVersion: config.policyVersion, proof: verification.proof, ...(config.outbound ? { outboundBooking: config.outbound } : {}), policy: terms.value, clock: config.clock }, fetchPort);
         const writer = ClinikoBookingWriter.create({ ...selection, scope }, fetchPort, config.clock);
         if (!offers.ok || !writer.ok || stopped()) return denied();
         resources.push(offers.value);
         const selectionMenu = new ClinikoBookingMenu({ verification, offers: offers.value, scope, callId: config.receipt.callId,
           sessionId: config.sessionId, policyVersion: config.policyVersion }); resources.push(selectionMenu);
         const selectionHost = new ClinikoBookingHost({ scope, callId: config.receipt.callId, sessionId: config.sessionId,
-          policyVersion: config.policyVersion, ledger: config.ledger, policy: config.policies, proof: verification.proof,
+          policyVersion: config.policyVersion, ledger: config.ledger, policy: config.policies, proof: verification.proof, ...(config.outbound ? { outboundBooking: config.outbound } : {}),
           authority: catalogueBookingAuthority(offers.value, catalogue, scope, member.practitionerId), menu: selectionMenu,
           timeZone: selection.timeZone, recallTypeId: selection.recallTypeId, writer: writer.value,
           recallWriter: recalls.value, ...(config.financial ? { financial: config.financial } : {}), clock: config.clock }); resources.push(selectionHost);

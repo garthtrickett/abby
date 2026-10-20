@@ -1,3 +1,4 @@
+import { ClinikoOutboundClinicalContext } from "./cliniko-outbound-clinical-context.ts";
 import { ClinikoBookingWriter } from "../cliniko/booking-write.ts";
 import { digestActionRequest } from "../core/digest.ts";
 import type { HostReadFailure, PolicyStore } from "../core/host.ts";
@@ -14,6 +15,7 @@ import { ClinikoBookingOffers } from "./cliniko-booking-offers.ts";
 export type ClinikoBookingGuardConfig = Readonly<{
   scope: LocationScope; callId: string; sessionId: string; policyVersion: string; ledger: LedgerStore;
   policy: PolicyStore; proof: TransientPatientProofHost; authority: ClinikoBookingAuthority;
+  outboundBooking?: ClinikoOutboundClinicalContext;
   writer: ClinikoBookingWriter; clock?: () => string;
 }>;
 async function untilAbort<Value>(pending: Promise<Value>, signal: AbortSignal): Promise<Value | undefined> {
@@ -40,6 +42,10 @@ export class ClinikoBookingGuard {
         !sameScope(config.writer.selection().scope, config.scope) || (config.clock !== undefined && typeof config.clock !== "function")) {
       throw new TypeError("invalid Cliniko booking guard configuration");
     }
+    if (config.outboundBooking && (!(config.outboundBooking instanceof ClinikoOutboundClinicalContext) ||
+        !config.outboundBooking.current("appointments.book") || !config.outboundBooking.matchesWorkflow({ scope: config.scope, callId: config.callId,
+          businessId: config.writer.selection().businessId, credentialFingerprint: config.writer.credentialFingerprint() })))
+      throw new TypeError("invalid outbound booking guard configuration");
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }) });
   }
   #time(now: string): number | undefined {
@@ -55,6 +61,8 @@ export class ClinikoBookingGuard {
         !found.value.admission || !sameScope(found.value.policy.scope, config.scope) || found.value.policy.policyVersion !== config.policyVersion ||
         found.value.sessionLease?.sessionId !== config.sessionId || approvalInstant(found.value.sessionLease.expiresAt) === undefined ||
         Date.parse(found.value.sessionLease.expiresAt) <= now) return undefined;
+    if (config.outboundBooking && (!config.outboundBooking.current("appointments.book") || !config.outboundBooking.matchesAdmission({ callId: config.callId,
+      scope: config.scope, admission: found.value.admission, lifecycle: "active" }))) return undefined;
     return found.value;
   }
   async #ready(now: number, signal: AbortSignal, mutation?: HostMutation): Promise<CallState | undefined> {
@@ -163,6 +171,7 @@ export class ClinikoBookingGuard {
     const at = this.#time(now);
     const leaseExpiry = this.#dispatchLeases.get(prepared);
     return at !== undefined && leaseExpiry !== undefined && leaseExpiry > at && !this.#closed && !signal.aborted &&
+      (!this.#config.outboundBooking || this.#config.outboundBooking.current("appointments.book")) &&
       this.#config.proof.ownsLiveReference(prepared.query.verificationRef, "appointments.book", new Date(at).toISOString()) &&
       Date.parse(prepared.request.patient.expiresAt) > at && Date.parse(prepared.request.offer.expiresAt) > at &&
       Date.parse(prepared.request.offer.startsAt) > at;

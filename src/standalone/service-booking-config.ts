@@ -9,9 +9,11 @@ import { OwnerFileServiceCatalogue } from "./owner-file-service-catalogue.ts";
 export type ServiceCatalogueConfig = Readonly<{ approvalPath: string; services: readonly Readonly<{ serviceRef: string;
   practitioners: readonly Readonly<{ practitionerId: string; bookingApprovalPath: string }>[] }>[] }>;
 
+type CatalogueFlowConfig = Pick<ClinikoCallFlowConfig, "serviceCatalogue" | "receipt" | "policyVersion" | "cliniko" | "directory" | "clock" | "approvals">;
+
 /** Map a validated caller request to private approved writer bindings. This
  * creates no verifier, provider traffic, offer or clinical mutation. */
-export async function serviceBookingConfig(config: ClinikoCallFlowConfig, incoming: BookingServiceChoice) {
+export async function serviceBookingConfig<T extends CatalogueFlowConfig>(config: T, incoming: BookingServiceChoice) {
   const denied = () => err({ kind: "workflowUnavailable" as const });
   const choice = copyBookingServiceChoice(incoming);
   if (!config.serviceCatalogue || !choice) return denied();
@@ -38,7 +40,7 @@ export async function serviceBookingConfig(config: ClinikoCallFlowConfig, incomi
 }
 
 /** Re-read the complete current approval before each public selection question. */
-export async function currentServiceCatalogue(config: ClinikoCallFlowConfig) {
+export async function currentServiceCatalogue(config: CatalogueFlowConfig) {
   const c = config.serviceCatalogue;
   if (!c) return err({ kind: "unavailable" as const });
   const result = await OwnerFileServiceCatalogue.capture({ path: c.approvalPath, scope: config.receipt.scope, policyVersion: config.policyVersion,

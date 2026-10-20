@@ -1,3 +1,4 @@
+import { ClinikoOutboundClinicalContext } from "./cliniko-outbound-clinical-context.ts";
 import { ClinikoAppointmentSelection } from "./cliniko-appointment-selection.ts";
 import type { SelectedAppointmentEvidence } from "./cliniko-appointment-selection.ts";
 import { copyBookingSearchWindow, matchesBookingSearchWindow, validBookingSearchWindow } from "../core/booking-search-window.ts";
@@ -23,6 +24,7 @@ import { TransientPatientProofHost } from "./transient-patient-proof.ts";
 export type ClinikoBookingOffersConfig = Readonly<{
   scope: LocationScope; callId: string; sessionId: string; policyVersion: string; apiKey: string; contactEmail: string;
   businessId: string; practitionerId: string; appointmentTypeId: string; proof: TransientPatientProofHost;
+  outboundBooking?: ClinikoOutboundClinicalContext;
   policy: OwnerFileBookingPolicy; operation?: "appointments.book" | "appointments.reschedule"; rateBudget: ClinikoRequestBudget; clock?: () => string; timeoutMs?: number;
 }>;
 export type BookingChoices = Readonly<{
@@ -59,6 +61,10 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
           !isClinikoRequestBudget(config.rateBudget) || ![config.callId, config.sessionId, config.policyVersion].every(ref) ||
           typeof fetchPort !== "function" || (config.clock !== undefined && typeof config.clock !== "function") ||
           (config.timeoutMs !== undefined && (!Number.isSafeInteger(config.timeoutMs) || config.timeoutMs < 1 || config.timeoutMs > 20_000))) return err({ kind: "invalidConfig" });
+      if (config.outboundBooking && (!(config.outboundBooking instanceof ClinikoOutboundClinicalContext) ||
+          config.operation !== undefined && config.operation !== "appointments.book" || !config.outboundBooking.current("appointments.book") ||
+          !config.outboundBooking.usesBudget(config.rateBudget) || !config.outboundBooking.matchesWorkflow({ scope: config.scope, callId: config.callId,
+            credentialFingerprint: clinikoCredentialFingerprint(config.apiKey), businessId: config.businessId }))) return err({ kind: "invalidConfig" });
       const bound = config.policy.binding();
       if (!sameScope(bound.scope, config.scope) || bound.policyVersion !== config.policyVersion ||
           bound.businessId !== config.businessId || bound.practitionerId !== config.practitionerId || bound.appointmentTypeId !== config.appointmentTypeId ||
@@ -92,6 +98,7 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
   }
   async #current(verificationRef: string, now: string, signal: AbortSignal, withinSourceRead = false) {
     const config = this.#config;
+    if (config.outboundBooking && !await config.outboundBooking.refreshOriginal("appointments.book", signal)) return undefined;
     const policy = await config.policy.current(config.scope);
     if (!policy.ok || signal.aborted || this.#time(now) === undefined) return undefined;
     const proof = withinSourceRead ? await config.proof.currentReference(config.scope, verificationRef, config.operation ?? "appointments.book", this.#now())
@@ -99,7 +106,7 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
     if (!proof.ok || signal.aborted) return undefined;
     const finalPolicy = await config.policy.current(config.scope), at = this.#time(now);
     if (!finalPolicy.ok || JSON.stringify(finalPolicy.value) !== JSON.stringify(policy.value) || at === undefined ||
-        signal.aborted || Date.parse(proof.value.expiresAt) <= at) return undefined;
+        signal.aborted || Date.parse(proof.value.expiresAt) <= at || config.outboundBooking && !config.outboundBooking.current("appointments.book")) return undefined;
     return { policy: finalPolicy.value, patient: proof.value, at };
   }
   #expiry(policy: BookingApproval, proofExpiry: string, at: number): string {
@@ -206,6 +213,7 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
           read.value.offering?.practitionerName !== selected.practitionerName || read.value.offering?.appointmentTypeName !== selected.appointmentTypeName ||
           !read.value.startsAt.includes(evidence.offer.startsAt) || at === undefined || signal.aborted || epoch !== this.#epoch ||
           this.#offers.get(query.offerRef) !== selected || !config.proof.ownsLiveReference(query.verificationRef, "appointments.book", new Date(at).toISOString()) ||
+          config.outboundBooking && !config.outboundBooking.current("appointments.book") ||
           Date.parse(before.patient.expiresAt) <= at || Date.parse(evidence.offer.expiresAt) <= at ||
           !OwnerFileBookingPolicy.allows(before.policy, evidence.offer.startsAt, new Date(at).toISOString())) return undefined;
       return structuredClone(evidence);
@@ -216,7 +224,7 @@ export class ClinikoBookingOffers implements ClinikoBookingAuthority {
   retains(evidence: ClinikoBookingEvidence, verificationRef: string): boolean {
     try {
       const selected = this.#offers.get(evidence.offer.offerRef), at = this.#time(this.#now());
-      return !this.#lifetime.signal.aborted && at !== undefined && !!selected && selected.verificationRef === verificationRef &&
+      return !this.#lifetime.signal.aborted && (!this.#config.outboundBooking || this.#config.outboundBooking.current("appointments.book")) && at !== undefined && !!selected && selected.verificationRef === verificationRef &&
         Date.parse(selected.evidence.offer.expiresAt) > at && JSON.stringify(selected.evidence) === JSON.stringify(evidence);
     } catch { return false; }
   }
