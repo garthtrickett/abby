@@ -8,9 +8,12 @@ import { connectPostgres } from "../../src/storage/connect.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { verificationCanaries, verificationNow } from "../support/caller-verification.ts";
 
+import { captureSqlVerificationCanaryWindow, assertSqlVerificationCodeCanary } from "../support/sql-verification-canary.ts";
+
 if (!process.env.DATABASE_URL) throw Error("DATABASE_URL required");
 const db = connectPostgres(process.env.DATABASE_URL), peer = connectPostgres(process.env.DATABASE_URL);
 after(async () => { await Promise.all([db.destroy(), peer.destroy()]); });
+const canaryWindow = await captureSqlVerificationCanaryWindow(db);
 const emitted = new URL("../../dist/runtime/", import.meta.url);
 const { outboundClinicalVoiceFixture } = await import(new URL("test/support/outbound-clinical-voice.js", emitted).href) as typeof import("../support/outbound-clinical-voice.ts");
 const { PostgresClinikoRequestBudget } = await import(new URL("src/storage/postgres-cliniko-request-budget.js", emitted).href) as typeof import("../../src/storage/postgres-cliniko-request-budget.ts");
@@ -57,6 +60,7 @@ test(`actual emitted signed cancellation private keypad with shared native180, S
   const second = await f.transport.listen(f.transport.makeRouter()); t.after(second.close);
   const response = await second.post(), duplicate = await second.open(await response.text()); assert.equal(await duplicate.outcome, "closed");
   assert.equal(f.transport.state.created, 1);
+  await assertSqlVerificationCodeCanary(db, code, canaryWindow);
   const canaries = [apiKey, ...verificationCanaries, recipientNumber, f.actualCallId, f.sessionId, code, f.requestNotes,
     JSON.stringify(f.transport.original), f.transport.original.recallRef, f.transport.original.attempt.requestDigest,
     identities.accountSid, identities.callSid, identities.streamSid, identities.authToken, Buffer.from(identities.contextKey).toString("hex"),
