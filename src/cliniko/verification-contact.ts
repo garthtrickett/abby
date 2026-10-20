@@ -49,6 +49,9 @@ export class ClinikoVerificationContactReader implements VerificationContact {
     return { scope: { tenantId: this.#config.scope.tenantId, clinicId: this.#config.scope.clinicId }, credentialFingerprint: clinikoCredentialFingerprint(this.#config.apiKey) };
   }
 
+  /** Private physical-account ownership only; no read or zero-cost authority. */
+  usesBudget(budget: ClinikoRequestBudget): boolean { return this.#budget === budget; }
+
   usesContactRevision(owner: ClinikoContactRevisionReader): boolean {
     const selection = this.selection();
     return this.#config.contactRevision === owner && owner.matches(selection.scope.tenantId, selection.credentialFingerprint);
