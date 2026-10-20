@@ -2,7 +2,13 @@
 
 Activated by the owner: bridge all thirteen gaps in the agreed order, including every part that can be completed without a Twilio number. The October 10 source comparison is an inventory, not a completion claim. Existing no-number contracts and privacy rules still apply.
 
-## Current qualification checkpoint, 19 October 2026
+## Current qualification checkpoint, 20 October 2026
+
+All104 original outstanding PRs were integrated through557 into public main649be53 after both exact integration-head cloud workflows passed. The subsequent main run39355351376 has one financial-booking-host failure (5315 passed/one failed/one existing skip), so current main is not fully green. See [the execution ledger](EXECUTION_PROGRESS.md).
+
+A deterministic private-reference format mismatch is corrected separately: the financial-recipient reader now accepts canonical references issued by Abby's verifier even when they begin `-` or `_`, while preserving independent permissions and public approval-name rules.103 source/actual-host controls, including deterministic real-verifier original-host cases for both prefixes, complete strict/638-artifact build and the new test-only strict graph pass. This focused candidate still needs exact-head cloud qualification. The Twilio transport is preserved in its separate branch; concrete outbound ingress/conversation/final-report integration, independently verified exact clinical callback and approved gap13 remain next engineering. All real acceptance/activation gates stay distinct.
+
+## Historical qualification checkpoint, 19 October 2026
 
 Through539d5f901e full1792378464534 completed4742 passed/zero failed/one existing
 C-LIVE-40 skip plus6 ordered follow-ups. Draft540's class/resend followup and

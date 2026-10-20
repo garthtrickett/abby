@@ -22,6 +22,11 @@ export type FinancialRecipientAuthority = Readonly<{
 type Observation = NonNullable<Awaited<ReturnType<FinancialBookingRecipient["read"]>>>;
 type Last = { selection: string; query: FinancialRecipientQuery; observation: Observation; at: number };
 const mailbox = (v: unknown): v is string => typeof v === "string" && v.length <= 254 && /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(v);
+// Live proofs are32-byte base64url references, whose first character may be
+// '-' or '_'. Public approval-name rules do not describe this private value.
+// Keep existing named host references compatible without relaxing public names.
+const verificationReference = (v: unknown): v is string => approvalRef(v) || typeof v === "string" &&
+  /^[A-Za-z0-9_-]{43}$/.test(v) && Buffer.from(v, "base64url").toString("base64url") === v;
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 function freeze<T>(v: T): T { if (v && typeof v === "object") { for (const child of Object.values(v)) freeze(child); Object.freeze(v); } return v; }
 function discard(response: Response | undefined): void { try { void response?.body?.cancel().catch(() => {}); } catch { /* No upstream details escape. */ } }
@@ -58,7 +63,7 @@ export class ClinikoFinancialBookingRecipient implements FinancialBookingRecipie
       const booking = freeze(structuredClone(input)), began = this.#now(), expires = approvalInstant(booking.expiresAt);
       if (!sameScope(booking.scope, this.#source.scope) || booking.businessId !== this.#source.businessId || booking.credentialFingerprint !== this.#source.credentialFingerprint ||
           ![booking.patientId, booking.practitionerId, booking.appointmentTypeId].every(validClinikoId) ||
-          ![booking.callId, booking.sessionId, booking.policyVersion, booking.verificationRef, booking.offerRef].every(approvalRef) ||
+          ![booking.callId, booking.sessionId, booking.policyVersion, booking.offerRef].every(approvalRef) || !verificationReference(booking.verificationRef) ||
           approvalInstant(booking.startsAt) === undefined || approvalInstant(booking.endsAt) === undefined || booking.endsAt <= booking.startsAt ||
           began === undefined || expires === undefined || expires <= began || !["book", "classBook"].includes(booking.bookingKind) ||
           booking.bookingKind === "classBook" && !validClinikoId(booking.classSessionId)) return undefined;
