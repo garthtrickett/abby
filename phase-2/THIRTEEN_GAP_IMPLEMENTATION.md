@@ -1,6 +1,6 @@
 # Cliniko integration: thirteen-gap implementation order
 
-**Current outbound engineering:** Foundations through PR571 are normally merged. Cancellation PR572/exact3309 passed all eight own cloud jobs. Current local integration of published fixture correction PR573/f705b7a passes full strict/682 build and26 emitted SQL cases, while that parent's own cloud/review/normal merge and this revised cancellation head's publication remain pending. Complete no-stop/all-ASR/private coverage, approved gap13, all thirteen gaps and real acceptance remain open. See [current cancellation evidence](OUTBOUND_CLINICAL_CANCELLATION.md).
+**Current outbound engineering:** Foundations through PR571 and clock correction PR573 are normally merged. Cancellation PR572/exact3309 passed all eight old-head jobs; its revised actual-mainb1ce parent integration retains qualified full strict/682 build and26 emitted SQL/privacy cases. The revised head needs its own publication/cloud/review gates. Actual new main checks are independently monitored. Complete no-stop/private/all-ASR, approved gap13, all thirteen gaps and real acceptance remain open. See [current cancellation contract](OUTBOUND_CLINICAL_CANCELLATION.md).
 
 Activated by the owner: bridge all thirteen gaps in the agreed order, including every part that can be completed without a Twilio number. The October 10 source comparison is an inventory, not a completion claim. Existing no-number contracts and privacy rules still apply.
 
