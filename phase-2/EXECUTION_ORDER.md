@@ -4,7 +4,7 @@
 
 **Execution:** The owner subsequently instructed work through this order. See [current progress and evidence](EXECUTION_PROGRESS.md). That instruction activates the planned engineering; clinic/provider acceptance, deployment and Karen removal retain their separate requirements below.
 
-**Current outbound engineering:** Report/recovery foundations through564 have exact-head and actual merged-main cloud checks green. Receiver565/fdbfc is merged as3fcc453 with all exact-head jobs green and actual main separately monitored. [Positive speech producer](TWILIO_OUTBOUND_STOP_SPEECH.md)566/c0d35e9 has62 source/129 preservation, full strict/667 build and9 emitted SQL/privacy passes. Review found the real ASR emits uncertain quality; a new conservative uncertain-stop closure now passes its actual red replay without promoting speech to clear or inventing DNC. The revision passes63 source, focused strict types, full strict/667 serving build and10 emitted SQL/privacy cases; two unchanged browser login journeys also pass after explicit image preparation. Revised exact-head cloud qualification follows. Continue complete provider/contact/speech finality, independent original-patient/exact clinical handoff, then approved gap13. Real acceptance and activation remain separate. See [current evidence](EXECUTION_PROGRESS.md).
+**Current outbound engineering:** Report/recovery, signed receiver and conservative speech-stop foundations through566 are merged. PR566/3ef2cde passed all eight exact-head jobs and merged asd7f251c; actual main is separately monitored. The optional [positive finality composition](TWILIO_OUTBOUND_FINALITY.md) now passes native/provider/source controls, full strict/current672 serving artifacts and ten actual emitted SQL/native180/process-loss/privacy cases. Its new-head cloud qualification and normal review/merge follow. Complete no-stop/all-ASR drain remains separate: the actual OpenAI adapter still marks finals uncertain, and no quality is promoted. Continue independent exact original-patient/clinical handoff, remaining finality engineering, then approved gap13. Clinic/provider/source/restore/acoustic acceptance and activation remain separate. See [current evidence](EXECUTION_PROGRESS.md).
 
 **Karen reference for current and future agents:** The owner supplied an updated Karen snapshot on 19 October 2026, available beside Abby through `/home/gust/code/karen-website-dev`. When uncertain about an implementation or workflow, search this copy for existing solutions and their tests before designing new machinery; Karen may already solve it. Use its patterns as a reference and adapt them to Abby's contracts and validation. The copy has no `.git` metadata and is distinct from the older commit pinned in the reuse audit. See [snapshot provenance and useful entry points](KAREN_TO_ABBY_REUSE_AUDIT.md#current-owner-supplied-reference-19-october-2026).
 
@@ -160,7 +160,7 @@ This sequence was checked against the three documents for booking-step order, al
 ### Shared-host execution
 
 For future local jobs, follow the operator's live host policy at
-`/home/gust/infra/docs/shared-compute.md`. Independent bounded jobs may overlap
+`/home/gust/code/infra/docs/shared-compute.md`. Independent bounded jobs may overlap
 when actual CPU/RAM headroom and file/database isolation permit. Historical
 exclusive-slot notes are not current resource authority. Preserve source pins,
 test concurrency/deadlines and real shared-file/database exclusions.

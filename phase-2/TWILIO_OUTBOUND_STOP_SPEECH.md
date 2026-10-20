@@ -84,3 +84,10 @@ cases including uncertain stop closure without report/DNC action consumption.
 The two unchanged real PostgreSQL/TLS browser login journeys also pass with
 the image prepared before the existing startup deadline. Exact revised-head
 cloud qualification follows; initial results are not substituted for new source.
+
+
+### Conditional positive finality — 20 October 2026
+
+PR566's conservative speech-stop revision passed all eight exact3ef2cde cloud jobs and merged asd7f251c; actual main is separately monitored. The new [positive-only finality composition](TWILIO_OUTBOUND_FINALITY.md) has local native/provider/source, strict/current672 serving and ten actual emitted SQL/native180/process-loss/full-privacy passes. It rediscovers MAC-bound original native context from the runtime pair without inventing lost session/report IDs, requires independently current complete all-creation/mutation/restore single-root approval and fresh provider reads, then invokes the existing separate native contact-outcome and call-capacity owners. The same physical budget and one purpose-wide180 ceiling cover all native requests. Early reports and consumed actions are not rewritten or replayed.
+
+Its own exact-head cloud qualification/review/merge remain required. This does not activate an HTTP handler, scheduler or live backend. Complete no-stop/all-ASR drain, independent original-patient/exact clinical authority and gap13 remain open. Actual OpenAI quality is still uncertain; conservative unclear stop closure without native positive evidence keeps its holds. Synthetic clear speech/provider fixtures do not establish clinic, carrier, acoustic or restore acceptance. See the [execution ledger](EXECUTION_PROGRESS.md) for complete source, failed refinements, emitted/process/SQL evidence and current publication status.

@@ -38,6 +38,7 @@ import { value } from "./outbound-records.ts";
  * acoustic providers are synthetic; no prepared producer report is inserted. */
 type BaseOptions = NonNullable<Parameters<typeof outboundContactLifecycleFixture>[0]>;
 export async function twilioOutboundStopSpeechFixture(options: Pick<BaseOptions, "apiKey" | "scope" | "patientId" | "budget" | "effectFactory" | "capacityFactory" | "capacity" | "guardRef"> & {
+  carrierRead?: typeof fetch;
   text?: string; quality?: "clear" | "needsClarification"; omitProfileBinding?: boolean;
   reportResponse?: "lostStored" | "lostUnstored"; decisionResponse?: "lostStored" | "lostUnstored";
 } = {}) {
@@ -55,6 +56,7 @@ export async function twilioOutboundStopSpeechFixture(options: Pick<BaseOptions,
       contextKey: randomBytes(32), now: () => f.state.now };
     const callSid = "CA" + "b".repeat(32), streamSid = "MZ" + "c".repeat(32); let form!: URLSearchParams, calls = 0;
     const runtime = new TwilioAbbyOutboundRuntime(carrier, async (_input, init) => {
+      if (init?.method === "GET" && options.carrierRead) return options.carrierRead(_input, init);
       calls++; form = new URLSearchParams(String(init?.body));
       return Response.json({ account_sid: carrier.accountSid, sid: callSid, to: form.get("To"), from: carrier.from,
         direction: "outbound-api", status: "queued", parent_call_sid: null, uri: `/2010-04-01/Accounts/${carrier.accountSid}/Calls/${callSid}.json` }, { status: 201 });

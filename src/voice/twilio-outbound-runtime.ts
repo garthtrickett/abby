@@ -9,6 +9,7 @@ import { captureOutboundOriginalSend } from "./outbound-original-send.ts";
 import type { OutboundOriginalSend } from "./outbound-original-send.ts";
 import type { OutboundProviderBinding, OutboundRuntimeCall, OutboundRuntimeLaunchResult, OutboundVoiceRuntimeAdapter } from "./outbound-runtime.ts";
 import { supportsTwilioBidirectionalAudio } from "./twilio-media-stream.ts";
+import { TwilioOutboundCallClosure } from "./twilio-outbound-call-closure.ts";
 import { TwilioOutboundContext } from "./twilio-outbound-context.ts";
 import type { TwilioOriginalCall } from "./twilio-outbound-context.ts";
 import type { SignedTwilioWebhook, SignedTwilioStreamStart, SignedTwilioUpgrade } from "./twilio-signed-ingress.ts";
@@ -73,6 +74,13 @@ export class TwilioAbbyOutboundRuntime implements OutboundVoiceRuntimeAdapter {
   acceptsAccount(accountSid: string): boolean { return accountSid === this.#config.accountSid; }
   paths(): Readonly<{ answer: string; status: string; stream: string }> {
     return Object.freeze({ answer: this.#answer.pathname, status: this.#status.pathname, stream: this.#stream.pathname });
+  }
+  /** Private credentials/transport remain captured by the launch owner. A
+   * separately approved read-only inspector cannot silently select a different
+   * account/token/from number than the original provider binding. */
+  createCallClosureReader(): TwilioOutboundCallClosure {
+    return new TwilioOutboundCallClosure({ provider: this.#binding, accountSid: this.#config.accountSid, authToken: this.#config.authToken,
+      from: this.#config.from, deadlineMs: this.#config.deadlineMs ?? 15000, now: this.#now }, this.#fetch);
   }
   async inspectTerminal(): Promise<Readonly<{ kind: "unknown" }>> { return { kind: "unknown" }; }
 
