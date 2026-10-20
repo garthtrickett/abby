@@ -8,6 +8,8 @@ All104 original outstanding PRs were integrated through557 into public main649be
 
 A deterministic private-reference format mismatch is corrected separately: the financial-recipient reader now accepts canonical references issued by Abby's verifier even when they begin `-` or `_`, while preserving independent permissions and public approval-name rules.103 source/actual-host controls, including deterministic real-verifier original-host cases for both prefixes, complete strict/638-artifact build and the new test-only strict graph pass. This focused candidate still needs exact-head cloud qualification. The Twilio transport is preserved in its separate branch; concrete outbound ingress/conversation/final-report integration, independently verified exact clinical callback and approved gap13 remain next engineering. All real acceptance/activation gates stay distinct.
 
+The [conditional Twilio + Abby transport](TWILIO_OUTBOUND_TRANSPORT.md) is now incorporated above that financial correction. Its89 source controls, complete641-artifact build and21 emitted PostgreSQL/crash/privacy cases retain their exact recorded scope; the new combined PR requires its own cloud qualification. It preserves the runtime seam and conservative unknown terminal state. No real call, clinic write or default listener follows.
+
 ## Historical qualification checkpoint, 19 October 2026
 
 Through539d5f901e full1792378464534 completed4742 passed/zero failed/one existing

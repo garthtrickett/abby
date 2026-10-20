@@ -3,6 +3,8 @@ import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import { validRecallMarker } from "../cliniko/recall-note.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
+import { captureOutboundOriginalSend } from "./outbound-original-send.ts";
+import type { OutboundOriginalSend } from "./outbound-original-send.ts";
 
 /** Non-patient selection. bindingDigest must cover transport account, runtime,
  * credentials and effective profile/settings. A different runtime needs a new
@@ -22,7 +24,7 @@ export type OutboundLaunchProvider = Readonly<{
    * dispatch. A true fence is one-use, not a retry/idempotency permission.
    * Only an exact parsed provider ACK can call acknowledged. */
   launchOnce(payload: OutboundRuntimeCall, signal: AbortSignal, beforeSend: () => Promise<boolean>,
-    acknowledged: (effectRef: string) => void): Promise<OutboundRuntimeLaunchResult>;
+    acknowledged: (effectRef: string) => void, original?: OutboundOriginalSend): Promise<OutboundRuntimeLaunchResult>;
 }>;
 export type OutboundTerminalProvider = Readonly<{
   binding(): OutboundTerminalProviderBinding;
@@ -56,13 +58,15 @@ export function bindOutboundVoiceRuntime(adapter: OutboundVoiceRuntimeAdapter): 
     const current = () => { try { return isDeepStrictEqual(binding(), selected); } catch { return false; } };
     const selectedBinding = () => { if (!current()) throw new Error("Outbound runtime selection changed"); return selected; };
     const launchPort: OutboundLaunchProvider = Object.freeze({ binding: selectedBinding,
-      async launchOnce(input: OutboundRuntimeCall, signal: AbortSignal, beforeSend: () => Promise<boolean>, acknowledged: (ref: string) => void): Promise<OutboundRuntimeLaunchResult> {
+      async launchOnce(input: OutboundRuntimeCall, signal: AbortSignal, beforeSend: () => Promise<boolean>, acknowledged: (ref: string) => void, original?: OutboundOriginalSend): Promise<OutboundRuntimeLaunchResult> {
         let admitted = false, fenced = false, acceptedRef: string | undefined, closed = false;
         try {
           if (!(signal instanceof AbortSignal) || signal.aborted || !current() || typeof beforeSend !== "function" || typeof acknowledged !== "function" ||
               !exact(input, ["effectRef", "capacityAllocationRef", "number", "profileRef"]) || !identityValid(input) || input.profileRef !== selected.profileRef ||
               typeof input.number !== "string" || !/^\+[1-9][0-9]{7,14}$/.test(input.number)) return { kind: "definitiveUnsent" };
           const payload = Object.freeze(structuredClone(input));
+          const context = original === undefined ? undefined : captureOutboundOriginalSend(original, payload, selected);
+          if (original !== undefined && !context) return { kind: "definitiveUnsent" };
           const fence = async () => {
             if (closed || fenced || signal.aborted || !current()) return false; fenced = true;
             try {
@@ -77,7 +81,7 @@ export function bindOutboundVoiceRuntime(adapter: OutboundVoiceRuntimeAdapter): 
             }
           };
           const answer = await awaitUntilAbort(Promise.resolve().then(() =>
-            !signal.aborted && current() ? launch(payload, signal, fence, ack) : { kind: "unknown" as const }), signal);
+            !signal.aborted && current() ? launch(payload, signal, fence, ack, context) : { kind: "unknown" as const }), signal);
           if (acceptedRef) return { kind: "accepted", effectRef: acceptedRef };
           if (admitted && exact(answer, ["kind", "effectRef"]) && answer?.kind === "accepted" && answer.effectRef === payload.effectRef)
             return { kind: "accepted", effectRef: payload.effectRef };

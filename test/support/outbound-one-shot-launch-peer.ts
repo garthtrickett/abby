@@ -7,11 +7,13 @@ import type { outboundLaunchOwnerFixture } from "./outbound-launch-owner.ts";
 import type { OutboundTargetAuthority } from "../../src/cliniko/outbound-appointment-target.ts";
 import type { OutboundLaunchAuthority } from "../../src/standalone/cliniko-outbound-launch-owner.ts";
 import type { OutboundNumberStopAuthority } from "../../src/standalone/cliniko-outbound-number-stops.ts";
+import type { TwilioAbbyOutboundConfig } from "../../src/voice/twilio-outbound-runtime.ts";
 type Fixture = Awaited<ReturnType<typeof outboundLaunchOwnerFixture>>;
 export async function outboundLaunchPeer(f: Fixture, cwd: string, onSubmitted: () => void, hold: "nativeAck" | "provider",
   targeted?: Readonly<{ individualTarget: Readonly<{ appointmentPolicyDigest: string }>; target: OutboundTargetAuthority;
     authority: OutboundLaunchAuthority; native: typeof fetch }>,
-  guarded?: Readonly<{ guardRef: string; accountPath: string; maximumNativeRequests: number; numberStops: OutboundNumberStopAuthority; native: typeof fetch }>) {
+  guarded?: Readonly<{ guardRef: string; accountPath: string; maximumNativeRequests: number; numberStops: OutboundNumberStopAuthority; native: typeof fetch;
+    twilio?: Readonly<{ config: Omit<TwilioAbbyOutboundConfig, "now">; transport: typeof fetch }> }>) {
   const child = fork(new URL("./outbound-launch-worker.mjs", import.meta.url), [], { cwd, stdio: ["ignore", "pipe", "pipe", "ipc"],
     env: { ...process.env, NODE_OPTIONS: "--max-old-space-size=256" } });
   const output: string[] = []; child.stdout?.on("data", value => output.push(String(value))); child.stderr?.on("data", value => output.push(String(value)));
@@ -32,6 +34,11 @@ export async function outboundLaunchPeer(f: Fixture, cwd: string, onSubmitted: (
           ...(request.body === undefined ? {} : { body: request.body }) });
         if (hold === "nativeAck" && request.method === "POST") { onSubmitted(); return; }
         data = { body: await response.text(), status: response.status };
+      } else if (m.kind === "twilioRequest" && guarded?.twilio) {
+        const request = m.data, response = await guarded.twilio.transport(request.input, { method: request.method, headers: request.headers,
+          redirect: "error", signal: AbortSignal.timeout(15000), body: request.body });
+        if (hold === "provider") { onSubmitted(); return; }
+        data = { body: await response.text(), status: response.status, headers: Object.fromEntries(response.headers) };
       } else if (m.kind === "provider") {
         const allocation = value(decodeOutboundLaunchAttempt(f.contactControls.rows.find(r =>
           (r.recall_type as { links: { self: string } }).links.self.endsWith("/62"))!.notes)).capacityAllocationRef;
@@ -53,7 +60,7 @@ export async function outboundLaunchPeer(f: Fixture, cwd: string, onSubmitted: (
         else if (family === "target" && targeted) data = targeted.target.current(query, signal) && await targeted.target.allows(query, signal);
         else throw new Error("Synthetic grant unavailable");
       } else throw new Error("Synthetic operation unavailable");
-    } catch { data = m.kind === "fetch" ? { failed: true } : false; }
+    } catch { data = m.kind === "fetch" || m.kind === "twilioRequest" ? { failed: true } : false; }
     if (child.connected) child.send({ kind: "reply", id: m.id, data });
   });
   const { clock: _clock, rateBudget: _budget, ...requests } = f.config.requests;
@@ -61,7 +68,8 @@ export async function outboundLaunchPeer(f: Fixture, cwd: string, onSubmitted: (
   const { clock: _contactClock, rateBudget: _contactBudget, contactRevision: _revision, ...contact } = f.config.contact;
   child.send({ kind: "start", data: { requests, attempts, contact, campaignRef: f.request.campaignRef,
     ...(targeted ? { individualTarget: targeted.individualTarget } : {}),
-    ...(guarded ? { guarded: { guardRef: guarded.guardRef, accountPath: guarded.accountPath, maximumNativeRequests: guarded.maximumNativeRequests } } : {}),
+    ...(guarded ? { guarded: { guardRef: guarded.guardRef, accountPath: guarded.accountPath, maximumNativeRequests: guarded.maximumNativeRequests,
+      ...(guarded.twilio ? { twilio: { ...guarded.twilio.config, contextKey: Array.from(guarded.twilio.config.contextKey) } } : {}) } } : {}),
     campaignPath: join(dirname(f.definitionConfig.path), "campaign.json"), now: f.state.now, provider: f.ports.provider.binding(), binding: f.binding } });
   return { child, output, errors,
     async kill() { if (child.exitCode === null && child.signalCode === null) { assert.ok(child.kill("SIGKILL")); assert.equal(await terminal, "SIGKILL"); } } };

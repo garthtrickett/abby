@@ -45,6 +45,21 @@ process.on('message', async message => {
       if (value.failed) throw new Error('Synthetic native unavailable');
       return new Response(value.body, { status: value.status });
     };
+    let concreteProvider;
+    if (setup.guarded?.twilio) {
+      const { TwilioAbbyOutboundRuntime } = await import(new URL('voice/twilio-outbound-runtime.js', emitted));
+      const { bindOutboundVoiceRuntime } = await import(new URL('voice/outbound-runtime.js', emitted));
+      const transport = async (input, init) => {
+        const result = await rpc('twilioRequest', { input: String(input), method: init.method,
+          headers: Object.fromEntries(new Headers(init.headers)), body: init.body });
+        if (result.failed) throw new Error('Synthetic transport unavailable');
+        return new Response(result.body, { status: result.status, headers: result.headers });
+      };
+      const bound = bindOutboundVoiceRuntime(new TwilioAbbyOutboundRuntime({ ...setup.guarded.twilio,
+        contextKey: new Uint8Array(setup.guarded.twilio.contextKey), now: clock }, transport));
+      if (!bound.ok) throw new Error('Synthetic runtime unavailable');
+      concreteProvider = bound.value.launch;
+    }
     const owner = ClinikoOutboundLaunchOwner.create(config, {
       request: grant('request'), attempt: { ...grant('attempt'), producerAdmitted: query => rpc('grant', { family: 'attemptProducer', query }) },
       history: { allowsHistoryRead: query => rpc('grant', { family: 'history', query }), allowsRecordRead: query => rpc('grant', { family: 'historyRecord', query }), current: () => process.connected },
@@ -55,7 +70,7 @@ process.on('message', async message => {
       effects: new PostgresOutboundEffectBarrier(db, requests.scope, outboundLaunchOwnerBinding(config)),
       attemptEffects: new PostgresOutboundEffectBarrier(db, requests.scope, outboundLaunchRecordOwnerBinding(attempts)),
       capacity: new PostgresOutboundCapacity(db, requests.scope, outboundCapacityOwnerBinding(config.campaignRef)), native,
-      provider: { binding: () => setup.provider,
+      provider: concreteProvider ?? { binding: () => setup.provider,
         async launchOnce(payload, _signal, beforeSend, acknowledged) {
           if (!await beforeSend()) return { kind: 'definitiveUnsent' };
           const value = await rpc('provider', payload);
