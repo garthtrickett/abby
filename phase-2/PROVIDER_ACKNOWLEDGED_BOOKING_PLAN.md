@@ -6,7 +6,7 @@
 
 Simplify Abby's external PMS booking flow: prepare and authorize the exact request, check availability immediately before one write, and recognize an exact successful provider acknowledgement as booking success. Subsequent inspection cannot erase that result. Preserve verification, played confirmation, duplicate protection and Cliniko-owned crash recovery. Hosts that own their diary retain their stronger transactional contract.
 
-This Abby proposal draws on Louis's Aeva workflow. His Aeva decisions do not approve an Abby clinic, a Cliniko recovery process or release activation. The current request is planning only; implementing it requires a separate go-ahead. This document does not amend the accepted D-16 contract by itself.
+This Abby proposal draws on Louis's Karen workflow. His Karen decisions do not approve an Abby clinic, a Cliniko recovery process or release activation. The current request is planning only; implementing it requires a separate go-ahead. This document does not amend the accepted D-16 contract by itself.
 
 ## Scope and delivery boundaries
 

@@ -2,11 +2,11 @@
 
 **Status:** Proposed sequence, documentation only. **Date:** 16 October 2026.
 
-**Execution:** The owner subsequently instructed work through this order. See [current progress and evidence](EXECUTION_PROGRESS.md). That instruction activates the planned engineering; clinic/provider acceptance, deployment and Aeva removal retain their separate requirements below.
+**Execution:** The owner subsequently instructed work through this order. See [current progress and evidence](EXECUTION_PROGRESS.md). That instruction activates the planned engineering; clinic/provider acceptance, deployment and Karen removal retain their separate requirements below.
 
-**Aeva reference for current and future agents:** The owner supplied an updated Aeva snapshot on 19 October 2026, extracted beside Abby at `/home/gust/code/aeva-website-dev`. When uncertain about an implementation or workflow, search this copy for existing solutions and their tests before designing new machinery; Aeva may already solve it. Use its patterns as a reference and adapt them to Abby's contracts and validation. The copy has no `.git` metadata and is distinct from the older commit pinned in the reuse audit. See [snapshot provenance and useful entry points](AEVA_TO_ABBY_REUSE_AUDIT.md#current-owner-supplied-reference-19-october-2026).
+**Karen reference for current and future agents:** The owner supplied an updated Karen snapshot on 19 October 2026, available beside Abby through `/home/gust/code/karen-website-dev`. When uncertain about an implementation or workflow, search this copy for existing solutions and their tests before designing new machinery; Karen may already solve it. Use its patterns as a reference and adapt them to Abby's contracts and validation. The copy has no `.git` metadata and is distinct from the older commit pinned in the reuse audit. See [snapshot provenance and useful entry points](KAREN_TO_ABBY_REUSE_AUDIT.md#current-owner-supplied-reference-19-october-2026).
 
-Preserve access to the useful Aeva material now. For Abby engineering, deliver the provider acknowledged booking change first, requalify the affected receptionist flows, finish the remaining earlier-gap and class work, then build payments, outbound and approved writeback in that order. Apply the Aeva lessons inside those changes rather than creating a separate Aeva feature-parity project.
+Preserve access to the useful Karen material now. For Abby engineering, deliver the provider acknowledged booking change first, requalify the affected receptionist flows, finish the remaining earlier-gap and class work, then build payments, outbound and approved writeback in that order. Apply the Karen lessons inside those changes rather than creating a separate Karen feature-parity project.
 
 ## The three source documents
 
@@ -14,17 +14,17 @@ Preserve access to the useful Aeva material now. For Abby engineering, deliver t
 | --- | --- |
 | [13-gap Cliniko integration plan](THIRTEEN_GAP_IMPLEMENTATION.md) | Master requirements and engineering history. All thirteen gaps remain in scope; historical local passes do not establish current completion or activation. |
 | [Provider acknowledged booking plan](PROVIDER_ACKNOWLEDGED_BOOKING_PLAN.md) | Detailed prerequisite for changing individual and native class booking success. Its four implementation steps and verification matrix govern the booking stages below. |
-| [Aeva reuse audit](AEVA_TO_ABBY_REUSE_AUDIT.md) | Source references, acceptance scenarios and optional extensions. R01–R28 are recommendations with different scopes, not twenty-eight automatically approved features. |
+| [Karen reuse audit](KAREN_TO_ABBY_REUSE_AUDIT.md) | Source references, acceptance scenarios and optional extensions. R01–R28 are recommendations with different scopes, not twenty-eight automatically approved features. |
 
 This document orders those plans; it does not replace their detailed contracts or authorize implementation, provider actions, deployment or deletion. The booking change still needs the separate implementation go-ahead recorded in its plan. Existing activation of the thirteen-gap roadmap remains recorded there; this sequencing document does not invent another approval for already authorized work. Any conflicting contract or material scope change must be resolved explicitly before the affected implementation.
 
 ## Planned order
 
-### 1 Preserve Aeva source access before local deletion
+### 1 Preserve Karen source access before local deletion
 
-Follow the audit's [preservation checklist](AEVA_TO_ABBY_REUSE_AUDIT.md#preserve-before-removing-the-local-source). Verify independent retrieval of the exact audited source and tests, inventory dirty worktrees and local-only work, and retain the selected material in an approved destination. Keep these four planning documents independently recoverable too. A local commit or GitHub link alone is insufficient.
+Follow the audit's [preservation checklist](KAREN_TO_ABBY_REUSE_AUDIT.md#preserve-before-removing-the-local-source). Verify independent retrieval of the exact audited source and tests, inventory dirty worktrees and local-only work, and retain the selected material in an approved destination. Keep these four planning documents independently recoverable too. A local commit or GitHub link alone is insufficient.
 
-The audit used Aeva `34a642be8da7884b924eb02e7ccae731bd428276`; remote retrieval was not verified. Its summaries preserve lessons, not the whole source. Avoid placing a wholesale Aeva archive, credentials or patient material in Abby.
+The audit used Karen `34a642be8da7884b924eb02e7ccae731bd428276`; remote retrieval was not verified. Its summaries preserve lessons, not the whole source. Avoid placing a wholesale Karen archive, credentials or patient material in Abby.
 
 **Exit:** The operator has a concrete preservation inventory and verified recovery evidence before deciding to delete anything. Source removal, service shutdown and credential/data-retention decisions remain separate owner actions. Unavailable remote access blocks deletion readiness; it need not block independent Abby engineering.
 
@@ -88,18 +88,18 @@ Finish the staged caller/SAM presentation, receipt and renewed-consent route, op
 
 ### 8 Build gap 11 payments and expiry
 
-Use the roadmap's [gap 11 requirements](THIRTEEN_GAP_IMPLEMENTATION.md#requirements-and-evidence-needed) with audit [R18](AEVA_TO_ABBY_REUSE_AUDIT.md#r18-separate-payment-truth-from-appointment-and-delivery-truth) and [R19](AEVA_TO_ABBY_REUSE_AUDIT.md#r19-use-aeva-payment-races-as-adversarial-requirements).
+Use the roadmap's [gap 11 requirements](THIRTEEN_GAP_IMPLEMENTATION.md#requirements-and-evidence-needed) with audit [R18](KAREN_TO_ABBY_REUSE_AUDIT.md#r18-separate-payment-truth-from-appointment-and-delivery-truth) and [R19](KAREN_TO_ABBY_REUSE_AUDIT.md#r19-use-karen-payment-races-as-adversarial-requirements).
 
 Stripe and dedicated Cliniko financial reviews are owner-selected. Qualify the
 concrete clinic record and permission contracts first, then implement exact action/account/amount/currency binding, authenticated and idempotent events, link delivery, receipts and independently authorized expiry. Keep payment, appointment, delivery and receipt outcomes distinct. Cover duplicate/out-of-order events and payment-versus-expiry races. No invented reservation, automatic restoration, refund or financial coverage promise.
 
-If a required receipt needs native attachment support, bring forward only that approved [R22](AEVA_TO_ABBY_REUSE_AUDIT.md#r22-give-notes-and-attachments-distinct-permissions-and-receipts) dependency here, under its own exact-target/storage contract. Do not wait for all gap 13 work or quietly add general clinical writeback.
+If a required receipt needs native attachment support, bring forward only that approved [R22](KAREN_TO_ABBY_REUSE_AUDIT.md#r22-give-notes-and-attachments-distinct-permissions-and-receipts) dependency here, under its own exact-target/storage contract. Do not wait for all gap 13 work or quietly add general clinical writeback.
 
 **Exit:** Complete synthetic payment/expiry journeys and failure recovery are demonstrated through the actual host. Real payment, sender and clinic acceptance remain distinct. Keep patient-bearing payment state out of standalone local persistence.
 
 ### 9 Build gap 12 outbound and sick-day workflows
 
-Use the roadmap's [gap 12 requirements](THIRTEEN_GAP_IMPLEMENTATION.md#requirements-and-evidence-needed) with audit [R20](AEVA_TO_ABBY_REUSE_AUDIT.md#r20-build-outbound-campaigns-separately-from-recall-requests) and [R21](AEVA_TO_ABBY_REUSE_AUDIT.md#r21-pin-the-exact-sick-day-or-callback-appointment-end-to-end).
+Use the roadmap's [gap 12 requirements](THIRTEEN_GAP_IMPLEMENTATION.md#requirements-and-evidence-needed) with audit [R20](KAREN_TO_ABBY_REUSE_AUDIT.md#r20-build-outbound-campaigns-separately-from-recall-requests) and [R21](KAREN_TO_ABBY_REUSE_AUDIT.md#r21-pin-the-exact-sick-day-or-callback-appointment-end-to-end).
 
 The owner selected separate clinic-approved Cliniko contact reviews for voice consent and opt-out/DNC, distinct from financial reviews; marketing flags are not voice consent. Authenticated provider opt-outs at the dialled number may automatically write dedicated Cliniko DNC decisions under clinic-approved policy; future calls stay blocked and reconsent requires clinic approval. Qualify that concrete source and its current grants. Define approved audience and contact policy, then build opt-out, quiet-hours/timezone handling, scheduling, cancellation, capacity limits and per-action recovery. Bind each callback/sick-day action to the exact fresh appointment and independently verified authority. Existing recall requests do not establish campaign support; a shared phone or campaign record does not establish patient permission.
 
@@ -107,7 +107,7 @@ The owner selected separate clinic-approved Cliniko contact reviews for voice co
 
 ### 10 Build gap 13 approved communication and document writeback
 
-Use the roadmap's [gap 13 requirements](THIRTEEN_GAP_IMPLEMENTATION.md#requirements-and-evidence-needed) with audit [R08](AEVA_TO_ABBY_REUSE_AUDIT.md#r08-generate-any-future-prose-from-trusted-outcomes) and [R22](AEVA_TO_ABBY_REUSE_AUDIT.md#r22-give-notes-and-attachments-distinct-permissions-and-receipts).
+Use the roadmap's [gap 13 requirements](THIRTEEN_GAP_IMPLEMENTATION.md#requirements-and-evidence-needed) with audit [R08](KAREN_TO_ABBY_REUSE_AUDIT.md#r08-generate-any-future-prose-from-trusted-outcomes) and [R22](KAREN_TO_ABBY_REUSE_AUDIT.md#r22-give-notes-and-attachments-distinct-permissions-and-receipts).
 
 Establish clinic-owned content, storage, exact subject/target and permission separately for patient memos, individual notes, shared-class records and attachments. Derive any permitted prose from trusted outcomes. Preserve concurrency, partial upload/orphan and ambiguous-write boundaries; neither a released claim nor a transport response permits blind replay.
 
@@ -121,7 +121,7 @@ Keep external readiness visible from stage 2 onward: actual clinic verification/
 
 **Exit:** Each of the thirteen gaps has current engineering evidence and an explicit acceptance status. Deployment, configuration/content activation and human acceptance are separately evidenced before relevant patient traffic. If an external gate remains blocked, report engineering progress and that blocked acceptance accurately; do not declare the entire integration complete.
 
-## Where every Aeva recommendation belongs
+## Where every Karen recommendation belongs
 
 These assignments keep the audit actionable without adding a second backlog ahead of gap 10. Preserve existing invariants wherever their modules change; adopt a new feature only when it satisfies an actual requirement and its applicable decision is settled.
 

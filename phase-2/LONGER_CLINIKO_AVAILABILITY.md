@@ -1,5 +1,7 @@
 # Longer Cliniko availability: gap6 progress
 
+**Source navigation:** Karen source links in this document open the current owner-supplied local reference snapshot. Recorded inspection dates and historical commit IDs remain historical evidence; the uploaded snapshot has no verified commit identity and is not asserted to match those revisions. A historical path absent from the upload links to the reference root for investigation.
+
 ## Implemented online searches
 
 An independently approved booking policy may include:
@@ -165,14 +167,14 @@ production workflow and confirmation boundaries.
 ### Reference/provider contract findings
 
 The [official daily schema](https://docs.api.cliniko.com/openapi/daily-availability)
-currently enumerates0–6 without a textual weekday mapping. The inspected Aeva
+currently enumerates0–6 without a textual weekday mapping. The inspected Karen
 source at committed`cd592bec2f0c5630c1f559f6571c8b5724c7103d`
-([calculator](https://github.com/aeva-ai/aeva-website/blob/cd592bec2f0c5630c1f559f6571c8b5724c7103d/server/src/services/cliniko/patients/customAvailabilityCalculatorService.ts))
+([calculator](/home/gust/code/karen-website-dev/server/src/services/cliniko/patients/customAvailabilityCalculatorService.ts))
 records an ISO weekday convention from its native investigation and matches
 Sunday7 as well as legacy0. Abby's Sunday-origin approved plan now accepts both
 Sunday encodings and verifies that both produce the same clinic date. This is
 source-based contract evidence and synthetic qualification; Abby did not read
-production calendars or independently reproduce Aeva's live investigation.
+production calendars or independently reproduce Karen's live investigation.
 
 [Cliniko's repeating appointment guide](https://help.cliniko.com/en/articles/1777286-book-repeating-appointments)
 describes calendar occurrences. The
@@ -255,3 +257,12 @@ Availability blocks that define extra opening hours still require repeat_rule
 null. Their expansion/count/month-end/DST semantics remain unqualified. No
 missing native occurrence is synthesized or inferred from an existing rule, and
 full recurrence support and real-calendar acceptance remain open.
+
+
+## Historical source navigation inventory
+
+Client application paths use the `/home/gust/code/karen-client` alias; other paths use `/home/gust/code/karen-website-dev`. Paths describe the inspected source layout, while presence refers only to the current upload.
+
+| Historical commit | Source path | Current snapshot |
+| --- | --- | --- |
+| `cd592bec2f0c5630c1f559f6571c8b5724c7103d` | `server/src/services/cliniko/patients/customAvailabilityCalculatorService.ts` | Present |

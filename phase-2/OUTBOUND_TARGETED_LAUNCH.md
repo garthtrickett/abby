@@ -20,6 +20,6 @@ Known exact provider acceptance survives later target-permission withdrawal. Unk
 
 ## Remaining requirements
 
-Concrete Twilio/Abby outbound conversation and authenticated recovery, Vapi integration, durable number-wide stop suppression, verified callback handoff and actual clinic/producer/restore/acoustic acceptance remain unfinished. An approved generic greeting is not permission to reveal appointment details before verification. Future sick-day rescheduling must preserve the original appointment duration and independently validate both original and replacement targets; Aeva's original-span handoff is a reference for that later clinical step.
+Concrete Twilio/Abby outbound conversation and authenticated recovery, Vapi integration, durable number-wide stop suppression, verified callback handoff and actual clinic/producer/restore/acoustic acceptance remain unfinished. An approved generic greeting is not permission to reveal appointment details before verification. Future sick-day rescheduling must preserve the original appointment duration and independently validate both original and replacement targets; Karen's original-span handoff is a reference for that later clinical step.
 
 No default outbound listener, scheduler expansion, live call, clinic write, activation, local patient store or schema is added. See [runtime responsibilities](OUTBOUND_RUNTIME.md), [outbound contract](OUTBOUND_SICK_DAY_CONTRACT.md) and [qualification evidence](EXECUTION_PROGRESS.md).
