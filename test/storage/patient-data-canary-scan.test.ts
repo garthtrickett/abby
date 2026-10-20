@@ -1,3 +1,4 @@
+import { distinctFromClock, drawDistinctCode } from "../support/verification-code-canary.ts";
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { randomUUID } from "node:crypto";
@@ -109,4 +110,27 @@ test("database canary scan identifies current patient-data leaks without returni
   assert.deepEqual(await scanDisposableBackupCanaries(url, [
     { label: "offer", value: offerRef }, { label: "appointment", value: appointmentRef },
   ]), ["appointment", "offer"]);
+});
+
+test("six-digit verification canaries distinguish legitimate clock substrings and still expose actual code payloads", async () => {
+  const schema = `otp_clock_${randomUUID().replaceAll("-", "")}`;
+  await sql.raw(`create schema "${schema}"`).execute(db);
+  const target = new URL(url!); target.searchParams.set("options", `-csearch_path=${schema}`);
+  const isolated = connectPostgres(target.toString());
+  try {
+    await sql`create table epoch_values (sent_at_ms jsonb, echo text)`.execute(isolated);
+    const window = { sinceMs: 1792470200000, throughMs: 1792470860000 };
+    await sql`insert into epoch_values values (${JSON.stringify([window.sinceMs, window.sinceMs + 1234, window.throughMs])}::jsonb, null)`.execute(isolated);
+    const collision = Number(String(window.sinceMs).slice(0, 6));
+    assert.deepEqual(await scanPatientDataCanaries(isolated, [{ label: "code", value: String(collision) }]),
+      { ok: true, value: [{ label: "code", table: "epoch_values", column: "sent_at_ms" }] },
+      "the unchanged raw scanner can flag a purely public clock value as an apparent OTP match");
+    let draws = 0;
+    const safe = drawDistinctCode(() => draws++ === 0 ? collision : 0, window), code = String(safe).padStart(6, "0");
+    assert.equal(distinctFromClock(safe, window), true); assert.equal(draws, 2);
+    assert.deepEqual(await scanPatientDataCanaries(isolated, [{ label: "code", value: code }]), { ok: true, value: [] });
+    await sql`update epoch_values set echo = ${"private code " + code}`.execute(isolated);
+    assert.deepEqual(await scanPatientDataCanaries(isolated, [{ label: "code", value: code }]),
+      { ok: true, value: [{ label: "code", table: "epoch_values", column: "echo" }] }, "actual code data remains detectable");
+  } finally { await isolated.destroy(); await sql.raw(`drop schema "${schema}" cascade`).execute(db); }
 });

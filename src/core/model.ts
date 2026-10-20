@@ -7,12 +7,12 @@ export const err = <Failure>(error: Failure): Result<never, Failure> => ({ ok: f
 
 export type LocationScope = Readonly<{ tenantId: string; clinicId: string; locationId: string }>;
 export type ProviderCallKey = Readonly<{ accountRef: string; providerCallRef: string }>;
-export type Admission = Readonly<{
-  key: ProviderCallKey;
-  dialedNumber: string;
-  acceptedAt: string;
-  deadline: string;
-}>;
+type AdmissionTiming = Readonly<{ key: ProviderCallKey; acceptedAt: string; deadline: string }>;
+/** Legacy incoming records keep their public dialled clinic number and original shape. */
+export type InboundAdmission = AdmissionTiming & Readonly<{ dialedNumber: string; direction?: never; clinicNumber?: never }>;
+/** The recipient and native patient context belong only to the volatile outbound owner. */
+export type OutboundAdmission = AdmissionTiming & Readonly<{ direction: "outbound"; clinicNumber: string; dialedNumber?: never }>;
+export type Admission = InboundAdmission | OutboundAdmission;
 export type SessionLease = Readonly<{ sessionId: string; version: number; expiresAt: string; validForMs: number }>;
 export const CALL_TERMINAL_REASONS = ["callerDisconnected", "sessionClosed", "mediaFailure", "localLeaseClosed",
   "admissionExpired", "leaseExpired", "transferConnected", "transferUnproven", "textCompleted"] as const;
@@ -41,7 +41,7 @@ export type PendingLocationPrompt = Readonly<{
 export type PendingLocationCall = Readonly<{
   callId: string;
   route: PendingLocationRoute;
-  admission: Admission;
+  admission: InboundAdmission;
   status: "pending" | "expired" | "bound";
   sessionLease?: SessionLease;
   prompt?: PendingLocationPrompt;

@@ -1,3 +1,4 @@
+import { validAdmission, sameCallAdmission } from "./call-admission.ts";
 import { POSSIBLE_SEND_RECOVERY_DELAY_MS, err, ok } from "./model.ts";
 import type { ActiveSessionReceipt, Admission, AdmissionReceipt, AdmissionResult, ApprovedGreeting, CallPolicy, CallState, LocationScope, PendingLocationCall, PendingLocationExpiryResult, PendingLocationPrompt, PendingLocationResult, PendingLocationRoute, PendingPresentationRef, RecoverableEffectRef, Result, StaffQueueEntry, TransitionAction, TransitionFailure } from "./model.ts";
 import { transition } from "./transition.ts";
@@ -76,7 +77,7 @@ export function admissionReceipt(state: CallState): AdmissionReceipt | null {
 }
 
 export function sameAdmission(left: Admission, right: Admission): boolean {
-  return left.key.accountRef === right.key.accountRef && left.key.providerCallRef === right.key.providerCallRef && left.dialedNumber === right.dialedNumber;
+  return sameCallAdmission(left, right);
 }
 
 function sameScope(left: LocationScope, right: LocationScope): boolean {
@@ -389,8 +390,7 @@ export class MemoryLedger implements LedgerStore, EffectCallLeaseStore {
   }
 
   async admit(callId: string, policy: CallPolicy, admission: Admission): Promise<Result<AdmissionResult, TransitionFailure>> {
-    if (!callId || !admission.key.accountRef || !admission.key.providerCallRef || !admission.dialedNumber ||
-        !Number.isFinite(Date.parse(admission.acceptedAt)) || Date.parse(admission.deadline) <= Date.parse(admission.acceptedAt)) return err({ kind: "invalidTransition" });
+    if (!callId || !validAdmission(admission)) return err({ kind: "invalidTransition" });
     const existing = this.calls.get(callId);
     if (existing) {
       const receipt = admissionReceipt(existing);

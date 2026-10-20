@@ -5222,3 +5222,7 @@ An explicit appointment-policy configuration and independent native target plus 
 ## Bounded native number-stop observation, 19 October 2026
 
 The separately qualified read-only source checks shared numbers across explicitly approved current/retired clinic contact roles.194 source controls, strict/632 serving build and29 emitted SQL/native180/privacy cases pass. It is not wired into launch and does not establish absence of unretained provider stops or complete call admission. The separate through550 full failed one original pass-class clinical-expiry case(5097pass/1fail/1existingSkip;ordered6notrun); diagnosis remains open. See [scope and remaining requirements](OUTBOUND_NUMBER_STOPS.md) and [evidence](EXECUTION_PROGRESS.md#native-shared-number-stop-observation-19-october-2026).
+
+## Gap12 explicit outgoing call admission prerequisite — 20 October 2026
+
+See [contract and commands](OUTBOUND_CALL_ADMISSION.md) and [current evidence](EXECUTION_PROGRESS.md). The separate public clinic-number role, private-field refusal, cross-direction conflict and incoming-only location choice now have focused source, strict/build and actual emitted SQL/cold/lock-wait/backup qualification. This is an actual-conversation prerequisite; conversation, complete provider/contact/speech finality and independently verified original-patient/exact clinical handoff remain unfinished. Current follow-up cloud qualification and actual provider/clinic acceptance remain separate.
