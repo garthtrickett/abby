@@ -15,6 +15,8 @@ import { TransientPatientProofHost } from "./transient-patient-proof.ts";
 import { clinikoRequestCeiling, inheritClinikoRequestCost } from "../cliniko/request-cost.ts";
 import type { ClinikoCostBinding } from "../cliniko/request-cost.ts";
 import type { PatientOperation, VerificationPolicyGate } from "./transient-patient-proof.ts";
+import { isDeepStrictEqual } from "node:util";
+import { ClinikoOutboundClinicalContext } from "./cliniko-outbound-clinical-context.ts";
 
 type Config = Readonly<{
   receipt: AdmissionReceipt; inbound: AuthenticatedInboundCall; sessionId: string; policyVersion: string;
@@ -23,13 +25,18 @@ type Config = Readonly<{
   contact: VerificationContact; permission: PatientVerificationPermission;
   budget: PatientVerificationBudget; delivery: PatientCodeDelivery; clock?: () => string; timeoutMs?: number;
 }>;
+type CapturedConfig = Omit<Config, "inbound"> & Readonly<{
+  candidateNumber: string;
+  outbound?: ClinikoOutboundClinicalContext;
+}>;
+export type OutboundCallerVerificationConfig = Omit<Config, "inbound"> & Readonly<{ outbound: ClinikoOutboundClinicalContext }>;
 type Grant = Readonly<{ verificationRef: string; expiresAt: string }>;
 export const verificationPrompt = "If you receive a verification code at your registered email, enter it here. I cannot access or change personal appointments until verification succeeds.";
 
 /** Trusted call-owner input, separate from caller turns and every model/agent command.
  * One admission/session owns one challenge, one operation and one private proof. */
 export class CallerVerificationSession {
-  readonly #config: Config;
+  readonly #config: CapturedConfig;
   readonly #email: EmailPatientAuthority;
   readonly #proof: TransientPatientProofHost;
   #pending: Promise<void> | undefined;
@@ -38,8 +45,8 @@ export class CallerVerificationSession {
   #grant: Grant | undefined;
   #subject: string | undefined;
 
-  private constructor(incoming: Config) {
-    const config = Object.freeze({ ...incoming, receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound) });
+  private constructor(incoming: CapturedConfig) {
+    const config = Object.freeze({ ...incoming, receipt: structuredClone(incoming.receipt) });
     this.#config = config;
     const scope = this.#config.receipt.scope;
     const policy: VerificationPolicyGate = { current: async bound => {
@@ -52,11 +59,11 @@ export class CallerVerificationSession {
     } };
     const clock = () => this.#now();
     this.#email = new EmailPatientAuthority({ scope, callId: config.receipt.callId, sessionId: config.sessionId,
-      policyVersion: config.policyVersion, presentedNumber: config.inbound.presentedCallerNumber!, operations: [config.operation],
+      policyVersion: config.policyVersion, presentedNumber: config.candidateNumber, operations: [config.operation],
       lookup: config.lookup, contact: config.contact, policy, permission: config.permission, budget: config.budget,
       delivery: config.delivery, clock: () => Date.parse(clock()), ...(config.timeoutMs === undefined ? {} : { deadlineMs: config.timeoutMs }) });
     this.#proof = new TransientPatientProofHost({ scope, callId: config.receipt.callId, sessionId: config.sessionId,
-      policyVersion: config.policyVersion, presentedCallerNumber: config.inbound.presentedCallerNumber,
+      policyVersion: config.policyVersion, presentedCallerNumber: config.candidateNumber,
       maxAttempts: 1, lookup: config.lookup, authority: this.#email, policy, clock,
       ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) });
   }
@@ -64,12 +71,33 @@ export class CallerVerificationSession {
   static create(config: Config): Result<CallerVerificationSession, Readonly<{ kind: "verificationUnavailable" }>> {
     try {
       const { receipt, inbound } = config;
-      if (!receipt || !inbound || receipt.lifecycle === "ended" || receipt.callId !== callIdFor(inbound.key) ||
+      if (!receipt || !inbound || Object.hasOwn(config, "outbound") || receipt.admission.direction === "outbound" || receipt.lifecycle === "ended" || receipt.callId !== callIdFor(inbound.key) ||
           receipt.admission.key.accountRef !== inbound.key.accountRef ||
           receipt.admission.key.providerCallRef !== inbound.key.providerCallRef || receipt.admission.dialedNumber !== inbound.dialedNumber ||
           typeof config.ledger?.read !== "function" || typeof config.ledger?.readWriteStop !== "function" ||
           typeof config.policyStore?.read !== "function" || config.policy?.operation !== config.operation) return err({ kind: "verificationUnavailable" });
-      return ok(new CallerVerificationSession(config));
+      const { inbound: _, ...rest } = config;
+      return ok(new CallerVerificationSession({ ...rest, candidateNumber: inbound.presentedCallerNumber! }));
+    } catch { return err({ kind: "verificationUnavailable" }); }
+  }
+
+  /** Explicit outgoing path. Native original context constrains the candidate;
+   * it cannot issue proof or replace registered-channel and patient authority.
+   * Incoming events are never manufactured from the called number. */
+  static createOutbound(config: OutboundCallerVerificationConfig): Result<CallerVerificationSession, Readonly<{ kind: "verificationUnavailable" }>> {
+    try {
+      const { outbound, receipt, contact } = config;
+      if (!(outbound instanceof ClinikoOutboundClinicalContext) || !outbound.matchesAdmission(receipt) || !outbound.current(config.operation) ||
+          Object.hasOwn(config, "inbound") || !(contact instanceof ClinikoVerificationContactReader) ||
+          Object.getPrototypeOf(contact) !== ClinikoVerificationContactReader.prototype || contact.read !== ClinikoVerificationContactReader.prototype.read ||
+          contact.revision !== ClinikoVerificationContactReader.prototype.revision ||
+          !outbound.matchesContact(contact) ||
+          typeof config.ledger?.read !== "function" || typeof config.ledger?.readWriteStop !== "function" ||
+          typeof config.policyStore?.read !== "function" || config.policy?.operation !== config.operation) return err({ kind: "verificationUnavailable" });
+      const binding = outbound.verificationBinding(), selection = ClinikoVerificationContactReader.prototype.selection.call(contact);
+      if (selection.credentialFingerprint !== binding.credentialFingerprint || selection.scope.tenantId !== binding.scope.tenantId ||
+          selection.scope.clinicId !== binding.scope.clinicId) return err({ kind: "verificationUnavailable" });
+      return ok(new CallerVerificationSession({ ...config, candidateNumber: binding.number, lookup: outbound.constrainLookup(config.lookup, config.operation) }));
     } catch { return err({ kind: "verificationUnavailable" }); }
   }
 
@@ -80,8 +108,8 @@ export class CallerVerificationSession {
   }
 
   async #active(): Promise<boolean> {
-    const { receipt, inbound, sessionId, policyVersion, operation, ledger, policyStore } = this.#config;
-    if (this.#closed) return false;
+    const { receipt, outbound, sessionId, policyVersion, operation, ledger, policyStore } = this.#config;
+    if (this.#closed || outbound && !outbound.current(operation)) return false;
     const current = await policyStore.read(receipt.scope);
     if (!current.ok || !sameScope(current.value.scope, receipt.scope) || current.value.automationEnabled !== true ||
         current.value.policyVersion !== policyVersion) return false;
@@ -96,9 +124,9 @@ export class CallerVerificationSession {
         state.value.policy.policyVersion !== policyVersion || !state.value.sessionLease ||
         state.value.sessionLease.sessionId !== sessionId ||
         Date.parse(state.value.sessionLease.expiresAt) <= Date.parse(this.#now()) ||
-        !state.value.admission || state.value.admission.key.accountRef !== inbound.key.accountRef ||
-        state.value.admission.key.providerCallRef !== inbound.key.providerCallRef || state.value.admission.dialedNumber !== inbound.dialedNumber) return false;
-    return !this.#closed && Date.parse(state.value.sessionLease.expiresAt) > Date.parse(this.#now());
+        !state.value.admission || !isDeepStrictEqual(state.value.admission, receipt.admission)) return false;
+    return !this.#closed && (!outbound || outbound.matchesAdmission(receipt) && outbound.current(operation)) &&
+      Date.parse(state.value.sessionLease.expiresAt) > Date.parse(this.#now());
   }
 
   /** Trusted transport binding only; no patient, contact, code or proof. */
@@ -220,9 +248,7 @@ export class CallerVerificationSession {
         return found.ok && found.value.kind === "one" && found.value.candidateIds.length === 1 && found.value.candidateIds[0] === patientId
           ? found : ok({ kind: "none" as const, candidateIds: [] });
       }, config.lookup.candidates) };
-      const created = CallerVerificationSession.create({ ...config, lookup });
-      if (!created.ok) return unavailable();
-      successor = created.value;
+      successor = new CallerVerificationSession({ ...config, lookup });
       const current = await awaitUntilAbort(successor.#active(), signal);
       if (current !== true || signal.aborted || this.#closed) { successor.dispose(); return unavailable(); }
       return ok(successor);

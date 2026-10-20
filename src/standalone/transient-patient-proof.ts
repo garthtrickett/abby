@@ -45,7 +45,8 @@ export type TransientPatientProofConfig = Readonly<{
   scope: LocationScope;
   callId: string;
   sessionId: string;
-  /** Obtained from the authenticated inbound call, never from a model turn. */
+  /** Candidate clue from authenticated incoming identity or an independently
+   * approved native outgoing origin, never a model turn or patient proof. */
   presentedCallerNumber: string | undefined;
   policyVersion: string;
   maxAttempts: 1 | 2 | 3;
