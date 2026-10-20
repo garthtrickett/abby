@@ -13,9 +13,9 @@ import type { AdminAccount, AdminDirectory } from "../../src/standalone/identity
 import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 import { outboundRequestValue } from "./outbound-recipient-request.ts";
 import { value } from "./outbound-records.ts";
-export async function outboundContactSourceFixture(options: { apiKey?: string; scope?: import("../../src/core/model.ts").LocationScope } = {}) {
+export async function outboundContactSourceFixture(options: { apiKey?: string; scope?: import("../../src/core/model.ts").LocationScope; patientId?: string } = {}) {
   const seed = outboundRequestValue(), apiKey = options.apiKey ?? "synthetic-key-au5";
-  const request = { ...seed, scope: options.scope ?? seed.scope, credentialFingerprint: clinikoCredentialFingerprint(apiKey) };
+  const request = { ...seed, scope: options.scope ?? seed.scope, patientId: options.patientId ?? seed.patientId, credentialFingerprint: clinikoCredentialFingerprint(apiKey) };
   const folder = await mkdtemp(join(tmpdir(), "abby-contact-source-")), path = join(folder, "source.json");
   const state = { now: "2026-11-02T00:00:00.000Z", live: true, revision: 1, revisionBlocked: false, claims: 0,
     account: { email: "reviewer@example.invalid", membershipVersion: "1", actor: { actorRef: "contact-admin", role: "clinicAdmin", scope: request.scope } } as AdminAccount | undefined };

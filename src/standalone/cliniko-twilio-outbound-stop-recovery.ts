@@ -17,6 +17,7 @@ export type TwilioOutboundStopRecoveryConfig = Readonly<{ stop: OutboundStopOwne
 type Ports = Omit<StopPorts, "provider"> & Readonly<{ runtime: TwilioAbbyOutboundRuntime;
   authentication: TwilioOutboundReportAuthentication; reports: TwilioOutboundReportHistoryAuthority }>;
 type Failure = Readonly<{ kind: "invalidConfig" | "unavailable" | "forbidden" | "unrecoverable" }>;
+type ObservedRecovery = Readonly<{ outcome: OutboundStopOutcome; evidence: "missing" | "noStop" | "stop" }>;
 
 /** Concrete cold recovery from authenticated native Twilio/Abby evidence into
  * the existing restrictive decision owner. The signed callback supplies only
@@ -68,7 +69,17 @@ export class ClinikoTwilioOutboundStopRecovery {
       return ok(new ClinikoTwilioOutboundStopRecovery(captured, bound));
     } catch { return err({ kind: "invalidConfig" }); }
   }
+  matchesRuntime(runtime: TwilioAbbyOutboundRuntime): boolean {
+    try { return runtime instanceof TwilioAbbyOutboundRuntime && isDeepStrictEqual(runtime.binding(), this.#selected) &&
+      isDeepStrictEqual(this.#binding(), this.#selected); } catch { return false; }
+  }
   async recoverStatus(request: SignedTwilioWebhook, external: AbortSignal): Promise<Result<OutboundStopOutcome, Failure>> {
+    const result = await this.recoverStatusEvidence(request, external);
+    return result.ok ? ok(result.value.outcome) : result;
+  }
+  /** Delivery acknowledgement can distinguish absent producer data from an
+   * authentic no-stop observation without treating either as hold clearance. */
+  async recoverStatusEvidence(request: SignedTwilioWebhook, external: AbortSignal): Promise<Result<ObservedRecovery, Failure>> {
     try {
       if (!(external instanceof AbortSignal) || external.aborted || !isDeepStrictEqual(this.#binding(), this.#selected) ||
           this.#config.stop.policy.currentFor !== this.#policyMethod) return err({ kind: "unavailable" });
@@ -77,6 +88,7 @@ export class ClinikoTwilioOutboundStopRecovery {
       const call = authenticated.value.call, original = call.context, a = original.original.attempt, p = this.#ports, c = this.#config;
       const grants = new Map<string, TwilioOutboundReportHistoryQuery | TwilioOutboundReportQuery>();
       let reportSeen = false, claims = 0;
+      let evidence: ObservedRecovery["evidence"] = "missing";
       const current = (signal: AbortSignal) => !signal.aborted && c.stop.policy.currentFor === this.#policyMethod && isDeepStrictEqual(this.#binding(), this.#selected) &&
         [...grants.values()].every(g => p.reports.current(g, signal) === true);
       const physical = c.stop.requests.rateBudget;
@@ -109,14 +121,16 @@ export class ClinikoTwilioOutboundStopRecovery {
           const report = found.value.record?.record;
           if (!report) return { kind: "unknown" };
           if (report.callSid !== call.callSid || report.number !== call.recipientNumber) throw Error("Foreign native call evidence");
-          if (report.contact.kind !== "stopRequested") return { kind: "none" };
+          if (report.contact.kind !== "stopRequested") { evidence = "noStop"; return { kind: "none" }; }
+          evidence = "stop";
           reportSeen = true;
           return { kind: "stop", effectRef: a.effectRef, capacityAllocationRef: a.capacityAllocationRef!, provider: p.authentication.binding(),
             number: report.number, participant: "anyAtDialledNumber", stoppedAt: report.contact.stoppedAt, observedAt: report.reportedAt };
         } }
       });
       if (!owner.ok) return err({ kind: "unavailable" });
-      return await owner.value.retainStopOnce({ recallRef: original.original.recallRef, actionRef: a.actionRef, patientId: a.patientId }, external);
+      const result = await owner.value.retainStopOnce({ recallRef: original.original.recallRef, actionRef: a.actionRef, patientId: a.patientId }, external);
+      return result.ok ? ok(Object.freeze({ outcome: result.value, evidence })) : result;
     } catch { return err({ kind: "unavailable" }); }
   }
 }

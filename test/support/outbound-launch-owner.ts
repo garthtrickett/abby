@@ -17,6 +17,7 @@ import { outboundCapacityOwnerBinding } from "../../src/core/outbound-capacity.t
 
 export async function outboundLaunchOwnerFixture(options: {
   apiKey?: string; scope?: import("../../src/core/model.ts").LocationScope;
+  patientId?: string;
   purpose?: "followUp" | "sickDay";
   appointment?: Readonly<{ ref: string; digest: string }>;
   budget?: import("../../src/cliniko/read-budget.ts").ClinikoRequestBudget;
@@ -24,7 +25,8 @@ export async function outboundLaunchOwnerFixture(options: {
   capacityFactory?(scope: Parameters<OutboundCapacity["matches"]>[0], owner: string): OutboundCapacity;
   runtime?: { ClinikoOutboundLaunchOwner: typeof ClinikoOutboundLaunchOwner; OwnerFileOutboundCampaign: typeof OwnerFileOutboundCampaign };
 } = {}) {
-  const f = await outboundContactSourceFixture({ ...(options.apiKey ? { apiKey: options.apiKey } : {}), ...(options.scope ? { scope: options.scope } : {}) }), runtime = options.runtime ?? { ClinikoOutboundLaunchOwner, OwnerFileOutboundCampaign };
+  const f = await outboundContactSourceFixture({ ...(options.apiKey ? { apiKey: options.apiKey } : {}), ...(options.scope ? { scope: options.scope } : {}),
+    ...(options.patientId ? { patientId: options.patientId } : {}) }), runtime = options.runtime ?? { ClinikoOutboundLaunchOwner, OwnerFileOutboundCampaign };
   try {
     const base = "https://api.au5.cliniko.com/v1", path = join(dirname(f.definitionConfig.path), "campaign.json");
     const original = { ...f.request, ...(options.purpose ? { purpose: options.purpose } : {}), ...(options.appointment ? { appointment: options.appointment } : {}),
