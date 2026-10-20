@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { withClinicalRunner } from "../support/clinical-runner-call.ts";
 import { voiceUntil } from "../support/cliniko-workflow-voice.ts";
+import { withDisposablePostgres } from "../support/disposable-postgres.ts";
 test('actual synthetic private resend reports active fixed stages without private diagnostic values',{timeout:120000},async()=>{
+ await withDisposablePostgres(async (_db, adminDatabaseUrl)=>{
+ const previousProbe=process.env.ABBY_ISOLATED_POSTGRES_PROBE;
+ // Mark only this owned disposable database as synthetic; restore the caller's environment.
+ process.env.ABBY_ISOLATED_POSTGRES_PROBE='1';
+ try {
  await withClinicalRunner('confirmationResend',async call=>{
   await call.say('Please resend my appointment confirmation email.');await call.mark();await call.verify();
   await voiceUntil(()=>call.spoken.some(s=>s.includes('Choose the appointment')),'private resend menu');
@@ -28,5 +34,10 @@ test('actual synthetic private resend reports active fixed stages without privat
   }
   assert.equal(call.mutations.length,0);const mail=call.messages.find(m=>m.kind==='verificationEmail');assert.ok(mail?.code);
   await call.scan(['registered-session@example.test','private-session-chart',mail.code]);
+ },{adminDatabaseUrl});
+ } finally {
+  if(previousProbe===undefined)delete process.env.ABBY_ISOLATED_POSTGRES_PROBE;
+  else process.env.ABBY_ISOLATED_POSTGRES_PROBE=previousProbe;
+ }
  });
 });
