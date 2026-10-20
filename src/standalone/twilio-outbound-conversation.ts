@@ -83,10 +83,16 @@ export function twilioAbbyOutboundConversation(config: TwilioAbbyOutboundConvers
             }
           } },
           transcription: {
-            accept: (frame, generation, abort) => current() ? ports.transcription.accept(frame, generation, abort)
-              : Promise.resolve(err({ kind: "transcriptionUnavailable" })),
-            flush: (generation, abort) => current() ? ports.transcription.flush(generation, abort)
-              : Promise.resolve(err({ kind: "transcriptionUnavailable" })),
+            accept: async (frame, generation, abort) => {
+              if (!current() || abort.aborted) return err({ kind: "transcriptionUnavailable" });
+              const result = await ports.transcription.accept(frame, generation, abort);
+              return current() && !abort.aborted ? result : err({ kind: "transcriptionUnavailable" });
+            },
+            flush: async (generation, abort) => {
+              if (!current() || abort.aborted) return err({ kind: "transcriptionUnavailable" });
+              const result = await ports.transcription.flush(generation, abort);
+              return current() && !abort.aborted ? result : err({ kind: "transcriptionUnavailable" });
+            },
             cancel: async generation => { await ports.transcription.cancel?.(generation); },
             close: async () => { await ports.transcription.close?.(); },
           },

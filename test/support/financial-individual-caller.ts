@@ -25,7 +25,8 @@ import { runPaidFinancialCaller } from "./financial-class-caller-chain.ts";
 import { runUnpaidFinancialCaller } from "./financial-class-unpaid-chain.ts";
 
 export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid", stage: (value: number) => void,
-  afterBooking?: (context: FinancialCallerActor, original: Readonly<{ cancellations: readonly unknown[]; timeZone: string }>) => Promise<void>, approvedTerms?: string, approvedPerCall = false): Promise<void> {
+  afterBooking?: (context: FinancialCallerActor, original: Readonly<{ cancellations: readonly unknown[]; timeZone: string }>) => Promise<void>, approvedTerms?: string, approvedPerCall = false,
+  expectedOfferPrefix?: "-" | "_"): Promise<void> {
   stage(1); const callerBegan = performance.now();
   await withDisposablePostgres(async (db, connectionString) => {
     const budget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-session-au5", maxPerMinute: 180 });
@@ -63,7 +64,7 @@ export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid"
         current: declareClinikoRequestCost(async () => true, binding, 0), currentForSend: () => true },
       presentation: { play: async () => { assert.fail("the actual admitted caller must supply financial playback"); } } };
     let perCallPolicy: import("../../src/standalone/cliniko-voice-clinical-host.ts").FinancialVoiceProvision["policyForCall"];
-    let financialPolicyCalls = 0;
+    let financialPolicyCalls = 0, checkedOfferPrefixes = 0;
     if (approvedPerCall) {
       const path = join(f.folder, "financial-fees.json");
       await writeFile(path, JSON.stringify({ scope: f.scope, revision: "fees-v1", approverRef: "synthetic-admin",
@@ -80,7 +81,15 @@ export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid"
         // Reviewed synthetic ports: admin approval is local-file-only and the
         // independent grant makes no native requests; each current() adds one
         // exact patient GET, charged to the same actual180 SQL account budget.
-        return { ...policy, current: declareClinikoRequestCost(policy.current.bind(policy), binding, 1) };
+        return { ...policy, quote: (selection, signal) => {
+          if (expectedOfferPrefix) {
+            assert.equal(selection.offerRef[0], expectedOfferPrefix);
+            assert.equal(Buffer.from(selection.offerRef, "base64url").byteLength, 24);
+            assert.equal(Buffer.from(selection.offerRef, "base64url").toString("base64url"), selection.offerRef);
+            checkedOfferPrefixes++;
+          }
+          return policy.quote(selection, signal);
+        }, current: declareClinikoRequestCost(policy.current.bind(policy), binding, 1) };
       };
     }
     const seen: string[] = [];
@@ -119,6 +128,7 @@ export async function financialIndividualCaller(outcome: "paid" | "closedUnpaid"
           assert.deepEqual(call.writes, ["POST /v1/individual_appointments"]);
           assert.equal(Object.values((await call.state()).actions).at(-1)?.status, "committed");
           if (approvedPerCall) assert.equal(financialPolicyCalls, 1);
+          if (expectedOfferPrefix) assert.ok(checkedOfferPrefixes > 0, "actual issuer-format offer reached approved per-call quote");
           for (const secret of [approvedPerCall ? verificationCanaries[0]! : "financial-recipient@example.invalid", "GBP 50.00"])
             assert.equal(JSON.stringify([call.modelTurns, call.transcripts, seen, await call.state()]).includes(secret), false);
         })(), new Promise<never>((_, reject) => { callerTimer = setTimeout(() => { reject(new Error("original individual caller deadline")); void call?.close(); }, Math.max(1,120_000-(performance.now()-callerBegan))); })]);

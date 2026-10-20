@@ -16,7 +16,7 @@ import { approvedSyntheticPolicy, syntheticSpeech, withApprovedSyntheticVoice } 
 import { outboundLaunchValue } from "../support/outbound-launch.ts";
 import { twilioOutboundIngressFixture } from "../support/twilio-outbound-ingress.ts";
 const now = "2026-11-01T10:00:00.000Z";
-async function fixture(options: { changedRuntime?: boolean; revoked?: boolean; changedMedia?: boolean } = {}) {
+async function fixture(options: { changedRuntime?: boolean; revoked?: boolean; changedMedia?: boolean; withdrawDuringTranscription?: "accept" | "flush" } = {}) {
   const scope = outboundLaunchValue().attempt.scope;
   const approval: OutboundConversationApproval = { purpose: "outboundContact", runtimeConfigurationHash: "a".repeat(64), mediaOptions: { silenceMs: 100 },
     policy: approvedSyntheticPolicy({ ...referenceDefaultPolicy(scope), automationEnabled: true,
@@ -25,23 +25,32 @@ async function fixture(options: { changedRuntime?: boolean; revoked?: boolean; c
         effectiveFrom: "2026-10-01T00:00:00.000Z", effectiveUntil: "2026-12-01T00:00:00.000Z" } }) };
   let current = !options.revoked, opened = 0;
   let admitted: { ledger: MemoryLedger; receipt: AdmissionReceipt; sessionId: string } | undefined;
-  const spoken: string[] = [], policies: unknown[] = [], turns: string[] = [];
+  const spoken: string[] = [], policies: unknown[] = [], turns: string[] = [], acceptedTranscripts: string[] = [];
   const f = await twilioOutboundIngressFixture({ profileRef: outboundConversationProfileRef(approval)!,
     conversation: runtime => twilioAbbyOutboundConversation({ runtime, runtimeConfigurationHash: (options.changedRuntime ? "b" : "a").repeat(64),
       source: { read: async call => { policies.push(call); return ok(approval); }, current: () => current }, readiness: async () => ok(true), now: () => now,
       mediaOptions: { silenceMs: options.changedMedia ? 200 : 100 },
       ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
-        transcriptionFactory: sessionId => ({ accept: async () => ok([]), flush: async generation => ok([{ kind: "segmentFinal", sessionId, generation,
-          utteranceId: "outgoing-one", text: "Hello, can you help?", quality: "clear" }]) }) }),
+        transcriptionFactory: sessionId => ({ accept: async (_frame, generation) => {
+          if (options.withdrawDuringTranscription !== "accept") return ok([]);
+          await Promise.resolve(); current = false;
+          return ok([{ kind: "segmentFinal", sessionId, generation, utteranceId: "outgoing-one", text: "Hello, can you help?", quality: "clear" }]);
+        }, flush: async generation => {
+          await Promise.resolve(); if (options.withdrawDuringTranscription === "flush") current = false;
+          return ok([{ kind: "segmentFinal", sessionId, generation, utteranceId: "outgoing-one", text: "Hello, can you help?", quality: "clear" }]);
+        } }) }),
       session(ledger, receipt, sessionId, playback, _signal, original) {
         assert.deepEqual(original, f.original);
         opened++; admitted = { ledger, receipt, sessionId };
         const reception = new TextReception(ledger, withApprovedSyntheticVoice(new MemoryPolicyStore()), new ReferenceClinicHost([], []));
-        return new VoiceSession(receipt.callId, sessionId, receipt.scope, ledger, reception, playback,
+        const session = new VoiceSession(receipt.callId, sessionId, receipt.scope, ledger, reception, playback,
           async turn => { turns.push(turn.text); return ok({ kind: "clarify" }); });
+        const acceptTranscript = session.acceptTranscript.bind(session);
+        session.acceptTranscript = event => { acceptedTranscripts.push(event.text); return acceptTranscript(event); };
+        return session;
       },
     }) });
-  return { ...f, scope, approval, spoken, policies, turns, get opened() { return opened; }, get admitted() { return admitted; }, revoke() { current = false; } };
+  return { ...f, scope, approval, spoken, policies, turns, acceptedTranscripts, get opened() { return opened; }, get admitted() { return admitted; }, revoke() { current = false; } };
 }
 test("signed actual outbound HTTP/WSS plays its greeting, handles a caller turn and stays unverified", { timeout: 10000 }, async t => {
   const f = await fixture(), server = await f.listen(); t.after(server.close);
@@ -76,6 +85,7 @@ test("signed actual outbound HTTP/WSS plays its greeting, handles a caller turn 
     });
     wire.socket.once("close", () => reject(Error("Synthetic outgoing reply unavailable")));
   });
+
   for (let index = 0; index < 7; index++) wire.socket.send(JSON.stringify({ event: "media", sequenceNumber: String(index + 3), streamSid: f.streamSid,
     media: { track: "inbound", chunk: String(index + 1), timestamp: String(index * 20), payload: Buffer.alloc(160, index < 2 ? 0x9f : 0xff).toString("base64") } }));
   await followup;
@@ -97,3 +107,21 @@ for (const [label, options] of [["independent current approval", { revoked: true
     assert.equal(await wire.outcome, "closed"); assert.equal(f.opened, 0); assert.deepEqual(f.spoken, []);
     assert.equal(f.state.burned.size, 1); assert.deepEqual(await f.runtime.inspectTerminal(), { kind: "unknown" });
   });
+
+
+for (const phase of ["accept", "flush"] as const)
+test(`signed outbound ${phase} result after approval withdrawal never enters the session or intent`, { timeout: 10000 }, async t => {
+  const f = await fixture({ withdrawDuringTranscription: phase }), server = await f.listen(); t.after(server.close);
+  const response = await server.post(), wire = await server.open(await response.text()), messages: Record<string, unknown>[] = [];
+  wire.socket.on("message", raw => { messages.push(JSON.parse(raw.toString())); }); assert.equal(await wire.outcome, "ready");
+  for (let i = 0; !messages.some(m => m.event === "mark") && i < 20; i++) await once(wire.socket, "message");
+  const marker = messages.find(m => m.event === "mark")!.mark;
+  wire.socket.send(JSON.stringify({ event: "mark", sequenceNumber: "2", streamSid: f.streamSid, mark: marker }));
+  const pong = once(wire.socket, "pong"); wire.socket.ping(); await pong;
+  const closed = once(wire.socket, "close");
+  for (let index = 0; index < 7; index++) wire.socket.send(JSON.stringify({ event: "media", sequenceNumber: String(index + 3), streamSid: f.streamSid,
+    media: { track: "inbound", chunk: String(index + 1), timestamp: String(index * 20), payload: Buffer.alloc(160, index < 2 ? 0x9f : 0xff).toString("base64") } }));
+  await closed;
+  assert.deepEqual(f.acceptedTranscripts, []); assert.deepEqual(f.turns, []); assert.equal(f.spoken.length, 1);
+  assert.deepEqual(await f.runtime.inspectTerminal(), { kind: "unknown" });
+});
