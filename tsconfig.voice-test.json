@@ -46,7 +46,8 @@
     "test/support/outbound-clinical-rescheduling.ts",
     "test/support/twilio-outbound-conversation.ts",
     "test/support/outbound-clinical-voice.ts",
-    "test/support/outbound-follow-up-financial.ts"
+    "test/support/outbound-follow-up-financial.ts",
+    "test/support/outbound-follow-up-financial-process.ts"
   ],
   "include": []
 }

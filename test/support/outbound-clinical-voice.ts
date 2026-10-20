@@ -62,6 +62,7 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
   }
   let mediaElapsedMs = 0, nowOffset = 0, notes = "", requestVersion = verificationNow, moved = false, patches = 0, bookings = 0;
   let booked: Record<string, unknown> | undefined;
+  const bookingRequests: Readonly<Record<string, unknown>>[] = [];
   let targetVersion = "2026-10-02T00:00:00.000Z", contactNumber = options.recipientNumber ?? "+61481927364", lastTarget: Record<string, unknown> | undefined;
   const identities = options.identities ?? (purpose === "followUp" ? {
     accountSid: `AC${randomUUID().replaceAll("-", "")}`, callSid: `CA${randomUUID().replaceAll("-", "")}`,
@@ -94,7 +95,7 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
       const body = JSON.parse(String(init?.body)), review = value(decodeClinikoReview(f.recalls[0]!.notes));
       assert.equal(review.request.operation.kind, "book"); if (review.request.operation.kind !== "book") throw Error("Expected booking review");
       assert.equal(body.starts_at, review.request.operation.startsAt); assert.equal(body.ends_at, review.request.operation.endsAt);
-      assert.equal(body.patient_id, request.patientId); bookings++;
+      assert.equal(body.patient_id, request.patientId); bookings++; bookingRequests.push(Object.freeze(structuredClone(body)));
       booked = { id: "91", notes: body.notes, starts_at: body.starts_at, ends_at: body.ends_at, cancelled_at: null, archived_at: null, deleted_at: null,
         patient: { links: { self: `${base}/patients/${body.patient_id}` } }, business: { links: { self: `${base}/businesses/${body.business_id}` } },
         practitioner: { links: { self: `${base}/practitioners/${body.practitioner_id}` } }, appointment_type: { links: { self: `${base}/appointment_types/${body.appointment_type_id}` } } };
@@ -185,7 +186,16 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
     send({ event: "media", media: { track: "inbound", chunk: String(chunk), timestamp: String(mediaElapsedMs), payload: Buffer.alloc(160, voiced ? 0x9f : 0xff).toString("base64") } });
   };
   const current = async () => { assert.ok(ledger && actualCallId); return value(await ledger.read(actualCallId, f.scope)); };
+  const closeCall = async () => {
+    lifetime.abort(); await server.close();
+    if (flow) await until(() => flow!.closed, "actual outgoing owner cleanup");
+  };
   return { ...f, transport, server, spoken, transcripts, modelTurns, nativeCalls, sent, state, request, requestNotes: notes, recipientNumber: request.recipient.number,
+    currentTime: now, retainedNative: { fetchPort: native }, bookingRequests, closeCall,
+    setCallTime(instant: string) {
+      const target = Date.parse(instant); assert.ok(Number.isFinite(target) && new Date(target).toISOString() === instant && target >= Date.parse(now()));
+      nowOffset = target - Date.parse(verificationNow) - mediaElapsedMs;
+    },
     get patches() { return patches; }, get bookings() { return bookings; }, get flow() { assert.ok(flow); return flow; }, get sessionId() { assert.ok(sessionId); return sessionId; },
     get actualCallId() { assert.ok(actualCallId); return actualCallId; }, current,
     changeTarget() { targetVersion = "2026-10-03T00:00:00.000Z"; }, changeRequest() { requestVersion = "2026-10-04T06:00:01.000Z"; },
@@ -228,5 +238,5 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
       await until(() => closed, "three private failures close actual call", 5000);
     },
     async waitForMail() { await until(() => f.mail.length > 0, "native registered-channel challenge", 5000); return f.mail.at(-1)!.code; },
-    close: async () => { lifetime.abort(); await server.close(); await f.close(); } };
+    close: async () => { try { await closeCall(); } finally { await f.close(); } } };
 }
