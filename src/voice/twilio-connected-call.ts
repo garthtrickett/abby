@@ -1,3 +1,4 @@
+import type { MediaFrame } from "./media-turn-controller.ts";
 import { callIdFor } from "./admission.ts";
 import type { PrivateKeypadInput } from "./private-keypad-input.ts";
 import { err, ok } from "../core/model.ts";
@@ -15,6 +16,8 @@ export type TwilioConnectedCallConfig = Omit<ConnectedVoiceCallCommonConfig, "ou
   streamStartedAt: string;
   /** Opt-in trusted secret entry; the production standalone runner leaves it unset. */
   privateKeypadInput?: PrivateKeypadInput;
+  /** Trusted contact-only queue; never receives packets from a call with a private input adapter. */
+  onPublicContactMedia?: (frame: MediaFrame) => void;
   send: TwilioStreamConfig["send"];
   now?: () => string;
   /** Null means the option is intentionally disabled; undefined means its clock failed. */
@@ -41,6 +44,7 @@ export type TwilioConnectedFailure = TwilioStreamFailure | ConnectedVoiceFailure
 export class TwilioConnectedCall {
   readonly stream: TwilioMediaStream;
   private readonly privateKeypadInput: PrivateKeypadInput | undefined;
+  private readonly onPublicContactMedia: ((frame: MediaFrame) => void) | undefined;
   private privateResuming = false;
   private privateQuietMs = 0;
   private privateQuietUntil: number | undefined;
@@ -78,6 +82,7 @@ export class TwilioConnectedCall {
     if (config.privateKeypadInput && (!config.privateKeypadInput.claim(callIdFor(key), config.sessionId) ||
         config.privateKeypadInput.blocked() !== true)) throw new TypeError("invalid private input ownership");
     this.privateKeypadInput = config.privateKeypadInput;
+    this.onPublicContactMedia = config.onPublicContactMedia;
     this.silenceTimer = config.silenceTimer ?? systemTimer;
     this.silenceWaitMs = silenceWaitMs;
     this.playbackDeadlineMs = playbackDeadlineMs;
@@ -355,7 +360,12 @@ export class TwilioConnectedCall {
     catch { this.stopCall(); return this.failSession().then(() => err({ kind: "privateInputUnavailable" })); }
     if (!received.ok) this.stopCall();
     if (received.ok && received.value.kind === "stopped") this.stopCall();
-    if (received.ok && received.value.kind === "media" && !privateAtArrival) this.call.observePendingCorrection(received.value.frame);
+    if (received.ok && received.value.kind === "media" && !privateAtArrival) {
+      if (!this.privateKeypadInput) {
+        try { this.onPublicContactMedia?.(received.value.frame); } catch { this.stopCall(); return this.failSession().then(() => err({ kind: "streamUnavailable" })); }
+      }
+      this.call.observePendingCorrection(received.value.frame);
+    }
     if (received.ok && received.value.kind === "ignoredMark") return Promise.resolve(ok({ kind: "ignored" }));
     if (this.outstanding >= 64) {
       this.closed = true;

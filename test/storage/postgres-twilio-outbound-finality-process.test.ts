@@ -1,5 +1,7 @@
+// E2E-423: cold native recovery is qualified after both ordinary and queued-terminal stop preparation.
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
+import { once } from "node:events";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -18,13 +20,19 @@ const { PostgresOutboundCapacity } = await import(new URL("src/storage/postgres-
 const { PostgresOutboundEffectBarrier } = await import(new URL("src/storage/postgres-outbound-effect-barrier.js", emitted).href) as typeof import("../../src/storage/postgres-outbound-effect-barrier.ts");
 const { PostgresClinikoRequestBudget } = await import(new URL("src/storage/postgres-cliniko-request-budget.js", emitted).href) as typeof import("../../src/storage/postgres-cliniko-request-budget.ts");
 
-test("real emitted finality owner SIGKILL after stored outcome needs no lost session/report IDs or private journal", { timeout: 170000 }, async t => {
+for (const queuedTerminal of [false, true])
+test(`real emitted finality owner SIGKILL after ${queuedTerminal ? "queued terminal" : "ordinary"} stop and stored outcome needs no lost session/report IDs or private journal`, { timeout: 170000 }, async t => {
   const apiKey = `synthetic-finality-crash-${randomUUID()}-au5`, scope = { tenantId: `finality-crash-${randomUUID()}`, clinicId: "clinic", locationId: "main" }, guardRef = randomUUID();
   const budget = new PostgresClinikoRequestBudget(db, { apiKey, maxPerMinute: 180 });
   const f = await twilioOutboundFinalityFixture({ apiKey, scope, budget, guardRef,
     patientId: (BigInt("0x" + randomUUID().replaceAll("-", "")) % 1_000_000_000_000_000_000n + 1_000_000_000_000_000_000n).toString(),
     effectFactory: (s, b) => new PostgresOutboundEffectBarrier(db, s, b), capacityFactory: (s, b) => new PostgresOutboundCapacity(db, s, b),
-    capacity: new PostgresOutboundCapacity(db, scope, outboundContactGuardOwnerBinding(guardRef)!) }); t.after(f.close); await f.speakStop();
+    capacity: new PostgresOutboundCapacity(db, scope, outboundContactGuardOwnerBinding(guardRef)!) }); t.after(f.close);
+  if (queuedTerminal) {
+    const server = await f.listen(); t.after(server.close); const wire = await f.start(server);
+    const closed = once(wire.socket, "close"); wire.sendQueuedTail("socketClose"); await closed; await f.finished;
+    f.state.now = "2026-11-02T00:00:03.000Z";
+  } else await f.speakStop();
   const headroom = async () => { const until = Date.now() + 75000;
     while (await budget.checkHeadroom(100) !== null) { assert.ok(Date.now() < until, "wait only for actual native100 headroom"); await new Promise(resolve => setTimeout(resolve, 500)); } };
   await headroom();

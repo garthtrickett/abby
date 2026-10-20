@@ -6,8 +6,9 @@ import { err } from "../core/model.ts";
 import type { AdmissionReceipt } from "../core/model.ts";
 import type { AutomationReadiness } from "../core/readiness.ts";
 import type { ModelKnowledgeContextHost } from "../core/host.ts";
-import { prepareOutboundVoiceEntry } from "../voice/outbound-voice-entry.ts";
-import type { OutboundConversationPolicySource } from "../voice/outbound-voice-entry.ts";
+import { validGreetingAt } from "../core/greeting.ts";
+import { outboundConversationProfileRef, prepareOutboundVoiceEntry } from "../voice/outbound-voice-entry.ts";
+import type { OutboundConversationApproval, OutboundConversationPolicySource } from "../voice/outbound-voice-entry.ts";
 import type { SpeechAdapterFactory } from "../voice/call-speech-binding.ts";
 import type { TwilioWireCall } from "../voice/twilio-media-sockets.ts";
 import type { TwilioOutboundStream } from "../voice/twilio-outbound-ingress.ts";
@@ -17,6 +18,9 @@ import type { TwilioConnectedCallConfig } from "../voice/twilio-connected-call.t
 import type { PlaybackPort, VoiceSession } from "../voice/voice-session.ts";
 import { TwilioOutboundStopSpeech } from "./twilio-outbound-stop-speech.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
+import type { MediaFrame } from "../voice/media-turn-controller.ts";
+import { OutboundTerminalTranscription } from "../voice/outbound-terminal-transcription.ts";
+import type { OutboundContactStopPolicy } from "../voice/outbound-contact-stop.ts";
 import { callIdFor } from "../voice/admission.ts";
 import type { OutboundConversationCall } from "../voice/outbound-voice-entry.ts";
 import type { PreparedVoiceSession } from "../voice/reception-voice-call.ts";
@@ -86,6 +90,21 @@ export function twilioAbbyOutboundConversation(config: TwilioAbbyOutboundConvers
   return async (stream, send, close, ingressSignal) => {
     const lifetime = new AbortController(), signal = AbortSignal.any([ingressSignal, lifetime.signal]);
     const ledger = new MemoryLedger(readiness);
+    let terminalSpeech: OutboundTerminalTranscription | undefined, stopPolicy: OutboundContactStopPolicy | undefined;
+    let terminalCall: OutboundConversationCall | undefined, terminalApproval: OutboundConversationApproval | undefined;
+    const admittedSource: OutboundConversationPolicySource = { read: async (call, signal) => {
+      const found = await source.read(call, signal);
+      if (found.ok) { terminalCall = structuredClone(call); terminalApproval = structuredClone(found.value); }
+      return found;
+    }, current: source.current };
+    const currentStopPolicy = () => {
+      try {
+        if (!terminalCall || !terminalApproval) return;
+        const call = structuredClone(terminalCall), approval = structuredClone(terminalApproval);
+        return outboundConversationProfileRef(approval) === call.profileRef && validGreetingAt(approval.policy.greeting, call.scope, now()) &&
+          source.current(call, approval) ? stopPolicy : undefined;
+      } catch { return undefined; }
+    };
     let candidate: PreparedVoiceSession | undefined, privateInput: PrivateKeypadInput | undefined;
     let abandoned = false, inputTransferred = false, inputStopped = false;
     const discardInput = () => {
@@ -98,7 +117,7 @@ export function twilioAbbyOutboundConversation(config: TwilioAbbyOutboundConvers
       if (original.provider.ref !== provider.ref || original.provider.bindingDigest !== provider.bindingDigest || signal.aborted)
         throw Error("Outbound conversation unavailable");
       const prepared = await prepareOutboundVoiceEntry({ call: { key: { accountRef: stream.call.accountSid, providerCallRef: stream.call.callSid },
-        scope: original.scope, clinicNumber: stream.call.clinicNumber, profileRef: provider.profileRef }, ledger, source,
+        scope: original.scope, clinicNumber: stream.call.clinicNumber, profileRef: provider.profileRef }, ledger, source: admittedSource,
         readiness, now, signal, ...(config.knowledge ? { knowledge: config.knowledge } : {}) });
       if (!prepared.ok) throw Error("Outbound conversation unavailable");
       const entry = prepared.value, current = () => !signal.aborted && entry.current?.() === true;
@@ -127,6 +146,10 @@ export function twilioAbbyOutboundConversation(config: TwilioAbbyOutboundConvers
         const created = createSpeech(profile, sessionId, runtime);
         if (!created.ok) return created;
         const ports = created.value;
+        if (bindStop && terminalSpeech) return err({ kind: "readinessFailed", missing: ["voiceProfile"] });
+        const transcription = bindStop ? (terminalSpeech = new OutboundTerminalTranscription(ports.transcription, {
+          callId: callIdFor(entry.key), sessionId, deadlineMs: runtime.mediaOptions?.transcriptionDeadlineMs ?? 2000, now, policy: currentStopPolicy,
+        })).transcription : ports.transcription;
         return { ok: true, value: { profile: ports.profile,
           synthesis: { async *stream(text, abort) {
             if (!current()) throw Error("Outbound conversation unavailable");
@@ -138,16 +161,16 @@ export function twilioAbbyOutboundConversation(config: TwilioAbbyOutboundConvers
           transcription: {
             accept: async (frame, generation, abort) => {
               if (!current() || abort.aborted) return err({ kind: "transcriptionUnavailable" });
-              const result = await ports.transcription.accept(frame, generation, abort);
+              const result = await transcription.accept(frame, generation, abort);
               return current() && !abort.aborted ? result : err({ kind: "transcriptionUnavailable" });
             },
             flush: async (generation, abort) => {
               if (!current() || abort.aborted) return err({ kind: "transcriptionUnavailable" });
-              const result = await ports.transcription.flush(generation, abort);
+              const result = await transcription.flush(generation, abort);
               return current() && !abort.aborted ? result : err({ kind: "transcriptionUnavailable" });
             },
-            cancel: async generation => { await ports.transcription.cancel?.(generation); },
-            close: async () => { await ports.transcription.close?.(); },
+            cancel: async generation => { await transcription.cancel?.(generation); },
+            close: async () => { await transcription.close?.(); },
           },
         } };
       } };
@@ -156,17 +179,18 @@ export function twilioAbbyOutboundConversation(config: TwilioAbbyOutboundConvers
         fullFactory: (receipt, sessionId, playback) => {
           if (!current() || receipt.callId !== callIdFor(entry.key)) throw Error("Outbound conversation unavailable");
           const session = sessionFactory(receipt, sessionId, playback);
-          if (bindStop) session.protectOutboundContact(bindStop(stream, receipt, sessionId, () => close("normal")));
+          if (bindStop) { stopPolicy = bindStop(stream, receipt, sessionId, () => close("normal")); session.protectOutboundContact(stopPolicy); }
           return session;
         },
         streamStartedAt: stream.streamStartedAt, now, ...settings,
+        ...(bindStop ? { onPublicContactMedia: (frame: MediaFrame) => terminalSpeech?.bufferPublicFrame(frame) } : {}),
         ...(config.monotonicNow ? { monotonicNow: config.monotonicNow } : {}),
-        send: json => current() ? send(json) : "notSent", closeTransport: close, onCallStop: () => lifetime.abort() });
+        send: json => current() ? send(json) : "notSent", closeTransport: close, onCallStop: () => { void terminalSpeech?.finish(); lifetime.abort(); } });
       inputTransferred = true;
       let cleanup: Promise<unknown> | undefined;
       const disconnect = () => {
         ingressSignal.removeEventListener("abort", onAbort);
-        cleanup ??= call.disconnect().finally(() => { lifetime.abort(); ledger.dispose(); });
+        cleanup ??= call.disconnect().then(async result => { await terminalSpeech?.finish(); return result; }).finally(() => { lifetime.abort(); ledger.dispose(); });
         return cleanup;
       };
       const onAbort = () => { void disconnect().catch(() => undefined); };
