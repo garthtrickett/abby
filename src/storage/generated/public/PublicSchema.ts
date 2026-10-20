@@ -8,6 +8,7 @@ import type { default as ClinikoContactRevisionsTable } from './ClinikoContactRe
 import type { default as ClinicOperationalDailyCountsTable } from './ClinicOperationalDailyCounts.js';
 import type { default as ClinicIntakeSettingsTable } from './ClinicIntakeSettings.js';
 import type { default as PendingLocationCallsTable } from './PendingLocationCalls.js';
+import type { default as OutboundEffectBarriersTable } from './OutboundEffectBarriers.js';
 import type { default as ClinicWriteStopTable } from './ClinicWriteStop.js';
 import type { default as NumberRouteEventsTable } from './NumberRouteEvents.js';
 import type { default as ClinicNotificationSettingsTable } from './ClinicNotificationSettings.js';
@@ -23,6 +24,7 @@ import type { default as ClinikoContactChangesTable } from './ClinikoContactChan
 import type { default as TenantConfigImportsTable } from './TenantConfigImports.js';
 import type { default as EffectCallLeasesTable } from './EffectCallLeases.js';
 import type { default as ClinicAutomationTable } from './ClinicAutomation.js';
+import type { default as OutboundCapacityAllocationsTable } from './OutboundCapacityAllocations.js';
 import type { default as ClinikoRequestBudgetsTable } from './ClinikoRequestBudgets.js';
 import type { default as PatientPhoneScanTable } from './PatientPhoneScan.js';
 import type { default as ClinikoCatalogueApprovalsTable } from './ClinikoCatalogueApprovals.js';
@@ -60,6 +62,8 @@ export default interface PublicSchema {
 
   pending_location_calls: PendingLocationCallsTable;
 
+  outbound_effect_barriers: OutboundEffectBarriersTable;
+
   clinic_write_stop: ClinicWriteStopTable;
 
   number_route_events: NumberRouteEventsTable;
@@ -89,6 +93,8 @@ export default interface PublicSchema {
   effect_call_leases: EffectCallLeasesTable;
 
   clinic_automation: ClinicAutomationTable;
+
+  outbound_capacity_allocations: OutboundCapacityAllocationsTable;
 
   cliniko_request_budgets: ClinikoRequestBudgetsTable;
 
