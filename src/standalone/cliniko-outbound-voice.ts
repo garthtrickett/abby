@@ -1,3 +1,6 @@
+import { captureFinancialVoiceProvision, financialVoiceForCall } from "./financial-voice-provision.ts";
+import type { FinancialVoiceProvision } from "./financial-voice-provision.ts";
+import { PrivateFinancialBookingInput } from "./private-financial-booking-input.ts";
 import { isDeepStrictEqual } from "node:util";
 import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
 import { validGreetingAt } from "../core/greeting.ts";
@@ -15,7 +18,8 @@ import type { OutboundVoicePreparation } from "./twilio-outbound-conversation.ts
 
 type CallOwned = "receipt" | "sessionId" | "ledger" | "signal" | "clock" | "outbound";
 export type ClinikoOutboundVoiceConfig = Readonly<{
-  clinical: Omit<ClinikoOutboundCallFlowConfig, CallOwned>;
+  clinical: Omit<ClinikoOutboundCallFlowConfig, CallOwned | "financial">;
+  financial?: FinancialVoiceProvision;
   context: Omit<Parameters<typeof ClinikoOutboundClinicalContext.capture>[0], "original" | "key" | "clinicNumber" | "signal" | "fetchPort">;
   greeting: ApprovedGreeting;
   intent: (flow: ClinikoCallFlow) => IntentResolver;
@@ -28,10 +32,14 @@ export type ClinikoOutboundVoiceConfig = Readonly<{
  * closure. A carrier/runtime adapter receives only the generic prepared bundle. */
 export function clinikoOutboundVoice(config: ClinikoOutboundVoiceConfig):
   (preparation: OutboundVoicePreparation) => Promise<PreparedVoiceSession> {
+  if (Object.hasOwn(config.clinical, "financial")) throw Error("Clinical conversation unavailable");
   const clinical = Object.freeze({ ...config.clinical, cliniko: Object.freeze({ ...config.clinical.cliniko }),
     approvals: Object.freeze({ ...config.clinical.approvals }),
     ...(config.clinical.reschedulingDestination ? { reschedulingDestination: Object.freeze({ ...config.clinical.reschedulingDestination }) } : {}),
     ...(config.clinical.reschedulingPractitioners ? { reschedulingPractitioners: Object.freeze(config.clinical.reschedulingPractitioners.map(member => Object.freeze({ ...member }))) } : {}) });
+  const financial = config.financial ? captureFinancialVoiceProvision(config.financial,
+    { scope: config.context.requests.scope, ...clinical.cliniko }) : undefined;
+  const usedPolicies = new WeakSet<object>();
   const contextConfig = Object.freeze({ ...config.context, requests: Object.freeze({ ...config.context.requests,
     scope: Object.freeze({ ...config.context.requests.scope }) }),
     records: Object.freeze({ allows: config.context.records.allows.bind(config.context.records), current: config.context.records.current.bind(config.context.records) }),
@@ -43,7 +51,7 @@ export function clinikoOutboundVoice(config: ClinikoOutboundVoiceConfig):
   return async preparation => {
     const lifetime = new AbortController(), signal = AbortSignal.any([preparation.signal, lifetime.signal]);
     const ledger = preparation.ledger, sessionId = preparation.sessionId, call = structuredClone(preparation.call);
-    let context: ClinikoOutboundClinicalContext | undefined, flow: ClinikoCallFlow | undefined, created = false;
+    let context: ClinikoOutboundClinicalContext | undefined, flow: ClinikoCallFlow | undefined, voice: VoiceSession | undefined, created = false;
     const stop = () => { lifetime.abort(); flow?.dispose(); context?.dispose(); };
     try {
       const callId = callIdFor(call.key);
@@ -56,24 +64,33 @@ export function clinikoOutboundVoice(config: ClinikoOutboundVoiceConfig):
         clinicNumber: call.clinicNumber, signal, ...(clinical.fetchPort ? { fetchPort: clinical.fetchPort } : {}) });
       if (!captured.ok) throw Error("Clinical conversation unavailable");
       context = captured.value;
-      if (signal.aborted || !context.current("appointments.reschedule")) throw Error("Clinical conversation unavailable");
+      const operation = context.current("appointments.book") ? "appointments.book" : "appointments.reschedule";
+      if (signal.aborted || !context.current(operation)) throw Error("Clinical conversation unavailable");
       const keypad = new PrivateWorkflowKeypad({ callId, sessionId, owner: () => flow });
-      const privateKeypadInput = { claim: keypad.claim.bind(keypad), start: keypad.start.bind(keypad), blocked: keypad.blocked.bind(keypad),
-        accept: keypad.accept.bind(keypad), stop: () => { keypad.stop(); stop(); } };
+      const input = new PrivateFinancialBookingInput(keypad, () => flow);
+      const privateKeypadInput = { claim: input.claim.bind(input), start: input.start.bind(input), blocked: input.blocked.bind(input),
+        handlesDigit: input.handlesDigit.bind(input), captureDigit: input.captureDigit.bind(input), acceptMedia: input.acceptMedia.bind(input),
+        accept: input.accept.bind(input), stop: () => { input.stop(); stop(); } };
       return { privateKeypadInput, create(receipt, selectedSessionId, playback) {
         if (created || signal.aborted || selectedSessionId !== sessionId || receipt.callId !== callId ||
-            !context!.matchesAdmission(receipt) || !context!.current("appointments.reschedule") ||
+            !context!.matchesAdmission(receipt) || !context!.current(operation) ||
             !validGreetingAt(greeting, call.scope, clock())) { stop(); throw Error("Clinical conversation unavailable"); }
         created = true;
-        const made = ClinikoCallFlow.createOutbound({ ...clinical, receipt, sessionId, ledger,
-          outbound: context!, signal, clock });
-        if (!made.ok) { stop(); throw Error("Clinical conversation unavailable"); }
-        flow = made.value;
         try {
+          const provision = financial && operation === "appointments.book" ? financialVoiceForCall(financial,
+            { scope: receipt.scope, callId, sessionId, signal, clock }, { async play(text, abort, canPresent) {
+              const played = await voice?.presentPrivateFinancialBooking(text, abort, clock(), canPresent);
+              return played ? { ...played, playedAt: clock() } : undefined;
+            } }, usedPolicies) : undefined;
+          const made = ClinikoCallFlow.createOutbound({ ...clinical, receipt, sessionId, ledger,
+            outbound: context!, signal, clock, ...(provision ? { financial: provision } : {}) });
+          if (!made.ok) throw Error("Clinical conversation unavailable");
+          flow = made.value;
           const reception = new TextReception(ledger, clinical.policies, flow, undefined, undefined, undefined,
             clinical.publicKnowledge, clock);
-          return new VoiceSession(callId, sessionId, receipt.scope, ledger, reception, playback, intent(flow), undefined,
+          voice = new VoiceSession(callId, sessionId, receipt.scope, ledger, reception, playback, intent(flow), undefined,
             monotonicNow, { greeting, staffWorkUnavailable: true });
+          return voice;
         } catch { stop(); throw Error("Clinical conversation unavailable"); }
       } };
     } catch { stop(); throw Error("Clinical conversation unavailable"); }

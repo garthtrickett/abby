@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from "node:util";
+import { ClinikoOutboundClinicalContext } from "./cliniko-outbound-clinical-context.ts";
 import { createWorkflowCallerVerification } from "./workflow-caller-verification.ts";
 import type { RepresentativeWorkflowSelection } from "./workflow-caller-verification.ts";
 import { createApprovedBookingComposition } from "./approved-booking-composition.ts";
@@ -35,6 +37,11 @@ export type ClinikoBookingSessionConfig = Readonly<{
   representative?: RepresentativeWorkflowSelection;
   signal: AbortSignal; fetchPort?: typeof fetch; clock?: () => string; timeoutMs?: number;
 }>;
+export type ClinikoOutboundBookingSessionConfig = Omit<ClinikoBookingSessionConfig, "inbound" | "representative"> &
+  Readonly<{ outbound: ClinikoOutboundClinicalContext; inbound?: never; representative?: never }>;
+type SessionConfig = Omit<ClinikoBookingSessionConfig, "inbound"> &
+  Readonly<{ inbound?: AuthenticatedInboundCall; outbound?: ClinikoOutboundClinicalContext }>;
+
 type Failure = Readonly<{ kind: "bookingSessionUnavailable" }>;
 
 /** Trusted post-admission wiring. One admission owns one verifier, selection map and send attempt.
@@ -52,6 +59,24 @@ export class ClinikoBookingSession {
   }
 
   static async create(incoming: ClinikoBookingSessionConfig): Promise<Result<ClinikoBookingSession, Failure>> {
+    if (!incoming || Object.hasOwn(incoming, "outbound") || incoming.receipt?.admission.direction === "outbound")
+      return err({ kind: "bookingSessionUnavailable" });
+    return this.#create(incoming);
+  }
+  /** Original follow-up routing constrains an independent returning-patient
+   * booking. Normal offers, finances, played consent and reviewed send remain. */
+  static async createOutbound(incoming: ClinikoOutboundBookingSessionConfig): Promise<Result<ClinikoBookingSession, Failure>> {
+    try {
+      if (!incoming || Object.hasOwn(incoming, "inbound") || Object.hasOwn(incoming, "representative") ||
+          !(incoming.outbound instanceof ClinikoOutboundClinicalContext) || !incoming.outbound.matchesAdmission(incoming.receipt) ||
+          !incoming.outbound.usesBudget(incoming.cliniko.rateBudget) || !incoming.outbound.current("appointments.book") ||
+          !incoming.outbound.matchesWorkflow({ scope: incoming.receipt.scope, callId: incoming.receipt.callId,
+            credentialFingerprint: clinikoCredentialFingerprint(incoming.cliniko.apiKey), businessId: incoming.cliniko.businessId }))
+        return err({ kind: "bookingSessionUnavailable" });
+      return this.#create(incoming);
+    } catch { return err({ kind: "bookingSessionUnavailable" }); }
+  }
+  static async #create(incoming: SessionConfig): Promise<Result<ClinikoBookingSession, Failure>> {
     const unavailable = (): Result<ClinikoBookingSession, Failure> => err({ kind: "bookingSessionUnavailable" });
     let timeout: ReturnType<typeof setTimeout> | undefined, removeAbort: () => void = () => undefined;
     let verification: CallerVerificationSession | undefined, composition: ApprovedBookingComposition | undefined;
@@ -63,7 +88,7 @@ export class ClinikoBookingSession {
           !isClinikoRequestBudget(incoming.cliniko?.rateBudget) ||
           (incoming.timeoutMs !== undefined && (!Number.isSafeInteger(incoming.timeoutMs) || incoming.timeoutMs < 1 || incoming.timeoutMs > 20_000))) return unavailable();
       // Freeze caller/provider bindings before the first async approval read.
-      const config = Object.freeze({ ...incoming, ...(incoming.representative ? { representative: Object.freeze({ ...incoming.representative }) } : {}), receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound),
+      const config = Object.freeze({ ...incoming, ...(incoming.representative ? { representative: Object.freeze({ ...incoming.representative }) } : {}), receipt: structuredClone(incoming.receipt), ...(incoming.inbound ? { inbound: structuredClone(incoming.inbound) } : {}),
         cliniko: Object.freeze({ ...incoming.cliniko }),
         ...(incoming.catalogue ? { catalogue: Object.freeze({ ...incoming.catalogue, ...(incoming.catalogue.initialSearchPreference ? { initialSearchPreference: Object.freeze({ ...incoming.catalogue.initialSearchPreference }) } : {}), practitioners: Object.freeze(incoming.catalogue.practitioners.map(member => Object.freeze({ ...member }))) }) } : {}), clock: incoming.clock ?? (() => new Date().toISOString()) });
       const scope = config.receipt.scope, fetchPort = config.fetchPort ?? fetch;
@@ -80,7 +105,8 @@ export class ClinikoBookingSession {
           state.value.admission?.key.accountRef === config.receipt.admission.key.accountRef &&
           state.value.admission?.key.providerCallRef === config.receipt.admission.key.providerCallRef &&
           state.value.sessionLease?.sessionId === config.sessionId && Date.parse(state.value.sessionLease.expiresAt) > at &&
-          state.value.policy.policyVersion === config.policyVersion;
+          state.value.policy.policyVersion === config.policyVersion && (!config.outbound ||
+            config.outbound.current("appointments.book") && isDeepStrictEqual(state.value.admission, config.receipt.admission));
       };
       const build = (async () => {
         if (!await active() || settled) return undefined;
@@ -114,10 +140,15 @@ export class ClinikoBookingSession {
             current.value.capabilities.book === "execute" && current.value.staffWorkEnabled === true && admitted.ok &&
             admitted.value.policy.capabilities.book === "execute" && admitted.value.policy.staffWorkEnabled === true });
         } };
-        const session = await createWorkflowCallerVerification({ receipt: config.receipt, inbound: config.inbound, sessionId: config.sessionId,
-          policyVersion: config.policyVersion, operation: "appointments.book", ledger: config.ledger, policyStore: config.policies,
+        const verificationConfig = { receipt: config.receipt, sessionId: config.sessionId,
+          policyVersion: config.policyVersion, operation: "appointments.book" as const, ledger: config.ledger, policyStore: config.policies,
           policy: verificationPolicy, lookup: config.lookup, contact: new ClinikoVerificationContactReader({ ...config.cliniko, scope }, fetchPort),
-          permission: config.permission, budget: config.verificationBudget, delivery: config.delivery, clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) }, { credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey), businessId: config.cliniko.businessId, timeZone: config.cliniko.timeZone }, config.signal, caller.value, config.representative);
+          permission: config.permission, budget: config.verificationBudget, delivery: config.delivery, clock: config.clock,
+          ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) };
+        const session = config.outbound ? CallerVerificationSession.createOutbound({ ...verificationConfig, outbound: config.outbound }) :
+          await createWorkflowCallerVerification({ ...verificationConfig, inbound: config.inbound! },
+            { credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey), businessId: config.cliniko.businessId, timeZone: config.cliniko.timeZone },
+            config.signal, caller.value, config.representative);
         if (!session.ok) return undefined;
         verification = session.value;
         if (settled || config.signal.aborted) { verification.dispose(); return undefined; }
