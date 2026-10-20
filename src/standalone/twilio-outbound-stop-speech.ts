@@ -42,7 +42,7 @@ export function twilioStopSpeechProfileBinding(reports: TwilioOutboundReportConf
   try {
     if (!(reportKey instanceof Uint8Array) || reportKey.byteLength !== 32 || !outboundConfigShard({ ...reports,
       outboundRecallTypeId: reports.outboundProviderReportRecallTypeId, recordPolicyDigest: reports.providerReportPolicyDigest }, fetch)) return;
-    return createHash("sha256").update(JSON.stringify(["abby.twilio-stop-speech.v1", reports.scope.tenantId, reports.scope.clinicId, reports.scope.locationId,
+    return createHash("sha256").update(JSON.stringify(["abby.twilio-stop-speech.v2", "boundedPublicTerminalASRWithoutClinicalTurnV1", "mediaFrameStopTimeV1", reports.scope.tenantId, reports.scope.clinicId, reports.scope.locationId,
       reports.businessId, clinikoCredentialFingerprint(reports.apiKey), reports.outboundProviderReportRecallTypeId, reports.providerReportPolicyDigest,
       createHash("sha256").update(reportKey).digest("hex"), grammarDigest])).digest("hex");
   } catch { return; }

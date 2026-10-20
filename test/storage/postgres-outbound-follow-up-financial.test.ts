@@ -9,9 +9,12 @@ import { verificationCanaries } from "../support/caller-verification.ts";
 import { financialConsentReadback } from "../../src/standalone/financial-consent-readback.ts";
 import { decodeClinikoFinancialIntent } from "../../src/cliniko/financial-review-intent.ts";
 
+import { captureSqlVerificationCanaryWindow, assertSqlVerificationCodeCanary } from "../support/sql-verification-canary.ts";
+
 if (!process.env.DATABASE_URL) throw Error("DATABASE_URL required");
 const db = connectPostgres(process.env.DATABASE_URL), peer = connectPostgres(process.env.DATABASE_URL);
 after(async () => { await Promise.all([db.destroy(), peer.destroy()]); });
+const canaryWindow = await captureSqlVerificationCanaryWindow(db);
 const emitted = new URL("../../dist/runtime/", import.meta.url);
 const { financialCall, selectBooking, playTerms, until } = await import(new URL("test/support/outbound-follow-up-financial.js", emitted).href) as typeof import("../support/outbound-follow-up-financial.ts");
 const { PostgresClinikoRequestBudget } = await import(new URL("src/storage/postgres-cliniko-request-budget.js", emitted).href) as typeof import("../../src/storage/postgres-cliniko-request-budget.ts");
@@ -56,6 +59,7 @@ test(`emitted outgoing follow-up private financial consent, shared native180 and
   const financialNotes = [...c.funding.rows.values()].map(row => String(row.notes));
   const retained = [...c.funding.rows.values()].find(row => String(row.notes).includes("financial intent")); assert.ok(retained);
   const intent = decodeClinikoFinancialIntent(retained.notes); assert.ok(intent.ok);
+  await assertSqlVerificationCodeCanary(db, code, canaryWindow);
   const canaries = [apiKey, ...verificationCanaries, recipientNumber, f.actualCallId, f.sessionId, code, f.requestNotes,
     JSON.stringify(f.transport.original), f.transport.original.recallRef, f.transport.original.attempt.requestDigest,
     identities.accountSid, identities.callSid, identities.streamSid, identities.authToken, identities.contextKey.toString("hex"),

@@ -39,7 +39,7 @@ import { value } from "./outbound-records.ts";
 type BaseOptions = NonNullable<Parameters<typeof outboundContactLifecycleFixture>[0]>;
 export async function twilioOutboundStopSpeechFixture(options: Pick<BaseOptions, "apiKey" | "scope" | "patientId" | "budget" | "effectFactory" | "capacityFactory" | "capacity" | "guardRef"> & {
   carrierRead?: typeof fetch;
-  text?: string; quality?: "clear" | "needsClarification"; omitProfileBinding?: boolean;
+  text?: string; quality?: "clear" | "needsClarification"; omitProfileBinding?: boolean; transcriptionAt?: string;
   reportResponse?: "lostStored" | "lostUnstored"; decisionResponse?: "lostStored" | "lostUnstored";
 } = {}) {
   const f = await outboundContactLifecycleFixture(options);
@@ -74,6 +74,7 @@ export async function twilioOutboundStopSpeechFixture(options: Pick<BaseOptions,
     const policy = value(await OwnerFileOutboundDncPolicy.capture({ path: policyPath, scope: f.request.scope, directory: f.directory,
       clock: () => f.state.now }, new AbortController().signal));
     const state = { live: true, report: true, history: true, decision: true, producer: true, conversation: true,
+      beforeFlush: undefined as ((signal: AbortSignal) => void | Promise<void>) | undefined,
       beforeReport: undefined as (() => void | Promise<void>) | undefined, beforeDecision: undefined as (() => void | Promise<void>) | undefined };
     const reportPosts: Record<string, unknown>[] = [], dncPosts: Record<string, unknown>[] = [], burned = new Set<string>();
     const native: typeof fetch = async (input, init) => {
@@ -107,6 +108,8 @@ export async function twilioOutboundStopSpeechFixture(options: Pick<BaseOptions,
       authority: { allows: async () => state.decision, current: () => state.live }, effects, native };
     const make = () => TwilioOutboundStopSpeech.create(config, ports), producer = value(make());
     const spoken: string[] = [], intents: string[] = [], acceptedTranscripts: string[] = [];
+    const transcriptionStats = { accepted: 0, flushes: 0, closes: 0 };
+    const frameListeners = new Set<() => void>();
     let drained!: () => void;
     const finished = new Promise<void>(resolve => { drained = resolve; });
     let admitted: { ledger: MemoryLedger; receipt: AdmissionReceipt; sessionId: string; session: VoiceSession } | undefined;
@@ -114,12 +117,13 @@ export async function twilioOutboundStopSpeechFixture(options: Pick<BaseOptions,
       source: { read: async () => ok(approval), current: () => state.conversation }, readiness: async () => ok(true), now: () => f.state.now,
       mediaOptions: approval.mediaOptions,
       ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
-        transcriptionFactory: sessionId => ({ accept: async () => ok([]), flush: async generation => {
+        transcriptionFactory: sessionId => ({ accept: async () => { transcriptionStats.accepted++; for (const notify of frameListeners) notify(); return ok([]); }, flush: async (generation, signal) => {
+          transcriptionStats.flushes++; await state.beforeFlush?.(signal);
           // Media timestamps end at +120ms; independently observed fixture time
           // advances past that actual frame before native records are produced.
-          f.state.now = "2026-11-02T00:00:01.000Z";
+          f.state.now = options.transcriptionAt ?? "2026-11-02T00:00:01.000Z";
           return ok([{ kind: "segmentFinal", sessionId, generation, utteranceId: "outgoing-stop", text: options.text ?? "Please stop calling me.", quality: options.quality ?? "clear" }]);
-        } }) }),
+        }, close: async () => { transcriptionStats.closes++; } }) }),
       session(ledger, receipt, sessionId, playback) {
         const reception = new TextReception(ledger, withApprovedSyntheticVoice(new MemoryPolicyStore()), new ReferenceClinicHost([], []));
         const session = new VoiceSession(receipt.callId, sessionId, receipt.scope, ledger, reception, playback,
@@ -164,13 +168,29 @@ export async function twilioOutboundStopSpeechFixture(options: Pick<BaseOptions,
       const marker = messages.find(m => m.event === "mark")!.mark;
       wire.socket.send(JSON.stringify({ event: "mark", sequenceNumber: "2", streamSid, mark: marker }));
       const pong = once(wire.socket, "pong"); wire.socket.ping(); await pong;
-      return { ...wire, messages, sendTurn() {
+      const sendTailFrames = () => {
+        for (let index = 0; index < 2; index++) wire.socket.send(JSON.stringify({ event: "media", sequenceNumber: String(index + 3), streamSid,
+          media: { track: "inbound", chunk: String(index + 1), timestamp: String(index * 20), payload: Buffer.alloc(160, 0x9f).toString("base64") } }));
+      };
+      const sendStop = () => wire.socket.send(JSON.stringify({ event: "stop", sequenceNumber: "5", streamSid, stop: { accountSid: carrier.accountSid, callSid } }));
+      return { ...wire, messages, async sendTail() {
+        const before = transcriptionStats.accepted;
+        const accepted = new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => { frameListeners.delete(notify); reject(Error("Actual ASR tail was not accepted")); }, 5000);
+          const notify = () => { if (transcriptionStats.accepted >= before + 2) { clearTimeout(timer); frameListeners.delete(notify); resolve(); } };
+          frameListeners.add(notify);
+        });
+        sendTailFrames();
+        await accepted;
+      }, stopTail: sendStop, sendQueuedTail(end: "wireStop" | "socketClose") {
+        sendTailFrames(); if (end === "wireStop") sendStop(); else wire.socket.close();
+      }, sendTurn() {
         for (let index = 0; index < 7; index++) wire.socket.send(JSON.stringify({ event: "media", sequenceNumber: String(index + 3), streamSid,
           media: { track: "inbound", chunk: String(index + 1), timestamp: String(index * 20), payload: Buffer.alloc(160, index < 2 ? 0x9f : 0xff).toString("base64") } }));
       } };
     }
     return { ...f, key, config, ports, producer, makeSpeech: make, stateSpeech: state, policyPath, policyApproval, reports, reportPosts, dncPosts, nativeSpeech: native,
-      runtime, carrier, callSid, streamSid, form, attempt, effects, speechBurned: burned, approval, spoken, intents, acceptedTranscripts, listen, start, finished, recover, original,
+      runtime, carrier, callSid, streamSid, form, attempt, effects, speechBurned: burned, approval, spoken, intents, acceptedTranscripts, transcriptionStats, listen, start, finished, recover, original,
       get carrierCalls() { return calls; }, get admitted() { return admitted; } };
   } catch (error) { await f.close(); throw error; }
 }

@@ -86,6 +86,7 @@ function runStream(socket: WebSocket, request: IncomingMessage, config: TwilioMe
   let call: TwilioWireCall | undefined;
   let tail = Promise.resolve();
   let inFlightMessages = 0;
+  let queuedDispatches = 0, protocolStarted = false;
   let disconnected = false;
   let claimedKey: string | undefined;
   let activeLease: ActiveCallLease | undefined;
@@ -111,11 +112,31 @@ function runStream(socket: WebSocket, request: IncomingMessage, config: TwilioMe
     } catch { return "uncertain"; }
   };
 
+  const delegate = (raw: string): boolean => {
+    if (!call) return false;
+    try {
+      const pending = call.receive(raw);
+      void pending.then(received => { if (!received.ok) socket.close(1008); }, () => socket.close(1011))
+        .finally(() => { inFlightMessages -= 1; });
+      return true;
+    } catch { socket.close(1011); return false; }
+  };
+
   socket.on("message", (data, isBinary) => {
     // Admit before chaining behind async authentication/storage/construction.
     // Otherwise a signed peer could fill an unbounded startup promise queue.
     if (inFlightMessages >= 64) { lifetime.abort(); socket.close(1008); return; }
     inFlightMessages += 1;
+    // Once authentication/startup and its dispatch backlog have drained, deliver
+    // wire admission synchronously. A close frame in this same socket read must
+    // not discard earlier public media before its contact-only owner sees it.
+    if (call && protocolStarted && queuedDispatches === 0 && socket.readyState === WebSocket.OPEN && !disconnected) {
+      if (isBinary) { inFlightMessages -= 1; socket.close(1003); return; }
+      const raw = (Array.isArray(data) ? Buffer.concat(data) : data instanceof ArrayBuffer ? Buffer.from(new Uint8Array(data)) : data).toString("utf8");
+      if (!delegate(raw)) inFlightMessages -= 1;
+      return;
+    }
+    queuedDispatches += 1;
     let delegated = false;
     tail = tail.then(async () => {
       if (socket.readyState !== WebSocket.OPEN) return;
@@ -141,18 +162,16 @@ function runStream(socket: WebSocket, request: IncomingMessage, config: TwilioMe
         clearTimeout(deadline);
         const first = await call.receive(connected);
         if (!first.ok) { socket.close(1008); return; }
-        const second = await call.receive(raw);
+        const starting = call.receive(raw); protocolStarted = true;
+        const second = await starting;
         if (!second.ok) socket.close(1008);
         return;
       }
       // Dispatch in wire order without waiting for semantic work. An inbound mark
       // can then release a clear fence awaited by an earlier media message.
-      const pending = call.receive(raw);
-      delegated = true;
-      void pending.then(received => {
-        if (!received.ok) socket.close(1008);
-      }, () => socket.close(1011)).finally(() => { inFlightMessages -= 1; });
+      delegated = delegate(raw);
     }).catch(() => socket.close(1011)).finally(() => {
+      queuedDispatches -= 1;
       if (!delegated) inFlightMessages -= 1;
     });
   });

@@ -6,9 +6,12 @@ import { connectPostgres } from "../../src/storage/connect.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { verificationCanaries } from "../support/caller-verification.ts";
 
+import { captureSqlVerificationCanaryWindow, assertSqlVerificationCodeCanary } from "../support/sql-verification-canary.ts";
+
 if (!process.env.DATABASE_URL) throw Error("DATABASE_URL required");
 const db = connectPostgres(process.env.DATABASE_URL), peer = connectPostgres(process.env.DATABASE_URL);
 after(async () => { await Promise.all([db.destroy(), peer.destroy()]); });
+const canaryWindow = await captureSqlVerificationCanaryWindow(db);
 const emitted = new URL("../../dist/runtime/", import.meta.url);
 const { outboundClinicalReschedulingFixture } = await import(new URL("test/support/outbound-clinical-rescheduling.js", emitted).href) as typeof import("../support/outbound-clinical-rescheduling.ts");
 const { PostgresClinikoRequestBudget } = await import(new URL("src/storage/postgres-cliniko-request-budget.js", emitted).href) as typeof import("../../src/storage/postgres-cliniko-request-budget.ts");
@@ -47,6 +50,7 @@ test(`emitted original-patient outpatient move with shared PostgreSQL180 and com
   assert.equal((await f.confirm()).ok, true); await f.drain();
   assert.equal(f.patches, scenario === "accepted" ? 1 : 0);
   assert.equal(Object.values((await f.state()).actions)[0]!.status === "committed", scenario === "accepted");
+  await assertSqlVerificationCodeCanary(db, f.mail[0]!.code, canaryWindow);
   const canaries = [apiKey, ...verificationCanaries, f.original.attempt.patientId, f.original.attempt.requestDigest,
     outboundLaunchAttemptDigest(f.original.attempt)!, f.original.recallRef, f.recipientNumber,
     f.callId, f.sessionId, f.mail[0]!.code, f.originalRequestNotes, ...f.recalls.map(r => String(r.notes))];

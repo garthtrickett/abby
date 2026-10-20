@@ -257,13 +257,11 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
       async scan(values: readonly string[]) {
         const window = messages.find(message => message.kind === "verificationCanaryWindow")?.diagnostic as
           { sinceMs: number; throughMs: number } | undefined;
-        if (window || !options.classes && operation !== "confirmationResend") {
-          assert.ok(window && Number.isSafeInteger(window.sinceMs) && Number.isSafeInteger(window.throughMs));
-          const rows = await db.selectFrom("cliniko_request_budgets").select("sent_at_ms").execute();
-          assert.ok(rows.every(row => Array.isArray(row.sent_at_ms) &&
-            (row.sent_at_ms as number[]).every(at => at >= window.sinceMs && at <= window.throughMs)),
-          "all actual request timestamps stay inside the synthetic code canary window");
-        }
+        assert.ok(window && Number.isSafeInteger(window.sinceMs) && Number.isSafeInteger(window.throughMs));
+        const rows = await db.selectFrom("cliniko_request_budgets").select("sent_at_ms").execute();
+        assert.ok(rows.every(row => Array.isArray(row.sent_at_ms) &&
+          (row.sent_at_ms as number[]).every(at => at >= window.sinceMs && at <= window.throughMs)),
+        "all actual request timestamps stay inside the synthetic code canary window");
         assert.deepEqual(resultValue(await scanPatientDataCanaries(db, values.map((value, i) => ({ label: `runner_${i}`, value })))), []);
         for (const value of values) assert.equal(output.join("").includes(value), false, "runner output excludes private canaries"); },
     };
