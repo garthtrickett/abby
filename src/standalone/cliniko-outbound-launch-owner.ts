@@ -296,7 +296,7 @@ export class ClinikoOutboundLaunchOwner {
           if (edgeInvoked || !active()) return false; edgeInvoked = true;
           try { await prepare(); if (now() >= attempt.dispatchNotAfter) return false; current(); dispatched = true; return true; }
           catch { return false; }
-        }, ref => { if (dispatched && ref === r.effectRef) accepted = true; }));
+        }, ref => { if (dispatched && ref === r.effectRef) accepted = true; }, Object.freeze({ recallRef: retained.value.recallRef, attempt })));
       if (dispatched && result.kind === "accepted" && result.effectRef === r.effectRef) accepted = true;
       return dispatched ? ok({ kind: accepted ? "accepted" : "unknown", capacity: "held" }) : err({ kind: "forbidden" });
     } catch (error) {

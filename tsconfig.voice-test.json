@@ -17,6 +17,7 @@
     "src/cliniko/outbound-dnc-records.ts",
     "src/cliniko/outbound-appointment-target.ts",
     "src/voice/outbound-runtime.ts",
+    "src/voice/twilio-outbound-runtime.ts",
     "src/storage/postgres-outbound-capacity.ts",
     "test/support/start-synthetic-queue-monitor.ts",
     "test/support/financial-consumer-process.ts",
