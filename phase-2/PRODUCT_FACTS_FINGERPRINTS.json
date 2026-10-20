@@ -5,7 +5,7 @@
   "sources": {
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
     "docs/adr/0003-class-movement-staff-resolution.md": "683bdd10660afc00309bac21e32ceda976573aa5e29aca4106fb1cddcb71b62f",
-    "phase-2/EXECUTION_PROGRESS.md": "e7f83cb4a5cc4bf94b664c6930e7494f505d3899fbee7e7513602ff5bd4ed7fc",
+    "phase-2/EXECUTION_PROGRESS.md": "c73193a6feb6ca1d5e06dd6c0c800aa05e79939563b67ad84d478370ae1bbb18",
     "phase-2/OUTBOUND_CALL_ADMISSION.md": "93edc93d8868e17133055771c98176af0d6fa13385adbf4f3700069f5d22df2f",
     "phase-2/OUTBOUND_CONTACT_LIFECYCLE.md": "716d095cbbd175ac791eeebd1fffb2ce1c6a86fafdf63d9d79ce9129a8cce92a",
     "phase-2/OUTBOUND_NUMBER_STOPS.md": "95562e9f7cbb4461bc1ca4efd00bc5945737a2772b4fe1505db222d98eb40b50",
@@ -358,7 +358,7 @@
     "test/support/outbound-record-peer.ts": "f9e43ad97c7d459fc786ec54f838a4ed8c1513c481f9eb4ff8b2c854c25d7813",
     "test/support/outbound-record-process.ts": "96eb58263e3d8ce1f5ba3d6c96e4b9f68158d088ead6e75b50a2d63db5120478",
     "test/support/postgres-twilio-outbound.ts": "85b9aaa796387a87c21db4c82dbc75e9a789160afb24b8b4964ec4e7c5548346",
-    "test/support/staged-class-move-journey.ts": "879f74251b24d657cb17596b50ce8cd7f73bb83dd5bdafebbc3f53a6b65d834c",
+    "test/support/staged-class-move-journey.ts": "1ccd1366cab58b19988a25f6002dda416ae4e8dc711ad614b0471c7be460ace5",
     "test/support/start-synthetic-financial-voice-runner.ts": "5f4c053c57f0306fb103c94aabb8d8cec0e9fbf730a010991220e5e2f780b2ba",
     "test/support/synthetic-media-timeline.ts": "c32af1fe918c824557ad4704b3da8af36c9ec0a8399d859e26e5f8d5811d7ef1",
     "test/text/booking-menu-deadline.test.ts": "cf2c6f24a08c0846e65fbc9be9a4646b18a0f734b6fe0dd9cf1c2da2e7fcc022",

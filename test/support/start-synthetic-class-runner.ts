@@ -1,3 +1,4 @@
+import { installStagedVerificationCanaries } from "./verification-code-canary.ts";
 import { classProviderProxy } from "./class-provider-proxy.ts";
 import type { ClassMoveColdContext } from "./class-move-cold-context.ts";
 import { TwilioConnectedCall } from "../../src/voice/twilio-connected-call.ts";
@@ -63,6 +64,7 @@ if (operation === "reschedule" && (process.env.ABBY_SYNTHETIC_DIFFERENT_CLASS ==
 const c = f.flowConfig, apiKey = process.env.ABBY_CLINIKO_API_KEY!, now = c.clock!;
 const mediaClockOrigin = Date.parse(now());
 if (staging) {
+  process.send?.({ kind: "verificationCanaryWindow", diagnostic: installStagedVerificationCanaries() });
   const receive = TwilioConnectedCall.prototype.receive;
   TwilioConnectedCall.prototype.receive = function(this: TwilioConnectedCall, raw: string | Uint8Array) {
     let markName: string | undefined;

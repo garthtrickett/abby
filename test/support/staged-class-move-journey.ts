@@ -162,6 +162,11 @@ export async function stagedMoveJourney(scenario: StagedMoveScenario) {
     if (scenario.maximum) assert.ok(call.messages.filter(row => row.kind === "verificationEmail").length >= 2, "final inspection renews the private same-patient proof");
     const rows = await call.db.selectFrom("cliniko_request_budgets").selectAll().execute();
     assert.ok(rows.length > 0 && rows.every(row => row.max_per_minute === 180 && Array.isArray(row.sent_at_ms) && row.sent_at_ms.length <= 180));
+    const canaryWindow = call.messages.find(row => row.kind === "verificationCanaryWindow")?.diagnostic as
+      { sinceMs: number; throughMs: number } | undefined;
+    assert.ok(canaryWindow && Number.isSafeInteger(canaryWindow.sinceMs) && Number.isSafeInteger(canaryWindow.throughMs));
+    assert.ok(rows.every(row => (row.sent_at_ms as number[]).every(at => at >= canaryWindow.sinceMs && at <= canaryWindow.throughMs)),
+      "all real request timestamps stay in the declared synthetic canary window");
     assert.equal((await call.db.selectFrom("cliniko_request_reservations").selectAll().execute()).length, 0);
     // The actual phone lookup persists exactly its allowed phone-to-ID map.
     // Verify those columns explicitly; private grants, codes and clinical data
