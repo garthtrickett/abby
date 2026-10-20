@@ -118,3 +118,13 @@ test("outgoing greeting expiry after preparation refuses a stale host-current cl
   assert.equal((await prepared.value.begin()).ok, false);
   assert.deepEqual(await f.ledger.findAdmission(callIdFor(f.call.key)), { ok: true, value: null });
 });
+
+test("provider-terminal selection is explicit and absent fields preserve both prior physical profile projections", () => {
+  const f = fixture();
+  assert.equal(outboundConversationProfileRef(f.approval), "abby-outbound-v1:f84df2cd02f4cf5cda0b28edd528cbb7a4ace116e42cfaa9b58127e4ca0deaa1");
+  assert.equal(outboundConversationProfileRef({ ...f.approval, stopSpeechBinding: "b".repeat(64) }), "abby-outbound-v1:dff8572a07e1c7eb91c75982f364cff3edb4a0b7deb94d77f94f3d87922eebe6");
+  const selected = { ...f.approval, terminalObservationBinding: "c".repeat(64) };
+  assert.notEqual(outboundConversationProfileRef(selected), outboundConversationProfileRef(f.approval));
+  assert.notEqual(outboundConversationProfileRef({ ...selected, terminalObservationBinding: "d".repeat(64) }), outboundConversationProfileRef(selected));
+  assert.equal(outboundConversationProfileRef({ ...selected, terminalObservationBinding: "not-a-selection" }), undefined);
+});
