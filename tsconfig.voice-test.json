@@ -39,7 +39,8 @@
     "src/standalone/twilio-outbound-conversation.ts",
     "src/cliniko/twilio-outbound-report-records.ts",
     "src/cliniko/twilio-outbound-report-history.ts",
-    "src/standalone/cliniko-twilio-outbound-stop-recovery.ts"
+    "src/standalone/cliniko-twilio-outbound-stop-recovery.ts",
+    "src/standalone/twilio-outbound-stop-receiver.ts"
   ],
   "include": []
 }

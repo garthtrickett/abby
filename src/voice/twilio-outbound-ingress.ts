@@ -10,6 +10,7 @@ import type { ActiveCallClaims, TwilioWireCall } from "./twilio-media-sockets.ts
 import type { OutboundProviderBinding } from "./outbound-runtime.ts";
 import { TwilioAbbyOutboundRuntime } from "./twilio-outbound-runtime.ts";
 import type { AuthenticatedTwilioOutboundCall } from "./twilio-outbound-runtime.ts";
+import type { SignedTwilioWebhook } from "./twilio-signed-ingress.ts";
 
 export type TwilioOutboundStream = Readonly<{ call: AuthenticatedTwilioOutboundCall; streamSid: string; streamStartedAt: string }>;
 export type TwilioOutboundIngressQuery = Readonly<{
@@ -30,6 +31,11 @@ export type TwilioOutboundIngressConfig = Readonly<{
   /** Historical progress only. This port cannot attest final speech, no-stop,
    * all-call closure or patient/clinical authority. */
   observeProgress?: (event: Readonly<{ call: AuthenticatedTwilioOutboundCall; status: string }>, signal: AbortSignal) => Promise<void>;
+  /** Explicit trusted-host recovery hook. It receives private signed material
+   * under this request's deadline, after authentication/current ingress grant.
+   * Its independent native workflow permissions are never supplied by status. */
+  receiveAuthenticatedStatus?: (request: SignedTwilioWebhook,
+    event: Readonly<{ call: AuthenticatedTwilioOutboundCall; status: string }>, signal: AbortSignal) => Promise<void>;
   deadlineMs?: number;
 }>;
 const header = (v: string | string[] | undefined) => typeof v === "string" ? v : undefined;
@@ -73,6 +79,7 @@ export class TwilioOutboundIngress {
   readonly #effects: TwilioOutboundIngressConfig["sessionEffects"];
   readonly #create: TwilioOutboundIngressConfig["createCall"];
   readonly #progress: TwilioOutboundIngressConfig["observeProgress"];
+  readonly #statusReceiver: TwilioOutboundIngressConfig["receiveAuthenticatedStatus"];
   readonly #deadline: number;
   readonly #media: ReturnType<typeof createTwilioMediaSockets>;
   readonly #sessionBinding: string;
@@ -81,6 +88,7 @@ export class TwilioOutboundIngress {
     if (!(config.runtime instanceof TwilioAbbyOutboundRuntime) || typeof config.authority?.allows !== "function" ||
         typeof config.authority.current !== "function" || typeof config.sessionEffects !== "function" || typeof config.createCall !== "function" ||
         config.observeProgress !== undefined && typeof config.observeProgress !== "function" ||
+        config.receiveAuthenticatedStatus !== undefined && typeof config.receiveAuthenticatedStatus !== "function" ||
         !Number.isSafeInteger(config.deadlineMs ?? 5000) || (config.deadlineMs ?? 5000) < 1 || (config.deadlineMs ?? 5000) > 10_000) throw Error("Invalid outbound ingress configuration");
     this.#runtime = config.runtime; this.#provider = freeze(structuredClone(config.runtime.binding())); this.#paths = config.runtime.paths();
     if (new Set(Object.values(this.#paths)).size !== 3 || Object.values(this.#paths).some(p =>
@@ -88,6 +96,7 @@ export class TwilioOutboundIngress {
     this.#authority = Object.freeze({ allows: config.authority.allows.bind(config.authority), current: config.authority.current.bind(config.authority) });
     this.#effects = config.sessionEffects.bind(config); this.#create = config.createCall.bind(config);
     this.#progress = config.observeProgress?.bind(config); this.#deadline = config.deadlineMs ?? 5000;
+    this.#statusReceiver = config.receiveAuthenticatedStatus?.bind(config);
     this.#sessionBinding = createHash("sha256").update(JSON.stringify(["abby.twilio-outbound-session.v1", this.#provider])).digest("hex");
     this.#media = createTwilioMediaSockets({ ...(config.activeCallClaims ? { activeCallClaims: config.activeCallClaims } : {}),
       authorizeUpgrade: request => this.#selected() && this.#runtime.authorizeUpgrade(request).ok,
@@ -152,6 +161,10 @@ export class TwilioOutboundIngress {
         if (!status.ok) { reply(403); return true; }
         const query = this.#query("observeProgress", status.value.call);
         if (!await this.#allows(query, lifetime.signal)) { reply(503); return true; }
+        if (this.#statusReceiver) {
+          await awaitUntilAbort(this.#statusReceiver(Object.freeze({ ...input }), freeze(structuredClone(status.value)), lifetime.signal), lifetime.signal);
+          if (!this.#current(query, lifetime.signal)) { reply(503); return true; }
+        }
         if (this.#progress) await awaitUntilAbort(this.#progress(freeze(structuredClone(status.value)), lifetime.signal), lifetime.signal);
         if (!this.#current(query, lifetime.signal)) { reply(503); return true; }
         reply(204);
