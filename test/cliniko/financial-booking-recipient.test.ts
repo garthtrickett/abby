@@ -117,3 +117,27 @@ test(`issuer-format ${prefix} reference cannot replace independent financial-rec
   assert.equal(await f.create().read({ ...f.selection, verificationRef: prefix + "A".repeat(42) }, signal()), undefined);
   assert.equal(f.state.gets, 0); assert.equal(f.queries.length, 1);
 });
+
+for (const prefix of ["-", "_"]) for (const proofPrefix of ["-", "_"])
+test(`financial recipient accepts the actual24-byte offer ${prefix} with32-byte proof ${proofPrefix}`, async t => {
+  const f = await fixture(); t.after(f.close);
+  const offerRef = prefix + "A".repeat(31), verificationRef = proofPrefix + "A".repeat(42);
+  assert.equal(Buffer.from(offerRef, "base64url").byteLength, 24);
+  assert.equal(Buffer.from(offerRef, "base64url").toString("base64url"), offerRef);
+  const selected = { ...f.selection, offerRef, verificationRef }, reader = f.create(), found = await reader.read(selected, signal());
+  assert.ok(found); assert.equal(f.state.gets, 1); assert.equal(f.queries.length, 3);
+  assert.equal(reader.currentForSend(selected, found.recipient, signal()), true);
+  assert.equal(reader.currentForSend({ ...selected, offerRef: prefix + "B".repeat(31) }, found.recipient, signal()), false);
+});
+for (const offerRef of ["-" + "A".repeat(30), "_" + "A".repeat(32), "-" + "A".repeat(31) + "=", "+" + "A".repeat(31), "_" + "A".repeat(30) + "\n"])
+test(`financial recipient refuses malformed private offer ${JSON.stringify(offerRef)}`, async t => {
+  const f = await fixture(); t.after(f.close);
+  assert.equal(await f.create().read({ ...f.selection, offerRef }, signal()), undefined);
+  assert.equal(f.state.gets, 0); assert.equal(f.queries.length, 0);
+});
+for (const prefix of ["-", "_"])
+test(`valid ${prefix} booking offer cannot replace financial recipient admission`, async t => {
+  const f = await fixture(); t.after(f.close); f.state.allowed = false;
+  assert.equal(await f.create().read({ ...f.selection, offerRef: prefix + "A".repeat(31) }, signal()), undefined);
+  assert.equal(f.state.gets, 0); assert.equal(f.queries.length, 1);
+});
