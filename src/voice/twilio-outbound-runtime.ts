@@ -8,6 +8,7 @@ import { ownedBodyBytes } from "../shared/owned-body-bytes.ts";
 import { captureOutboundOriginalSend } from "./outbound-original-send.ts";
 import type { OutboundOriginalSend } from "./outbound-original-send.ts";
 import type { OutboundProviderBinding, OutboundRuntimeCall, OutboundRuntimeLaunchResult, OutboundVoiceRuntimeAdapter } from "./outbound-runtime.ts";
+import { supportsTwilioBidirectionalAudio } from "./twilio-media-stream.ts";
 import { TwilioOutboundContext } from "./twilio-outbound-context.ts";
 import type { TwilioOriginalCall } from "./twilio-outbound-context.ts";
 import type { SignedTwilioWebhook, SignedTwilioStreamStart, SignedTwilioUpgrade } from "./twilio-signed-ingress.ts";
@@ -64,11 +65,14 @@ export class TwilioAbbyOutboundRuntime implements OutboundVoiceRuntimeAdapter {
     this.#now = input.now?.bind(input) ?? (() => new Date().toISOString());
     const hash = (v: string | Uint8Array) => createHash("sha256").update(v).digest("hex");
     this.#binding = Object.freeze({ ref: input.ref, profileRef: input.profileRef, bindingDigest: hash(JSON.stringify([
-      "abby.twilio-abby-outbound.v1", input.ref, input.profileRef, input.accountSid, hash(input.authToken), input.from,
+      "abby.twilio-abby-outbound.v2", input.ref, input.profileRef, input.accountSid, hash(input.authToken), input.from,
       input.publicAnswerUrl, input.publicStatusUrl, input.publicStreamUrl, hash(input.contextKey), input.deadlineMs ?? 15000])) });
     this.#context = new TwilioOutboundContext(input.contextKey, this.#binding, input.accountSid, input.from);
   }
   binding(): OutboundProviderBinding { return this.#binding; }
+  paths(): Readonly<{ answer: string; status: string; stream: string }> {
+    return Object.freeze({ answer: this.#answer.pathname, status: this.#status.pathname, stream: this.#stream.pathname });
+  }
   async inspectTerminal(): Promise<Readonly<{ kind: "unknown" }>> { return { kind: "unknown" }; }
 
   async launchOnce(input: OutboundRuntimeCall, external: AbortSignal, beforeSend: () => Promise<boolean>,
@@ -81,7 +85,7 @@ export class TwilioAbbyOutboundRuntime implements OutboundVoiceRuntimeAdapter {
           input.profileRef !== this.#binding.profileRef || typeof beforeSend !== "function" || typeof acknowledged !== "function" || !original) return { kind: "definitiveUnsent" };
       const call = Object.freeze({ ...input }), captured = captureOutboundOriginalSend(original, call, this.#binding);
       if (!captured?.attempt.contactReferences || !captured.attempt.dncReferences) return { kind: "definitiveUnsent" };
-      const token = this.#context.sealLaunch(captured, call, randomUUID());
+      const token = this.#context.sealLaunch(captured, call, randomUUID(), randomUUID());
       const answer = new URL(this.#answer), status = new URL(this.#status);
       answer.searchParams.set("abbyContext", token); status.searchParams.set("abbyContext", token);
       if (answer.href.length > 4096 || status.href.length > 4096) return { kind: "definitiveUnsent" };
@@ -161,7 +165,7 @@ export class TwilioAbbyOutboundRuntime implements OutboundVoiceRuntimeAdapter {
       if (!object(connected) || connected.event !== "connected" || connected.protocol !== "Call" || connected.version !== "1.0.0" ||
           !object(start) || start.event !== "start" || start.sequenceNumber !== "1" || !object(start.start) ||
           typeof start.streamSid !== "string" || !/^MZ[0-9a-f]{32}$/.test(start.streamSid) || start.start.streamSid !== start.streamSid ||
-          start.start.accountSid !== this.#config.accountSid || !sid(start.start.callSid) || !object(start.start.customParameters)) return invalid();
+          start.start.accountSid !== this.#config.accountSid || !sid(start.start.callSid) || !object(start.start.customParameters) || !supportsTwilioBidirectionalAudio(start.start)) return invalid();
       const parameters = start.start.customParameters, keys = Object.keys(parameters), parts: string[] = [];
       if (!keys.length || keys.length > 16) return invalid();
       for (let i = 0; i < keys.length; i++) { const part = parameters[`abbyOutbound${i}`];

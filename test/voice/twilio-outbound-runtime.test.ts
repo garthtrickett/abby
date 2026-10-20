@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { randomUUID } from "node:crypto";
+import { createCipheriv, randomBytes, randomUUID } from "node:crypto";
 import { getExpectedTwilioSignature } from "twilio/lib/webhooks/webhooks.js";
 import { TwilioAbbyOutboundRuntime } from "../../src/voice/twilio-outbound-runtime.ts";
 import { bindOutboundVoiceRuntime } from "../../src/voice/outbound-runtime.ts";
@@ -8,7 +8,7 @@ import type { OutboundOriginalSend } from "../../src/voice/outbound-original-sen
 import type { OutboundRuntimeCall } from "../../src/voice/outbound-runtime.ts";
 import type { SignedTwilioWebhook } from "../../src/voice/twilio-signed-ingress.ts";
 import { outboundLaunchValue } from "../support/outbound-launch.ts";
-import { outboundLaunchAttemptDigest } from "../../src/cliniko/outbound-launch-attempt.ts";
+import { encodeOutboundLaunchAttempt, outboundLaunchAttemptDigest } from "../../src/cliniko/outbound-launch-attempt.ts";
 import { value } from "../support/outbound-records.ts";
 
 function fixture(options: { response?: (body: Record<string, unknown>) => Response | Promise<Response>; port?: typeof fetch } = {}) {
@@ -142,7 +142,8 @@ function mediaRequest(f: ReturnType<typeof fixture>, twiml: string) {
   return { method: "GET", requestTarget: "/outbound/stream", signature: getExpectedTwilioSignature(f.config.authToken, f.config.publicStreamUrl, {}),
     connected: JSON.stringify({ event: "connected", protocol: "Call", version: "1.0.0" }),
     start: JSON.stringify({ event: "start", sequenceNumber: "1", streamSid: f.streamSid, start: { streamSid: f.streamSid,
-      accountSid: f.config.accountSid, callSid: f.callSid, customParameters: parameters } }) };
+      accountSid: f.config.accountSid, callSid: f.callSid, tracks: ["inbound"],
+      mediaFormat: { encoding: "audio/x-mulaw", sampleRate: 8000, channels: 1 }, customParameters: parameters } }) };
 }
 test("signed media start binds cold call, account, original context and bounded chunked encrypted parameters", async () => {
   const f = fixture(); await f.launch(); const answer = value(f.adapter.authenticateAnswer(f.request())), request = mediaRequest(f, answer.twiml);
@@ -196,4 +197,30 @@ test("oversized or malformed ACK bodies are discarded without leaking or retryin
     const f = fixture({ response: () => new Response(text, { status: 201, headers: { "Content-Type": "application/json" } }) });
     assert.deepEqual(await f.launch(), { kind: "unknown" }); assert.equal(f.calls, 1); assert.equal(f.acknowledgements, 0);
   }
+});
+
+test("cold original context retains distinct preallocated session and final-report exclusions", async () => {
+  const f = fixture(); await f.launch();
+  const one = value(f.adapter.authenticateAnswer(f.request())).call.context;
+  const cold = value(new TwilioAbbyOutboundRuntime(f.config).authenticateAnswer(f.request())).call.context;
+  assert.match(one.sessionActionRef, /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
+  assert.notEqual(one.sessionActionRef, one.reportActionRef); assert.deepEqual(one, cold);
+});
+
+for (const shape of ["legacyWithoutSession", "aliasedSessionAndReport"] as const)
+test(`authenticated sealed ${shape} cannot gain a fresh conversation claim`, async () => {
+  const f = fixture(); await f.launch(); const reportRef = randomUUID();
+  const payload: unknown[] = [shape === "legacyWithoutSession" ? 1 : 2, f.adapter.binding().bindingDigest,
+    f.config.profileRef, f.config.accountSid, f.config.from, f.call.number, reportRef, f.original.recallRef,
+    value(encodeOutboundLaunchAttempt(f.original.attempt))];
+  if (shape === "aliasedSessionAndReport") payload.push(reportRef);
+  const nonce = randomBytes(12), cipher = createCipheriv("aes-256-gcm", f.config.contextKey, nonce);
+  cipher.setAAD(Buffer.from("abby.twilio-outbound.launch.v1"));
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify(payload), "utf8"), cipher.final()]);
+  const token = Buffer.concat([nonce, cipher.getAuthTag(), encrypted]).toString("base64url");
+  const request = f.request(), url = new URL(request.requestTarget, f.config.publicAnswerUrl); url.searchParams.set("abbyContext", token);
+  const fields = Object.fromEntries(new URLSearchParams(request.body));
+  const signed = { ...request, requestTarget: url.pathname + url.search,
+    signature: getExpectedTwilioSignature(f.config.authToken, url.href, fields) };
+  assert.equal(new TwilioAbbyOutboundRuntime(f.config).authenticateAnswer(signed).ok, false);
 });

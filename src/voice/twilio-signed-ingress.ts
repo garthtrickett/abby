@@ -95,6 +95,10 @@ export class TwilioSignedIngress {
     this.fallbackNumbers = new Map(fallbackNumbers);
   }
 
+  paths(): Readonly<{ webhook: string; stream: string }> {
+    return Object.freeze({ webhook: this.webhookUrl.pathname, stream: this.streamUrl.pathname });
+  }
+
   private mac(payload: string): Buffer {
     return createHmac("sha256", this.config.bindingKey).update(payload).digest();
   }
