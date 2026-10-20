@@ -44,7 +44,8 @@
     "test/support/twilio-outbound-stop-speech.ts",
     "test/support/twilio-outbound-finality.ts",
     "test/support/outbound-clinical-rescheduling.ts",
-    "test/support/twilio-outbound-conversation.ts"
+    "test/support/twilio-outbound-conversation.ts",
+    "test/support/outbound-clinical-voice.ts"
   ],
   "include": []
 }
