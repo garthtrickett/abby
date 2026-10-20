@@ -1,3 +1,4 @@
+import { installClinicalVerificationCanaries } from "./verification-code-canary.ts";
 import { observeSyntheticWire } from "./synthetic-wire-observer.ts";
 import { syntheticTaskSequence, syntheticMultiTaskBookingProvider } from "./call-task-sequence.ts";
 import { withSmtpVerificationServer } from "./smtp-verification-server.ts";
@@ -36,6 +37,7 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
     !["book", "cancel", "reschedule", "intake", "patientUpdate", "appointments.read", "staff.request"].includes(operation ?? "")) {
   throw new Error("synthetic clinical runner requires an isolated fixture");
 }
+process.send?.({ kind: "verificationCanaryWindow", diagnostic: installClinicalVerificationCanaries() });
 const taskSequence = process.env.ABBY_SYNTHETIC_TASK_SEQUENCE === "1";
 if (process.env.ABBY_SYNTHETIC_TASK_SEQUENCE && (!taskSequence || operation !== "book" || process.env.ABBY_SYNTHETIC_SERVICE_MODE || process.env.ABBY_SYNTHETIC_LOCATION_MODE)) throw new Error("invalid synthetic task sequence mode");
 const intakeFields = process.env.ABBY_SYNTHETIC_INTAKE_FIELDS === "1";
