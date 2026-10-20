@@ -20,13 +20,15 @@ import { verificationCanaries, verificationNow } from "./caller-verification.ts"
 
 /** Actual native decoder, caller OTP/proof, exact selection, played SAM,
  * review and one-shot mutation. Remote native transport/grants are synthetic. */
-export async function outboundClinicalReschedulingFixture(options: Readonly<{ budget?: ClinikoRequestBudget; apiKey?: string }> = {}) {
+export async function outboundClinicalReschedulingFixture(options: Readonly<{ budget?: ClinikoRequestBudget; apiKey?: string; recipientNumber?: string }> = {}) {
   const f = await reschedulingSessionFixture({ multiple: true, ...(options.budget ? { rateBudget: options.budget } : {}) });
   f.owner.dispose();
   const lifetime = new AbortController();
   let patches = 0, moved = false;
   let lastTarget: Record<string, unknown> | undefined;
   try {
+    const recipientNumber = options.recipientNumber ?? f.inbound.presentedCallerNumber;
+    let contactNumber = recipientNumber;
     const base = "https://api.au5.cliniko.com/v1", c = { ...f.config.cliniko, ...(options.apiKey ? { apiKey: options.apiKey } : {}) };
     if (options.apiKey) {
       await f.replacePolicy({ credentialFingerprint: clinikoCredentialFingerprint(c.apiKey) });
@@ -53,6 +55,10 @@ export async function outboundClinicalReschedulingFixture(options: Readonly<{ bu
         return Response.json({ ...lastTarget, starts_at: "2026-10-08T05:00:00.000Z", ends_at: "2026-10-08T05:30:00.000Z" });
       }
       const response = await f.ownerPorts.fetchPort(input, init);
+      if (url.pathname === `/v1/patients/${verificationCanaries[2]}` && method === "GET" && response.ok) {
+        const row = await response.json();
+        return Response.json({ ...row, patient_phone_numbers: [{ number: contactNumber, phone_type: "Mobile" }] });
+      }
       if (url.pathname === "/v1/individual_appointments/91" && method === "GET") {
         state.targetReads++; await state.beforeTarget?.();
         const row = await response.json();
@@ -69,7 +75,7 @@ export async function outboundClinicalReschedulingFixture(options: Readonly<{ bu
     const observed = value(await value(ClinikoOutboundAppointmentTarget.create({ requests, appointmentPolicyDigest: target.appointmentPolicyDigest }, target.authority, native))
       .observeTarget({ patientId: verificationCanaries[2]!, appointmentRef: "cliniko:appointment:91" }, lifetime.signal));
     const request = { ...outboundRequestValue(), scope: f.scope, businessId: c.businessId, credentialFingerprint: clinikoCredentialFingerprint(c.apiKey),
-      patientId: verificationCanaries[2]!, purpose: "sickDay" as const, recipient: { kind: "voice" as const, number: f.inbound.presentedCallerNumber },
+      patientId: verificationCanaries[2]!, purpose: "sickDay" as const, recipient: { kind: "voice" as const, number: recipientNumber },
       appointment: { ref: observed.target.appointmentRef, digest: observed.digest }, requestedAt: verificationNow,
       schedule: { notBefore: verificationNow, expiresAt: "2026-10-09T06:00:00.000Z", timeZone: "Australia/Sydney", weekdays: [1, 2, 3, 4, 5, 6, 7], opensAt: "00:00", closesAt: "23:59" } };
     notes = value(encodeOutboundRecipientRequest(request));
@@ -98,22 +104,28 @@ export async function outboundClinicalReschedulingFixture(options: Readonly<{ bu
     const readMenu = (stage: "targets" | "offers", id = "read-" + stage) => agent.submit({ kind: "rescheduling.menu.read.v1", turn: turn(id), stage,
       from: stage === "targets" ? verificationNow : "2026-10-08", to: stage === "targets" ? "2026-10-09T06:00:00.000Z" : "2026-10-08", now: verificationNow });
     const selectMenu = (stage: "targets" | "offers", choice: 1 | 2 | 3 = 1) => agent.submit({ kind: "rescheduling.menu.select.v1", turn: turn("select-" + stage), stage, choice, now: verificationNow });
-    return { ...f, owner, context, outgoingConfig, original, targetState: state, targetQueries, receipt, callId, sessionId, runtime, agent, reception,
+    return { ...f, owner, context, outgoingConfig, original, recipientNumber, targetState: state, targetQueries, receipt, callId, sessionId, runtime, agent, reception,
       get patches() { return patches; }, get claims() { return f.claims; },
       get originalRequestNotes() { return notes; },
+      setContactNumber: (number: string) => { contactNumber = number; },
       editOriginalRequest: () => { requestUpdatedAt = "2026-10-04T06:00:01.000Z"; },
       state: currentState, play, readMenu, selectMenu,
       verify: async () => {
-        let wake: (() => void) | undefined; const sent = new Promise<void>(resolve => { wake = resolve; });
+        let wake: (() => void) | undefined, timer: ReturnType<typeof setTimeout> | undefined;
+        const sent = new Promise<void>((resolve, reject) => {
+          wake = resolve;
+          timer = setTimeout(() => reject(Error("Outgoing fixture did not deliver its registered-channel challenge")), 5000);
+        });
         // begin's challenge work is joined by submitCode; wait only for the
         // owned synthetic delivery, never infer completion from elapsed time.
         const originalSend = outgoingConfig.delivery.send;
         outgoingConfig.delivery.send = async (...args) => { const result = await originalSend(...args); wake!(); return result; };
-        owner.beginVerification();
-        // The session captured the delivery object, whose method is read by
-        // the existing authority at issue time.
-        await sent;
-        assert.equal((await owner.submitCode(f.mail.at(-1)!.code)).verified, true);
+        try {
+          owner.beginVerification();
+          // The callback proves delivery; elapsed time only bounds failure.
+          await sent;
+          assert.equal((await owner.submitCode(f.mail.at(-1)!.code)).verified, true);
+        } finally { if (timer !== undefined) clearTimeout(timer); }
       },
       confirm: async () => { await play(); const action = Object.values((await currentState()).actions)[0]!;
         return reception.affirm(f.scope, turn("affirm", "Yes"), action.key, action.digest, verificationNow); },

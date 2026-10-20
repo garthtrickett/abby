@@ -52,7 +52,7 @@ for (const decoded of [false, true]) test(`clinical grant withdrawn during ${dec
   assert.equal(f.patches, 0);
 });
 
-for (const cause of ["targetVersion", "originalRequest", "clinicalGrant", "targetGrant"] as const)
+for (const cause of ["targetVersion", "originalRequest", "clinicalGrant", "targetGrant", "registeredContact"] as const)
 test(`${cause} changed after played confirmation still fences the final reviewed PATCH`, { timeout: 15000 }, async t => {
   const f = await outboundClinicalReschedulingFixture(); t.after(f.close); await f.verify();
   await f.readMenu("targets"); await f.play(); await f.selectMenu("targets"); await f.play();
@@ -63,10 +63,18 @@ test(`${cause} changed after played confirmation still fences the final reviewed
   if (cause === "originalRequest") f.editOriginalRequest();
   if (cause === "clinicalGrant") f.targetState.live = false;
   if (cause === "targetGrant") f.targetState.targetLive = false;
+  if (cause === "registeredContact") f.setContactNumber("+61499123456");
   const action = Object.values((await f.state()).actions)[0]!;
   await f.reception.affirm(f.scope, { callId: f.callId, sessionId: f.sessionId, turnId: "affirm-late", text: "Yes", quality: "clear", at: "2026-10-04T06:00:00.000Z" },
     action.key, action.digest, "2026-10-04T06:00:00.000Z");
   await f.drain(); assert.equal(f.patches, 0);
+});
+
+test("a distinct outgoing recipient uses its actual registered contact without changing the independent incoming event", { timeout: 15000 }, async t => {
+  const f = await outboundClinicalReschedulingFixture({ recipientNumber: "+61488123456" }); t.after(f.close);
+  assert.notEqual(f.recipientNumber, f.inbound.presentedCallerNumber);
+  assert.equal(f.context.verificationBinding().number, f.recipientNumber);
+  await f.verify(); assert.ok(await f.owner.verified());
 });
 
 test("outgoing rescheduling cannot reset the shared physical native budget", { timeout: 15000 }, async t => {
