@@ -13,7 +13,7 @@ import type { OutboundEffectBarrier } from "../../src/core/outbound-effect-barri
 import type { LocationScope } from "../../src/core/model.ts";
 
 export type OutboundMemoOperation = "book" | "cancel" | "reschedule";
-export type OutboundMemoMode = "accepted" | "wrongSubjectGrant" | "withdrawn" | "lostStored";
+export type OutboundMemoMode = "accepted" | "wrongSubjectGrant" | "withdrawn" | "lostStored" | "nativeUncertain";
 
 /** Real signed clinical fixture and independent memo grants; remote ports remain synthetic. */
 export async function outboundMemoFixture(operation: OutboundMemoOperation, mode: OutboundMemoMode, options: {
@@ -26,6 +26,7 @@ export async function outboundMemoFixture(operation: OutboundMemoOperation, mode
   let memo: ReturnType<typeof subjectMemoFixture> | undefined;
   const f = await outboundClinicalVoiceFixture({ budget: options.budget ?? new ClinikoReadBudget(180),
     ...(options.apiKey ? { apiKey: options.apiKey } : {}), realElapsedTime: true,
+    ...(mode === "nativeUncertain" ? { lostClinicalResponse: true } : {}),
     ...(options.sessionEffects ? { sessionEffects: options.sessionEffects } : {}),
     ...(options.verificationBudgetFor ? { verificationBudgetFor: options.verificationBudgetFor } : {}),
     ...(operation === "book" ? { purpose: "followUp" } : { sickDayAction: operation }),
@@ -65,16 +66,18 @@ export async function outboundMemoFixture(operation: OutboundMemoOperation, mode
     assert.equal(proposed.kind, operation); assert.equal(proposed.status, "awaitingConfirmation");
     assert.equal(f.bookings + f.cancellations + f.patches, 0); assert.equal(retained.posts.length, 0);
     await f.mark(); if (mode === "withdrawn") retained.control.permitted = false;
-    await f.say("Yes", { kind: "affirm" }); await retained.memoSettled;
+    await f.say("Yes", { kind: "affirm" });
+    if (mode !== "nativeUncertain") await retained.memoSettled;
     assert.equal(f.bookings + f.cancellations + f.patches, 1);
-    assert.equal(Object.values((await f.current()).actions)[0]!.status, "committed");
+    assert.equal(Object.values((await f.current()).actions)[0]!.status, mode === "nativeUncertain" ? "uncertain" : "committed");
     const nativeNotes = operation === "book" ? String(f.bookingRequests[0]!.notes) : String(f.recalls[0]!.notes);
     const source = operation === "book" ? /^Abby booking ([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i.exec(nativeNotes)?.[1]
       : resultValue(decodeClinikoReview(nativeNotes)).marker;
     assert.ok(source, "actual native source marker is independent of memo retention");
-    const denied = mode === "wrongSubjectGrant" || mode === "withdrawn";
+    const denied = mode === "wrongSubjectGrant" || mode === "withdrawn" || mode === "nativeUncertain";
     assert.equal(retained.posts.length, denied ? 0 : 1); assert.equal(retained.rows.length, denied ? 0 : 1);
-    assert.equal(retained.outcomes[0]!.kind, denied ? "unavailable" : mode === "lostStored" ? "uncertain" : "accepted");
+    if (mode === "nativeUncertain") assert.ok(retained.outcomes.every(outcome => outcome.kind === "unavailable"));
+    else assert.equal(retained.outcomes[0]!.kind, denied ? "unavailable" : mode === "lostStored" ? "uncertain" : "accepted");
     if (!denied) {
       const decoded = resultValue(decodeAdministrativeMemo(retained.posts[0]!.content));
       assert.equal(decoded.direction, "outbound"); assert.equal(decoded.patientId, verificationCanaries[2]);
@@ -82,8 +85,21 @@ export async function outboundMemoFixture(operation: OutboundMemoOperation, mode
       assert.equal(decoded.sourceActionRef, source);
       assert.deepEqual(resultValue(await retained.config.barrier.claimOnce(decoded.actionRef)), { claimed: false });
     }
+    if (mode === "nativeUncertain") {
+      // Independent synthetic provider oracle, never supplied back to Abby.
+      assert.equal(await retained.config.native.rateBudget.claim(), null);
+      const native = retained.config.native;
+      const response = await f.retainedNative.fetchPort("https://api.au5.cliniko.com/v1/individual_appointments/91", { method: "GET", redirect: "error",
+        headers: { Accept: "application/json", Authorization: `Basic ${Buffer.from(`${native.apiKey}:`).toString("base64")}`, "User-Agent": `Abby (${native.contactEmail})` },
+        signal: AbortSignal.timeout(5000) });
+      assert.equal(response.status, 200); const row = await response.json();
+      if (operation === "book") assert.equal(row.notes, nativeNotes);
+      else if (operation === "cancel") assert.ok(row.cancelled_at);
+      else assert.equal(row.starts_at, "2026-10-08T05:00:00.000Z");
+    }
     await f.mark(); await f.say("Did it finish", { kind: "outcome" });
     assert.equal(f.bookings + f.cancellations + f.patches, 1); assert.equal(retained.posts.length, denied ? 0 : 1);
+    assert.equal(Object.values((await f.current()).actions)[0]!.status, mode === "nativeUncertain" ? "uncertain" : "committed");
     const publicData = JSON.stringify([f.spoken, f.modelTurns, f.transcripts, f.sent, await f.flow.publicIntentContext()]);
     const privateValues = [...verificationCanaries, code, f.recipientNumber, f.requestNotes, nativeNotes, source, retained.config.native.apiKey,
       ...f.recalls.map(row => String(row.notes)), ...retained.posts.flatMap(row => [String(row.content), JSON.stringify(row)]), retained.key.toString("hex"), retained.key.toString("base64")];

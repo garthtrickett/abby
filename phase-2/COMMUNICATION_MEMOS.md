@@ -802,7 +802,7 @@ restore acceptance remain open. No default activation or live traffic.
 
 ## Signed outgoing original-patient administrative memos, 21 October 2026
 
-The optional outgoing prepared-clinical composition now has current qualification
+Earlier local637534b qualified the optional outgoing prepared-clinical composition
 for original-patient follow-up individual booking and exact sick-day individual
 cancellation/rescheduling. Actual signed HTTP/WebSocket greeting, private keypad
 verification, played clinical confirmation and native receipt/observation precede
@@ -862,3 +862,46 @@ still has its own current cloud/normal-merge gate. This local follow-up integrat
 that exact parent with qualification inputs preserved, but remains unpublished
 until its actual normal parent and own review/cloud gates. No default activation
 or completed thirteen-gap goal is claimed.
+
+## Outgoing clinical-response uncertainty, 21 October 2026
+
+Current qualification additionally covers clinical response loss in actual signed
+outgoing booking, cancellation and rescheduling. Each synthetic native endpoint
+performs its mutation before losing the response. Abby retains uncertainty and
+writes no memo or memo purpose. A separately budgeted diagnostic GET verifies
+that the native change exists, without supplying that observation back to Abby;
+a later caller outcome question still cannot promote the result or repeat either
+clinical or memo writes. Existing known acknowledgements remain committed despite
+the separate denied or lost memo-retention outcomes.
+
+The first three-case probe passed booking and failed two diagnostic-oracle calls
+(1792605054418,1/3): those calls omitted the base fixture's required redirect
+refusal. Clinical uncertainty/no-memo checks preceded the diagnostic failure.
+The oracle now charges the same physical budget and supplies redirect:error,
+the normal Basic/User-Agent/Accept headers and a bounded signal; no provider
+assertion or production guard is removed. The corrected three-case source probe
+passes (1792605152940). Failed inputs, runner and log remain frozen.
+
+Current full six-file source qualification passes51/51 (1792605200405), zero
+failures/skips/cancellations. Whole strict TypeScript and actual721 output rebuild
+pass (1792605201842,3m48s,peak1,663,459,328 B/2GiB). Only outgoing-clinical-voice
+and outgoing-memo test helpers differ from637534b; all production and the other719
+outputs remain byte-identical. No unqualified source/artifact overlay is used.
+
+All fifteen current emitted signed/PostgreSQL cases pass: clinical-response-loss3
+(1792605494854,34s,Node peak158,371,840 B) and preserved known-clinical12
+(1792605583624,1m41s,Node peak178,847,744 B). The actual180 budget, SQL verification,
+session exclusions and permanent memo purposes remain active. Diagnostic reads
+are explicitly charged; no limit, deadline, scanner or failure assertion changes.
+The same every-column and complete-unfiltered-backup/output privacy probes retain
+independent native markers/context/keys/proof/call/session canaries and unrelated
+legitimate aliases/scans/effects. Node and external PostgreSQL remain separately
+bounded512MiB/CPU100%/Swap0; all OOM/high/max counters are zero and owned resources
+are cleaned. This is one current fifteen-case scope, not a sum with the earlier
+twelve. No new killed-sender or logical restore is claimed.
+
+Remote services, clear-final ASR and grants remain synthetic. Representative
+PR579's actual normal merge and this follow-up's current review/publication/cloud
+remain separate gates. Broader subjects/classes/financial/catalogue combinations,
+complete no-stop/private/all-ASR and real clinic/provider/mail/acoustic/source/
+restore acceptance stay open. No default activation or completed execution goal.

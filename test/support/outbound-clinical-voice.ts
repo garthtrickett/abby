@@ -41,7 +41,7 @@ async function until(check: () => boolean | Promise<boolean>, label: string, tim
 /** Real signed carrier HTTP/WebSocket, clinical prepared bundle, private keypad,
  * native decoders and ordinary review/write owners. Clinic grants, remote native
  * HTTP, email, clear-final speech recognition and synthesis are synthetic. */
-export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: ClinikoRequestBudget; apiKey?: string; recipientNumber?: string; purpose?: "followUp" | "sickDay"; services?: boolean; sickDayAction?: "reschedule" | "cancel"; lostCancellationResponse?: boolean;
+export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: ClinikoRequestBudget; apiKey?: string; recipientNumber?: string; purpose?: "followUp" | "sickDay"; services?: boolean; sickDayAction?: "reschedule" | "cancel"; lostCancellationResponse?: boolean; lostClinicalResponse?: true;
   verificationBudgetFor?: (scope: LocationScope) => NonNullable<ClinikoCallFlowConfig["verificationBudget"]>;
   realElapsedTime?: true;
   memo?: (context: Readonly<{ scope: LocationScope; cliniko: ClinikoOutboundCallFlowConfig["cliniko"]; clock: () => string }>) => ClinikoBookingMemoConfig;
@@ -99,7 +99,7 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
       assert.equal(review.request.operation.cancellationReason, 50);
       assert.deepEqual([review.request.operation.startsAt, review.request.operation.endsAt], ["2026-10-08T04:00:00.000Z", "2026-10-08T04:30:00.000Z"]);
       cancellations++;
-      if (options.lostCancellationResponse) throw Error("Synthetic response lost after cancellation send");
+      if (options.lostCancellationResponse || options.lostClinicalResponse) throw Error("Synthetic response lost after cancellation send");
       return new Response(null, { status: 204 });
     }
     if (url.pathname === "/v1/individual_appointments/91" && method === "PATCH") {
@@ -109,6 +109,7 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
       assert.equal(f.recalls.length, 1); assert.equal(patches, 0);
       assert.deepEqual(JSON.parse(String(init?.body)), { starts_at: "2026-10-08T05:00:00.000Z", ends_at: null });
       assert.ok(lastTarget); patches++; moved = true;
+      if (options.lostClinicalResponse) throw Error("Synthetic response lost after rescheduling send");
       return Response.json({ ...lastTarget, starts_at: "2026-10-08T05:00:00.000Z", ends_at: "2026-10-08T05:30:00.000Z" });
     }
     if (url.pathname === "/v1/individual_appointments" && method === "POST") {
@@ -123,6 +124,7 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
       booked = { id: "91", notes: body.notes, starts_at: body.starts_at, ends_at: body.ends_at, cancelled_at: null, archived_at: null, deleted_at: null,
         patient: { links: { self: `${base}/patients/${body.patient_id}` } }, business: { links: { self: `${base}/businesses/${body.business_id}` } },
         practitioner: { links: { self: `${base}/practitioners/${body.practitioner_id}` } }, appointment_type: { links: { self: `${base}/appointment_types/${body.appointment_type_id}` } } };
+      if (options.lostClinicalResponse) throw Error("Synthetic response lost after booking send");
       return Response.json(booked, { status: 201 });
     }
     if (booked && url.pathname === "/v1/individual_appointments/91" && method === "GET") return Response.json(booked);

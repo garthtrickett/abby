@@ -24,7 +24,7 @@ const { PostgresPatientPhoneIndex } = await import(new URL("src/storage/postgres
 const { PostgresPatientPhoneScan } = await import(new URL("src/storage/postgres-patient-phone-scan.js", emitted).href) as typeof import("../../src/storage/postgres-patient-phone-scan.ts");
 
 for (const operation of ["book", "cancel", "reschedule"] as const)
-for (const mode of ["accepted", "wrongSubjectGrant", "withdrawn", "lostStored"] as const)
+for (const mode of ["accepted", "wrongSubjectGrant", "withdrawn", "lostStored", "nativeUncertain"] as const)
 test(`actual emitted signed outgoing ${operation} memo uses SQL180, verification, permanent purpose and full-backup privacy: ${mode}`, { timeout: 180000 }, async () => {
   const admin = connectPostgres(adminUrl), name = `abby_out_memo_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl); target.pathname = `/${name}`;
@@ -47,7 +47,7 @@ test(`actual emitted signed outgoing ${operation} memo uses SQL180, verification
     const { code, publicData, privateValues } = await c.complete();
     const binding = administrativeMemoRecordBinding(c.memo.config.native, c.memo.authentication)!;
     const purposes = await sql<{ total: number }>`select count(*)::int as total from outbound_effect_barriers where owner_binding = ${binding}`.execute(db);
-    assert.equal(purposes.rows[0]!.total, mode === "wrongSubjectGrant" || mode === "withdrawn" ? 0 : 1);
+    assert.equal(purposes.rows[0]!.total, mode === "wrongSubjectGrant" || mode === "withdrawn" || mode === "nativeUncertain" ? 0 : 1);
     const scope = c.memo.config.native.scope;
     const verification = await sql<{ kind: string; attempts: number }>`select kind, attempts from patient_verification_budgets where tenant_id = ${scope.tenantId}`.execute(db);
     for (const kind of ["issue", "answer"] as const) assert.ok(verification.rows.some(row => row.kind === kind && row.attempts >= 1));
