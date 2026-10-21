@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { isDeepStrictEqual } from "node:util";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
 import type { OutboundEffectBarrier as OneUseEffectBarrier } from "../core/outbound-effect-barrier.ts";
@@ -10,6 +9,7 @@ import { claimClinikoBudget, clinikoCredentialFingerprint, isClinikoRequestBudge
 import type { ClinikoRequestBudget } from "./read-budget.ts";
 import { AdministrativeMemoAuthentication, administrativeMemoDigest, decodeAdministrativeMemo, encodeAdministrativeMemo } from "./administrative-memo.ts";
 import type { AdministrativeMemo } from "./administrative-memo.ts";
+import { administrativeMemoNativeInstant as instant, matchesAdministrativeMemo, parseNativeAdministrativeMemo } from "./internal/administrative-memo-native.ts";
 
 export type AdministrativeMemoConfig = Readonly<{
   scope: LocationScope; businessId: string; apiKey: string; contactEmail: string;
@@ -45,12 +45,6 @@ const exact = (v: unknown, keys: readonly string[]) => !!object(v) && Object.key
 const numeric = (v: unknown): v is string => typeof v === "string" && /^[1-9][0-9]{0,18}$/.test(v);
 const opaque = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$/.test(v);
 const digest = (v: unknown): v is string => typeof v === "string" && /^[a-f0-9]{64}$/.test(v);
-const link = (v: unknown) => object(object(v)?.links)?.self;
-function instant(v: unknown): string | undefined {
-  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(v)) return;
-  const n = Date.parse(v);
-  return Number.isFinite(n) && new Date(Date.parse(v.slice(0, 10) + "T00:00:00Z")).toISOString().slice(0, 10) === v.slice(0, 10) ? new Date(n).toISOString() : undefined;
-}
 function shard(c: AdministrativeMemoConfig, auth: AdministrativeMemoAuthentication, port: typeof fetch): string | undefined {
   try {
     const s = typeof c.apiKey === "string" ? /-([a-z]{2}[0-9]{1,2})$/.exec(c.apiKey)?.[1] : undefined;
@@ -113,9 +107,7 @@ export class ClinikoAdministrativeMemos {
     } catch { return err({ kind: "invalidConfig" }); }
   }
   #matches(m: AdministrativeMemo): boolean {
-    const c = this.#config;
-    return isDeepStrictEqual(m.scope, c.scope) && m.businessId === c.businessId && m.credentialFingerprint === clinikoCredentialFingerprint(c.apiKey) &&
-      m.authorRef === c.authorRef && isDeepStrictEqual(m.policy, c.policy) && this.#auth.verify(m);
+    return matchesAdministrativeMemo(m, this.#config, this.#auth);
   }
   #query(input: NativeInput, memo?: AdministrativeMemo): AdministrativeMemoQuery {
     const c = this.#config, selected = input.method === "POST" ? input.memo : input.binding;
@@ -177,21 +169,17 @@ export class ClinikoAdministrativeMemos {
       if (response.url && response.url !== url) throw new Failure("mismatched");
       const bytes = await ownedBodyBytes(response.body, 65536, signal);
       let raw: unknown; try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); } catch { throw new Failure("malformed"); }
-      const row = object(raw), createdAt = instant(row?.created_at), updatedAt = instant(row?.updated_at), archivedAt = row?.archived_at === null ? null : instant(row?.archived_at);
-      const decoded = decodeAdministrativeMemo(row?.content), selected = input.method === "POST" ? input.memo : input.binding;
-      if (!row || !numeric(row.id) || link(row) !== `${this.#base}/communications/${row.id}` || link(row.patient) !== `${this.#base}/patients/${selected.patientId}` ||
-          row.category_code !== 12 || row.type_code !== 3 || row.confidential !== true || !decoded.ok || !this.#matches(decoded.value) ||
-          decoded.value.actionRef !== selected.actionRef || decoded.value.patientId !== selected.patientId ||
-          row.direction_code !== (decoded.value.direction === "outbound" ? 1 : 2) || !createdAt || !updatedAt || createdAt > updatedAt || archivedAt === undefined ||
-          Date.parse(createdAt) < Date.parse(decoded.value.recordedAt) - 30000 || Date.parse(updatedAt) > Date.parse(clock()) + 30000 ||
-          input.method === "POST" && (row.content !== input.content || archivedAt !== null) ||
-          input.method === "GET" && `cliniko:communication:${row.id}` !== input.binding.communicationRef) throw new Failure("mismatched");
+      const selected = input.method === "POST" ? input.memo : input.binding;
+      const found = parseNativeAdministrativeMemo(raw, { base: this.#base, config: c, authentication: this.#auth, clock,
+        patientId: selected.patientId, actionRef: selected.actionRef,
+        ...(input.method === "POST" ? { content: input.content } : { communicationRef: input.binding.communicationRef }) });
+      if (!found) throw new Failure("mismatched");
       if (input.method === "POST") {
-        known = Object.freeze({ kind: "accepted", communicationRef: `cliniko:communication:${row.id}`, actionRef: input.memo.actionRef });
+        known = Object.freeze({ kind: "accepted", communicationRef: found.communicationRef, actionRef: input.memo.actionRef });
         try { current(); return ok(known); } catch { return ok({ kind: "acceptedWithheld" }); }
       }
-      await permit(this.#query(input, decoded.value)); current();
-      return ok(Object.freeze({ kind: "nativeAdministrativeMemo", communicationRef: input.binding.communicationRef, memo: decoded.value, createdAt, updatedAt, archivedAt }));
+      await permit(this.#query(input, found.memo)); current();
+      return ok(found);
     } catch (error) {
       if (known) return ok({ kind: "acceptedWithheld" });
       return dispatched ? ok({ kind: "uncertain" }) : err({ kind: error instanceof Failure ? error.kind : "unavailable" });

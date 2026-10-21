@@ -15,14 +15,14 @@ import type { PatientVerificationBudget } from "../../src/standalone/email-patie
 import type { OutboundEffectBarrier } from "../../src/core/outbound-effect-barrier.ts";
 
 /** Real class SAM/approval/native writer. Clinic grants, mail and transport are synthetic. */
-export async function classBookingMemoFixture(options: { passes?: boolean; admitted?: boolean; realQuotaWait?: boolean; mode?: "accepted" | "lostStored" | "lostUnstored" | "nonexact";
+export async function classBookingMemoFixture(options: { clinicalFetchAround?: (port: typeof fetch) => typeof fetch; memoFetchPort?: typeof fetch; passes?: boolean; admitted?: boolean; realQuotaWait?: boolean; mode?: "accepted" | "lostStored" | "lostUnstored" | "nonexact";
   scope?: LocationScope; budget?: ClinikoRequestBudget; verificationBudget?: PatientVerificationBudget;
   barrierFor?: (scope: LocationScope, owner: string) => OutboundEffectBarrier } = {}) {
   const key = randomBytes(32), authentication = new AdministrativeMemoAuthentication(key), service = new AbortController();
   const memoPosts: Record<string, unknown>[] = [], memoRows: Record<string, unknown>[] = [], outcomes: MemoRetentionOutcome[] = [], consumed = new Set<string>();
   const gates = { allowed: true, producer: true, current: true, hold: undefined as Promise<void> | undefined };
   let done!: () => void; const memoSettled = new Promise<void>(resolve => { done = resolve; });
-  const f = await financialClassBookingFixture({ passes: options.passes ?? false, required: false, budgetLimit: 180,
+  const f = await financialClassBookingFixture({ ...(options.clinicalFetchAround ? { fetchAround: options.clinicalFetchAround } : {}), passes: options.passes ?? false, required: false, budgetLimit: 180,
     ...(options.scope ? { scope: options.scope } : {}), ...(options.budget ? { budget: options.budget } : {}),
     ...(options.verificationBudget ? { verificationBudget: options.verificationBudget } : {}), memoFor: (clinical, clock) => {
     const native = { scope: clinical.scope, apiKey: clinical.apiKey, contactEmail: clinical.contactEmail, businessId: clinical.businessId,
@@ -34,7 +34,7 @@ export async function classBookingMemoFixture(options: { passes?: boolean; admit
       barrier: options.barrierFor?.(native.scope, owner) ?? { matches: (scope, binding) => JSON.stringify(scope) === JSON.stringify(native.scope) && binding === owner,
         claimOnce: async ref => { const claimed = !consumed.has(ref); consumed.add(ref); return ok({ claimed }); } },
       observeOutcome: result => { outcomes.push(result); done(); },
-      fetchPort: async (url, init) => {
+      fetchPort: options.memoFetchPort ?? (async (url, init) => {
         assert.equal(String(url), "https://api.au5.cliniko.com/v1/communications"); assert.equal(init?.method, "POST"); assert.equal(init.redirect, "error");
         const body = JSON.parse(String(init.body)); memoPosts.push(body); assert.equal(body.patient_id, verificationCanaries[2]); assert.equal(body.confidential, true);
         const decoded = decodeAdministrativeMemo(body.content); assert.ok(decoded.ok && authentication.verify(decoded.value));
@@ -43,7 +43,7 @@ export async function classBookingMemoFixture(options: { passes?: boolean; admit
         if (options.mode !== "lostUnstored") memoRows.push(row);
         if (options.mode === "lostStored" || options.mode === "lostUnstored") throw Error("Synthetic memo response loss");
         return Response.json(options.mode === "nonexact" ? { ...row, confidential: false } : row, { status: 201 });
-      } };
+      }) };
   } });
   let admitted: ClinikoClassSession | undefined, reception = f.reception;
   if (options.admitted) {

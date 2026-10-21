@@ -42,8 +42,9 @@ withheld; headers alone or a lost/nonexact body remain uncertain. A spent
 unretained purpose cannot POST again.
 
 The read-only interface needs separate preliminary and decoded-record grants.
-It can read a known communication reference; cold discovery without that
-reference is not implemented yet. The adapter does not edit or archive records,
+It can read a known communication reference. The cold-history extension and
+its separately granted original-review source are qualified below for the stated
+ordinary-class process/restore cases. The adapter does not edit or archive records,
 add a local private queue, or retry the original clinical action.
 
 ## Earlier native-primitive checkpoint, 21 October 2026
@@ -383,6 +384,81 @@ A fresh shared-codec ordinary cancellation SQL/privacy case also passes
 than becoming a fresh combined694 pass. Provider, mail and clinic grants remain
 synthetic; signed acoustic and actual clinic acceptance are not established.
 
+## Cold native history and ordinary-class process recovery, 21 October 2026
+
+The GET-only history module accepts a clinic-approved patient, original action
+and canonical creation window of at most seven days. It includes archived memo/
+phone communications, scans at most five pages of 100, and requires two matching
+complete inventories. Native collection filters cannot restrict author or
+confidentiality, so the preliminary grant covers the whole patient memo/phone
+collection in that window; the selected confidential decoded record needs its
+own grant. Partial/changed pages, duplicate originals, wrong links, edited content,
+unknown key/policy/account and lost current grants stay unavailable/conflicted.
+Unrelated human memo text is discarded and never returned. Known-reference and
+cold reads share the existing exact native record/codec/MAC parser.
+
+A separate protected original-review reader derives class-booking/movement roots
+from the native attendance action ID, and cancellation/rescheduling roots from
+the native reviewed-send marker. Its own original-record permission is distinct
+from collection and decoded-memo permissions and remains current across the
+operation. Source/account/patient/operation/interval bindings are rechecked.
+The transport and body are owned under a whole bounded lifetime. Invalid or
+undefined windows and clocks refuse before native reads; later rollback or
+cancellation retires the remaining operation.
+No communication ID, ended caller object, lost process map, model assertion or
+clinical replay is accepted. A located memo reports historical administrative
+facts; it is not a new patient proof or guarantee of the current diary state.
+
+Individual booking deliberately remains unsupported by this original-review
+adapter: its review does not retain the actual booking marker. That missing
+root needs a separately permitted exact native appointment source, not the
+review marker, a fresh UUID or an inferred match. Unknown original selections,
+other outcome/process cohorts and combined signed voice remain to be qualified.
+A not-located result describes only the declared bounded observation. It never
+proves that no effect existed and cannot recreate a spent memo purpose.
+
+Current source controls pass 115/115 (1792586103154,43s), no failures/skips/
+cancellations. Two adversarial checks first failed (1792585971835): cancellation
+did not retire an abort-ignoring original-review body, and an invalid window
+read the review before refusing. Owned bounded body retirement and pre-IO time
+validation correct both without weakening the existing review schema or grants.
+The full strict/699-output build passes (1792586110481,3m54s,1,656,823,808 B/
+2GiB); five new modules/fixtures and two expected changed outputs leave the
+other 692 parent outputs unchanged. The first affected strict attempt failed
+only on new test narrowing/readonly annotations; corrected strict passes.
+
+The first actual stopped-sender case (1792586377960) reached fresh recovery but
+correctly rejected the synthetic transport's localhost Response URL. Privacy/
+restore were not reached. Its exact source and699 outputs are privately archived.
+Only the test transport envelope was corrected to map its checked native origin
+onto the loopback provider, preserving status, headers and abortable body. No
+production URL check changed. Affected strict and actual serving rebuild pass
+(1792586498246,2m16s,1,086,767,104 B/2GiB): only the recovery-worker output differs;
+all 698 other outputs, production and source-control inputs are byte-preserved.
+
+Three actual emitted/PostgreSQL cases now pass, zero failures/skips/cancellations:
+stored1/1 (1792586647529) and archived/unretained2/2 (1792586728052). Each executes
+the admitted ordinary class session with file approvals, synthetic registered-
+channel OTP, played menu/SAM, actual native attendee acknowledgement, the real
+SQL180 account/verification budgets and a permanent original-bound memo purpose.
+The exact sender process is SIGKILLed after its memo POST but before any response;
+its terminal signal and PID absence are verified. A fresh compiled process from
+an empty directory receives the clinic-selected review reference, never a memo
+ID or action root. It rereads the native review and two complete collections,
+finds stored/archived originals, or reports not-located for unretained loss. It
+makes no new native mutation and the SQL purpose remains spent in every case.
+
+The complete unfiltered logical database is then restored to a separate fresh
+database and the same discovery/one-use checks run in another fresh process.
+Every-column and raw full-backup scans pass before and after restore for the
+acted-on subject, proof/code/call/session, native review/memo, root, MAC and key.
+Legitimate unrelated phone aliases, staged scans and opaque effects are retained;
+rich local call rows remain empty. No local patient-bearing recovery queue or
+journal is added. Node peaks180,396,032/183,861,248 B and external PostgreSQL peaks
+140,574,720/141,324,288 B, each bounded512MiB/CPU100%/Swap0; all OOM/high/max counters
+are zero and owned databases/containers are cleaned. Provider, mail, grants and
+native retention are synthetic; this is not clinic, carrier or acoustic acceptance.
+
 ## Work still required
 
 The current individual/class source producers and partial movement reports have
@@ -393,9 +469,10 @@ source, observer or response failures.
 Exact clinic templates, local presentation, author, confidentiality/viewer roles,
 retention and per-operation permissions remain separate requirements.
 
-Add independently permitted complete native history, protected original-bound
-recovery without lost local references, process-loss and full logical-restore
-proofs. Retain all-column/raw-backup privacy and real physical-budget admission.
+Extend the now-qualified bounded native history and ordinary-class process/restore
+subset to independently permitted individual-booking marker recovery and the
+remaining original-source/outcome/subject combinations. Retain all-column/raw-
+backup privacy, archived/ambiguous refusal and real physical-budget admission.
 Then qualify the actual combined host/serving paths, keep operator facts and
 scenarios current, and complete normal parent integration, exact-head cloud
 checks and review before publication. The memo branch is based on normally
