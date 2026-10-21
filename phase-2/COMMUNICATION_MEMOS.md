@@ -459,6 +459,78 @@ journal is added. Node peaks180,396,032/183,861,248 B and external PostgreSQL pe
 are zero and owned databases/containers are cleaned. Provider, mail, grants and
 native retention are synthetic; this is not clinic, carrier or acoustic acceptance.
 
+## Individual-booking marker recovery and final grants, 21 October 2026
+
+A separately permitted clinic-selected native individual appointment now supplies
+its actual `Abby booking <UUID>` marker. The review-only owner deliberately still
+refuses individual-booking reviews: they omit that marker, and a matching diary
+row cannot reconstruct a lost review's causal send identity. The new GET-only
+owner accepts an exact appointment/patient and bounded native memo window, with
+no communication ID, source UUID, old receipt object or model-authored note.
+It is not a new clinical receipt, patient proof or send permission.
+
+The native appointment read explicitly includes archived, cancelled and deleted
+states using the three filters supported by the reviewed official contract.
+It requires exact self/patient/business/practitioner/type links, canonical bounded
+intervals, metadata and marker-only notes, under separate preliminary and decoded-
+source grants. Current account/subject/source grants, the real physical budget,
+native429 feedback, owned bounded body and whole deadline remain enforced.
+History then uses its independent whole-collection and decoded-record grants.
+A second exact appointment read must preserve all relevant source/version facts
+before final disclosure. Only the authenticated historical booking memo with
+that root, appointment and interval can be returned. Cancelled/deleted/archived
+state does not erase the historical memo or promise a currently active booking.
+Changed intervals/versions, noncanonical notes, copied marker/wrong appointment
+and lost source or history permission refuse. Prior source edits are not evidence
+of absence; every not-located result stays confined to its declared native source
+and complete bounded window, never permission to retry a spent purpose.
+
+A new adversarial check first failed against the earlier review owner
+(1792587692669,1 failure): history permission could be withdrawn during the later
+original-record permission wait. Both recovery owners now capture history grants
+per operation and recheck them across every subsequent source wait and before
+returning. Parallel operations do not share these captured queries. Source ports,
+physical budget methods, configuration and permission callbacks are captured
+before waits. No extra clinical mutation or activation path is introduced.
+
+Current source qualification passes158/158 (1792588396150,1m31s), zero failures,
+skips or cancellations, including the new final-grant RED-GREEN case, native
+source edits, complete record metadata, held body cancellation, archived and
+later-cancelled/deleted records, original-review refusal and existing receipt/
+history controls. An initial150/156 run had three positive fixture failures and
+three consequent cancellations: the synthetic native GET record omitted its self
+link. The complete native metadata and terminal-aware held-test readiness were
+corrected; no product link, permission, deadline or assertion was weakened.
+The affected driver graph passes (1792588190236). Whole strict TypeScript and the
+actual serving build pass (1792588407058,4m07s,1,650,147,328 B/2GiB):700 outputs,
+one new recovery module, three expected changed outputs and all696 other parent
+outputs byte-preserved. The shared original writer/codec and clinical producers
+retain their exact parent bytes.
+
+Six current emitted/PostgreSQL process cases pass, zero failures/skips/
+cancellations: the individual stored case1/1 (1792588664958), followed by current
+class3 and individual archived/unretained2 cases5/5 (1792588769650). Both sender
+families execute their actual admitted owner, file approvals, synthetic registered-
+channel OTP, played SAM, original native review, exact clinical acknowledgement
+and independent memo. The actual individual native marker is explicitly different
+from its review marker. The sender is SIGKILLed after its memo POST and before
+response; PID absence and terminal signal are verified. A fresh compiled process
+from an empty directory receives only a clinic-selected review/appointment and
+protected configuration, with no communication ID or lost source UUID. No fresh
+native mutation occurs and the original SQL memo purpose stays spent for stored,
+archived and unretained results. The individual native source is also archived
+in that archived case.
+
+Each case restores the complete unfiltered logical database into a new isolated
+database and repeats discovery and one-use checks in another fresh process.
+The real SQL180 and verification budgets, every-column/raw-backup/output privacy,
+empty recovery directory and legitimate unrelated aliases/staged scans/opaque
+effects are retained. Node peaks212,590,592/182,677,504 B and external PostgreSQL
+peaks179,929,088/142,544,896 B, bounded512MiB/CPU100% each/Swap0, all OOM/high/max0.
+Owned containers/databases are cleaned. Native provider, mail and grants remain
+synthetic. This does not qualify other outcome/process/subject/voice combinations,
+real clinic source approval or acoustic/provider acceptance.
+
 ## Work still required
 
 The current individual/class source producers and partial movement reports have
@@ -469,9 +541,9 @@ source, observer or response failures.
 Exact clinic templates, local presentation, author, confidentiality/viewer roles,
 retention and per-operation permissions remain separate requirements.
 
-Extend the now-qualified bounded native history and ordinary-class process/restore
-subset to independently permitted individual-booking marker recovery and the
-remaining original-source/outcome/subject combinations. Retain all-column/raw-
+Extend the now-qualified native history, individual appointment-marker and
+ordinary-class process/restore subsets to the remaining cancellation/rescheduling/
+movement source/outcome/subject combinations. Retain all-column/raw-
 backup privacy, archived/ambiguous refusal and real physical-budget admission.
 Then qualify the actual combined host/serving paths, keep operator facts and
 scenarios current, and complete normal parent integration, exact-head cloud

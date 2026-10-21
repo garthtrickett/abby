@@ -16,6 +16,7 @@ import { verificationCanaries, verificationNow } from "./caller-verification.ts"
 /** Real admitted booking owner, file approvals, OTP/menu/SAM and native writer.
  * Provider replies and independent clinic memo grants remain synthetic. */
 export async function bookingMemoSessionFixture(options: {
+  clinicalFetchAround?: (port: typeof fetch) => typeof fetch; memoFetchPort?: typeof fetch;
   scope?: LocationScope; budget?: ClinikoRequestBudget; verificationBudget?: PatientVerificationBudget;
   barrierFor?: (scope: LocationScope, owner: string) => OutboundEffectBarrier;
   mode?: "accepted" | "lostStored" | "lostUnstored" | "nonexact";
@@ -32,12 +33,12 @@ export async function bookingMemoSessionFixture(options: {
   const owner = administrativeMemoRecordBinding(native, authentication)!;
   const barrier = options.barrierFor?.(scope, owner) ?? { matches: (s: LocationScope, binding: string) => JSON.stringify(s) === JSON.stringify(scope) && binding === owner,
     claimOnce: async (ref: string) => { const claimed = !consumed.has(ref); consumed.add(ref); return ok({ claimed }); } };
-  const f = await bookingSessionFixture({ scope, budget: rateBudget, ...(options.verificationBudget ? { verificationBudget: options.verificationBudget } : {}),
+  const f = await bookingSessionFixture({ scope, budget: rateBudget, ...(options.clinicalFetchAround ? { fetchAround: options.clinicalFetchAround } : {}), ...(options.verificationBudget ? { verificationBudget: options.verificationBudget } : {}),
     memo: { native, authentication, memoSignal: service.signal, barrier,
       authority: { allows: async () => gates.allowed, current: () => gates.current,
         producerAdmitted: async q => gates.producer && q.memo?.patientId === verificationCanaries[2] },
       observeOutcome: outcome => { outcomes.push(outcome); finish(); },
-      fetchPort: async (url, init) => {
+      fetchPort: options.memoFetchPort ?? (async (url, init) => {
         assert.equal(String(url), "https://api.au5.cliniko.com/v1/communications"); assert.equal(init?.method, "POST"); assert.equal(init.redirect, "error");
         const body = JSON.parse(String(init.body)); memoPosts.push(body);
         const decoded = decodeAdministrativeMemo(body.content); assert.ok(decoded.ok); assert.equal(authentication.verify(decoded.value), true);
@@ -47,7 +48,7 @@ export async function bookingMemoSessionFixture(options: {
         if (options.mode !== "lostUnstored") memoRows.push(row);
         if (options.mode === "lostStored" || options.mode === "lostUnstored") throw Error("Synthetic memo acknowledgement lost");
         return Response.json(options.mode === "nonexact" ? { ...row, confidential: false } : row, { status: 201 });
-      } } });
+      }) } });
   return { ...f, native, authentication, key, service, outcomes, memoPosts, memoRows, consumed, gates, memoSettled,
     prepare: async () => { const proof = await f.verify(); assert.ok((await f.readMenu()).ok); await f.playPending();
       assert.ok((await f.select()).ok); assert.ok((await f.confirm()).ok); return proof; },

@@ -12,9 +12,10 @@ async function fixture() {
     await f.prepare(); await f.drain();
     const config = f.classSessionConfig.memo!.native, now = config.clock!();
     const row: Record<string, unknown> & { links: { self: string } } = { ...f.recalls[0], links: { self: "https://api.au5.cliniko.com/v1/recalls/71" }, updated_at: now };
-    const calls: string[] = [], grants = { original: true, history: true, record: true, current: true,
+    let originalChecks = 0;
+    const calls: string[] = [], grants = { original: true, history: true, record: true, current: true, historyCurrent: true,
       hold: undefined as Promise<void> | undefined, after: undefined as (() => void) | undefined,
-      originalResponse: undefined as (() => Response) | undefined };
+      originalResponse: undefined as (() => Response) | undefined, beforeOriginal: undefined as ((n: number) => void) | undefined };
     const port: typeof fetch = async (url, init) => {
       assert.equal(init?.method, "GET"); calls.push(new URL(String(url)).pathname);
       if (calls.at(-1) === "/v1/recalls/71") return grants.originalResponse?.() ?? Response.json(row);
@@ -23,8 +24,8 @@ async function fixture() {
       return Response.json({ communications: f.memoRows, total_entries: f.memoRows.length });
     };
     const fresh = () => resultValue(ClinikoAdministrativeMemoRecovery.create(config, f.authentication, "7",
-      { allows: async q => { assert.equal(q.recallRef, "cliniko:recall:71"); await grants.hold; return grants.original; }, current: () => grants.current },
-      { allowsHistoryRead: async () => grants.history, allowsRecordRead: async () => grants.record, current: () => true }, port));
+      { allows: async q => { assert.equal(q.recallRef, "cliniko:recall:71"); grants.beforeOriginal?.(++originalChecks); await grants.hold; return grants.original; }, current: () => grants.current },
+      { allowsHistoryRead: async () => grants.history, allowsRecordRead: async () => grants.record, current: () => grants.historyCurrent }, port));
     const selection = { patientId: verificationCanaries[2]!, recallRef: "cliniko:recall:71",
       createdFrom: new Date(Date.parse(now) - 3600000).toISOString(), createdThrough: now };
     return { f, row, calls, grants, fresh, selection };
@@ -72,6 +73,15 @@ test(`original-review recovery rejects a changed ${field} without disclosing a m
 test("original-review permission is rechecked after both native history scans", async t => {
   const x = await fixture(); t.after(x.f.close); x.grants.after = () => { x.grants.current = false; };
   assert.equal((await x.fresh().recover(x.selection, new AbortController().signal)).ok, false);
+});
+
+test("memo history permission must remain current across a later original-review permission wait", async t => {
+  const x = await fixture(); t.after(x.f.close); let opened!: () => void, release!: () => void;
+  const held = new Promise<void>(resolve => { opened = resolve; });
+  x.grants.beforeOriginal = n => { if (n === 2) { x.grants.hold = new Promise<void>(resolve => { release = resolve; }); opened(); } };
+  const pending = x.fresh().recover(x.selection, new AbortController().signal);
+  try { await held; x.grants.historyCurrent = false; release(); assert.equal((await pending).ok, false); }
+  finally { release?.(); }
 });
 
 test("a held original permission is bounded and performs no native read after cancellation", async t => {

@@ -75,20 +75,25 @@ export class ClinikoAdministrativeMemoRecovery {
   readonly #native: AdministrativeMemoConfig;
   readonly #recallTypeId: string;
   readonly #reviews: ClinikoRecallReader;
-  readonly #history: ClinikoAdministrativeMemoHistory;
+  readonly #history: AdministrativeMemoHistoryAuthority;
+  readonly #authentication: AdministrativeMemoAuthentication;
+  readonly #port: typeof fetch;
   readonly #authority: AdministrativeMemoOriginalAuthority;
   private constructor(native: AdministrativeMemoConfig, recallTypeId: string, reviews: ClinikoRecallReader,
-    history: ClinikoAdministrativeMemoHistory, authority: AdministrativeMemoOriginalAuthority) {
-    this.#native = Object.freeze({ ...native, scope: Object.freeze({ ...native.scope }), policy: Object.freeze({ ...native.policy }) });
-    this.#recallTypeId = recallTypeId; this.#reviews = reviews; this.#history = history;
+    history: AdministrativeMemoHistoryAuthority, authority: AdministrativeMemoOriginalAuthority, authentication: AdministrativeMemoAuthentication, port: typeof fetch) {
+    this.#native = native;
+    this.#recallTypeId = recallTypeId; this.#reviews = reviews; this.#authentication = authentication; this.#port = port;
+    this.#history = Object.freeze({ allowsHistoryRead: history.allowsHistoryRead.bind(history), allowsRecordRead: history.allowsRecordRead.bind(history), current: history.current.bind(history) });
     this.#authority = Object.freeze({ allows: authority.allows.bind(authority), current: authority.current.bind(authority) });
   }
   static create(native: AdministrativeMemoConfig, authentication: AdministrativeMemoAuthentication, recallTypeId: string,
     originalAuthority: AdministrativeMemoOriginalAuthority, historyAuthority: AdministrativeMemoHistoryAuthority, port: typeof fetch = fetch): Result<ClinikoAdministrativeMemoRecovery, Failure> {
     try {
       if (!numeric(recallTypeId) || typeof originalAuthority?.allows !== "function" || typeof originalAuthority.current !== "function") return unavailable();
-      const history = ClinikoAdministrativeMemoHistory.create(native, authentication, historyAuthority, port), reviews = ClinikoRecallReader.create(native, reviewPort(port), native.clock);
-      return history.ok && reviews.ok ? ok(new ClinikoAdministrativeMemoRecovery(native, recallTypeId, reviews.value, history.value, originalAuthority)) : unavailable();
+      const b = native.rateBudget, captured = Object.freeze({ ...native, scope: Object.freeze({ ...native.scope }), policy: Object.freeze({ ...native.policy }),
+        rateBudget: Object.freeze({ claim: b.claim.bind(b), observe429: b.observe429.bind(b) }), clock: native.clock?.bind(native) ?? (() => new Date().toISOString()) });
+      const history = ClinikoAdministrativeMemoHistory.create(captured, authentication, historyAuthority, port), reviews = ClinikoRecallReader.create(captured, reviewPort(port), captured.clock);
+      return history.ok && reviews.ok ? ok(new ClinikoAdministrativeMemoRecovery(captured, recallTypeId, reviews.value, historyAuthority, originalAuthority, authentication, port)) : unavailable();
     } catch { return unavailable(); }
   }
   async recover(input: AdministrativeMemoRecoverySelection, external: AbortSignal): Promise<Result<AdministrativeMemoHistoryResult, Failure>> {
@@ -101,15 +106,16 @@ export class ClinikoAdministrativeMemoRecovery {
           Date.parse(input.createdThrough) - Date.parse(input.createdFrom) > 7 * 86400000 || !(external instanceof AbortSignal) || external.aborted) return unavailable();
       selected = Object.freeze({ ...input });
     } catch { return unavailable(); }
-    const c = this.#native, signal = AbortSignal.any([external, AbortSignal.timeout(c.deadlineMs ?? 15000)]);
+    const c = this.#native, controller = new AbortController(), signal = AbortSignal.any([external, controller.signal]),
+      timer = setTimeout(() => controller.abort(), c.deadlineMs ?? 15000);
     const q: AdministrativeMemoOriginalQuery = Object.freeze({ operation: "readOriginalAdministrativeMemoReview", scope: c.scope,
       businessId: c.businessId, credentialFingerprint: clinikoCredentialFingerprint(c.apiKey), patientId: selected.patientId,
       recallRef: selected.recallRef, recallTypeId: this.#recallTypeId });
-    let last = "";
+    const historyGrants = new Set<Parameters<AdministrativeMemoHistoryAuthority["current"]>[0]>(); let last = "";
     const current = () => {
       const at = (c.clock ?? (() => new Date().toISOString()))();
       if (signal.aborted || typeof at !== "string" || instant(at) !== at || at < last || Date.parse(selected.createdThrough) > Date.parse(at) + 30000) return false;
-      last = at; return this.#authority.current(q, signal) === true;
+      last = at; return this.#authority.current(q, signal) === true && [...historyGrants].every(query => this.#history.current(query, signal) === true);
     };
     try {
       if (!current() || await awaitUntilAbort(this.#authority.allows(q, signal), signal) !== true || !current()) return unavailable();
@@ -117,11 +123,18 @@ export class ClinikoAdministrativeMemoRecovery {
       if (!original?.ok || !current()) return unavailable();
       const r = original.value.envelope.request, binding = source(original.value);
       if (!binding || r.patientId !== selected.patientId || !isDeepStrictEqual(r.scope, c.scope) || r.businessId !== c.businessId || r.credentialFingerprint !== q.credentialFingerprint) return unavailable();
-      const found = await this.#history.discover({ patientId: selected.patientId, sourceActionRef: binding.root,
+      const history = ClinikoAdministrativeMemoHistory.create(c, this.#authentication, {
+        allowsHistoryRead: (query, s) => { historyGrants.add(query); return current() ? this.#history.allowsHistoryRead(query, s) : Promise.resolve(false); },
+        allowsRecordRead: (query, s) => { historyGrants.add(query); return current() ? this.#history.allowsRecordRead(query, s) : Promise.resolve(false); },
+        current: (query, s) => { historyGrants.add(query); return current() && this.#history.current(query, s); }
+      }, this.#port);
+      if (!history.ok) return unavailable();
+      const found = await history.value.discover({ patientId: selected.patientId, sourceActionRef: binding.root,
         createdFrom: selected.createdFrom, createdThrough: selected.createdThrough }, signal);
       if (!found.ok || !current() || found.value.kind === "located" && !binding.matches(found.value.record.memo) ||
           await awaitUntilAbort(this.#authority.allows(q, signal), signal) !== true || !current()) return unavailable();
       return ok(found.value);
     } catch { return unavailable(); }
+    finally { clearTimeout(timer); controller.abort(); }
   }
 }
