@@ -1,4 +1,4 @@
-import { distinctFromClock, drawDistinctCode } from "../support/verification-code-canary.ts";
+import { distinctFromClock, drawSqlCanaryCode } from "../support/verification-code-canary.ts";
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import { randomUUID } from "node:crypto";
@@ -129,7 +129,7 @@ test("six-digit verification canaries distinguish legitimate clock substrings an
       "the unchanged raw scanner can flag a purely public clock value as an apparent OTP match");
     assert.deepEqual(await scanDisposableBackupCanaries(target.toString(), [{ label: "code", value: String(collision) }]), ["code"]);
     let draws = 0;
-    const safe = drawDistinctCode(() => draws++ === 0 ? collision : 0, window), code = String(safe).padStart(6, "0");
+    const safe = drawSqlCanaryCode(() => draws++ === 0 ? collision : 0, window), code = String(safe).padStart(6, "0");
     assert.equal(distinctFromClock(safe, window), true); assert.equal(draws, 2);
     assert.deepEqual(await scanPatientDataCanaries(isolated, [{ label: "code", value: code }]), { ok: true, value: [] });
     assert.deepEqual(await scanDisposableBackupCanaries(target.toString(), [{ label: "code", value: code }]), []);
@@ -139,4 +139,30 @@ test("six-digit verification canaries distinguish legitimate clock substrings an
     assert.deepEqual(await scanDisposableBackupCanaries(target.toString(), [{ label: "code", value: code }]), ["code"],
       "the actual raw code remains detectable in the unfiltered backup too");
   } finally { await isolated.destroy(); await sql.raw(`drop database "${database}"`).execute(db); }
+});
+
+test("SQL canaries cannot collide with any PostgreSQL-rendered microsecond fraction", async () => {
+  const window = { sinceMs: 1792470200000, throughMs: 1792470860000 };
+  const code = String(drawSqlCanaryCode(() => 0, window)).padStart(6, "0");
+  const result = await sql<{ total: number; collisions: number; zero_ending_fractions: number; full: string; trimmed: string }>`
+    with rendered as (
+      select (timestamp '2026-10-20 12:34:56' + n * interval '1 microsecond')::text as value
+      from generate_series(0, 999999) as fractions(n)
+      union all
+      select (timestamptz '2026-10-20 12:34:56+00' + n * interval '1 microsecond')::text as value
+      from generate_series(0, 999999) as fractions(n)
+    )
+    select count(*)::integer as total,
+      count(*) filter (where strpos(value, ${code}) > 0)::integer as collisions,
+      count(*) filter (where length(substring(value from ${"\\.([0-9]+)"})) = 6
+        and right(substring(value from ${"\\.([0-9]+)"}), 1) = '0')::integer as zero_ending_fractions,
+      (timestamp '2026-10-20 12:34:56.123457')::text as full,
+      (timestamp '2026-10-20 12:34:56.123450')::text as trimmed
+    from rendered`.execute(db);
+  assert.equal(result.rows[0]?.total, 2_000_000);
+  assert.equal(result.rows[0]?.collisions, 0);
+  assert.equal(result.rows[0]?.zero_ending_fractions, 0,
+    "neither timestamp type can render any complete six-digit fraction ending in zero");
+  assert.equal(result.rows[0]?.full, "2026-10-20 12:34:56.123457");
+  assert.equal(result.rows[0]?.trimmed, "2026-10-20 12:34:56.12345");
 });
