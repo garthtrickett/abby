@@ -531,6 +531,63 @@ Owned containers/databases are cleaned. Native provider, mail and grants remain
 synthetic. This does not qualify other outcome/process/subject/voice combinations,
 real clinic source approval or acoustic/provider acceptance.
 
+## Archived originals and observed-change recovery, 21 October 2026
+
+Historical original reviews now have a distinct `readReviewHistory` entry point.
+It explicitly requests `archived_at:*` and validates archive/update timestamps,
+exact self/patient/type links and canonical review content. The memo owner
+separately matches the full scope, business, credential and selected subject. The
+existing `readReview` keeps its active-record URL, result shape and archive
+refusal for clinical send/recovery owners. The shared parser has an immutable
+per-call mode; a historical read supplies context, never an active send permit.
+The memo owner's independent original-record query explicitly includes archived
+permission and retains all source/history grants across later waits.
+
+Actual admitted individual cancellation and rescheduling now have cold memo
+recovery proof. Their original reviewed-send marker binds the source; the
+historical memo retains its `acknowledgedAndObservedBestEffort` grade and full
+intervals; rescheduling also retains old/new practitioner references. A later read cannot turn
+this into exact causal success or authority to repeat the clinical action.
+Completed/archived originals remain readable under separate current permission;
+edited canonical intervals, malformed dates and denied source/history grants
+refuse without exposing a memo. Class cancellation/movement are not qualified
+by these individual-change cases.
+
+Current source qualification passes249/249 (1792590630576,6m02s), zero failures,
+skips or cancellations. It includes the earlier booking/history controls, new
+closed/archived originals and observed-change source cases, and existing active
+class-move/correction/resend staff consumers with real authenticated HTTP checks.
+The first run passed209/211 but two preserved staff endpoints lacked this fresh
+checkout's dashboard bundle. The actual bundle was built (1792590574531) and its
+hash pinned before the complete passing rerun; no assertion or skip was changed.
+Whole strict TypeScript and actual serving build pass (1792590648654,4m19s,
+1,657,720,832 B/2GiB):700 outputs, four expected changed modules/fixtures, and
+all696 other parent outputs unchanged.
+
+The first compiled stored pair (1792591011057) passed rescheduling completely;
+cancellation reached cold discovery but its test privacy collector tried to
+serialize a nonexistent body after a valid native PATCH204. Its failed driver
+is preserved. Only the nonemitted driver was corrected to validate that exact
+bodyless cancellation case; full pre/post native appointment snapshots, intervals
+and notes were added as privacy canaries. Current affected strict passes
+(1792591360004); all700 runtime bytes and selected source249 inputs are unchanged.
+
+Twelve current emitted/PostgreSQL cases pass, zero failures/skips/cancellations:
+stored cancellation/rescheduling2/2 (1792591370961), then the other observed-change
+and prior individual/class booking cases10/10 (1792591508850). Each actual
+admitted sender is SIGKILLed after its memo POST but before response. The parent
+retains the actual native review/acknowledgement/inspection and memo, including
+closed archived original reviews in archive mode. Fresh compiled workers receive
+no memo ID, lost action UUID, receipt object or local cache. They make no native
+mutation, retain the spent purpose, then repeat discovery after a complete
+unfiltered logical restore into another fresh database. Actual SQL180 and
+verification budgets, every-column/raw-backup/output privacy, empty recovery
+directories and legitimate unrelated aliases/scans/opaque effects remain.
+Node peaks183,529,472/187,670,528 B; external PostgreSQL peaks141,762,560/142,299,136 B,
+each bounded512MiB/CPU100%/Swap0, all OOM/high/max0 and owned resources cleaned.
+Provider, mail and grants are synthetic; broader subjects, class outcomes,
+signed voice and actual clinic/provider acceptance remain separate.
+
 ## Work still required
 
 The current individual/class source producers and partial movement reports have
@@ -542,8 +599,9 @@ Exact clinic templates, local presentation, author, confidentiality/viewer roles
 retention and per-operation permissions remain separate requirements.
 
 Extend the now-qualified native history, individual appointment-marker and
-ordinary-class process/restore subsets to the remaining cancellation/rescheduling/
-movement source/outcome/subject combinations. Retain all-column/raw-
+ordinary-class and observed individual-change process/restore subsets to class
+cancellation and completed/partial movement, and remaining source/subject
+combinations. Retain all-column/raw-
 backup privacy, archived/ambiguous refusal and real physical-budget admission.
 Then qualify the actual combined host/serving paths, keep operator facts and
 scenarios current, and complete normal parent integration, exact-head cloud

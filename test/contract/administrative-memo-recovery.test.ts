@@ -5,6 +5,7 @@ import { decodeClinikoReview, encodeClinikoReview } from "../../src/cliniko/revi
 import { classBookingMemoFixture } from "../support/class-booking-memo.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
 import { verificationCanaries } from "../support/caller-verification.ts";
+import { ClinikoRecallReader } from "../../src/cliniko/recalls.ts";
 
 async function fixture() {
   const f = await classBookingMemoFixture({ admitted: true, mode: "lostStored" });
@@ -24,11 +25,11 @@ async function fixture() {
       return Response.json({ communications: f.memoRows, total_entries: f.memoRows.length });
     };
     const fresh = () => resultValue(ClinikoAdministrativeMemoRecovery.create(config, f.authentication, "7",
-      { allows: async q => { assert.equal(q.recallRef, "cliniko:recall:71"); grants.beforeOriginal?.(++originalChecks); await grants.hold; return grants.original; }, current: () => grants.current },
+      { allows: async q => { assert.equal(q.recallRef, "cliniko:recall:71"); assert.equal(q.includeArchived, true); grants.beforeOriginal?.(++originalChecks); await grants.hold; return grants.original; }, current: () => grants.current },
       { allowsHistoryRead: async () => grants.history, allowsRecordRead: async () => grants.record, current: () => grants.historyCurrent }, port));
     const selection = { patientId: verificationCanaries[2]!, recallRef: "cliniko:recall:71",
       createdFrom: new Date(Date.parse(now) - 3600000).toISOString(), createdThrough: now };
-    return { f, row, calls, grants, fresh, selection };
+    return { f, config, port, row, calls, grants, fresh, selection };
   } catch (error) { await f.close(); throw error; }
 }
 
@@ -42,6 +43,27 @@ test("fresh protected recovery derives the class purpose from its actual native 
   assert.equal(result.record.memo.outcome.kind, "classBookingConfirmed");
   assert.deepEqual(x.calls, ["/v1/recalls/71", "/v1/communications", "/v1/communications"]);
   assert.equal(x.f.writes.length, 1); assert.equal(x.f.memoPosts.length, 1); assert.equal(x.f.consumed.size, 1);
+});
+
+for (const recalled of [false, true])
+test(`a separately permitted archived original review remains cold memo context with recalled=${recalled}`, async t => {
+  const x = await fixture(); t.after(x.f.close); x.row.archived_at = x.config.clock!(); x.row.recalled = recalled;
+  const reader = resultValue(ClinikoRecallReader.create(x.config, x.port, x.config.clock));
+  assert.equal((await reader.readReview(x.config.scope, x.selection.recallRef, "7", new AbortController().signal)).ok, false,
+    "active clinical readReview must retain its archive refusal");
+  const history = resultValue(await reader.readReviewHistory(x.config.scope, x.selection.recallRef, "7", new AbortController().signal));
+  assert.equal(history.recalled, recalled);
+  const found = resultValue(await x.fresh().recover(x.selection, new AbortController().signal)); assert.equal(found.kind, "located");
+  assert.equal(x.f.writes.length, 1); assert.equal(x.f.memoPosts.length, 1);
+});
+
+for (const field of ["archiveDate", "archiveAfterUpdate", "futureUpdate"])
+test(`historical review context rejects ${field} instead of declaring no original effect`, async t => {
+  const x = await fixture(); t.after(x.f.close);
+  x.row.archived_at = field === "archiveDate" ? "2026-02-31T06:00:00.000Z" : field === "archiveAfterUpdate" ? "2026-10-05T06:00:00.000Z" : null;
+  if (field === "futureUpdate") x.row.updated_at = "2027-10-04T06:00:00.000Z";
+  assert.equal((await x.fresh().recover(x.selection, new AbortController().signal)).ok, false);
+  assert.ok(!x.calls.includes("/v1/communications"));
 });
 
 for (const gate of ["original", "history", "record"] as const)

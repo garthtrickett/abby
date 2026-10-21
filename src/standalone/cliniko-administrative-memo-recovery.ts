@@ -14,7 +14,7 @@ import type { LocationScope, Result } from "../core/model.ts";
 
 export type AdministrativeMemoOriginalQuery = Readonly<{
   operation: "readOriginalAdministrativeMemoReview"; scope: LocationScope; businessId: string; credentialFingerprint: string;
-  patientId: string; recallRef: string; recallTypeId: string;
+  patientId: string; recallRef: string; recallTypeId: string; includeArchived: true;
 }>;
 export type AdministrativeMemoOriginalAuthority = Readonly<{
   allows(query: AdministrativeMemoOriginalQuery, signal: AbortSignal): Promise<boolean>;
@@ -110,7 +110,7 @@ export class ClinikoAdministrativeMemoRecovery {
       timer = setTimeout(() => controller.abort(), c.deadlineMs ?? 15000);
     const q: AdministrativeMemoOriginalQuery = Object.freeze({ operation: "readOriginalAdministrativeMemoReview", scope: c.scope,
       businessId: c.businessId, credentialFingerprint: clinikoCredentialFingerprint(c.apiKey), patientId: selected.patientId,
-      recallRef: selected.recallRef, recallTypeId: this.#recallTypeId });
+      recallRef: selected.recallRef, recallTypeId: this.#recallTypeId, includeArchived: true });
     const historyGrants = new Set<Parameters<AdministrativeMemoHistoryAuthority["current"]>[0]>(); let last = "";
     const current = () => {
       const at = (c.clock ?? (() => new Date().toISOString()))();
@@ -119,7 +119,7 @@ export class ClinikoAdministrativeMemoRecovery {
     };
     try {
       if (!current() || await awaitUntilAbort(this.#authority.allows(q, signal), signal) !== true || !current()) return unavailable();
-      const original = await awaitUntilAbort(this.#reviews.readReview(c.scope, selected.recallRef, this.#recallTypeId, signal), signal);
+      const original = await awaitUntilAbort(this.#reviews.readReviewHistory(c.scope, selected.recallRef, this.#recallTypeId, signal), signal);
       if (!original?.ok || !current()) return unavailable();
       const r = original.value.envelope.request, binding = source(original.value);
       if (!binding || r.patientId !== selected.patientId || !isDeepStrictEqual(r.scope, c.scope) || r.businessId !== c.businessId || r.credentialFingerprint !== q.credentialFingerprint) return unavailable();

@@ -94,7 +94,19 @@ export class ClinikoRecallReader {
   selection() { return { scope: { ...this.scope }, credentialFingerprint: this.#fingerprint }; }
 
   /** Exact native recall read for an authenticated staff adapter. Notes remain untrusted context. */
-  async readReview(scope: ClinikoClinicScope, recallRef: string, recallTypeId: string, signal: AbortSignal):
+  readReview(scope: ClinikoClinicScope, recallRef: string, recallTypeId: string, signal: AbortSignal):
+    Promise<Result<ClinikoReviewRecord, ClinikoRecallFailure>> {
+    return this.#readReview(scope, recallRef, recallTypeId, signal, false);
+  }
+
+  /** Historical context only. An archived/completed review cannot supply the
+   * active review authority required by the separate clinical send owners. */
+  readReviewHistory(scope: ClinikoClinicScope, recallRef: string, recallTypeId: string, signal: AbortSignal):
+    Promise<Result<ClinikoReviewRecord, ClinikoRecallFailure>> {
+    return this.#readReview(scope, recallRef, recallTypeId, signal, true);
+  }
+
+  async #readReview(scope: ClinikoClinicScope, recallRef: string, recallTypeId: string, signal: AbortSignal, includeArchived: boolean):
     Promise<Result<ClinikoReviewRecord, ClinikoRecallFailure>> {
     if (!validScope(scope) || scope.tenantId !== this.scope.tenantId || scope.clinicId !== this.scope.clinicId) return err({ kind: "scopeMismatch" });
     const id = typeof recallRef === "string" ? /^cliniko:recall:([1-9][0-9]{0,18})$/.exec(recallRef)?.[1] : undefined;
@@ -102,7 +114,7 @@ export class ClinikoRecallReader {
     const limited = await claimClinikoBudget(this.rateBudget);
     if (limited || signal.aborted) return limited ? err(limited) : err({ kind: "unavailable" });
     try {
-      const response = await this.fetchPort(`${this.baseUrl}/recalls/${id}`, { method: "GET", redirect: "error",
+      const response = await this.fetchPort(`${this.baseUrl}/recalls/${id}${includeArchived ? "?q%5B%5D=archived_at%3A*" : ""}`, { method: "GET", redirect: "error",
         signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
         headers: { Accept: "application/json", Authorization: this.authorization, "User-Agent": this.userAgent } });
       if (response.status === 429) return err(await observeCliniko429(this.rateBudget, response.headers.get("X-RateLimit-Reset")));
@@ -112,11 +124,20 @@ export class ClinikoRecallReader {
       if (!parsed.ok || signal.aborted) return err({ kind: "unavailable" });
       const row = record(parsed.value), links = record(row?.links), patient = record(row?.patient), type = record(row?.recall_type);
       const decoded = decodeClinikoReview(row?.notes);
-      if (!row || row.id !== id || row.archived_at !== null || typeof row.recalled !== "boolean" || !decoded.ok ||
+      if (!row || row.id !== id || !includeArchived && row.archived_at !== null || typeof row.recalled !== "boolean" || !decoded.ok ||
           typeof row.updated_at !== "string" || !/^\d{4}-\d{2}-\d{2}T/.test(row.updated_at) || !Number.isFinite(Date.parse(row.updated_at)) ||
           links?.self !== `${this.baseUrl}/recalls/${id}` || record(patient?.links)?.self !== `${this.baseUrl}/patients/${decoded.value.request.patientId}` ||
           record(type?.links)?.self !== `${this.baseUrl}/recall_types/${recallTypeId}` ||
           decoded.value.request.scope.tenantId !== scope.tenantId || decoded.value.request.scope.clinicId !== scope.clinicId) return err({ kind: "malformed" });
+      if (includeArchived) {
+        const instant = (v: unknown): number | undefined => {
+          if (typeof v !== "string" || !validRecallDate(v.slice(0, 10)) ||
+              !/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(v)) return;
+          const parsed = Date.parse(v); return Number.isFinite(parsed) ? parsed : undefined;
+        };
+        const now = instant(this.clock()), updated = instant(row.updated_at), archived = row.archived_at === null ? null : instant(row.archived_at);
+        if (now === undefined || updated === undefined || updated > now + 30000 || archived === undefined || archived !== null && archived > updated) return err({ kind: "malformed" });
+      }
       return ok({ recallRef, recalled: row.recalled, updatedAt: row.updated_at, envelope: decoded.value });
     } catch { return err({ kind: "unavailable" }); }
   }

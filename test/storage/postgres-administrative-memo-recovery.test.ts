@@ -22,7 +22,7 @@ import type { AdministrativeMemoRecoverySelection } from "../../src/standalone/c
 import type { BookingMemoRecoverySelection } from "../../src/standalone/cliniko-booking-memo-recovery.ts";
 
 const worker = new URL("../../dist/runtime/test/support/administrative-memo-recovery-worker.js", import.meta.url);
-for (const family of ["class", "individual"] as const) for (const mode of ["stored", "archived", "unretained"] as const)
+for (const family of ["class", "individual", "cancel", "reschedule"] as const) for (const mode of ["stored", "archived", "unretained"] as const)
 test(`actual admitted ${family} sender SIGKILL, cold GET-only recovery and full logical restore: ${mode}`, { timeout: 240000 }, async () => {
   const adminUrl = process.env.DATABASE_URL; assert.ok(adminUrl);
   const admin = connectPostgres(adminUrl), names: string[] = [], children: ReturnType<typeof spawn>[] = [], output: string[] = [];
@@ -30,7 +30,8 @@ test(`actual admitted ${family} sender SIGKILL, cold GET-only recovery and full 
   const scope = { tenantId: `memo-cold-${family}-${randomUUID()}`, clinicId: "clinic", locationId: "main" };
   const patientId = verificationCanaries[2]!, mutations: string[] = [], reads: string[] = [];
   let db: ReturnType<typeof connectPostgres> | undefined, review: Record<string, unknown> | undefined,
-    memo: Record<string, unknown> | undefined, appointment: Record<string, unknown> | undefined, senderFolder: string | undefined;
+    memo: Record<string, unknown> | undefined, appointment: Record<string, unknown> | undefined,
+    observedAppointment: Record<string, unknown> | undefined, senderFolder: string | undefined;
   let settings: { key: string; businessId: string; authorRef: string; policy: { version: string; digest: string }; now: string;
     selection: AdministrativeMemoRecoverySelection | BookingMemoRecoverySelection } | undefined;
   const privateValues: string[] = []; let clinicalDone!: () => void, memoDone!: () => void;
@@ -46,19 +47,30 @@ test(`actual admitted ${family} sender SIGKILL, cold GET-only recovery and full 
         assert.equal(settings, undefined); senderFolder = body.folder;
         assert.equal(typeof senderFolder, "string"); assert.ok(senderFolder!.startsWith(tmpdir() + "/"));
         settings = { key: body.key, businessId: body.businessId, authorRef: body.authorRef, policy: body.policy, now: "",
-          selection: family === "class" ? { patientId, recallRef: "cliniko:recall:71", createdFrom: "", createdThrough: "" } :
-            { patientId, appointmentRef: "", createdFrom: "", createdThrough: "" } };
+          selection: family === "individual" ? { patientId, appointmentRef: "", createdFrom: "", createdThrough: "" } :
+            { patientId, recallRef: "cliniko:recall:71", createdFrom: "", createdThrough: "" } };
         privateValues.push(body.key, body.callId, body.sessionId);
       } else if (url.pathname === "/mirror-native") {
-        assert.ok(["/v1/recalls", family === "class" ? "/v1/attendees" : "/v1/individual_appointments"].includes(body.path)); mutations.push(`POST ${body.path}`);
+        const nativeMethod = body.method; assert.ok(["GET", "POST", "PATCH"].includes(nativeMethod));
+        if (nativeMethod === "GET") {
+          assert.equal(body.path, "/v1/individual_appointments/91"); assert.ok(body.row); observedAppointment = body.row;
+          privateValues.push(JSON.stringify(body.row));
+          for (const field of ["starts_at", "ends_at", "notes"]) if (typeof body.row[field] === "string") privateValues.push(body.row[field]);
+          response.writeHead(204).end(); return;
+        }
+        const mutation = `${nativeMethod} ${body.path}`, expected = family === "class" ? "POST /v1/attendees" : family === "individual" ? "POST /v1/individual_appointments" :
+          family === "cancel" ? "PATCH /v1/individual_appointments/91/cancel" : "PATCH /v1/individual_appointments/91";
+        assert.ok(mutation === "POST /v1/recalls" || mutation === expected); mutations.push(mutation);
         if (body.path === "/v1/recalls") {
           assert.equal(review, undefined); const decoded = decodeClinikoReview(body.row.notes); assert.ok(decoded.ok);
           review = { ...body.row, links: { self: `${native}/recalls/71` }, created_at: decoded.value.request.createdAt, updated_at: decoded.value.request.createdAt };
-          assert.equal(decoded.value.request.operation.kind, family === "class" ? "classBook" : "book");
+          assert.equal(decoded.value.request.operation.kind, family === "class" ? "classBook" : family === "individual" ? "book" : family);
           privateValues.push(String(body.row.notes), decoded.value.marker);
           if (decoded.value.request.operation.kind === "classBook") privateValues.push(decoded.value.request.operation.attendanceActionId);
         } else {
-          assert.ok(review); privateValues.push(JSON.stringify(body.row));
+          assert.ok(review);
+          if (body.row === undefined) { assert.equal(nativeMethod, "PATCH"); assert.equal(family, "cancel"); }
+          else privateValues.push(JSON.stringify(body.row));
           if (family === "individual") {
             assert.ok(settings); const original = decodeClinikoReview(review.notes); assert.ok(original.ok);
             appointment = { ...body.row, links: { self: `${native}/individual_appointments/${body.row.id}` },
@@ -70,16 +82,22 @@ test(`actual admitted ${family} sender SIGKILL, cold GET-only recovery and full 
       } else if (url.pathname === "/clinical-finished") {
         assert.ok(settings); settings.now = body.now;
         settings.selection = { ...settings.selection, createdFrom: new Date(Date.parse(body.now) - 3600000).toISOString(), createdThrough: body.now };
-        if (family === "individual") { assert.ok(appointment); if (mode === "archived") appointment.archived_at = body.now; }
+        if (family === "individual") { assert.ok(appointment); if (mode === "archived") { appointment.archived_at = body.now; appointment.updated_at = body.now; } }
+        else if (mode === "archived") { assert.ok(review); review.archived_at = body.now; review.updated_at = body.now; review.recalled = true; }
         privateValues.push(body.code, body.proof); clinicalDone();
       } else if (url.pathname === "/v1/communications" && method === "POST") {
         assert.ok(settings); assert.equal(memo, undefined); mutations.push("POST /v1/communications");
         const decoded = decodeAdministrativeMemo(body.content); assert.ok(decoded.ok); const at = decoded.value.recordedAt;
+        assert.equal(decoded.value.outcome.kind, family === "class" ? "classBookingConfirmed" : family === "individual" ? "bookingConfirmed" :
+          family === "cancel" ? "cancellationObserved" : "reschedulingObserved");
         memo = { ...body, id: "701", patient: { links: { self: `${native}/patients/${patientId}` } }, links: { self: `${native}/communications/701` },
           created_at: at, updated_at: at, archived_at: mode === "archived" ? at : null };
         privateValues.push(String(body.content), decoded.value.authentication, JSON.stringify(body)); memoDone();
         return; // Lose the exact native response by killing the requesting owner.
-      } else if (method === "GET" && url.pathname === "/v1/recalls/71") { reads.push(url.pathname); assert.ok(review); send(review); return; }
+      } else if (method === "GET" && url.pathname === "/v1/recalls/71") {
+        assert.deepEqual(url.searchParams.getAll("q[]"), ["archived_at:*"]);
+        reads.push(url.pathname); assert.ok(review); send(review); return;
+      }
       else if (method === "GET" && appointment && url.pathname === `/v1/individual_appointments/${appointment.id}`) {
         assert.equal(family, "individual"); assert.deepEqual(url.searchParams.getAll("q[]"), ["archived_at:*", "cancelled_at:*", "deleted_at:*"]);
         reads.push(url.pathname); send(appointment); return;
@@ -121,16 +139,24 @@ test(`actual admitted ${family} sender SIGKILL, cold GET-only recovery and full 
     await Promise.race([Promise.all([clinical, received]), sender.terminal.then(result => { throw Error(`sender ended before held native response: ${result.stderr}`); })]);
     assert.ok(settings?.now); assert.equal(sender.child.kill("SIGKILL"), true); assert.equal((await sender.terminal).signal, "SIGKILL");
     assert.throws(() => process.kill(sender.child.pid!, 0), { code: "ESRCH" });
-    assert.deepEqual(mutations, ["POST /v1/recalls", family === "class" ? "POST /v1/attendees" : "POST /v1/individual_appointments", "POST /v1/communications"]);
+    assert.deepEqual(mutations, ["POST /v1/recalls", family === "class" ? "POST /v1/attendees" : family === "individual" ? "POST /v1/individual_appointments" :
+      family === "cancel" ? "PATCH /v1/individual_appointments/91/cancel" : "PATCH /v1/individual_appointments/91", "POST /v1/communications"]);
     const original = decodeClinikoReview(review!.notes); assert.ok(original.ok);
     const root = family === "class" && original.value.request.operation.kind === "classBook" ? original.value.request.operation.attendanceActionId :
-      family === "individual" && appointment ? /^Abby booking ([0-9a-f-]+)$/.exec(String(appointment.notes))?.[1] : undefined;
+      family === "individual" && appointment ? /^Abby booking ([0-9a-f-]+)$/.exec(String(appointment.notes))?.[1] :
+        (family === "cancel" || family === "reschedule") ? original.value.marker : undefined;
+    if (family === "cancel") assert.equal(typeof observedAppointment?.cancelled_at, "string", "native inspected cancellation survives the ended sender");
+    if (family === "reschedule") {
+      assert.equal(original.value.request.operation.kind, "reschedule");
+      assert.equal(observedAppointment?.starts_at, original.value.request.operation.newStartsAt);
+      assert.equal(observedAppointment?.ends_at, original.value.request.operation.newEndsAt);
+    }
     assert.ok(root); const purpose = administrativeMemoActionRef(root)!;
     assert.equal((await sql`select * from outbound_effect_barriers where tenant_id=${scope.tenantId} and effect_ref=${purpose}::uuid`.execute(db)).rows.length, 1);
     // The actual account budget remains 180. If the sender exhausted this real
     // minute, wait for its SQL-owned reset rather than edit rows or raise quota.
     const quota = new PostgresClinikoRequestBudget(db, { apiKey: family === "class" ? "synthetic-class-au5" : "synthetic-session-au5", maxPerMinute: 180 });
-    const wait = await quota.checkHeadroom(family === "class" ? 10 : 12); if (wait) {
+    const wait = await quota.checkHeadroom(family === "individual" ? 12 : 10); if (wait) {
       assert.equal(wait.kind, "rateLimited"); assert.ok(wait.resetAt);
       await new Promise<void>(resolve => setTimeout(resolve, Math.max(0, Date.parse(wait.resetAt!) - Date.now()) + 25));
     }
@@ -138,7 +164,7 @@ test(`actual admitted ${family} sender SIGKILL, cold GET-only recovery and full 
       const before = mutations.length, previousReads = reads.length, result = await launch("recover", database).terminal;
       assert.equal(result.code, 0, result.stderr); assert.equal(result.signal, null);
       assert.deepEqual(JSON.parse(result.stdout), { kind: mode === "unretained" ? "notLocated" : "located", scanned: mode === "unretained" ? 100 : 101, spent: true, replayed: false });
-      assert.equal(mutations.length, before); assert.equal(reads.length - previousReads, (family === "class" ? 1 : 2) + (mode === "unretained" ? 2 : 4));
+      assert.equal(mutations.length, before); assert.equal(reads.length - previousReads, (family === "individual" ? 2 : 1) + (mode === "unretained" ? 2 : 4));
       assert.deepEqual(await readdir(folder), [], "fresh native recovery writes no local journal or private cache");
     };
     await recover(target);

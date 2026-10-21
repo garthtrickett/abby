@@ -17,6 +17,7 @@ import { verificationCanaries, verificationNow } from "./caller-verification.ts"
 /** Actual admitted session, file approvals, email proof, protected menus, SAM,
  * native review and inspected mutation. Provider/mail/clinic grants synthetic. */
 export async function appointmentChangeMemoFixture(kind: "cancel" | "reschedule", options: {
+  clinicalFetchAround?: (port: typeof fetch) => typeof fetch; memoFetchPort?: typeof fetch;
   scope?: LocationScope; budget?: ClinikoRequestBudget; verificationBudget?: PatientVerificationBudget;
   barrierFor?: (scope: LocationScope, owner: string) => OutboundEffectBarrier;
   mode?: "accepted" | "lostStored" | "lostUnstored" | "nonexact" | "lateDisclosure";
@@ -41,7 +42,7 @@ export async function appointmentChangeMemoFixture(kind: "cancel" | "reschedule"
       producerAdmitted: async q => gates.producer && !!q.memo && q.memo.patientId === verificationCanaries[2] &&
         q.memo.outcome.kind === (kind === "cancel" ? "cancellationObserved" : "reschedulingObserved") },
     observeOutcome: outcome => { outcomes.push(outcome); finish(); },
-    fetchPort: async (url, init) => {
+    fetchPort: options.memoFetchPort ?? (async (url, init) => {
       assert.equal(String(url), "https://api.au5.cliniko.com/v1/communications"); assert.equal(init?.method, "POST"); assert.equal(init.redirect, "error");
       const body = JSON.parse(String(init.body)); memoPosts.push(body); const decoded = decodeAdministrativeMemo(body.content); assert.ok(decoded.ok);
       assert.equal(authentication.verify(decoded.value), true); assert.equal(body.patient_id, verificationCanaries[2]);
@@ -54,16 +55,19 @@ export async function appointmentChangeMemoFixture(kind: "cancel" | "reschedule"
         gates.current = false; controller.enqueue(new TextEncoder().encode(JSON.stringify(row))); controller.close();
       } }, { highWaterMark: 0 }), { status: 201 });
       return Response.json(row, { status: 201 });
-    } };
+    }) };
   let sent = false;
-  const around = (base: typeof fetch): typeof fetch => async (url, init) => {
-    const u = new URL(String(url)), method = init?.method ?? "GET"; apiCalls.push(`${method} ${u.pathname}`);
-    const response = await base(url, init); if (method === "PATCH") sent = true;
-    if (sent && method === "GET" && u.pathname === "/v1/individual_appointments/91" && options.clinicalFault === "foreignInspection") {
-      const row = await response.json(); return Response.json({ ...row, patient: { links: { self: "https://api.au5.cliniko.com/v1/patients/43" } } });
-    }
-    if (sent && u.pathname.endsWith("/conflicts") && options.clinicalFault === "conflict") return Response.json({ conflicts: { exist: true } });
-    return response;
+  const around = (base: typeof fetch): typeof fetch => {
+    const clinical: typeof fetch = async (url, init) => {
+      const u = new URL(String(url)), method = init?.method ?? "GET"; apiCalls.push(`${method} ${u.pathname}`);
+      const response = await base(url, init); if (method === "PATCH") sent = true;
+      if (sent && method === "GET" && u.pathname === "/v1/individual_appointments/91" && options.clinicalFault === "foreignInspection") {
+        const row = await response.json(); return Response.json({ ...row, patient: { links: { self: "https://api.au5.cliniko.com/v1/patients/43" } } });
+      }
+      if (sent && u.pathname.endsWith("/conflicts") && options.clinicalFault === "conflict") return Response.json({ conflicts: { exist: true } });
+      return response;
+    };
+    return options.clinicalFetchAround?.(clinical) ?? clinical;
   };
   const f = kind === "cancel" ? await cancellationSessionFixture({ scope, rateBudget: budget, memo, fetchAround: around,
     ...(options.verificationBudget ? { budget: options.verificationBudget } : {}),
@@ -74,7 +78,7 @@ export async function appointmentChangeMemoFixture(kind: "cancel" | "reschedule"
       ...(options.practitionerOnly ? { destinationPractitionerId: "23", sameTime: true,
         practitionerMoves: [{ fromPractitionerId: "22", toPractitionerId: "23", appointmentTypeId: "33", durationMinutes: 30 }] } : {}) });
   const drainClinical = async () => { await f.drain(); return f.state(); };
-  return { scope, native, key, service, budget, outcomes, queries, memoPosts, memoRows, consumed, gates, memoSettled, apiCalls,
+  return { scope, native, key, authentication, folder: f.folder, service, budget, outcomes, queries, memoPosts, memoRows, consumed, gates, memoSettled, apiCalls,
     mail: f.mail, recalls: f.recalls, state: f.state, callId: f.callId, sessionId: f.sessionId, owner: f.owner, drainClinical,
     get patches() { return f.patches; },
     prepare: async () => {
