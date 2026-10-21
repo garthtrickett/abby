@@ -4,11 +4,11 @@
 
 **Execution:** The owner subsequently instructed work through this order. See [current progress and evidence](EXECUTION_PROGRESS.md). That instruction activates the planned engineering; clinic/provider acceptance, deployment and Karen removal retain their separate requirements below.
 
-**Integration candidate, 21 October 2026:** This local checkout combines normally merged outbound main095b7ba (PR #575/#577) with memo checkpoint ac946ab. The recorded component tests do not qualify this combined candidate. The class-recovery checkpoint, fresh combined qualification, exact-head cloud checks and review remain pending; no publication or activation is claimed.
+**Current engineering, 21 October 2026:** Normally merged main095b7ba (PR #575/#577) is now integrated locally with the memo components. The class-recovery component f7ce5fb passed 437 source controls, whole strict/701 serving and 36 actual killed-sender/full-logical-restore/privacy cases in its recorded scope. The preceding parent integration passed whole strict/716 serving, matching every owning parent output byte. The class changes apply without source conflicts; fresh qualification of the final combined candidate, its own exact-head cloud checks and review remain pending. No memo release is published or activated. Broader source/subject/financial/voice, complete no-stop/private/all-ASR and real acceptance remain open. See [component scope and evidence](COMMUNICATION_MEMOS.md).
 
 **Recorded outbound component evidence:** PR #575 qualified 580 source controls, 693 serving outputs, 42 SQL/process cases and one restore before its eight own-head cloud jobs and normal merge. PR #577 qualified its 135 controls, 10 new and 42 preserved SQL cases, four actual callback SIGKILL cases and two restores, then passed its own eight cloud jobs and normally merged. Their actual merged-main jobs were independently green and archived. The optional combined signed receiver preserves restrictive DNC before completed-notification retention under one deadline/physical budget. It supplies no complete no-stop/private/all-ASR truth, default activation or clinical hold release.
 
-**Memo component evidence at ac946ab before parent integration:** PR #576, #575 and #577 are normally merged with independently green actual-main checks. The local memo stack still needs the later outbound parents before publication; prior checkpoints include d1bb703. Current cold recovery passes 249 source controls, full strict TypeScript/700 serving and twelve actual sender-SIGKILL/full-logical-restore/privacy cases: stored, archived and unretained loss for individual/class booking and observed individual cancellation/rescheduling. Historical originals have a separate explicitly granted archived read; active clinical readReview keeps its archive refusal. The corrected nonemitted privacy driver retains all runtime/source-cohort bytes and passes affected strict plus the complete current process cohort. Class cancellation and completed/partial movement recovery, broader subject/financial/voice, parent integration, own cloud/review, complete no-stop/private/all-ASR and real acceptance remain open. No memo release is merged or activated. See [current memo evidence](COMMUNICATION_MEMOS.md).
+**Memo component evidence at f7ce5fb before final qualification:** The local memo stack passes 437 source controls, whole strict TypeScript/701 serving and thirty-six actual sender-SIGKILL/full-logical-restore/privacy cases. Recovery now includes ordinary class cancellations and the three approved pass-cancellation profiles and completed or partial ordinary and same-case pass moves, alongside individual/ordinary-class booking and individual observed changes. Historical originals and memo records include archived states under independent current grants; partial moves remain needsReview and recovery cannot continue a clinical phase or reset a purpose. The corrected native roster/case response witness preserves all production bytes. PR #576/#575/#577 are normally merged with independently green actual-main checks; this memo component needs fresh qualification on the integrated parents and its own exact-head cloud/review before publication. Broader source/subject/financial/voice and complete no-stop/private/all-ASR qualification and real acceptance remain open. No memo release is merged or activated. See [scope and evidence](COMMUNICATION_MEMOS.md).
 
 **Karen reference for current and future agents:** The owner supplied an updated Karen snapshot on 19 October 2026, available beside Abby through `/home/gust/code/karen-website-dev`. When uncertain about an implementation or workflow, search this copy for existing solutions and their tests before designing new machinery; Karen may already solve it. Use its patterns as a reference and adapt them to Abby's contracts and validation. The copy has no `.git` metadata and is distinct from the older commit pinned in the reuse audit. See [snapshot provenance and useful entry points](KAREN_TO_ABBY_REUSE_AUDIT.md#current-owner-supplied-reference-19-october-2026).
 
@@ -208,3 +208,38 @@ Foundations through PR571 are normally merged; actual main0da203d independently 
 ## Archived originals and individual-change memo recovery, 21 October 2026
 
 Current local recovery passes 249 source controls, whole strict/700 serving and twelve actual emitted sender-SIGKILL/full-logical-restore/privacy cases: corrected stored cancellation/rescheduling2 (1792591370961), then remaining booking/change10 (1792591508850). Historical native original reviews explicitly include archived records under separate current permission; active clinical readReview retains its original archive refusal and URI. Observed changes retain their acknowledged-and-inspected best-effort meaning and original reviewed-send root. Initial source failures209/211 were only missing dashboard assets; the actual bundle was built and the full rerun249 passed. A bodyless PATCH204 privacy-collector failure is preserved; only the nonemitted driver changed, adding original/latest native snapshots and retaining all700 runtime bytes and source inputs. Current affected strict passes. This does not qualify class cancellation/movement, broader subject/financial/voice, parent integration, own cloud/review or real acceptance. No default activation. See [exact scope and evidence](COMMUNICATION_MEMOS.md#archived-originals-and-observed-change-recovery-21-october-2026).
+
+## Actual class cancellation and movement cold recovery, 21 October 2026
+
+The current scoped cohort passes 437 source controls, whole strict TypeScript and 701
+serving outputs, plus 36 actual compiled sender-SIGKILL/full-logical-restore/privacy
+cases. This extends the prior 12 booking/observed-change cases to ordinary and all three
+approved pass-cancellation profiles, and ordinary/same-case-pass completed and partial
+movement, each stored, archived and unretained. Cancellation retains acknowledged-and-
+observed best-effort truth; a move retains nativeWorkflowReportBestEffort with separate
+original/replacement/case association observations. Partial/disposed movement remains
+needsReview, with no original cancellation or association sent. This is historical
+evidence, never an atomic, financial, current-diary or send-permission claim.
+
+The original two partial probes failed before cold recovery because the separate parent
+collector omitted the original attendee returned by native roster reads. Frozen failed
+evidence is retained. A separate successor captures actual existing roster/case
+responses without new native IO or invented state. The production and fixture inputs to
+the 437 source checks stay unchanged; current full strict/701 build changes only the SQL
+worker versus the prior 701 outputs, preserving all 700 others. Current 36 cases pass
+the corrected witness, renewed-code/case metadata/every-column/raw-dump/output checks,
+spent-purpose exclusions and fresh recovery after unfiltered logical restore. Legitimate
+unrelated aliases, staged scans and opaque effects stay intact. Real native 180 quotas,
+renewed proof and played stage consent remain; only movement test harness deadlines of
+600s per child and 660s per case reflect actual waits, with production deadlines
+unchanged.
+
+Exact current work IDs: source 1792593213284, full strict/build 1792594624840, SQL
+1792594886146(2), 1792595222675(3), 1792594896424(3), 1792595111962(12),
+1792595937499(12), 1792595751793(4). Node and external PostgreSQL are independently
+bounded at 512 MiB/CPU 100%/Swap 0; whole strict/build 2 GiB. Full process fixtures use
+synthetic provider, mail and grants, not real clinic acceptance. Specific cross-
+case/uncertain/compensation/native-source and subject/financial/catalogue/signed
+incoming/outgoing voice combinations retain their separate scope. Parent integration and
+a scoped memo PR with current cloud/review are next; full execution and real acceptance
+remain open. No default activation or live traffic.

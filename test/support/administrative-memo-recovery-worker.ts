@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { classBookingMemoFixture } from "./class-booking-memo.ts";
 import { bookingMemoSessionFixture } from "./booking-memo-session.ts";
 import { appointmentChangeMemoFixture } from "./appointment-change-memo.ts";
+import { classCancellationMemoFixture } from "./class-cancellation-memo.ts";
+import { classMovementMemoFixture } from "./class-movement-memo.ts";
+import { administrativeMemoRecoveryCases } from "./administrative-memo-recovery-cases.ts";
+import type { AdministrativeMemoRecoveryFamily } from "./administrative-memo-recovery-cases.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko-request-budget.ts";
@@ -19,13 +23,13 @@ import type { AdministrativeMemoHistoryAuthority, AdministrativeMemoHistoryResul
 // Separate disposable child, no inherited caller objects or local cache. Its
 // protected clinic inputs contain a native review/appointment selection, never
 // a communication ID or an action root supplied by the stopped sender.
-const input: { family: "class" | "individual" | "cancel" | "reschedule"; mode: "send" | "recover"; proxy: string; scope: LocationScope; settings?: {
+const input: { family: AdministrativeMemoRecoveryFamily; mode: "send" | "recover"; proxy: string; scope: LocationScope; settings?: {
   key: string; businessId: string; authorRef: string; policy: { version: string; digest: string }; now: string;
   selection: AdministrativeMemoRecoverySelection | BookingMemoRecoverySelection;
 } } = JSON.parse(await new Promise<string>(resolve => { let text = "";
   process.stdin.on("data", part => { text += String(part); }); process.stdin.on("end", () => resolve(text)); }));
-assert.ok(["class", "individual", "cancel", "reschedule"].includes(input.family));
-const db = connectPostgres(process.env.DATABASE_URL!), apiKey = input.family === "class" ? "synthetic-class-au5" : "synthetic-session-au5";
+assert.ok(Object.hasOwn(administrativeMemoRecoveryCases, input.family));
+const db = connectPostgres(process.env.DATABASE_URL!), apiKey = administrativeMemoRecoveryCases[input.family].apiKey;
 const budget = new PostgresClinikoRequestBudget(db, { apiKey, maxPerMinute: 180 });
 const notify = async (path: string, body: unknown) => {
   const response = await fetch(input.proxy + path, { method: "POST", body: JSON.stringify(body), signal: AbortSignal.timeout(5000) });
@@ -44,8 +48,10 @@ const mirror: (port: typeof fetch) => typeof fetch = port => async (value, init)
   // that same synthetic provider's row into its surviving parent store.
   const response = await port(value, init);
   const path = new URL(String(value)).pathname, method = init?.method ?? "GET";
-  if (method === "POST" || method === "PATCH" || method === "GET" && /^\/v1\/individual_appointments\/[1-9][0-9]*$/.test(path)) {
-    await notify("/mirror-native", { method, path, ...(response.status === 204 ? {} : { row: await response.clone().json() }) });
+  if (method === "POST" || method === "PATCH" || method === "GET" &&
+      (/^\/v1\/(individual_appointments|attendees)\/[1-9][0-9]*$/.test(path) ||
+       /^\/v1\/(attendees|patient_cases\/[1-9][0-9]*(\/attendees)?)$/.test(path))) {
+    await notify("/mirror-native", { method, path, status: response.status, ...(response.status === 204 ? {} : { row: await response.clone().json() }) });
   }
   return response;
 };
@@ -88,6 +94,44 @@ try {
       const proof = await f.prepare(); await f.drainClinical(); const action = Object.values((await f.state()).actions).at(-1)!;
       assert.equal(action.status, "committed"); assert.equal(f.patches, 1);
       await notify("/clinical-finished", { now: f.native.clock(), code: f.mail[0]!.code, proof });
+      await new Promise<void>(() => {});
+    } finally { await f.close(); }
+  } else if (input.mode === "send" && administrativeMemoRecoveryCases[input.family].review === "classCancel") {
+    const passes = input.family === "classCancelReleaseOne" ? "releaseOne" : input.family === "classCancelUnchanged" ? "unchanged" :
+      input.family === "classCancelConsumeOne" ? "consumeOne" : undefined;
+    const f = await classCancellationMemoFixture({ scope: input.scope, budget, realQuotaWait: true, ...(passes ? { passes } : {}),
+      verificationBudget: new PostgresPatientVerificationBudget(db, input.scope),
+      barrierFor: (scope, owner) => new PostgresOutboundEffectBarrier(db, scope, owner), memoFetchPort: nativePort, clinicalFetchAround: mirror });
+    try {
+      const native = f.classSessionConfig.memo!.native;
+      await notify("/sender-ready", { folder: f.folder, key: f.key.toString("hex"), businessId: native.businessId,
+        authorRef: native.authorRef, policy: native.policy, callId: f.callId, sessionId: f.sessionId });
+      const action = await f.prepare(); await f.drainClinical();
+      assert.equal((await f.state()).actions[action.key]!.status, "committed"); assert.equal(f.writes.length, 1);
+      assert.equal(action.mutation.request.kind, "cancel");
+      await notify("/clinical-finished", { now: native.clock!(), code: f.mail[0]!.code, codes: f.mail.map(message => message.code),
+        proof: action.mutation.request.patient.verificationRef });
+      await new Promise<void>(() => {});
+    } finally { await f.close(); }
+  } else if (input.mode === "send" && administrativeMemoRecoveryCases[input.family].review === "classMove") {
+    const passes = input.family === "classPassMove" || input.family === "classPassMovePartial", partial = input.family.endsWith("Partial");
+    const f = await classMovementMemoFixture({ scope: input.scope, budget, admitted: true, realQuotaWait: true, passes,
+      verificationBudget: new PostgresPatientVerificationBudget(db, input.scope),
+      barrierFor: (scope, owner) => new PostgresOutboundEffectBarrier(db, scope, owner), memoFetchPort: nativePort, clinicalFetchAround: mirror });
+    try {
+      const native = f.classSessionConfig.memo!.native;
+      await notify("/sender-ready", { folder: f.folder, key: f.key.toString("hex"), businessId: native.businessId,
+        authorRef: native.authorRef, policy: native.policy, callId: f.callId, sessionId: f.sessionId });
+      const action = await f.initial(); assert.equal(action.mutation.request.kind, "reschedule");
+      assert.equal((await f.state()).actions[action.key]!.status, "pendingContinuation"); assert.equal(f.writes.length, 1);
+      if (partial) { await f.pause(61); f.host.dispose(); }
+      else for (const _ of passes ? ["original", "association", "associationInspection"] : ["original"]) await f.next(action.key);
+      assert.equal((await f.state()).actions[action.key]!.status === "committed", !partial);
+      assert.equal(f.writes.length, passes && !partial ? 3 : partial ? 1 : 2);
+      // Disposal may retain a partial report, but must not resume a clinical
+      // phase. The parent waits for its actual POST; never await the held ACK.
+      await notify("/clinical-finished", { now: native.clock!(), code: f.mail.at(-1)!.code, codes: f.mail.map(message => message.code),
+        proof: action.mutation.request.patient.verificationRef });
       await new Promise<void>(() => {});
     } finally { await f.close(); }
   } else {

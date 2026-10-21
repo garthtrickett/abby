@@ -588,6 +588,42 @@ each bounded512MiB/CPU100%/Swap0, all OOM/high/max0 and owned resources cleaned.
 Provider, mail and grants are synthetic; broader subjects, class outcomes,
 signed voice and actual clinic/provider acceptance remain separate.
 
+
+## Actual class cancellation and movement cold recovery, 21 October 2026
+
+The current scoped cohort passes 437 source controls, whole strict TypeScript and 701
+serving outputs, plus 36 actual compiled sender-SIGKILL/full-logical-restore/privacy
+cases. This extends the prior 12 booking/observed-change cases to ordinary and all three
+approved pass-cancellation profiles, and ordinary/same-case-pass completed and partial
+movement, each stored, archived and unretained. Cancellation retains acknowledged-and-
+observed best-effort truth; a move retains nativeWorkflowReportBestEffort with separate
+original/replacement/case association observations. Partial/disposed movement remains
+needsReview, with no original cancellation or association sent. This is historical
+evidence, never an atomic, financial, current-diary or send-permission claim.
+
+The original two partial probes failed before cold recovery because the separate parent
+collector omitted the original attendee returned by native roster reads. Frozen failed
+evidence is retained. A separate successor captures actual existing roster/case
+responses without new native IO or invented state. The production and fixture inputs to
+the 437 source checks stay unchanged; current full strict/701 build changes only the SQL
+worker versus the prior 701 outputs, preserving all 700 others. Current 36 cases pass
+the corrected witness, renewed-code/case metadata/every-column/raw-dump/output checks,
+spent-purpose exclusions and fresh recovery after unfiltered logical restore. Legitimate
+unrelated aliases, staged scans and opaque effects stay intact. Real native 180 quotas,
+renewed proof and played stage consent remain; only movement test harness deadlines of
+600s per child and 660s per case reflect actual waits, with production deadlines
+unchanged.
+
+Exact current work IDs: source 1792593213284, full strict/build 1792594624840, SQL
+1792594886146(2), 1792595222675(3), 1792594896424(3), 1792595111962(12),
+1792595937499(12), 1792595751793(4). Node and external PostgreSQL are independently
+bounded at 512 MiB/CPU 100%/Swap 0; whole strict/build 2 GiB. Full process fixtures use
+synthetic provider, mail and grants, not real clinic acceptance. Specific cross-
+case/uncertain/compensation/native-source and subject/financial/catalogue/signed
+incoming/outgoing voice combinations retain their separate scope. Parent integration and
+a scoped memo PR with current cloud/review are next; full execution and real acceptance
+remain open. No default activation or live traffic.
+
 ## Work still required
 
 The current individual/class source producers and partial movement reports have
@@ -598,16 +634,11 @@ source, observer or response failures.
 Exact clinic templates, local presentation, author, confidentiality/viewer roles,
 retention and per-operation permissions remain separate requirements.
 
-Extend the now-qualified native history, individual appointment-marker and
-ordinary-class and observed individual-change process/restore subsets to class
-cancellation and completed/partial movement, and remaining source/subject
-combinations. Retain all-column/raw-
+Extend the now-qualified history and scoped booking/change/class process/restore subsets to remaining source/subject and explicitly unqualified class variants. Retain all-column/raw-
 backup privacy, archived/ambiguous refusal and real physical-budget admission.
 Then qualify the actual combined host/serving paths, keep operator facts and
 scenarios current, and complete normal parent integration, exact-head cloud
-checks and review before publication. The memo branch is based on normally
-merged PR576/main1c; later normally merged outbound PR575/577 are tracked
-independently and still need integration into this candidate. Attachments and
+checks and review before publication. The recorded memo component was qualified on PR576/main1c. The local integrated candidate now includes normally merged outbound PR575/577; fresh combined qualification, own exact-head cloud checks and review remain pending. Attachments and
 other storage types stay separate.
 
 Outbound complete no-stop/private/all-ASR reporting and real acoustic/provider/

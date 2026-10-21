@@ -24,7 +24,7 @@ import type { ClinikoAdministrativeMemoConfig } from "../../src/standalone/admin
 
 export type PassMoveOptions = Readonly<{ differentCase?: boolean; effect?: "releaseOne" | "unchanged" | "consumeOne"; full?: boolean; history?: number; rosterHistory?: number }>;
 
-export async function classMoveFixture(different = false, near = false, passes?: PassMoveOptions, staging = false, activate = true, options: { scope?: LocationScope; budget?: ClinikoRequestBudget; verificationBudget?: PatientVerificationBudget; realQuotaWait?: boolean; memoFor?: (native: ClinikoAttendanceConfig, clock: () => string) => ClinikoAdministrativeMemoConfig } = {}) {
+export async function classMoveFixture(different = false, near = false, passes?: PassMoveOptions, staging = false, activate = true, options: { scope?: LocationScope; budget?: ClinikoRequestBudget; verificationBudget?: PatientVerificationBudget; realQuotaWait?: boolean; fetchAround?: (port: typeof fetch) => typeof fetch; memoFor?: (native: ClinikoAttendanceConfig, clock: () => string) => ClinikoAdministrativeMemoConfig } = {}) {
   let claims = 0, now = verificationNow;
   const budget = options.budget ?? new ClinikoReadBudget(180, () => Date.parse(now));
   assert.ok(typeof budget.checkHeadroom === "function" && typeof budget.withReservation === "function");
@@ -98,7 +98,7 @@ export async function classMoveFixture(different = false, near = false, passes?:
   let onCaseRead = (_path: string) => {};
   let passAuthority: ClassPassMoveAuthority = { select: async query => { passQueries.push(query); return passAllowed ? structuredClone(selection) : undefined; },
     allows: async query => passAllowed && query.patientId === verificationCanaries[2] && query.stagingContractVersion === move.passMovement?.version && query.binding.source.effect === effect };
-  const fetchPort: typeof fetch = async (value, init) => {
+  const baseFetchPort: typeof fetch = async (value, init) => {
     const url = new URL(String(value)), method = init?.method ?? "GET";
     if (url.pathname.startsWith("/v1/patients/")) return f.fetchPort(value, init);
     if (url.pathname === "/v1/recalls" && method === "POST") {
@@ -161,6 +161,7 @@ export async function classMoveFixture(different = false, near = false, passes?:
       (row.appointment_type as { links: { self: string } }).links.self.endsWith(`/appointment_types/${expected("appointment_type_id")}`));
     return Response.json({ group_appointments: groups, total_entries: groups.length });
   };
+  const fetchPort = options.fetchAround?.(baseFetchPort) ?? baseFetchPort;
   let permission: ClassMovePermission = { allows: async query => permitted && phasePermission(query.phase) };
   if (staging) {
     const binding = { scope: f.scope, credentialFingerprint: clinikoCredentialFingerprint(native.config.apiKey), budget: rateBudget };

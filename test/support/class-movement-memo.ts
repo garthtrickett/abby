@@ -16,6 +16,7 @@ import { verificationCanaries } from "./caller-verification.ts";
 
 export async function classMovementMemoFixture(options: { scope?: LocationScope; budget?: ClinikoRequestBudget; verificationBudget?: PatientVerificationBudget;
   barrierFor?: (scope: LocationScope, owner: string) => OutboundEffectBarrier; realQuotaWait?: boolean; passes?: boolean; staged?: boolean; admitted?: boolean;
+  clinicalFetchAround?: (port: typeof fetch) => typeof fetch; memoFetchPort?: typeof fetch;
   mode?: "accepted" | "lostStored" | "lostUnstored" | "nonexact" } = {}) {
   const key = randomBytes(32), authentication = new AdministrativeMemoAuthentication(key), service = new AbortController();
   const memoPosts: Record<string, unknown>[] = [], memoRows: Record<string, unknown>[] = [], outcomes: MemoRetentionOutcome[] = [], consumed = new Set<string>();
@@ -23,7 +24,8 @@ export async function classMovementMemoFixture(options: { scope?: LocationScope;
   let done!: () => void; const memoSettled = new Promise<void>(resolve => { done = resolve; });
   const f = await classMoveFixture(false, false, options.passes ? {} : undefined, options.staged ?? true, true, {
     ...(options.scope ? { scope: options.scope } : {}), ...(options.budget ? { budget: options.budget } : {}),
-    ...(options.verificationBudget ? { verificationBudget: options.verificationBudget } : {}), ...(options.realQuotaWait ? { realQuotaWait: true } : {}), memoFor: (clinical, clock) => {
+    ...(options.verificationBudget ? { verificationBudget: options.verificationBudget } : {}), ...(options.realQuotaWait ? { realQuotaWait: true } : {}),
+    ...(options.clinicalFetchAround ? { fetchAround: options.clinicalFetchAround } : {}), memoFor: (clinical, clock) => {
     const native = { scope: clinical.scope, apiKey: clinical.apiKey, contactEmail: clinical.contactEmail, businessId: clinical.businessId,
       authorRef: "clinic-approved-admin-memo", policy: { version: "admin-actions-v1", digest: "a".repeat(64) }, rateBudget: clinical.rateBudget, clock, deadlineMs: 5000 };
     const owner = administrativeMemoRecordBinding(native, authentication)!;
@@ -32,7 +34,7 @@ export async function classMovementMemoFixture(options: { scope?: LocationScope;
         producerAdmitted: async q => gates.producer && !!q.memo && q.memo.patientId === verificationCanaries[2] && q.memo.outcome.kind === "classMovementReported" },
       barrier: options.barrierFor?.(native.scope, owner) ?? { matches: (scope, binding) => JSON.stringify(scope) === JSON.stringify(native.scope) && binding === owner,
         claimOnce: async ref => { const claimed = !consumed.has(ref); consumed.add(ref); return ok({ claimed }); } },
-      observeOutcome: outcome => { outcomes.push(outcome); done(); }, fetchPort: async (url, init) => {
+      observeOutcome: outcome => { outcomes.push(outcome); done(); }, fetchPort: options.memoFetchPort ?? (async (url, init) => {
         assert.equal(String(url), "https://api.au5.cliniko.com/v1/communications"); assert.equal(init?.method, "POST"); assert.equal(init.redirect, "error");
         const body = JSON.parse(String(init.body)); memoPosts.push(body); const decoded = resultValue(decodeAdministrativeMemo(body.content));
         assert.equal(authentication.verify(decoded), true); assert.equal(body.patient_id, verificationCanaries[2]); assert.equal(body.confidential, true);
@@ -41,7 +43,7 @@ export async function classMovementMemoFixture(options: { scope?: LocationScope;
         if (options.mode !== "lostUnstored") memoRows.push(row);
         if (options.mode === "lostStored" || options.mode === "lostUnstored") throw Error("Synthetic memo response loss");
         return Response.json(options.mode === "nonexact" ? { ...row, confidential: false } : row, { status: 201 });
-      } };
+      }) };
   } });
   const session = options.admitted ? resultValue(await ClinikoClassSession.create(f.classSessionConfig)) : undefined;
   const host = session?.rescheduling ?? f.host, reception = session ? new TextReception(f.ledger, f.policies, host, undefined, undefined, undefined, undefined, f.config.clock) : f.reception;

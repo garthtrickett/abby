@@ -20,6 +20,7 @@ import { verificationCanaries } from "./caller-verification.ts";
 export async function classCancellationMemoFixture(options: { passes?: "releaseOne" | "unchanged" | "consumeOne"; budgetLimit?: 180 | 200; realQuotaWait?: boolean;
   scope?: LocationScope; budget?: ClinikoRequestBudget; verificationBudget?: PatientVerificationBudget;
   barrierFor?: (scope: LocationScope, owner: string) => OutboundEffectBarrier;
+  clinicalFetchAround?: (port: typeof fetch) => typeof fetch; memoFetchPort?: typeof fetch;
   mode?: "accepted" | "lostStored" | "lostUnstored" | "nonexact"; foreignInspection?: boolean } = {}) {
   const key = randomBytes(32), authentication = new AdministrativeMemoAuthentication(key), service = new AbortController();
   const memoPosts: Record<string, unknown>[] = [], memoRows: Record<string, unknown>[] = [], outcomes: MemoRetentionOutcome[] = [], consumed = new Set<string>();
@@ -30,13 +31,13 @@ export async function classCancellationMemoFixture(options: { passes?: "releaseO
   const f = await classCancellationFixture({ ...(options.passes ? { passes: options.passes } : {}), budgetLimit: options.budgetLimit ?? 180,
     ...(options.scope ? { scope: options.scope } : {}), ...(options.budget ? { budget: options.budget } : {}),
     ...(options.verificationBudget ? { verificationBudget: options.verificationBudget } : {}),
-    fetchAround: port => async (url, init) => {
+    fetchAround: port => { const observed: typeof fetch = async (url, init) => {
       const response = await port(url, init); if (init?.method === "PATCH") patched = true;
       if (patched && options.foreignInspection && (init?.method ?? "GET") === "GET" && new URL(String(url)).pathname === "/v1/attendees/101") {
         return Response.json({ ...await response.json(), patient: { links: { self: "https://api.au5.cliniko.com/v1/patients/43" } } });
       }
       return response;
-    }, memoFor: (clinical, clock) => {
+    }; return options.clinicalFetchAround?.(observed) ?? observed; }, memoFor: (clinical, clock) => {
       const native = { scope: clinical.scope, apiKey: clinical.apiKey, contactEmail: clinical.contactEmail, businessId: clinical.businessId,
         authorRef: "clinic-approved-admin-memo", policy: { version: "admin-actions-v1", digest: "a".repeat(64) }, rateBudget: clinical.rateBudget, clock, deadlineMs: 5000 };
       const owner = administrativeMemoRecordBinding(native, authentication)!;
@@ -46,7 +47,7 @@ export async function classCancellationMemoFixture(options: { passes?: "releaseO
         barrier: options.barrierFor?.(native.scope, owner) ?? { matches: (scope, binding) => JSON.stringify(scope) === JSON.stringify(native.scope) && binding === owner,
           claimOnce: async ref => { const claimed = !consumed.has(ref); consumed.add(ref); return ok({ claimed }); } },
         observeOutcome: result => { outcomes.push(result); done(); },
-        fetchPort: async (url, init) => {
+        fetchPort: options.memoFetchPort ?? (async (url, init) => {
           assert.equal(String(url), "https://api.au5.cliniko.com/v1/communications"); assert.equal(init?.method, "POST"); assert.equal(init.redirect, "error");
           const body = JSON.parse(String(init.body)); memoPosts.push(body); assert.equal(body.patient_id, verificationCanaries[2]); assert.equal(body.confidential, true);
           const decoded = decodeAdministrativeMemo(body.content); assert.ok(decoded.ok && authentication.verify(decoded.value));
@@ -55,7 +56,7 @@ export async function classCancellationMemoFixture(options: { passes?: "releaseO
           if (options.mode !== "lostUnstored") memoRows.push(row);
           if (options.mode === "lostStored" || options.mode === "lostUnstored") throw Error("Synthetic memo response loss");
           return Response.json(options.mode === "nonexact" ? { ...row, confidential: false } : row, { status: 201 });
-        } };
+        }) };
     } });
   let session: ClinikoClassSession;
   try { session = resultValue(await ClinikoClassSession.create(f.classSessionConfig)); } catch (error) { service.abort(); await f.close(); throw error; }
