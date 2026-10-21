@@ -1,5 +1,6 @@
 import { ClinikoOutboundClinicalContext } from "./cliniko-outbound-clinical-context.ts";
 import { ClinikoBookingWriter } from "../cliniko/booking-write.ts";
+import type { ClinikoAcknowledgedBooking } from "../cliniko/booking-write.ts";
 import { digestActionRequest } from "../core/digest.ts";
 import type { HostReadFailure, PolicyStore } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
@@ -18,6 +19,13 @@ export type ClinikoBookingGuardConfig = Readonly<{
   outboundBooking?: ClinikoOutboundClinicalContext;
   writer: ClinikoBookingWriter; clock?: () => string;
 }>;
+/** Private provenance of a verified final dispatch, not an acknowledgement or
+ * permission to create an administrative memo after the clinical action. */
+export type ClinikoBookingDispatchSource = Readonly<{
+  scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
+  patientId: string; businessId: string; credentialFingerprint: string;
+  startsAt: string; endsAt: string; clinicalDigest: string; direction: "inbound" | "outbound";
+}>;
 async function untilAbort<Value>(pending: Promise<Value>, signal: AbortSignal): Promise<Value | undefined> {
   if (signal.aborted) { void pending.catch(() => undefined); return undefined; }
   let onAbort: () => void = () => undefined;
@@ -31,7 +39,7 @@ export class ClinikoBookingGuard {
   readonly #config: ClinikoBookingGuardConfig;
   #closed = false;
   readonly #nativeReads = new WeakMap<object, ClinikoBookingQuery>();
-  readonly #dispatchLeases = new WeakMap<PreparedClinikoBooking, number>();
+  readonly #dispatchLeases = new WeakMap<PreparedClinikoBooking, Readonly<{ expiresAt: number; source: ClinikoBookingDispatchSource }>>();
   constructor(config: ClinikoBookingGuardConfig) {
     if (!config.scope || ![config.scope.tenantId, config.scope.clinicId, config.scope.locationId,
       config.callId, config.sessionId, config.policyVersion].every(approvalRef) ||
@@ -162,19 +170,36 @@ export class ClinikoBookingGuard {
         validClinikoBookingEvidence(fresh.value, { ...query, now: new Date(current).toISOString() }, config.writer.selection(), config.writer.credentialFingerprint()) &&
         digestActionRequest({ kind: "book", patient: patient.value, offer: fresh.value.offer }) === mutation.payloadDigest &&
         sameClinikoBookingEvidence(fresh.value, prepared.evidence);
-      if (authorized) this.#dispatchLeases.set(prepared, leaseExpiry);
+      if (authorized) this.#dispatchLeases.set(prepared, Object.freeze({ expiresAt: leaseExpiry, source: Object.freeze({
+        scope: Object.freeze({ ...config.scope }), callId: config.callId, sessionId: config.sessionId, policyVersion: config.policyVersion,
+        patientId: prepared.request.patient.patientRef, businessId: prepared.evidence.businessId,
+        credentialFingerprint: config.writer.credentialFingerprint(), startsAt: prepared.request.offer.startsAt,
+        endsAt: prepared.evidence.endsAt, clinicalDigest: mutation.payloadDigest,
+        // Existing inbound admission records use dialedNumber, without a direction field.
+        direction: state.admission!.direction === "outbound" ? "outbound" : "inbound",
+      }) }));
       return authorized;
     } catch { return false; }
   }
   /** Local expiry/lifetime checks at transport invocation; never a remote write-stop replica. */
   currentForSend(prepared: PreparedClinikoBooking, now: string, signal: AbortSignal): boolean {
     const at = this.#time(now);
-    const leaseExpiry = this.#dispatchLeases.get(prepared);
+    const leaseExpiry = this.#dispatchLeases.get(prepared)?.expiresAt;
     return at !== undefined && leaseExpiry !== undefined && leaseExpiry > at && !this.#closed && !signal.aborted &&
       (!this.#config.outboundBooking || this.#config.outboundBooking.current("appointments.book")) &&
       this.#config.proof.ownsLiveReference(prepared.query.verificationRef, "appointments.book", new Date(at).toISOString()) &&
       Date.parse(prepared.request.patient.expiresAt) > at && Date.parse(prepared.request.offer.expiresAt) > at &&
       Date.parse(prepared.request.offer.startsAt) > at;
+  }
+  /** Only the actual final-send preparation object has this provenance. It is
+   * retained as historical fact after end/expiry, never renewed clinical power. */
+  acknowledgementSource(prepared: PreparedClinikoBooking, receipt: unknown):
+    Readonly<{ dispatch: ClinikoBookingDispatchSource; native: ClinikoAcknowledgedBooking }> | undefined {
+    try {
+      const dispatch = this.#dispatchLeases.get(prepared)?.source, native = this.#config.writer.acknowledgement(receipt);
+      if (!dispatch || !native || digestActionRequest(prepared.request) !== dispatch.clinicalDigest) return;
+      return Object.freeze({ dispatch, native });
+    } catch { return; }
   }
   /** Protect result inspection without demanding that the just-booked slot remain available. */
   async mayInspect(prepared: PreparedClinikoBooking, mutation: HostMutation, now: string, signal: AbortSignal): Promise<boolean> {

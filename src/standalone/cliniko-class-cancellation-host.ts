@@ -24,6 +24,10 @@ import { approvalInstant, approvalRef } from "./owner-file-clinic-approval.ts";
 import { NoStoredKnowledge } from "./no-stored-knowledge.ts";
 import { preparationMayBeDiscarded } from "./prepared-proposal.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
+import { administrativeMemoActionRef } from "../cliniko/administrative-memo.ts";
+import type { AdministrativeMemo } from "../cliniko/administrative-memo.ts";
+import { captureAdministrativeMemoConfig, retainAdministrativeMemo } from "./administrative-memo-retention.ts";
+import type { ClinikoAdministrativeMemoConfig } from "./administrative-memo-retention.ts";
 export type ClassCancellationPermission = Readonly<{
   allows(query: Readonly<{
     operation: "cancel";
@@ -51,6 +55,7 @@ export type ClinikoClassCancellationConfig = Readonly<{
   cancellationPolicy: OwnerFileCancellationPolicy;
   permission: ClassCancellationPermission;
   classPassCancellationAuthority?: ClassPassCancellationAuthority;
+  memo?: ClinikoAdministrativeMemoConfig;
   cliniko: Omit<ClinikoAttendanceConfig, "scope">;
   clock: () => string;
   signal: AbortSignal;
@@ -100,6 +105,8 @@ export class ClinikoClassCancellationHost extends NoStoredKnowledge implements A
   #attempted = false;
   #busy = false;
   #epoch = 0;
+  #memoDispatch: Readonly<{ prepared: Prepared; digest: string; direction: "inbound" | "outbound" }> | undefined;
+  #memoInspection: Readonly<{ prepared: Prepared; at: string }> | undefined;
   readonly #onClose = () => this.dispose();
   private constructor(config: ClinikoClassCancellationConfig, approval: ClassApproval) {
     super();
@@ -127,7 +134,9 @@ export class ClinikoClassCancellationHost extends NoStoredKnowledge implements A
         !input.verification.matchesClinikoAccount(clinikoCredentialFingerprint(input.cliniko.apiKey)) ||
         typeof input.permission?.allows !== "function" || typeof input.clock !== "function" || typeof input.ledger?.read !== "function" || typeof input.ledger?.readWriteStop !== "function" || typeof input.policies?.read !== "function")
         return denied();
-      const config = Object.freeze({ ...input, scope: Object.freeze({ ...input.scope }), cliniko: Object.freeze({ ...input.cliniko }) });
+      const config = Object.freeze({ ...input, scope: Object.freeze({ ...input.scope }), cliniko: Object.freeze({ ...input.cliniko }),
+        ...(input.memo ? { memo: captureAdministrativeMemoConfig(input.memo, { scope: input.scope, businessId: input.cliniko.businessId,
+          credentialFingerprint: clinikoCredentialFingerprint(input.cliniko.apiKey), rateBudget: input.cliniko.rateBudget, clock: input.clock }) } : {}) });
       const signal = AbortSignal.any([config.signal, AbortSignal.timeout(15000)]);
       const [classPolicy, cancel] = await Promise.all([awaitUntilAbort(config.classPolicy.current(config.scope), signal), awaitUntilAbort(config.cancellationPolicy.current(config.scope), signal)]);
       if (!classPolicy?.ok || !cancel?.ok || signal.aborted || classPolicy.value.policyVersion !== config.policyVersion || cancel.value.policyVersion !== config.policyVersion ||
@@ -323,8 +332,17 @@ export class ClinikoClassCancellationHost extends NoStoredKnowledge implements A
     if (!await this.#ready(this.#now(), signal, mutation))
       return false;
     const current = await this.#fresh(prepared.target, phase, signal, readNative), cancel = await this.#config.cancellationPolicy.current(this.#config.scope);
-    return !!current && cancel.ok && cancel.value.cancellationReason === prepared.provider.cancellationReason && digestActionRequest(current) === mutation.payloadDigest &&
-      mutation.payloadDigest === digestActionRequest(prepared.request) && !!await this.#ready(this.#now(), signal, mutation);
+    if (!current || !cancel.ok || cancel.value.cancellationReason !== prepared.provider.cancellationReason || digestActionRequest(current) !== mutation.payloadDigest ||
+        mutation.payloadDigest !== digestActionRequest(prepared.request)) return false;
+    const at = this.#now(), state = await this.#ready(at, signal, mutation); if (!state) return false;
+    if (this.#config.memo) {
+      try {
+        if (phase === "commit") this.#memoDispatch = Object.freeze({ prepared, digest: mutation.payloadDigest,
+          direction: state.admission?.direction === "outbound" ? "outbound" : "inbound" });
+        else this.#memoInspection = Object.freeze({ prepared, at });
+      } catch { /* Optional metadata cannot change an existing authorization. */ }
+    }
+    return true;
   }
   async checkConfirmationCapacity(query: BookingMenuQuery & Readonly<{ actionKey: string; digest: string }>): Promise<Result<Readonly<{ kind: "ready" }> | Readonly<{ kind: "wait"; seconds: number }>, HostReadFailure>> {
     if (!this.#passes) return ok({ kind: "ready" });
@@ -353,6 +371,36 @@ export class ClinikoClassCancellationHost extends NoStoredKnowledge implements A
     const seconds = Math.ceil(capacity.retryAfterMs! / 1000);
     if (Date.parse(p.target.expiresAt) <= Date.parse(this.#now()) + (seconds + 3) * 1000) return err({ kind: "expired", target: "offer" });
     return ok({ kind: "wait", seconds });
+  }
+  #captureMemo(prepared: Prepared, result: unknown): AdministrativeMemo | undefined {
+    const c = this.#config, dispatch = this.#memoDispatch, inspected = this.#memoInspection;
+    if (!c.memo) return;
+    try {
+      const reviewed = this.#review.changeSource(result), value = result as { outcome?: { ok?: unknown; value?: unknown } };
+      const native = value.outcome?.ok === true ? this.#writer.cancellationAcknowledgement(value.outcome.value) : undefined;
+      if (!reviewed || reviewed.request.operation.kind !== "classCancel" || !native || dispatch?.prepared !== prepared || inspected?.prepared !== prepared ||
+          dispatch.digest !== digestActionRequest(prepared.request) || !isDeepStrictEqual(native.request, prepared.provider)) return;
+      const r = reviewed.request, op = r.operation, p = prepared.provider, selection = native.selection;
+      if (op.kind !== "classCancel" || !sameScope(r.scope, c.scope) || !sameScope(selection.scope, c.scope) || r.patientId !== p.patientId || p.patientId !== prepared.target.patientRef ||
+          r.businessId !== c.cliniko.businessId || selection.businessId !== r.businessId || selection.practitionerId !== c.cliniko.practitionerId ||
+          selection.appointmentTypeId !== c.cliniko.appointmentTypeId || r.credentialFingerprint !== clinikoCredentialFingerprint(c.cliniko.apiKey) ||
+          selection.credentialFingerprint !== r.credentialFingerprint || r.policyVersion !== c.policyVersion || r.termsVersion !== prepared.request.terms.version ||
+          op.sessionId !== p.sessionId || op.attendeeId !== p.attendeeId || op.cancellationReason !== p.cancellationReason ||
+          op.practitionerId !== selection.practitionerId || op.appointmentTypeId !== selection.appointmentTypeId ||
+          Date.parse(op.startsAt) !== Date.parse(prepared.target.session.startsAt) || Date.parse(op.endsAt) !== Date.parse(prepared.target.session.endsAt)) return;
+      const actionRef = administrativeMemoActionRef(reviewed.marker), at = new Date(inspected.at).toISOString();
+      if (!actionRef || at < new Date(r.createdAt).toISOString()) return;
+      const signed = c.memo.authentication.sign({ actionRef, sourceActionRef: reviewed.marker, scope: c.scope, businessId: r.businessId,
+        credentialFingerprint: r.credentialFingerprint, patientId: p.patientId, authorRef: c.memo.native.authorRef, policy: c.memo.native.policy,
+        direction: dispatch.direction, outcome: { kind: "classCancellationObserved", appointmentRef: `cliniko:booking:${p.sessionId}`,
+          attendeeRef: native.attendeeRef, startsAt: new Date(op.startsAt).toISOString(), endsAt: new Date(op.endsAt).toISOString(),
+          verification: { basis: "acknowledgedAndObservedBestEffort", observedAt: at } }, occurredAt: at, recordedAt: c.memo.native.clock!() });
+      return signed.ok ? signed.value : undefined;
+    } catch { return; /* Optional metadata cannot change the inspected clinical result. */ }
+  }
+  #retainMemo(prepared: Prepared, result: unknown): void {
+    const memo = this.#captureMemo(prepared, result); this.#memoDispatch = undefined; this.#memoInspection = undefined;
+    if (this.#config.memo) void retainAdministrativeMemo(this.#config.memo, memo).catch(() => {});
   }
   async write(mutation: HostMutation, now: string, external?: AbortSignal): Promise<HostWriteReceipt> {
     const p = this.#prepared, c = this.#config, reject = (): HostWriteReceipt => ({ kind: "rejected", actionKey: mutation.actionKey, reason: "forbidden" });
@@ -386,10 +434,15 @@ export class ClinikoClassCancellationHost extends NoStoredKnowledge implements A
       return ["reviewUncertain", "mutationUncertain"].includes(result.error.kind) ? uncertain() : reject();
     if (!result.value.outcome.ok)
       return reject();
-    return result.value.outcome.value.kind === "accepted" && !signal.aborted ? { kind: "committed", actionKey: mutation.actionKey, hostRef: result.value.outcome.value.attendeeRef } : uncertain();
+    if (result.value.outcome.value.kind === "accepted" && !signal.aborted) {
+      this.#retainMemo(p, result.value);
+      return { kind: "committed", actionKey: mutation.actionKey, hostRef: result.value.outcome.value.attendeeRef };
+    }
+    return uncertain();
   }
   async reconcile(mutation: HostMutation): Promise<ReconcileObservation> { return { kind: "stillUnknown", actionKey: mutation.actionKey }; }
   async openTask(item: StaffItem): Promise<StaffTaskReceipt> { return { kind: "rejected", taskKey: item.key }; }
   async reconcileTask(item: StaffItem): Promise<StaffTaskObservation> { return { kind: "stillUnknown", taskKey: item.key }; }
-  dispose() { this.#config.signal.removeEventListener("abort", this.#onClose); this.#lifetime.abort(); this.#review.close(); this.#targets.clear(); this.#menu = undefined; this.#prepared = undefined; ++this.#epoch; }
+  dispose() { this.#config.signal.removeEventListener("abort", this.#onClose); this.#lifetime.abort(); this.#review.close(); this.#targets.clear(); this.#menu = undefined; this.#prepared = undefined;
+    this.#memoDispatch = undefined; this.#memoInspection = undefined; ++this.#epoch; }
 }

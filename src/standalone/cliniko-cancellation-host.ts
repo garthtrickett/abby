@@ -10,22 +10,26 @@ import { sameScope } from "./appointment-change-authority.ts";
 import { ClinikoAppointmentChangeGuard } from "./cliniko-appointment-change-guard.ts";
 import type { ClinikoAppointmentChangeGuardConfig, PreparedClinikoChange } from "./cliniko-appointment-change-guard.ts";
 import { ClinikoReviewedSend } from "./cliniko-reviewed-send.ts";
+import { ClinikoAppointmentChangeMemo } from "./cliniko-appointment-change-memo.ts";
+import type { ClinikoAdministrativeMemoConfig } from "./administrative-memo-retention.ts";
 import { NoStoredKnowledge } from "./no-stored-knowledge.ts";
 
 export type ClinikoCancellationHostConfig = Omit<ClinikoAppointmentChangeGuardConfig, "rescheduling"> & Readonly<{
   recallWriter: ClinikoRecallWriter;
   recallTypeId: string;
   timeZone: string;
+  memo?: ClinikoAdministrativeMemoConfig;
 }>;
 
 /** Standalone best-effort cancellation. All call state is volatile; provider review precedes one send.
- * Construction is not clinic activation. The production caller runner does not expose this host yet. */
+ * Construction and optional memo configuration are not clinic activation. */
 export class ClinikoCancellationHost extends NoStoredKnowledge
   implements AppointmentChangeEvidenceHost, BookingEvidenceHost, HostEffects {
   readonly effectDeadlineMs = 30_000;
   readonly #config: ClinikoCancellationHostConfig;
   readonly #guard: ClinikoAppointmentChangeGuard;
   readonly #review: ClinikoReviewedSend;
+  readonly #memo: ClinikoAppointmentChangeMemo | undefined;
   readonly #lifetime = new AbortController();
   #prepared: PreparedClinikoChange | undefined;
   #attempted = false;
@@ -39,6 +43,7 @@ export class ClinikoCancellationHost extends NoStoredKnowledge
       credentialFingerprint: config.credentialFingerprint, policyVersion: config.policyVersion,
       timeZone: config.timeZone, recallTypeId: config.recallTypeId, writer: config.recallWriter,
       clock: () => Date.parse(this.#now()) });
+    this.#memo = config.memo ? new ClinikoAppointmentChangeMemo(config.memo, config, this.#guard, this.#review) : undefined;
   }
 
   #now(): string { return (this.#config.clock ?? (() => new Date().toISOString()))(); }
@@ -95,6 +100,8 @@ export class ClinikoCancellationHost extends NoStoredKnowledge
     if (!result.ok) return result.error.kind === "mutationUncertain" || result.error.kind === "reviewUncertain"
       ? uncertain() : reject();
     if (!result.value.outcome.ok || result.value.outcome.value.kind !== "cancelled" || signal.aborted) return uncertain();
+    this.#memo?.capture(prepared, result.value, confirmed);
+    try { void this.#memo?.retain().catch(() => {}); } catch { /* Memo retention cannot veto the clinical result. */ }
     return { kind: "committed", actionKey: mutation.actionKey, hostRef: provider.appointmentId };
   }
 

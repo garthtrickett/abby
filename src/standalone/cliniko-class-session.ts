@@ -20,6 +20,7 @@ import { OwnerFileClassPolicy } from "./owner-file-class-policy.ts";
 import { OwnerFileClassMovePolicy } from "./owner-file-class-move-policy.ts";
 import { ClinikoClassMoveHost } from "./cliniko-class-move-host.ts";
 import type { ClassMovePermission } from "./cliniko-class-move-host.ts";
+import { captureAdministrativeMemoConfig } from "./administrative-memo-retention.ts";
 
 type Common = Omit<ClinikoBookingSessionConfig, "bookingApprovalPath" | "catalogue" | "representative"> & Readonly<{ classApprovalPath: string }>;
 export type ClinikoClassSessionConfig = Common & (
@@ -64,6 +65,9 @@ export class ClinikoClassSession {
           typeof incoming.classPermission?.allows !== "function" ||
           incoming.timeoutMs !== undefined && (!Number.isSafeInteger(incoming.timeoutMs) || incoming.timeoutMs < 1 || incoming.timeoutMs > 20_000)) return unavailable();
       const config = Object.freeze({ ...incoming, receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound),
+        ...(incoming.memo ? { memo: captureAdministrativeMemoConfig(incoming.memo, { scope: incoming.receipt.scope, businessId: incoming.cliniko.businessId,
+          credentialFingerprint: clinikoCredentialFingerprint(incoming.cliniko.apiKey), rateBudget: incoming.cliniko.rateBudget,
+          ...(incoming.clock ? { clock: incoming.clock } : {}) }) } : {}),
         ...(incoming.operation === "reschedule" ? { destination: Object.freeze({ ...incoming.destination }) } : {}),
         cliniko: Object.freeze({ ...incoming.cliniko }), clock: incoming.clock ?? (() => new Date().toISOString()) });
       const callSignal = AbortSignal.any([config.signal, lifetime.signal]);
@@ -131,12 +135,15 @@ export class ClinikoClassSession {
           ledger: config.ledger, policies: config.policies, verification, classPolicy: classes.value, cliniko: config.cliniko,
           clock: config.clock, signal: callSignal, ...(config.fetchPort ? { fetchPort: config.fetchPort } : {}) };
         const created = config.operation === "book" ? await ClinikoClassBookingHost.create({ ...common, permission: config.classPermission,
+          ...(config.memo ? { memo: config.memo } : {}),
           ...(config.financial ? { financial: config.financial } : {}),
           ...(config.classPassAuthority ? { classPassAuthority: config.classPassAuthority } : {}) }) :
           config.operation === "cancel" && cancellation?.ok ? await ClinikoClassCancellationHost.create({ ...common, cancellationPolicy: cancellation.value, permission: config.classPermission,
+            ...(config.memo ? { memo: config.memo } : {}),
             ...(config.classPassCancellationAuthority ? { classPassCancellationAuthority: config.classPassCancellationAuthority } : {}) }) :
           config.operation === "reschedule" && destination?.ok && movement?.ok ? await ClinikoClassMoveHost.create({ ...common,
             sourcePolicy: classes.value, destinationPolicy: destination.value, movePolicy: movement.value, permission: config.classPermission,
+            ...(config.memo ? { memo: config.memo } : {}),
             ...(config.classPassMoveAuthority ? { classPassMoveAuthority: config.classPassMoveAuthority } : {}) }) : undefined;
         if (!created?.ok) return undefined;
         host = created.value;

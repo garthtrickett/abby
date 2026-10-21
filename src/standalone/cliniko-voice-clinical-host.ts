@@ -1,4 +1,5 @@
 import { callIdFor } from "../voice/admission.ts";
+import { captureBookingMemoConfig } from "./cliniko-booking-memo.ts";
 import { captureFinancialVoiceProvision, financialVoiceForCall } from "./financial-voice-provision.ts";
 import type { FinancialVoiceProvision } from "./financial-voice-provision.ts";
 export type { FinancialVoiceProvision } from "./financial-voice-provision.ts";
@@ -44,6 +45,8 @@ export class ClinikoVoiceClinicalHost {
     }
     const financialProvision = config.financial ? captureFinancialVoiceProvision(config.financial, { scope: config.scope, ...config.cliniko }) : undefined;
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }),
+      ...(config.memo ? { memo: captureBookingMemoConfig(config.memo, { scope: config.scope, ...config.cliniko,
+        credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey) }) } : {}),
       ...(financialProvision ? { financial: financialProvision } : {}),
       greeting: Object.freeze(structuredClone(config.greeting)), cliniko: Object.freeze({ ...config.cliniko }),
       approvals: Object.freeze({ ...config.approvals }),

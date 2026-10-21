@@ -12,6 +12,8 @@ import { declareClinikoRequestCost } from "../../src/cliniko/request-cost.ts";
 import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 
 export async function financialClassBookingFixture(options: { passes?: boolean; required?: boolean; budgetLimit?: 180 | 200; budget?: import("../../src/cliniko/read-budget.ts").ClinikoRequestBudget; scope?: import("../../src/core/model.ts").LocationScope;
+  memoFor?: NonNullable<Parameters<typeof classBookingFixture>[0]>["memoFor"];
+  verificationBudget?: NonNullable<Parameters<typeof classBookingFixture>[0]>["verificationBudget"];
   caseCancellation?: NonNullable<Parameters<typeof classBookingFixture>[0]>["caseCancellation"];
   fetchAround?: (port: typeof fetch) => typeof fetch;
   quote?: (selection: FinancialBookingSelection, ordinary: FinancialBookingAssessment) => FinancialBookingAssessment | undefined;
@@ -21,6 +23,8 @@ export async function financialClassBookingFixture(options: { passes?: boolean; 
   let clock = () => verificationNow;
   const financialLife = new AbortController(), events: string[] = [], texts: string[] = [], selections: FinancialBookingSelection[] = [];
   const f = await classBookingFixture({ ...(options.passes ? { passes: true } : {}), ...(options.scope ? { scope: options.scope } : {}), ...(options.budgetLimit ? { budgetLimit: options.budgetLimit } : {}), ...(options.budget ? { budget: options.budget } : {}),
+    ...(options.memoFor ? { memoFor: options.memoFor } : {}),
+    ...(options.verificationBudget ? { verificationBudget: options.verificationBudget } : {}),
     ...(options.caseCancellation ? { caseCancellation: options.caseCancellation } : {}),
     fetchAround: port => {
       const clinicalPort = options.fetchAround ? options.fetchAround(port) : port;

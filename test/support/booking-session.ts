@@ -9,7 +9,7 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 import { verificationNow } from "./caller-verification.ts";
 
 /** Actual admitted-call composition and caller commands; clinic approval/permission/mail/provider are synthetic. */
-export async function bookingSessionFixture(options: Parameters<typeof bookingOffersFixture>[0] = {}) {
+export async function bookingSessionFixture(options: Parameters<typeof bookingOffersFixture>[0] & Pick<ClinikoBookingSessionConfig, "memo"> = {}) {
   const f = await bookingOffersFixture(options);
   f.host.dispose(); f.source.dispose(); f.session.dispose();
   const lifetime = new AbortController(); let owner: ClinikoBookingSession | undefined;
@@ -22,6 +22,7 @@ export async function bookingSessionFixture(options: Parameters<typeof bookingOf
       cliniko: { apiKey: "synthetic-session-au5", contactEmail: "test@example.test", businessId: "11", practitionerId: "22", appointmentTypeId: "33",
         recallTypeId: "7", timeZone: "Australia/Sydney", countryCallingCode: "61", rateBudget: f.ownerPorts.rateBudget },
       signal: lifetime.signal, fetchPort: f.ownerPorts.fetchPort, clock: f.sessionConfig.clock,
+      ...(options.memo ? { memo: options.memo } : {}),
       ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }) };
     owner = resultValue(await ClinikoBookingSession.create(config));
     const reception = new TextReception(f.ledger, f.policies, owner.effects);
