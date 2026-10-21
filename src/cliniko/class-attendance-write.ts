@@ -22,6 +22,11 @@ export type ClinikoAttendanceFailure = Readonly<{
   resetAt?: string;
 }>;
 export type ClinikoAttendanceWrite = Readonly<{ kind: "accepted"; attendeeRef: string }> | Readonly<{ kind: "uncertain" }>;
+export type ClinikoClassBookingAcknowledgement = Readonly<{
+  request: Extract<ClinikoAttendanceRequest, { kind: "book" }>;
+  selection: Readonly<{ scope: LocationScope; businessId: string; practitionerId: string; appointmentTypeId: string; credentialFingerprint: string }>;
+  attendeeRef: string;
+}>;
 /** Trusted host check, after every final account-budget wait. It must recheck
  * exact patient/session selection, independent class authority, current
  * capacity/duplicates, selected case/counters, fee/member policy, played
@@ -74,8 +79,10 @@ export class ClinikoClassAttendanceWriter {
   readonly #base: string;
   readonly #fetch: typeof fetch;
   readonly #attempted = new Set<string>();
+  readonly #acknowledged = new WeakMap<object, ClinikoClassBookingAcknowledgement>();
   private constructor(config: ClinikoAttendanceConfig, shard: string, fetchPort: typeof fetch) {
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }) }); this.#base = `https://api.${shard}.cliniko.com/v1`; this.#fetch = fetchPort;
+    Object.defineProperty(this, "bookingAcknowledgement", { value: this.bookingAcknowledgement.bind(this) });
   }
   static create(config: ClinikoAttendanceConfig, fetchPort: typeof fetch = fetch): Result<ClinikoClassAttendanceWriter, ClinikoAttendanceFailure> {
     const shard = typeof config?.apiKey === "string" ? /-([a-z]{2}[0-9]{1,2})$/.exec(config.apiKey)?.[1] : undefined;
@@ -87,6 +94,12 @@ export class ClinikoClassAttendanceWriter {
   }
   selection() { const c = this.#config; return { scope: { ...c.scope }, businessId: c.businessId, practitionerId: c.practitionerId,
     appointmentTypeId: c.appointmentTypeId, credentialFingerprint: clinikoCredentialFingerprint(c.apiKey) }; }
+  /** Only this writer's exact guarded creation response, never a generic PATCH
+   * acknowledgement, clone, inspection or another writer's accepted result. */
+  bookingAcknowledgement(receipt: unknown): ClinikoClassBookingAcknowledgement | undefined {
+    if (!receipt || typeof receipt !== "object") return;
+    return this.#acknowledged.get(receipt);
+  }
   #headers() { return { Accept: "application/json", Authorization: `Basic ${Buffer.from(`${this.#config.apiKey}:`).toString("base64")}`,
     "Content-Type": "application/json", "User-Agent": `Abby (${this.#config.contactEmail})` }; }
   #matches(row: Record<string, unknown>, request: ClinikoAttendanceRequest): boolean {
@@ -158,6 +171,12 @@ export class ClinikoClassAttendanceWriter {
     if (booking && request.kind === "book" && request.patientCaseId === undefined && Object.hasOwn(row, "patient_case"))
       return ok({ kind: "uncertain" });
     const accepted = Object.freeze({ kind: "accepted" as const, attendeeRef: `cliniko:attendee:${row.id}` });
+    try { if (booking && request.kind === "book") {
+      const selection = this.selection();
+      this.#acknowledged.set(accepted, Object.freeze({ attendeeRef: accepted.attendeeRef,
+        request: Object.freeze({ ...request, scope: Object.freeze({ ...request.scope }) }),
+        selection: Object.freeze({ ...selection, scope: Object.freeze(selection.scope) }) }));
+    } } catch { /* Optional provenance cannot erase the exact clinical result. */ }
     try { booking?.acknowledged(accepted); } catch { /* An observer cannot erase the validated receipt. */ }
     return ok(accepted);
   }

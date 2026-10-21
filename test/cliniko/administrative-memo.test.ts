@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { AdministrativeMemoAuthentication, administrativeMemoActionRef, encodeAdministrativeMemo, decodeAdministrativeMemo } from "../../src/cliniko/administrative-memo.ts";
 import { administrativeMemoInput } from "../support/administrative-memo.ts";
 
-for (const kind of ["bookingConfirmed", "reschedulingObserved", "cancellationObserved"] as const)
+for (const kind of ["bookingConfirmed", "reschedulingObserved", "cancellationObserved", "classBookingConfirmed"] as const)
 test(`administrative ${kind} has exact canonical authenticated facts without free prose`, () => {
   const auth = new AdministrativeMemoAuthentication(randomBytes(32)), input = administrativeMemoInput(kind), signed = auth.sign(input);
   assert.ok(signed.ok); if (!signed.ok) return;
@@ -12,6 +12,16 @@ test(`administrative ${kind} has exact canonical authenticated facts without fre
   const parsed = decodeAdministrativeMemo(content.value); assert.ok(parsed.ok); if (!parsed.ok) return;
   assert.deepEqual(parsed.value, signed.value); assert.equal(auth.verify(parsed.value), true); assert.ok(content.value.includes("(UTC)"));
   assert.equal(Object.isFrozen(parsed.value.outcome), true); assert.equal(Object.isFrozen(parsed.value.scope), true);
+});
+
+test("a class memo requires the exact patient attendee and occurrence without payment or whole-move claims", () => {
+  const auth = new AdministrativeMemoAuthentication(randomBytes(32)), input = administrativeMemoInput("classBookingConfirmed");
+  const signed = auth.sign(input); assert.ok(signed.ok); const content = encodeAdministrativeMemo(signed.value); assert.ok(content.ok);
+  assert.match(content.value.split("\n")[1]!, /^Confirmed class booking for patient attendee cliniko:attendee:901, occurrence cliniko:booking:900:/);
+  for (const change of [{ attendeeRef: undefined }, { attendeeRef: "cliniko:appointment:901" }, { appointmentRef: "cliniko:appointment:900" },
+    { payment: "paid" }, { move: "completed" }, { patientCaseId: "811" }, { sharedClassNote: "all patients" }]) {
+    assert.equal(auth.sign({ ...input, outcome: { ...input.outcome, ...change } } as typeof input).ok, false);
+  }
 });
 
 test("the memo purpose depends only on its original action, not operation/template/patient/key", () => {
@@ -32,7 +42,7 @@ test("observed changes retain their best-effort basis and inspection time instea
     const encoded = encodeAdministrativeMemo(result.value); assert.ok(encoded.ok); assert.ok(encoded.value.includes("Observed"));
     assert.equal(encoded.value.includes("Confirmed cancellation"), false); assert.equal(encoded.value.includes("Rescheduled cliniko:"), false);
     const changed = structuredClone(input);
-    if (changed.outcome.kind !== "bookingConfirmed") {
+    if (changed.outcome.kind === "cancellationObserved" || changed.outcome.kind === "reschedulingObserved") {
       (changed.outcome.verification as { observedAt: string }).observedAt = "2026-11-01T00:00:00.000Z";
       assert.equal(auth.sign(changed).ok, false);
     }

@@ -22,7 +22,8 @@ import { declareClinikoRequestCost } from "../../src/cliniko/request-cost.ts";
 export async function classBookingFixture(options: { passes?: boolean; fetchAround?: (port: typeof fetch) => typeof fetch;
   caseCancellation?: Readonly<{ version: string; releaseOne: string; unchanged: string; consumeOne: string }>;
   scope?: LocationScope; folder?: string; budget?: ClinikoRequestBudget; budgetLimit?: 180 | 200; verificationBudget?: PatientVerificationBudget;
-  financialFor?: (native: import("../../src/cliniko/class-attendance-write.ts").ClinikoAttendanceConfig, port: typeof fetch) => FinancialBookingPreparationConfig } = {}) {
+  financialFor?: (native: import("../../src/cliniko/class-attendance-write.ts").ClinikoAttendanceConfig, port: typeof fetch) => FinancialBookingPreparationConfig;
+  memoFor?: (native: import("../../src/cliniko/class-attendance-write.ts").ClinikoAttendanceConfig, clock: () => string) => import("../../src/standalone/administrative-memo-retention.ts").ClinikoAdministrativeMemoConfig } = {}) {
   let sourceTime = verificationNow;
   const nativeBudget = options.budget ?? new ClinikoReadBudget(options.budgetLimit ?? 200, () => Date.parse(sourceTime));
   let claims = 0;
@@ -133,9 +134,10 @@ export async function classBookingFixture(options: { passes?: boolean; fetchArou
   };
   const fetchPort = options.fetchAround ? options.fetchAround(baseFetchPort) : baseFetchPort;
   const financial = options.financialFor?.(native.config, fetchPort);
+  const memo = options.memoFor?.(native.config, () => sourceTime);
   const host = resultValue(await ClinikoClassBookingHost.create({ scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion,
     ledger: f.ledger, policies: f.policies, verification: f.session, classPolicy: policy, permission: classPermission,
-    ...(options.passes ? { classPassAuthority: passAuthority } : {}), ...(financial ? { financial } : {}), cliniko: native.config, clock: () => sourceTime, signal: lifetime.signal, fetchPort }));
+    ...(options.passes ? { classPassAuthority: passAuthority } : {}), ...(financial ? { financial } : {}), ...(memo ? { memo } : {}), cliniko: native.config, clock: () => sourceTime, signal: lifetime.signal, fetchPort }));
   const reception = new TextReception(f.ledger, f.policies, host, undefined, undefined, undefined, undefined, () => sourceTime), agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope: f.scope }, f.policies, reception, undefined, undefined, undefined, f.ledger);
   let turns = 0;
   const turn = (name: string, text = "Book a class") => ({ callId: f.callId, sessionId: f.sessionId, turnId: `class-${name}-${++turns}`, text, quality: "clear" as const, at: sourceTime });
@@ -173,7 +175,7 @@ export async function classBookingFixture(options: { passes?: boolean; fetchArou
     callerApprovalPath: f.config.path, classApprovalPath: path, operation: "book" as const,
     classPermission, ...(options.passes ? { classPassAuthority: passAuthority } : {}), cliniko: { ...native.config, timeZone: approval.timeZone, countryCallingCode: "61", recallTypeId: "7" },
     signal: lifetime.signal, fetchPort, clock: () => sourceTime };
-  return { ...f, mail, verificationDelivered: delivery, classSessionConfig: { ...classSessionConfig, ...(financial ? { financial } : {}) }, bindNativeCall: (read: typeof callState) => { callState = read; }, native, host, reception, agent, recalls, writes, cancellations, policy, path, turn, play, verify, propose, confirm,
+  return { ...f, mail, verificationDelivered: delivery, classSessionConfig: { ...classSessionConfig, ...(financial ? { financial } : {}), ...(memo ? { memo } : {}) }, bindNativeCall: (read: typeof callState) => { callState = read; }, native, host, reception, agent, recalls, writes, cancellations, policy, path, turn, play, verify, propose, confirm,
     pause: async (seconds: number) => {
       while (seconds > 0) { const step = Math.min(15, seconds); sourceTime = new Date(Date.parse(sourceTime) + step * 1000).toISOString(); f.setTime(sourceTime);
         resultValue(await f.runtime.renewSession(f.callId, f.sessionId, (await f.state()).sessionLease!.version, sourceTime)); seconds -= step; }

@@ -5,7 +5,8 @@ verified administrative booking, rescheduling and cancellation facts. Existing
 appointment and treatment notes remain untouched. This branch implements the
 native-record primitive, optional individual-booking receipt capture and optional
 observed cancellation/rescheduling capture through the approved session/voice
-compositions. Per-patient class outcomes and complete recovery remain unfinished. No default configuration,
+compositions. Patient-specific class booking is also locally qualified; class cancellation,
+partial movement and complete recovery remain unfinished. No default configuration,
 live write, signed voice acceptance or completed gap 13 is claimed.
 
 ## Native contract
@@ -189,10 +190,77 @@ opaque effects. Node peak is 178,507,776 B/1 GiB; external PostgreSQL peak is
 and databases are cleaned. Provider, mail, clinical transport and clinic grants
 remain synthetic; these are not signed acoustic or real clinic acceptance.
 
+## Patient-specific class booking checkpoint, 21 October 2026
+
+The optional class producer records only the verified patient's exact created
+attendee and occurrence, using `classBookingConfirmed` and the original native
+attendance action UUID. Its wording says class booking, not physical attendance.
+It does not write shared class notes or claim money, remaining case balance or
+whole-move completion. The native writer privately owns the exact guarded
+receipt: generic acknowledgements, clones, another writer and later inspections
+cannot supply it. The existing host privately retains verified dispatch facts
+before final capacity, with no added native IO. It captures the memo source
+before the clinical acknowledgement observer can dispose the host; independently
+bounded retention cannot delay or erase that clinical result.
+
+The current admitted ordinary/pass source cohort passes94/94 (1792560878541),
+with no skips/cancellations. Its affected strict graph passes (1792560889372).
+Earlier106 controls passed before clarifying the outcome name; their type
+attempt found a missing presence check in the synthetic grant helper, corrected
+without changing production permission.
+
+Whole strict and initial691 serving pass (1792561123072). The first actual SQL35
+run (1792561463000) passed29 and failed six pass cases before attendee POST; all
+previous23 memo cases and six ordinary class cases passed. The focused red trace
+(1792561816336) measured58 prior requests plus147 required headroom under real180.
+The helper had advanced its simulated clock, which cannot advance PostgreSQL's
+clock. The correction really waits in at-most15-second steps while renewing the
+synthetic connected-call lease. It does not age SQL rows, raise account quota,
+weaken source grants or change production30s effects or proof/offer expiry. The
+new class harness deadline120s accommodates an up-to60s pre-confirmation wait.
+
+Corrected fixture/driver strict passes (1792562066556,1792563273578). The actual
+corrected691 rebuild passes (queued work1792562910805, serving start06:09:38UTC,
+peak1,149,108,224 B/2GiB): only the intended test fixture output changes; all
+other690 output files remain byte-identical. Earlier capacity refusals occurred
+before compilation and are retained separately. Fresh live admission and one
+fair start governed the eventual build; no peer was interrupted. Final current
+whole-project strict passes (1792563755361,3m04s,peak1,656,115,200 B/2GiB).
+
+The exact previously red pass accepted case passes with a real quota wait
+(1792563414514,1/1). All12 current emitted class SQL cases then pass separately
+(1792563711381,7m56s), zero failures/skips/cancellations: ordinary/pass pairs of
+accepted, stored/unretained response loss, nonexact memo response, denied memo
+producer and lost clinical response. They reconstruct the actual admitted class
+owner, its own email proof, approved class/pass and explicit no-deposit financial
+policy, played SAM and exact native attendee response. They prove neither paid
+membership nor receipt/charge processing.
+
+The real SQL180 account bucket includes verification, protected class/pass work,
+native writes and the independent memo. A final-state witness uses actual prior
+and final rolling-minute timestamps, proving one memo increment while allowing
+legitimate expiry across windows; cumulative calls are not confused with one
+minute's capacity. Real SQL verification budgets and permanent memo purposes
+remain in force. Every-column scans and complete unfiltered backups exclude the
+tested patient/proof/call/memo/key/source marker and private class/pass content,
+while retaining unrelated legitimate aliases, staged scans and opaque effects.
+Node peak147,034,112 B/512MiB and external PostgreSQL peak139,579,392 B/512MiB,
+CPU100% each, Swap0/OOM-high-max0; owned containers/databases are cleaned.
+
+The previous23 actual memo SQL passes retain their scope: their test sources and
+all other690 runtime output bytes are unchanged, and the changed class fixture
+is not loaded by those drivers. This is scoped preservation, not another fresh
+35-case run. The original failed35-case evidence is retained with its exact2034
+source inputs and691 runtime artifacts in a hash-verified private archive.
+Provider, mail, Cliniko transport and clinic grants are synthetic. Actual signed
+voice, native clinic acceptance and a full completed gap13 are not established.
+The component remains local/unpublished with default activation inactive.
+
 ## Work still required
 
-Extend actual source capture to approved per-patient class facts without writing
-shared-class notes or promoting partial movement into complete success. Qualify distinct verified subjects, representative,
+Extend actual source capture to patient-specific class cancellation and partial
+movement facts without writing shared-class notes or promoting partial movement
+into complete success. Ordinary/pass class booking is now locally qualified. Qualify distinct verified subjects, representative,
 financial, catalogue and actual signed incoming/outgoing voice combinations.
 Keep known clinical acknowledgement irrevocable after memo quota, permission,
 source, observer or response failures.
