@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import crypto from "node:crypto";
-import { distinctFromClock, drawDistinctCode, assertDirectSqlVerificationCanaryContext, installDirectSqlVerificationCanaries, installClinicalVerificationCanaries, installResendVerificationCanaries, installStagedVerificationCanaries } from "../support/verification-code-canary.ts";
+import { distinctFromClock, drawDistinctCode, drawSqlCanaryCode, assertDirectSqlVerificationCanaryContext, installDirectSqlVerificationCanaries, installClinicalVerificationCanaries, installResendVerificationCanaries, installStagedVerificationCanaries } from "../support/verification-code-canary.ts";
 
 test("numeric verification canaries reject every real timestamp substring across decimal rollovers", () => {
   for (const sinceMs of [1792470200000, 1792470990000, 1792479990000]) {
@@ -59,4 +59,28 @@ test("direct SQL canary instrumentation cannot change crypto in an unrelated tes
   assert.throws(() => assertDirectSqlVerificationCanaryContext(), /isolated direct SQL/);
   assert.throws(() => installDirectSqlVerificationCanaries(new Set()), /isolated direct SQL/);
   assert.equal(crypto.randomInt, before);
+});
+
+
+test("SQL canaries reject full microsecond fractions while preserving epoch and prior-clock exclusions", () => {
+  const window = { sinceMs: 1792470200000, throughMs: 1792470860000 };
+  const eligible = Array.from({ length: 100000 }, (_, i) => i * 10).filter(code => distinctFromClock(code, window));
+  assert.ok(eligible.length > 10000);
+  const excluded = new Set([String(eligible[0]).padStart(6, "0")]);
+  const fraction = eligible.find(code => distinctFromClock(code + 1, window))! + 1;
+  assert.ok(fraction % 10 !== 0 && distinctFromClock(fraction, window));
+  const draws = [fraction, 179247, eligible[0]!, eligible[1]!]; let calls = 0;
+  const result = drawSqlCanaryCode(() => draws[calls++]!, window, excluded);
+  assert.equal(result, eligible[1]); assert.equal(result % 10, 0); assert.equal(calls, 4);
+  assert.equal(excluded.has(String(result).padStart(6, "0")), false);
+});
+
+test("SQL canary selection is bounded with headroom for rejection sampling", () => {
+  const window = { sinceMs: 1792470200000, throughMs: 1792470860000 }; let calls = 0;
+  assert.throws(() => drawSqlCanaryCode(() => { calls++; return 999999; }, window), /exhausted/);
+  assert.equal(calls, 4096);
+  calls = 0;
+  assert.equal(drawSqlCanaryCode(() => ++calls === 4096 ? 0 : 999999, window), 0);
+  assert.equal(calls, 4096);
+  assert.throws(() => drawSqlCanaryCode(() => 0, window, new Set(["bad"])), /Invalid/);
 });

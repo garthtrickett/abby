@@ -2,6 +2,10 @@
 
 Optional trusted-host engineering, inactive by default. This continues the full execution-order goal. It does not establish complete no-stop/all-ASR coverage, actual acoustic or clinic/provider/source/restore acceptance, or approved gap13 completion.
 
+## Current merged-parent qualification, 21 October 2026
+
+Foundations through terminal-speech PR #574 are normally merged as main9999d7e. Its independent main checks failed in the Node TypeScript parser and an outgoing-code/financial-timestamp canary collision; both raw failures are preserved. This narrow test-harness correction uses the locked TypeScript compiler for project tests and keeps synthetic SQL codes distinct from public timestamp forms while retaining full privacy scans. Full strict TypeScript/683 artifacts, 17 direct SQL/privacy cases, 20 compiled cases and the two targeted timestamp cases pass. Final current controls, exact-head cloud checks and normal review remain required. PR #575 has eight independently green checks but stays draft pending this correction and new-parent qualification. Gap 13 now selects confidential Cliniko communication memos; implementation, complete no-stop/private/all-ASR coverage, all thirteen gaps and real acceptance remain open. See [owning CI qualification](CI_TEST_QUALIFICATION.md). The dated entries below retain their historical scope.
+
 ## Direct SQL verification-canary qualification, 20 October 2026
 
 The original terminal PR #574 head (2a152f5) passed all eight push/PR jobs; raw logs are archived. Actual cancellation main 484a00f separately failed only its PostgreSQL job: the accepted outgoing cancellation completed its intended native action, then its actual six-digit verification code matched legitimate request-budget sent_at_ms. Its other three jobs passed. An unchanged-source deterministic probe reproduced exactly outbound_cancel_7_0 at that clock column (work 1792524308228). The failed main and red probe remain failed historical evidence; no blind CI rerun or scanner exemption is used.
