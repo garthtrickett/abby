@@ -77,6 +77,8 @@ export function assertDirectSqlVerificationCanaryContext(): void {
     "postgres-outbound-clinical-voice.test.ts", "postgres-outbound-follow-up-financial.test.ts",
     "postgres-representative-booking-memo.test.ts",
     "postgres-representative-change-memo.test.ts",
+    "postgres-guardian-booking-memo.test.ts",
+    "postgres-guardian-change-memo.test.ts",
     "postgres-outbound-administrative-memo.test.ts",
   ];
   let database: URL | undefined;
