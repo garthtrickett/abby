@@ -33,7 +33,7 @@ type Config = Readonly<{
   deadlineMs?: number;
 }>;
 export type ClinikoReviewedChangeSource = Readonly<{ marker: string; recallRef: string;
-  request: ClinikoReviewRequest & Readonly<{ operation: Extract<ClinikoReviewRequest["operation"], { kind: "cancel" | "reschedule" }> }> }>;
+  request: ClinikoReviewRequest & Readonly<{ operation: Extract<ClinikoReviewRequest["operation"], { kind: "cancel" | "reschedule" | "classCancel" }> }> }>;
 
 async function untilAbort<Value>(pending: Promise<Value>, signal: AbortSignal): Promise<Value | undefined> {
   let onAbort: () => void = () => undefined;
@@ -85,9 +85,11 @@ export class ClinikoReviewedSend {
   }
   #changeResult<Value>(recallRef: string, marker: string, request: ClinikoReviewRequest, outcome: Value) {
     const value = { recallRef, outcome };
-    if (request.operation.kind === "cancel" || request.operation.kind === "reschedule") {
+    if (request.operation.kind === "cancel" || request.operation.kind === "reschedule" || request.operation.kind === "classCancel") {
       try {
-        const copy = Object.freeze({ ...request, scope: Object.freeze({ ...request.scope }), operation: Object.freeze({ ...request.operation }) });
+        const operation = structuredClone(request.operation);
+        if (operation.kind === "classCancel" && operation.pass) Object.freeze(operation.pass);
+        const copy = Object.freeze({ ...request, scope: Object.freeze({ ...request.scope }), operation: Object.freeze(operation) });
         this.#changeSources.set(value, Object.freeze({ source: Object.freeze({ recallRef, marker, request: copy }), outcome }));
       } catch { /* Optional memo provenance cannot alter the existing reviewed-send result. */ }
     }

@@ -44,6 +44,7 @@ export class ClinikoAppointmentChangeMemo {
       if (!reviewed || value.outcome?.ok !== true || !isDeepStrictEqual(reviewed.request, confirmed)) return;
       const found = this.#source(prepared, value.outcome.value), c = this.#call;
       if (!found) return; const { dispatch: d, native: n } = found, r = n.request, op = reviewed.request.operation;
+      if (op.kind !== "cancel" && op.kind !== "reschedule") return;
       if (!isDeepStrictEqual(d.scope, c.scope) || d.callId !== c.callId || d.sessionId !== c.sessionId || d.policyVersion !== c.policyVersion ||
           d.businessId !== c.businessId || d.credentialFingerprint !== c.credentialFingerprint || reviewed.request.patientId !== d.patientId ||
           !isDeepStrictEqual(reviewed.request.scope, d.scope) || reviewed.request.businessId !== d.businessId ||

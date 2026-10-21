@@ -8,6 +8,7 @@ type Observation = Readonly<{ basis: "acknowledgedAndObservedBestEffort"; observ
 export type AdministrativeMemoOutcome = Appointment & (
   | Readonly<{ kind: "bookingConfirmed" }>
   | Readonly<{ kind: "classBookingConfirmed"; attendeeRef: string }>
+  | Readonly<{ kind: "classCancellationObserved"; attendeeRef: string; verification: Observation }>
   | Readonly<{ kind: "cancellationObserved"; verification: Observation }>
   | Readonly<{ kind: "reschedulingObserved"; verification: Observation; practitionerRef: string;
       previous: Readonly<{ startsAt: string; endsAt: string; practitionerRef: string }> }>
@@ -51,6 +52,10 @@ function validOutcome(o: AdministrativeMemoOutcome, occurredAt: string, recorded
   if (!o || !interval(o)) return false;
   if (o.kind === "classBookingConfirmed") return exact(o, ["kind", "appointmentRef", "attendeeRef", "startsAt", "endsAt"]) &&
     /^cliniko:booking:[1-9][0-9]{0,18}$/.test(o.appointmentRef) && /^cliniko:attendee:[1-9][0-9]{0,18}$/.test(o.attendeeRef);
+  if (o.kind === "classCancellationObserved") return exact(o, ["kind", "appointmentRef", "attendeeRef", "startsAt", "endsAt", "verification"]) &&
+    /^cliniko:booking:[1-9][0-9]{0,18}$/.test(o.appointmentRef) && /^cliniko:attendee:[1-9][0-9]{0,18}$/.test(o.attendeeRef) &&
+    exact(o.verification, ["basis", "observedAt"]) && o.verification.basis === "acknowledgedAndObservedBestEffort" &&
+    instant(o.verification.observedAt) && o.verification.observedAt === occurredAt && o.verification.observedAt <= recordedAt;
   if (!/^cliniko:appointment:[1-9][0-9]{0,18}$/.test(o.appointmentRef)) return false;
   if (o.kind === "bookingConfirmed") return exact(o, ["kind", "appointmentRef", "startsAt", "endsAt"]);
   if (o.kind !== "cancellationObserved" && o.kind !== "reschedulingObserved") return false;
@@ -77,8 +82,8 @@ function payload(v: AdministrativeMemo): UnsignedAdministrativeMemo {
     businessId: v.businessId, credentialFingerprint: v.credentialFingerprint, patientId: v.patientId, authorRef: v.authorRef,
     policy: { version: v.policy.version, digest: v.policy.digest }, direction: v.direction,
     outcome: { kind: o.kind, appointmentRef: o.appointmentRef, startsAt: o.startsAt, endsAt: o.endsAt,
-      ...(o.kind === "classBookingConfirmed" ? { attendeeRef: o.attendeeRef } : {}),
-      ...(o.kind === "cancellationObserved" || o.kind === "reschedulingObserved" ? { verification: { basis: o.verification.basis, observedAt: o.verification.observedAt } } : {}),
+      ...(o.kind === "classBookingConfirmed" || o.kind === "classCancellationObserved" ? { attendeeRef: o.attendeeRef } : {}),
+      ...(o.kind === "cancellationObserved" || o.kind === "reschedulingObserved" || o.kind === "classCancellationObserved" ? { verification: { basis: o.verification.basis, observedAt: o.verification.observedAt } } : {}),
       ...(o.kind === "reschedulingObserved" ? { practitionerRef: o.practitionerRef,
         previous: { startsAt: o.previous.startsAt, endsAt: o.previous.endsAt, practitionerRef: o.previous.practitionerRef } } : {}) } as AdministrativeMemoOutcome,
     occurredAt: v.occurredAt, recordedAt: v.recordedAt };
@@ -87,12 +92,13 @@ function description(v: AdministrativeMemo): string {
   const o = v.outcome, range = `${o.startsAt} to ${o.endsAt} (UTC)`;
   if (o.kind === "bookingConfirmed") return `Confirmed booking ${o.appointmentRef}: ${range}.`;
   if (o.kind === "classBookingConfirmed") return `Confirmed class booking for patient attendee ${o.attendeeRef}, occurrence ${o.appointmentRef}: ${range}.`;
+  if (o.kind === "classCancellationObserved") return `Observed cancelled patient attendee ${o.attendeeRef}, class occurrence ${o.appointmentRef}: ${range}; inspected ${o.verification.observedAt}.`;
   return o.kind === "cancellationObserved" ? `Observed cancelled ${o.appointmentRef}: ${range}; inspected ${o.verification.observedAt}.` :
     `Observed ${o.appointmentRef} at ${range}, practitioner ${o.practitionerRef}, after a rescheduling request from ${o.previous.startsAt} to ${o.previous.endsAt} (UTC); inspected ${o.verification.observedAt}.`;
 }
 function frozen(v: AdministrativeMemo): AdministrativeMemo {
   const p = payload(v); Object.freeze(p.scope); Object.freeze(p.policy);
-  if (p.outcome.kind === "cancellationObserved" || p.outcome.kind === "reschedulingObserved") Object.freeze(p.outcome.verification);
+  if (p.outcome.kind === "cancellationObserved" || p.outcome.kind === "reschedulingObserved" || p.outcome.kind === "classCancellationObserved") Object.freeze(p.outcome.verification);
   if (p.outcome.kind === "reschedulingObserved") Object.freeze(p.outcome.previous);
   Object.freeze(p.outcome); return Object.freeze({ ...p, authentication: v.authentication });
 }

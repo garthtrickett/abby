@@ -139,6 +139,7 @@ export class ClinikoClassSession {
           ...(config.financial ? { financial: config.financial } : {}),
           ...(config.classPassAuthority ? { classPassAuthority: config.classPassAuthority } : {}) }) :
           config.operation === "cancel" && cancellation?.ok ? await ClinikoClassCancellationHost.create({ ...common, cancellationPolicy: cancellation.value, permission: config.classPermission,
+            ...(config.memo ? { memo: config.memo } : {}),
             ...(config.classPassCancellationAuthority ? { classPassCancellationAuthority: config.classPassCancellationAuthority } : {}) }) :
           config.operation === "reschedule" && destination?.ok && movement?.ok ? await ClinikoClassMoveHost.create({ ...common,
             sourcePolicy: classes.value, destinationPolicy: destination.value, movePolicy: movement.value, permission: config.classPermission,

@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { AdministrativeMemoAuthentication, administrativeMemoActionRef, encodeAdministrativeMemo, decodeAdministrativeMemo } from "../../src/cliniko/administrative-memo.ts";
 import { administrativeMemoInput } from "../support/administrative-memo.ts";
 
-for (const kind of ["bookingConfirmed", "reschedulingObserved", "cancellationObserved", "classBookingConfirmed"] as const)
+for (const kind of ["bookingConfirmed", "reschedulingObserved", "cancellationObserved", "classBookingConfirmed", "classCancellationObserved"] as const)
 test(`administrative ${kind} has exact canonical authenticated facts without free prose`, () => {
   const auth = new AdministrativeMemoAuthentication(randomBytes(32)), input = administrativeMemoInput(kind), signed = auth.sign(input);
   assert.ok(signed.ok); if (!signed.ok) return;
@@ -20,6 +20,15 @@ test("a class memo requires the exact patient attendee and occurrence without pa
   assert.match(content.value.split("\n")[1]!, /^Confirmed class booking for patient attendee cliniko:attendee:901, occurrence cliniko:booking:900:/);
   for (const change of [{ attendeeRef: undefined }, { attendeeRef: "cliniko:appointment:901" }, { appointmentRef: "cliniko:appointment:900" },
     { payment: "paid" }, { move: "completed" }, { patientCaseId: "811" }, { sharedClassNote: "all patients" }]) {
+    assert.equal(auth.sign({ ...input, outcome: { ...input.outcome, ...change } } as typeof input).ok, false);
+  }
+});
+
+test("a class cancellation memo retains inspected best-effort truth without a pass-release or refund claim", () => {
+  const auth = new AdministrativeMemoAuthentication(randomBytes(32)), input = administrativeMemoInput("classCancellationObserved"), signed = auth.sign(input);
+  assert.ok(signed.ok); const content = encodeAdministrativeMemo(signed.value); assert.ok(content.ok); assert.match(content.value.split("\n")[1]!, /^Observed cancelled patient attendee/);
+  for (const change of [{ attendeeRef: undefined }, { attendeeRef: "cliniko:appointment:901" }, { verification: undefined },
+    { verification: { basis: "exactAcknowledgement", observedAt: input.occurredAt } }, { refund: "paid" }, { passReleased: true }]) {
     assert.equal(auth.sign({ ...input, outcome: { ...input.outcome, ...change } } as typeof input).ok, false);
   }
 });

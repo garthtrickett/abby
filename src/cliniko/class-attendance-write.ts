@@ -27,6 +27,11 @@ export type ClinikoClassBookingAcknowledgement = Readonly<{
   selection: Readonly<{ scope: LocationScope; businessId: string; practitionerId: string; appointmentTypeId: string; credentialFingerprint: string }>;
   attendeeRef: string;
 }>;
+export type ClinikoClassCancellationAcknowledgement = Readonly<{
+  request: Extract<ClinikoAttendanceRequest, { kind: "cancel" }>;
+  selection: ClinikoClassBookingAcknowledgement["selection"];
+  attendeeRef: string;
+}>;
 /** Trusted host check, after every final account-budget wait. It must recheck
  * exact patient/session selection, independent class authority, current
  * capacity/duplicates, selected case/counters, fee/member policy, played
@@ -80,9 +85,11 @@ export class ClinikoClassAttendanceWriter {
   readonly #fetch: typeof fetch;
   readonly #attempted = new Set<string>();
   readonly #acknowledged = new WeakMap<object, ClinikoClassBookingAcknowledgement>();
+  readonly #cancelled = new WeakMap<object, ClinikoClassCancellationAcknowledgement>();
   private constructor(config: ClinikoAttendanceConfig, shard: string, fetchPort: typeof fetch) {
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }) }); this.#base = `https://api.${shard}.cliniko.com/v1`; this.#fetch = fetchPort;
     Object.defineProperty(this, "bookingAcknowledgement", { value: this.bookingAcknowledgement.bind(this) });
+    Object.defineProperty(this, "cancellationAcknowledgement", { value: this.cancellationAcknowledgement.bind(this) });
   }
   static create(config: ClinikoAttendanceConfig, fetchPort: typeof fetch = fetch): Result<ClinikoClassAttendanceWriter, ClinikoAttendanceFailure> {
     const shard = typeof config?.apiKey === "string" ? /-([a-z]{2}[0-9]{1,2})$/.exec(config.apiKey)?.[1] : undefined;
@@ -99,6 +106,11 @@ export class ClinikoClassAttendanceWriter {
   bookingAcknowledgement(receipt: unknown): ClinikoClassBookingAcknowledgement | undefined {
     if (!receipt || typeof receipt !== "object") return;
     return this.#acknowledged.get(receipt);
+  }
+  /** PATCH acknowledgement only. The owning cancellation host must separately
+   * inspect the exact cancellation and any required pass effect. */
+  cancellationAcknowledgement(receipt: unknown): ClinikoClassCancellationAcknowledgement | undefined {
+    return receipt && typeof receipt === "object" ? this.#cancelled.get(receipt) : undefined;
   }
   #headers() { return { Accept: "application/json", Authorization: `Basic ${Buffer.from(`${this.#config.apiKey}:`).toString("base64")}`,
     "Content-Type": "application/json", "User-Agent": `Abby (${this.#config.contactEmail})` }; }
@@ -161,7 +173,16 @@ export class ClinikoClassAttendanceWriter {
     } catch { return ok({ kind: "uncertain" }); }
     if (!response || stop.aborted) return ok({ kind: "uncertain" });
     if (response.status === 429) await untilAbort(observeCliniko429(this.#config.rateBudget, response.headers.get("X-RateLimit-Reset")), stop);
-    if (request.kind === "cancel") return response.status === 204 && !stop.aborted ? ok({ kind: "accepted", attendeeRef: `cliniko:attendee:${request.attendeeId}` }) : ok({ kind: "uncertain" });
+    if (request.kind === "cancel") {
+      if (response.status !== 204 || stop.aborted) return ok({ kind: "uncertain" });
+      const accepted = Object.freeze({ kind: "accepted" as const, attendeeRef: `cliniko:attendee:${request.attendeeId}` });
+      try {
+        const selection = this.selection(); this.#cancelled.set(accepted, Object.freeze({ attendeeRef: accepted.attendeeRef,
+          request: Object.freeze({ ...request, scope: Object.freeze({ ...request.scope }) }),
+          selection: Object.freeze({ ...selection, scope: Object.freeze(selection.scope) }) }));
+      } catch { /* Optional source capture cannot erase an acknowledged PATCH. */ }
+      return ok(accepted);
+    }
     if (response.status !== (request.kind === "book" ? 201 : 200)) return ok({ kind: "uncertain" });
     const body = await untilAbort(boundedClinikoJson(response), stop), row = body?.ok ? object(body.value) : undefined;
     if (!row || stop.aborted || !this.#matches(row, request)) return ok({ kind: "uncertain" });

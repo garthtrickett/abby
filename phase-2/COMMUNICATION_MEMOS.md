@@ -5,8 +5,8 @@ verified administrative booking, rescheduling and cancellation facts. Existing
 appointment and treatment notes remain untouched. This branch implements the
 native-record primitive, optional individual-booking receipt capture and optional
 observed cancellation/rescheduling capture through the approved session/voice
-compositions. Patient-specific class booking is also locally qualified; class cancellation,
-partial movement and complete recovery remain unfinished. No default configuration,
+compositions. Patient-specific ordinary/pass class booking and class cancellation are also
+locally qualified; partial movement and complete recovery remain unfinished. No default configuration,
 live write, signed voice acceptance or completed gap 13 is claimed.
 
 ## Native contract
@@ -256,11 +256,65 @@ Provider, mail, Cliniko transport and clinic grants are synthetic. Actual signed
 voice, native clinic acceptance and a full completed gap13 are not established.
 The component remains local/unpublished with default activation inactive.
 
+## Patient-specific class cancellation checkpoint, 21 October 2026
+
+The admitted ordinary and approved-pass cancellation owner now captures optional
+`classCancellationObserved` facts. The original writer privately owns its exact
+accepted attendee PATCH object; the reviewed-send owner supplies the original
+acknowledged review marker. Private successful dispatch and inspection frames
+bind the verified patient, exact attendee/occurrence, interval, account,
+policy/terms and direction. Clones, another writer, generic review success,
+uncertain native replies and foreign inspection results cannot supply this source.
+The codec explicitly records `acknowledgedAndObservedBestEffort` and the existing
+inspection time. It reports the cancelled patient attendee as observed, without
+claiming sole causation, refund, released credit or remaining pass balance.
+
+Native IO, clinical headroom/permission checks, pass inspection, the30s effect
+and existing success/uncertainty semantics are unchanged. Source capture uses
+the existing dispatch/inspection clocks; independently bounded retention cannot
+delay or replace the clinical result. Optional configuration remains inactive
+unless supplied through the approved composition. No shared-class notes or
+private durable queue are introduced.
+
+The current source cohort passes158/158 (1792565709400), including all16 new
+memo cases, existing ordinary/pass cancellation host controls, nominal source,
+codec/review and individual/class-booking memo regressions. Affected strict
+TypeScript passes (1792565724219). Whole strict and the actual692-output serving
+build pass (1792566054671,4m45s,peak1,631,252,480 B/2GiB). There is one new emitted
+cancellation fixture and seven expected changed runtime outputs, including the
+shared native writer/codec. Earlier memo SQL cohorts are historical evidence;
+their complete runtime scope is not byte-preserved by this change.
+
+All15 current emitted cancellation PostgreSQL cases pass (1792566545320,
+11m41s,zero failures/skips/cancellations). Six ordinary cases cover accepted,
+stored/unretained memo response loss, nonexact reply, producer revocation and
+lost clinical response. Each approved-pass profile (`releaseOne`, `unchanged`,
+`consumeOne`) separately passes acceptance, stored memo response loss and lost
+clinical response. A first real releaseOne acceptance also passes
+(1792566440002). A fresh actual approved-pass class-booking SQL regression passes
+against the changed shared writer/codec (1792566558922).
+
+Each case reconstructs the actual admitted class owner, private verification,
+played terms/SAM, existing clinical PATCH/inspection and original review-bound
+memo purpose. The same real SQL180 bucket accounts for verification, protected
+clinical work and memo requests. Pre-confirmation quota waits use actual elapsed
+time with lease renewal; they do not rewrite quota rows, raise the limit or
+extend the production30s effect. Numeric memo-only observations distinguish
+post-PATCH clinical inspection from memo requests and honor rolling-window expiry.
+Real SQL verification budgets and permanent purpose exclusions remain active.
+Every-column scans and complete unfiltered backups exclude the tested subject,
+proof/call/review/memo/key and private class/pass values while retaining legitimate
+unrelated aliases, staged scans and opaque effects. Owned databases/containers
+are cleaned. Node peak151,027,712 B/512MiB and external PostgreSQL peak123,256,832
+B/512MiB, CPU100% each, Swap0 and OOM/high/max0. Clinical/provider/mail transports
+and grants are synthetic. Signed acoustic, full combined runtime and real clinic
+acceptance remain separate; this component is local and unpublished.
+
 ## Work still required
 
-Extend actual source capture to patient-specific class cancellation and partial
-movement facts without writing shared-class notes or promoting partial movement
-into complete success. Ordinary/pass class booking is now locally qualified. Qualify distinct verified subjects, representative,
+Extend actual source capture to partial class movement facts without writing
+shared-class notes or promoting partial movement into complete success.
+Ordinary/pass class booking and cancellation are now locally qualified. Qualify distinct verified subjects, representative,
 financial, catalogue and actual signed incoming/outgoing voice combinations.
 Keep known clinical acknowledgement irrevocable after memo quota, permission,
 source, observer or response failures.
