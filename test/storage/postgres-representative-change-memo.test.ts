@@ -117,7 +117,13 @@ test(`actual emitted signed representative ${operation} keeps memo subject, roll
     assert.ok(proposed, JSON.stringify({ stages, flowClosed: call.flow.closed, voiceClosed: call.closed,
       lifecycle: (await call.state()).lifecycle, context: await call.flow.publicIntentContext() }));
     assert.equal(proposed.status, "awaitingConfirmation");
-    await call.mark(); await call.turn("Yes");
+    await call.mark();
+    if (operation === "cancel" && mode === "lostStored") {
+      // Exercise accelerated carrier media ahead of wall time. Every quiet
+      // batch is received before confirmation; all ordinary deadlines remain.
+      for (let batch = 0; batch < 24; batch++) await call.privateQuiet();
+    }
+    await call.turn("Yes");
     assert.equal(call.writes.length, 1);
     assert.equal(call.writeRequests[0]!.path, operation === "cancel" ? "/v1/individual_appointments/91/cancel" : "/v1/individual_appointments/91");
     const nativeNotes = f.f.recalls[0]!.notes;
