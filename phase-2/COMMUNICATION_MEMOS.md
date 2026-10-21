@@ -780,6 +780,22 @@ This adds no guardian, representative cancellation/rescheduling/class, financial
 catalogue or outgoing voice qualification. It adds no stopped-process or restore
 case; the parent's 36 restored-history cases retain their recorded scope. Real
 clinic author/content/viewer/retention, permission/source/restore, provider/mail
-and acoustic acceptance remain open. Normal parent merge and this follow-up's
-own exact-head cloud/review remain required before delivery. No default activation
+and acoustic acceptance remain open. Actual normal parent integration is recorded below; this follow-up's
+own publication/exact-head cloud/review remain required before delivery. No default activation
 or completed thirteen-gap goal is claimed.
+
+## Normally merged memo parent and subject qualification integration
+
+PR #578/exactd72dd74 passed all eight push/PR jobs; complete raw logs are
+archived. It normally merged as main7a539010914c846b006222717f14c254aab7f1f4
+at17:32:19UTC. That actual main tree exactly equals the qualified d72 parent;
+this signed representative-booking follow-up now incorporates the normal merge.
+Only reviewed documentation status changes: all qualified code, runtime inputs,
+dependencies, emitted roots and720 artifact hashes stay unchanged. Current55
+source controls and four independently canaried signed SQL cases retain their
+recorded scopes; no rebuild, duplicate runtime run or broader acceptance is
+inferred. Fresh facts/scenario/source/naming/artifact/cleanup guards precede
+this follow-up's own publication and exact-head cloud/review. Actual merged-main
+checks are separately tracked and are not inferred green from the PR's checks.
+The full thirteen-gap objective and actual clinic/provider/mail/acoustic/source/
+restore acceptance remain open. No default activation or live traffic.
