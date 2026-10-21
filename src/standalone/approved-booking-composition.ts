@@ -15,7 +15,7 @@ import type { CallerVerificationSession } from "./caller-verification-session.ts
 
 export type ApprovedBookingComposition = Readonly<{ offers: ClinikoBookingOffers;
   host: ClinikoBookingHost | ClinikoCatalogueBookingHost; dispose(): void }>;
-type Config = Pick<ClinikoBookingSessionConfig, "receipt" | "sessionId" | "policyVersion" | "cliniko" | "ledger" | "policies" | "bookingApprovalPath" | "directory" | "catalogue" | "timeoutMs" | "fetchPort" | "financial"> & Readonly<{ clock: () => string; outbound?: ClinikoOutboundClinicalContext }>;
+type Config = Pick<ClinikoBookingSessionConfig, "receipt" | "sessionId" | "policyVersion" | "cliniko" | "ledger" | "policies" | "bookingApprovalPath" | "directory" | "catalogue" | "timeoutMs" | "fetchPort" | "financial" | "memo"> & Readonly<{ clock: () => string; outbound?: ClinikoOutboundClinicalContext }>;
 
 /** Share exact approved member selection and native write guards for returning
  * and newly registered patients; the caller owns the operation-specific proof. */
@@ -50,7 +50,7 @@ export async function createApprovedBookingComposition(config: Config, terms: Ow
       policyVersion: config.policyVersion, ledger: config.ledger, policy: config.policies, proof: verification.proof, ...(config.outbound ? { outboundBooking: config.outbound } : {}), authority: catalogue ? catalogueBookingAuthority(authority, catalogue, scope, config.cliniko.practitionerId) : authority,
       menu,
       timeZone: config.cliniko.timeZone, recallTypeId: config.cliniko.recallTypeId, writer: booking.value,
-      recallWriter: recalls.value, ...(config.financial ? { financial: config.financial } : {}), clock: config.clock });
+      recallWriter: recalls.value, ...(config.financial ? { financial: config.financial } : {}), ...(config.memo ? { memo: config.memo } : {}), clock: config.clock });
     resources.push(host);
     if (config.catalogue && catalogue && profile?.ok) {
       const members = [{ practitionerId: config.cliniko.practitionerId, name: profile.value.practitioners[0]!.name, host }];
@@ -72,7 +72,7 @@ export async function createApprovedBookingComposition(config: Config, terms: Ow
           policyVersion: config.policyVersion, ledger: config.ledger, policy: config.policies, proof: verification.proof, ...(config.outbound ? { outboundBooking: config.outbound } : {}),
           authority: catalogueBookingAuthority(offers.value, catalogue, scope, member.practitionerId), menu: selectionMenu,
           timeZone: selection.timeZone, recallTypeId: selection.recallTypeId, writer: writer.value,
-          recallWriter: recalls.value, ...(config.financial ? { financial: config.financial } : {}), clock: config.clock }); resources.push(selectionHost);
+          recallWriter: recalls.value, ...(config.financial ? { financial: config.financial } : {}), ...(config.memo ? { memo: config.memo } : {}), clock: config.clock }); resources.push(selectionHost);
         members.push({ practitionerId: member.practitionerId, name: profile.value.practitioners[index]!.name, host: selectionHost });
       }
       host = new ClinikoCatalogueBookingHost({ scope, callId: config.receipt.callId, sessionId: config.sessionId, policyVersion: config.policyVersion,

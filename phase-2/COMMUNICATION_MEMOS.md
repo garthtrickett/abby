@@ -2,10 +2,11 @@
 
 The owner selected separate confidential Cliniko communication memos for
 verified administrative booking, rescheduling and cancellation facts. Existing
-appointment and treatment notes remain untouched. This branch currently
-implements a native-record primitive; trusted clinical receipt capture,
-workflow integration and complete recovery remain unfinished. No default
-configuration, live write or completed gap 13 is claimed.
+appointment and treatment notes remain untouched. This branch implements the
+native-record primitive and optional individual-booking receipt capture through
+the approved booking/voice compositions. Rescheduling, cancellation, per-patient
+class outcomes and complete recovery remain unfinished. No default configuration,
+live write, signed voice acceptance or completed gap 13 is claimed.
 
 ## Native contract
 
@@ -65,22 +66,91 @@ and grants are synthetic; these cases do not prove an actual clinical receipt
 or host integration. Own databases are isolated and cleaned, CPU/RAM bounded,
 swap disabled and OOM/high/max counters zero.
 
+## Individual booking integration, 21 October 2026
+
+The actual native writer registers an immutable acknowledgement in its private
+WeakMap before its existing observer. A cloned receipt, public completed flag,
+later diary match or different writer cannot supply this provenance. The actual
+booking guard separately retains the verified dispatch subject, account,
+clinical digest, interval and original admission direction. Existing inbound
+admissions omit a direction field; their established inbound shape is mapped to
+received memos. Only both owning objects together can produce the memo facts.
+
+`ClinikoBookingMemo` captures the original preparation before reviewed send,
+then joins that private dispatch source to the actual writer acknowledgement.
+It adds no native, permission or database read after final availability. The
+optional configuration passes through returning-patient and registration-to-
+booking compositions, including catalogue members and incoming/outgoing voice
+owners. Clinic ports are captured before asynchronous workflow selection and
+must match the actual account and physical budget. No environment flag, public
+command or default mounting enables memos.
+
+A held-permission test first failed against the awaited memo path
+(1792555233934, one real assertion failure, no skips/cancellations). The corrected
+host returns its known clinical result while the separately bounded memo lifetime
+continues. Its existing independent service signal, whole deadline, native
+budget, permanent purpose and private outcome observer remain in force. This
+volatile bounded operation is not a durable private queue or retry journal.
+Memo failure, revocation, quota, observer failure or clinical-owner disposal
+cannot erase the booking, repeat it or delay confirmation until the memo deadline.
+
+Current host/session controls pass 21/21 (1792555308209), including the same held
+permission case, exact subject, response loss, denied producer/current grants,
+physical quota exhaustion and disposal immediately after native acknowledgement.
+The current affected strict graph passes (1792555308456). Earlier approved
+booking/intake preservation controls passed within 45/45 (1792554062621); their
+scope predates the final nonblocking change. Whole strict and the initial
+687-output build passed (1792554809185); that pre-latency source snapshot is
+preserved separately. The current actual serving rebuild passes (1792555449127,
+1m45s): only the host and its memo-session fixture outputs differ, with all other
+685 output bytes preserved. Final current whole-tree TypeScript passes
+(1792555799100, 3m07s, peak 1,648,001,024 B/2 GiB, Swap0/OOM-high-max0).
+This component remains local and unpublished; facts, source, naming, artifact
+and cleanup guards still precede its checkpoint commit.
+
+Ten current emitted/PostgreSQL cases pass together (1792555571529, 55s): the
+five preserved native-primitive cases and five actual approved booking-session
+cases for accepted, stored/unretained response loss, nonexact memo reply and
+producer revocation after clinical send. The latter reconstruct actual file
+approvals, registered-channel synthetic OTP, played menu/SAM, exact native
+booking and the independently permitted memo using the emitted runtime. One
+real SQL API-user bucket accounts for every clinical/verification request and
+the memo; real verification budgets and permanent purpose exclusions are used.
+Every-column scans and complete unfiltered dumps retain legitimate unrelated
+phone aliases, staged scans and opaque effects. The tested flow's acted-on patient
+ID, memo content, private proof, transcript, key and communication payload remain
+outside local persistence. Owned
+databases are cleaned; Node peak 172,376,064 B/1 GiB and external PostgreSQL peak
+169,263,104 B/512 MiB, CPU100% each, Swap0/OOM-high-max0. Provider, mail and clinic
+grants are synthetic. These are session/host checks, not a signed acoustic or
+real clinic acceptance result.
+
+The Karen reference was rechecked at its maintained sibling location. Its
+Cliniko endpoint/category/type corroborate the native primitive. Its transcript,
+phone-target and default confidentiality behavior does not supply Abby's chosen
+administrative content or verified subject authority; the documented loss of an
+acted-on patient is retained as an adversarial requirement.
+
 ## Work still required
 
-Bind rendering and the native producer to actual nominal acknowledgements from
-the verified workflow owner. Cover booking, rescheduling, cancellation and
-approved per-patient class facts without writing shared-class notes or promoting
-partial movement into complete success. Keep known clinical acknowledgement
-irrevocable after memo quota, permission, source, observer or response failures.
+Extend actual nominal receipt capture to rescheduling, cancellation and approved
+per-patient class facts without writing shared-class notes or promoting partial
+movement into complete success. Qualify distinct verified subjects, representative,
+financial, catalogue and actual signed incoming/outgoing voice combinations.
+Keep known clinical acknowledgement irrevocable after memo quota, permission,
+source, observer or response failures.
 Exact clinic templates, local presentation, author, confidentiality/viewer roles,
 retention and per-operation permissions remain separate requirements.
 
 Add independently permitted complete native history, protected original-bound
 recovery without lost local references, process-loss and full logical-restore
 proofs. Retain all-column/raw-backup privacy and real physical-budget admission.
-Then qualify the actual combined host/serving paths, update operator facts and
-scenarios, and complete normal parent integration, exact-head cloud checks and
-review before publication. Attachments and other storage types stay separate.
+Then qualify the actual combined host/serving paths, keep operator facts and
+scenarios current, and complete normal parent integration, exact-head cloud
+checks and review before publication. The memo branch is based on normally
+merged PR576/main1c; later normally merged outbound PR575/577 are tracked
+independently and still need integration into this candidate. Attachments and
+other storage types stay separate.
 
 Outbound complete no-stop/private/all-ASR reporting and real acoustic/provider/
 clinic acceptance remain open. Independent memo engineering does not close or

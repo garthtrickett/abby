@@ -1,4 +1,5 @@
 import { createApprovedBookingComposition } from "./approved-booking-composition.ts";
+import { captureBookingMemoConfig } from "./cliniko-booking-memo.ts";
 import type { ApprovedBookingComposition } from "./approved-booking-composition.ts";
 import { OwnerFileBookingCatalogue } from "./owner-file-booking-catalogue.ts";
 import type { ClinikoBookingSessionConfig } from "./cliniko-booking-session.ts";
@@ -19,6 +20,7 @@ import { OwnerFileBookingPolicy } from "./owner-file-booking-policy.ts";
 
 export type ClinikoIntakeBookingSessionConfig = Omit<ClinikoIntakeSessionConfig, "ledger" | "cliniko" | "policies"> & Readonly<{
   financial?: NonNullable<ClinikoBookingSessionConfig["financial"]>;
+  memo?: NonNullable<ClinikoBookingSessionConfig["memo"]>;
   catalogue?: NonNullable<ClinikoBookingSessionConfig["catalogue"]>;
   ledger: LedgerStore; policies: PolicyStore; directory: AdminDirectory; bookingApprovalPath: string; bookingPermission: PatientVerificationPermission;
   cliniko: ClinikoIntakeSessionConfig["cliniko"] & Readonly<{ businessId: string; practitionerId: string; appointmentTypeId: string;
@@ -51,6 +53,8 @@ export class ClinikoIntakeBookingSession extends NoStoredKnowledge implements In
           (incoming.timeoutMs !== undefined && (!Number.isSafeInteger(incoming.timeoutMs) || incoming.timeoutMs < 1 || incoming.timeoutMs > 20_000))) return denied();
       const config = Object.freeze({ ...incoming, receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound),
         cliniko: Object.freeze({ ...incoming.cliniko }),
+        ...(incoming.memo ? { memo: captureBookingMemoConfig(incoming.memo, { scope: incoming.receipt.scope, ...incoming.cliniko,
+          credentialFingerprint: clinikoCredentialFingerprint(incoming.cliniko.apiKey), ...(incoming.clock ? { clock: incoming.clock } : {}) }) } : {}),
         ...(incoming.catalogue ? { catalogue: Object.freeze({ ...incoming.catalogue, practitioners: Object.freeze(incoming.catalogue.practitioners.map(member => Object.freeze({ ...member }))) }) } : {}), clock: incoming.clock ?? (() => new Date().toISOString()) });
       const binding = config.policy.binding(), scope = config.receipt.scope;
       if (binding.businessId !== config.cliniko.businessId || binding.timeZone !== config.cliniko.timeZone || binding.countryCallingCode !== config.cliniko.countryCallingCode) return denied();

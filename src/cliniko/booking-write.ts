@@ -35,6 +35,13 @@ export type ClinikoBookingWrite =
   | Readonly<{ kind: "accepted"; appointmentRef: string }>
   | Readonly<{ kind: "uncertain" }>;
 
+/** Transient exact native acknowledgement, not patient verification or a memo
+ * grant. Only the issuing writer can recognize its actual receipt object. */
+export type ClinikoAcknowledgedBooking = Readonly<{
+  request: ClinikoBookingRequest; selection: ClinikoBookingSelection;
+  credentialFingerprint: string; appointmentRef: string;
+}>;
+
 export type ClinikoBookingObservation = Readonly<{ scope: LocationScope; observedAt: string }> & (
   | Readonly<{ kind: "none" | "ambiguous" | "mismatch" }>
   | Readonly<{ kind: "one"; appointmentRef: string; active: boolean }>
@@ -143,6 +150,7 @@ export class ClinikoBookingWriter {
   private readonly clock: () => string;
   private readonly attempted = new Set<string>();
   private readonly credentialHash: string;
+  readonly #acknowledgements = new WeakMap<object, ClinikoAcknowledgedBooking>();
 
   private constructor(config: ClinikoBookingConfig, shard: string, fetchPort: typeof fetch, clock: () => string) {
     this.scope = structuredClone(config.scope);
@@ -155,6 +163,7 @@ export class ClinikoBookingWriter {
     this.fetchPort = fetchPort;
     this.clock = clock;
     this.credentialHash = clinikoCredentialFingerprint(config.apiKey);
+    Object.defineProperty(this, "acknowledgement", { value: this.acknowledgement.bind(this) });
   }
 
   static create(config: ClinikoBookingConfig, fetchPort: typeof fetch = fetch,
@@ -177,6 +186,18 @@ export class ClinikoBookingWriter {
   }
 
   credentialFingerprint(): string { return this.credentialHash; }
+
+  /** No structural clone, later diary match or another writer's receipt can
+   * acquire this private native provenance. No credential or content is logged. */
+  acknowledgement(receipt: unknown): ClinikoAcknowledgedBooking | undefined {
+    try {
+      if (!receipt || typeof receipt !== "object" || Array.isArray(receipt) ||
+          Object.keys(receipt).sort().join(",") !== "appointmentRef,kind") return;
+      const known = this.#acknowledgements.get(receipt);
+      const value = receipt as Partial<Extract<ClinikoBookingWrite, { kind: "accepted" }>>;
+      return known && value.kind === "accepted" && value.appointmentRef === known.appointmentRef ? known : undefined;
+    } catch { return; }
+  }
 
   /** Read current provider conflicts; a clear result is not a reservation or atomic exclusion. */
   async inspectConflicts(appointmentRef: string, signal?: AbortSignal, beforeRead?: (signal: AbortSignal) => Promise<boolean>):
@@ -275,6 +296,13 @@ export class ClinikoBookingWriter {
       return ok({ kind: "uncertain" });
     }
     const accepted = { kind: "accepted" as const, appointmentRef: `cliniko:appointment:${row.id}` };
+    try {
+      this.#acknowledgements.set(accepted, Object.freeze({
+        request: Object.freeze({ ...request, scope: Object.freeze({ ...request.scope }) }),
+        selection: Object.freeze({ ...this.config, scope: Object.freeze({ ...this.scope }) }),
+        credentialFingerprint: this.credentialHash, appointmentRef: accepted.appointmentRef,
+      }));
+    } catch { /* Optional downstream provenance cannot erase native success. */ }
     // Establish the exact receipt before returning across asynchronous wrappers.
     // An observer is not allowed to erase native success or permit another POST.
     try { onAccepted?.(Object.freeze(accepted)); } catch { /* Receipt remains established. */ }

@@ -3,6 +3,7 @@ import { ClinikoOutboundClinicalContext } from "./cliniko-outbound-clinical-cont
 import { createWorkflowCallerVerification } from "./workflow-caller-verification.ts";
 import type { RepresentativeWorkflowSelection } from "./workflow-caller-verification.ts";
 import { createApprovedBookingComposition } from "./approved-booking-composition.ts";
+import { captureBookingMemoConfig } from "./cliniko-booking-memo.ts";
 import type { ApprovedBookingComposition } from "./approved-booking-composition.ts";
 import { OwnerFileBookingCatalogue } from "./owner-file-booking-catalogue.ts";
 import { ClinikoCatalogueBookingHost } from "./cliniko-catalogue-booking-host.ts";
@@ -34,6 +35,7 @@ export type ClinikoBookingSessionConfig = Readonly<{
     contactRevision?: import("../cliniko/contact-revision.ts").ClinikoContactRevisionReader }>;
   catalogue?: Readonly<{ approvalPath: string; practitioners: readonly Readonly<{ practitionerId: string; bookingApprovalPath: string }>[]; serviceBinding?: BookingServiceBinding; initialSearchPreference?: import("../core/booking-search-preference.ts").BookingSearchPreference }>;
   financial?: import("./cliniko-financial-booking-preparation.ts").FinancialBookingPreparationConfig;
+  memo?: import("./cliniko-booking-memo.ts").ClinikoBookingMemoConfig;
   representative?: RepresentativeWorkflowSelection;
   signal: AbortSignal; fetchPort?: typeof fetch; clock?: () => string; timeoutMs?: number;
 }>;
@@ -90,6 +92,8 @@ export class ClinikoBookingSession {
       // Freeze caller/provider bindings before the first async approval read.
       const config = Object.freeze({ ...incoming, ...(incoming.representative ? { representative: Object.freeze({ ...incoming.representative }) } : {}), receipt: structuredClone(incoming.receipt), ...(incoming.inbound ? { inbound: structuredClone(incoming.inbound) } : {}),
         cliniko: Object.freeze({ ...incoming.cliniko }),
+        ...(incoming.memo ? { memo: captureBookingMemoConfig(incoming.memo, { scope: incoming.receipt.scope, ...incoming.cliniko,
+          credentialFingerprint: clinikoCredentialFingerprint(incoming.cliniko.apiKey), ...(incoming.clock ? { clock: incoming.clock } : {}) }) } : {}),
         ...(incoming.catalogue ? { catalogue: Object.freeze({ ...incoming.catalogue, ...(incoming.catalogue.initialSearchPreference ? { initialSearchPreference: Object.freeze({ ...incoming.catalogue.initialSearchPreference }) } : {}), practitioners: Object.freeze(incoming.catalogue.practitioners.map(member => Object.freeze({ ...member }))) }) } : {}), clock: incoming.clock ?? (() => new Date().toISOString()) });
       const scope = config.receipt.scope, fetchPort = config.fetchPort ?? fetch;
       const stopped = new Promise<undefined>(resolve => {
