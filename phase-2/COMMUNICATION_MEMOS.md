@@ -631,8 +631,7 @@ remain open. No default activation or live traffic.
 ## Work still required
 
 The current individual/class source producers and partial movement reports have
-local scoped qualification. Qualify distinct verified subjects, representative,
-financial, catalogue and actual signed incoming/outgoing voice combinations.
+local scoped qualification. The signed incoming adult-representative individual-booking subset is qualified below. Guardian, multi-subject/other-operation/class, financial, catalogue and other signed incoming/outgoing voice combinations remain separate.
 Keep known clinical acknowledgement irrevocable after memo quota, permission,
 source, observer or response failures.
 Exact clinic templates, local presentation, author, confidentiality/viewer roles,
@@ -705,3 +704,98 @@ financial/catalogue/actual signed incoming/outgoing voice, complete no-stop/
 private/all-ASR or real clinic author/viewer/retention/source/restore acceptance.
 Own exact-head cloud/review and normal merge remain required. No default mounting,
 live traffic or completed thirteen-gap goal is claimed.
+
+## Signed adult representative booking memos, 21 October 2026
+
+The separate follow-up to draft PR578 qualifies an incoming adult representative
+booking through the actual reusable clinical host and signed HTTP/WebSocket
+serving composition. The caller and selected patient receive separate registered
+channel challenges. Private identity fields never become ordinary model turns;
+played patient readback and booking consent precede the one native creation.
+The native receipt and private dispatch bind the memo to that selected patient,
+never the verified caller or another related person. Other patient grants and
+withdrawn memo permission suppress only memo retention; the known booking stays
+confirmed. Stored memo response loss remains uncertain, with a spent SQL purpose
+and no additional clinical write or memo POST when the caller asks for its outcome.
+
+Current source controls pass 55/55 across 11 files (1792601160370,5m10s,peak151,691,264 B/
+512MiB), including the new owner controls, existing representative selection/
+workflow/change/task checks and canary safeguards. Full strict TypeScript and
+720 serving outputs pass (1792601161819,4m04s,peak1,684,189,184 B/2GiB).
+A subsequent affected strict/serving rebuild passes (1792601621814,2m20s,
+peak1,146,761,216 B/2GiB), and the final nonemitted SQL driver graph passes
+(1792601830276,1m18s,peak860,438,528 B/1GiB). Only two test-helper outputs differ
+from the 717 parent, with three added fixtures; all production and the other 715
+parent outputs match. Source55 dependency bytes stay unchanged across the
+unreferenced signed-fixture/nonemitted-driver overlay; no fresh wider source
+count is inferred.
+
+The first emitted accepted probe failed at host construction (1792601468726):
+the fixture omitted the reusable host's required private representative
+transcription factory. No caller/native/memo/privacy assertion was reached.
+The correction shares the same existing private factory between host and fixture
+composition. It changes no production guard. Earlier private-config types failed
+only to resolve Node declarations; explicit prospective typeRoots corrected it.
+All failed runners and source/output pins are retained.
+
+Four actual emitted signed/PostgreSQL cases pass: accepted 1 (1792601828832,30s)
+and wrong-patient-grant/withdrawn/lost-stored-ACK 3 (1792601970053,54s), zero
+failures/skips/cancellations. The actual account SQL180 budget, real caller and
+patient verification budgets, permanent memo purpose and whole deadlines remain
+active. Source time follows real elapsed time; the memo clock additionally uses
+the serving fixture's actual media/source clock. Provider, mail, clear-final ASR
+and clinic grants remain explicitly synthetic.
+
+Distinct native canary patient IDs are configured before relationship/selection
+setup, preserving existing default fixture identities. After actual call cleanup,
+every-column and unfiltered full-backup scans cover caller/subject IDs, private
+names/dates/emails/phones/ASR fields/codes, verification/call/session refs, native
+review/source roots, memo payload/MAC and key. Model/transcript/intent and actual
+command-progress projections are checked separately from private internal
+clinical state. Legitimate unrelated phone aliases, staged scans and opaque
+effects remain in the complete database/backup. Node and external PostgreSQL
+have separate 512 MiB/CPU100%/Swap0 caps and all OOM/high/max counters stay zero;
+owned databases, containers and private fixture folders are cleaned.
+
+Review of local `07dd800` found one P2 evidence gap: the denied-retention
+modes obtained the native source marker only from memo POSTs, which they
+correctly suppress. Those earlier four passes do not cover that missing canary.
+The nonemitted driver now independently observes the actual native booking notes,
+requires their exact UUIDv4 marker in every mode, probes both full notes and marker
+in public output, every SQL column and the unfiltered raw backup, and requires any
+posted memo sourceActionRef to equal the independently observed native marker.
+Read-only spec follow-up confirms the finding is closed without weakening scope;
+Standards review found no breaches or actionable smells.
+
+The corrected complete four-mode emitted signed SQL/privacy run passes
+(1792602775930,54s; Node peak168,853,504 B and PostgreSQL peak127,062,016 B,
+separate512MiB/CPU100%/Swap0 caps; zero OOM/high/max events).
+Affected strict TypeScript also passes (1792602777380,1m15s).
+All720 runtime outputs and the selected55 source-test dependency bytes remain
+unchanged. These four current cases supersede the earlier SQL privacy witness
+for this driver; they are not four additional acceptance scenarios. Historical
+results and the original review remain preserved.
+
+This adds no guardian, representative cancellation/rescheduling/class, financial,
+catalogue or outgoing voice qualification. It adds no stopped-process or restore
+case; the parent's 36 restored-history cases retain their recorded scope. Real
+clinic author/content/viewer/retention, permission/source/restore, provider/mail
+and acoustic acceptance remain open. Actual normal parent integration is recorded below; this follow-up's
+own publication/exact-head cloud/review remain required before delivery. No default activation
+or completed thirteen-gap goal is claimed.
+
+## Normally merged memo parent and subject qualification integration
+
+PR #578/exactd72dd74 passed all eight push/PR jobs; complete raw logs are
+archived. It normally merged as main7a539010914c846b006222717f14c254aab7f1f4
+at17:32:19UTC. That actual main tree exactly equals the qualified d72 parent;
+this signed representative-booking follow-up now incorporates the normal merge.
+Only reviewed documentation status changes: all qualified code, runtime inputs,
+dependencies, emitted roots and720 artifact hashes stay unchanged. Current55
+source controls and four independently canaried signed SQL cases retain their
+recorded scopes; no rebuild, duplicate runtime run or broader acceptance is
+inferred. Fresh facts/scenario/source/naming/artifact/cleanup guards precede
+this follow-up's own publication and exact-head cloud/review. Actual merged-main
+checks are separately tracked and are not inferred green from the PR's checks.
+The full thirteen-gap objective and actual clinic/provider/mail/acoustic/source/
+restore acceptance remain open. No default activation or live traffic.
