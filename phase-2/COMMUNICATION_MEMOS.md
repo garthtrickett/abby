@@ -799,3 +799,152 @@ this follow-up's own publication and exact-head cloud/review. Actual merged-main
 checks are separately tracked and are not inferred green from the PR's checks.
 The full thirteen-gap objective and actual clinic/provider/mail/acoustic/source/
 restore acceptance remain open. No default activation or live traffic.
+
+## Signed outgoing original-patient administrative memos, 21 October 2026
+
+Earlier local637534b qualified the optional outgoing prepared-clinical composition
+for original-patient follow-up individual booking and exact sick-day individual
+cancellation/rescheduling. Actual signed HTTP/WebSocket greeting, private keypad
+verification, played clinical confirmation and native receipt/observation precede
+independently granted memo retention. Every posted memo identifies the verified
+original patient and actual outbound direction; booking uses the independently
+observed native booking marker, while observed changes use the strict original
+review marker. Those native roots are independently privacy canaries even when
+the memo grant is denied. These tests do not release a contact or call-capacity
+hold or establish complete no-stop/private/all-ASR finality.
+
+For each operation, accepted retention, wrong-patient producer grant, withdrawn
+memo permission and stored-but-lost memo acknowledgement are exercised. Denial
+suppresses retention without erasing known clinical success. Lost memo ACK stays
+uncertain; duplicate queries cannot repeat the clinical mutation or one-use memo
+purpose. Cancellation/rescheduling retain acknowledged-and-observed best-effort
+meaning. This adds no financial, atomic-diary or appointment-capacity promise.
+
+Current source work1792603533927 passes48/48 in six files (2m25s,
+peak170,172,416 B/512MiB): the twelve new signed cases plus existing outgoing
+clinical/cancellation/financial, representative memo and verification-code
+canary controls. Whole strict TypeScript and actual721-output serving build pass
+(1792603535383,3m39s,peak1,693,466,624 B/2GiB). Relative to the qualified720
+parent, only the outgoing voice and verification-code test helpers change, with
+one added shared outgoing-memo fixture. Every production output and the other718
+parent outputs are byte-identical. New fixture options have actual source/SQL
+consumers; earlier callers keep their original defaults. The new paths opt into
+real elapsed wall time alongside the fixture's actual media clock.
+
+Only the nonemitted SQL driver was refined afterward to probe independent native
+context UUIDs, carrier secrets and memo MACs rather than relying solely on whole
+payload canaries. Its affected strict graph passes (1792603796475,58s,
+peak686,026,752 B/1GiB). All721 outputs and selected48 source dependencies remain
+unchanged; no duplicate build/source run is claimed. The initial inline signed
+three-operation smoke and affected types passed before shared-helper extraction
+and these SQL/clock refinements; they are preserved as historical prototypes.
+
+Actual emitted signed/PostgreSQL work passes all twelve cases: accepted3
+(1792603795020,37s) and remaining wrong-grant/withdrawn/lost-ACK9
+(1792603888177,1m04s), zero failures/skips/cancellations. Each case owns a fresh
+migrated database and uses the real native180 account budget, actual SQL
+verification quotas, call-session exclusion and permanent memo purpose. Public
+projections, every SQL column and an unfiltered complete raw backup are checked
+for private input/identity/contact, proof/call/session, actual native source roots,
+original routing context/UUIDs, carrier keys and memo payload/MAC/key material.
+Legitimate unrelated phone aliases, staged scans and opaque effects remain.
+Node and external PostgreSQL have separate512MiB/CPU100%/Swap0 caps; peaks are
+165,490,688 B and170,573,824 B for Node across the two runs. All OOM/high/max
+counters are zero, and owned databases/containers/fixture folders are cleaned.
+There is no new process kill or logical-restore case in this cohort.
+
+Clinic/native/carrier/mail, clear-final ASR and grants remain synthetic. Guardian,
+representative/class/financial/catalogue combinations, outgoing clinical-response
+uncertainty, complete negative finality and actual clinic/provider/acoustic/source/
+restore acceptance are separate. PR578 normally merged after eight green jobs;
+actual-main checks remain independent. Representative PR579 is published and
+still has its own current cloud/normal-merge gate. This local follow-up integrates
+that exact parent with qualification inputs preserved, but remains unpublished
+until its actual normal parent and own review/cloud gates. No default activation
+or completed thirteen-gap goal is claimed.
+
+## Outgoing clinical-response uncertainty, 21 October 2026
+
+Current qualification additionally covers clinical response loss in actual signed
+outgoing booking, cancellation and rescheduling. Each synthetic native endpoint
+performs its mutation before losing the response. Abby retains uncertainty and
+writes no memo or memo purpose. A separately budgeted diagnostic GET verifies
+that the native change exists, without supplying that observation back to Abby;
+a later caller outcome question still cannot promote the result or repeat either
+clinical or memo writes. Existing known acknowledgements remain committed despite
+the separate denied or lost memo-retention outcomes.
+
+The first three-case probe passed booking and failed two diagnostic-oracle calls
+(1792605054418,1/3): those calls omitted the base fixture's required redirect
+refusal. Clinical uncertainty/no-memo checks preceded the diagnostic failure.
+The oracle now charges the same physical budget and supplies redirect:error,
+the normal Basic/User-Agent/Accept headers and a bounded signal; no provider
+assertion or production guard is removed. The corrected three-case source probe
+passes (1792605152940). Failed inputs, runner and log remain frozen.
+
+Current full six-file source qualification passes51/51 (1792605200405), zero
+failures/skips/cancellations. Whole strict TypeScript and actual721 output rebuild
+pass (1792605201842,3m48s,peak1,663,459,328 B/2GiB). Only outgoing-clinical-voice
+and outgoing-memo test helpers differ from637534b; all production and the other719
+outputs remain byte-identical. No unqualified source/artifact overlay is used.
+
+All fifteen current emitted signed/PostgreSQL cases pass: clinical-response-loss3
+(1792605494854,34s,Node peak158,371,840 B) and preserved known-clinical12
+(1792605583624,1m41s,Node peak178,847,744 B). The actual 180 budget, SQL verification,
+session exclusions and permanent memo purposes remain active. Diagnostic reads
+are explicitly charged; no limit, deadline, scanner or failure assertion changes.
+The same every-column and complete-unfiltered-backup/output privacy probes retain
+independent native markers/context/keys/proof/call/session canaries and unrelated
+legitimate aliases/scans/effects. Node and external PostgreSQL remain separately
+bounded512MiB/CPU100%/Swap0; all OOM/high/max counters are zero and owned resources
+are cleaned. This is one current fifteen-case scope, not a sum with the earlier
+twelve. No new killed-sender or logical restore is claimed.
+
+Remote services, clear-final ASR and grants remain synthetic. Representative
+PR579's actual normal merge and this follow-up's current review/publication/cloud
+remain separate gates. Broader subjects/classes/financial/catalogue combinations,
+complete no-stop/private/all-ASR and real clinic/provider/mail/acoustic/source/
+restore acceptance stay open. No default activation or completed execution goal.
+
+## Signed representative individual changes, 21 October 2026
+
+This test-only follow-up qualifies the optional incoming adult-representative individual cancellation and rescheduling composition, alongside the preserved original-patient outgoing memo cohort. Caller and selected patient receive separate registered-channel codes; current independent authority, public menus and actually played SAM precede the one native change. The memo is confidential and bound to the selected patient and original native review marker, never the caller or another related patient.
+
+Both operations cover accepted retention, another-patient producer grant, withdrawn memo permission, stored memo with lost ACK and lost clinical ACK. Independent memo denial or uncertainty cannot erase a known clinical outcome. A lost clinical response remains uncertain/needsReview with no memo or consumed memo purpose, even when a separately charged diagnostic observes matching native state. The clinical action and spent memo purpose cannot replay. Source controls also preserve truthful uncertainty when an accelerated reschedule exhausts its actual 180-request rolling window after its one PATCH.
+
+Original37dd909 qualification used71 actual source controls across9 disjoint files on one frozen source graph:32 representative/permission/canary controls (1792607862760) and39 outgoing controls (1792608037975), zero failed, cancelled or skipped. This is a current deduplicated union, not a sum of historical component claims. Whole strict TypeScript and 722 serving outputs pass (1792607864205,4m15s,peak1,695,264,768 B/2GiB). From the prior 721 outputs, only the finite direct-SQL verification-canary test helper changes and representative-change-call.js is added. All production bytes and the other 720 outputs are exact.
+
+That original compiled signed SQL cohort contained25 distinct cases: 15 preserved outgoing cases (1792608235090) and 10 representative cancellation/rescheduling cases (1792608800588). Each uses fresh migrated disposable PostgreSQL, the actual shared native180 budget, persisted caller/patient verification accounting, permanent memo exclusions and the real signed HTTP/WS/reusable clinical host. Every-column and unfiltered full logical-dump privacy include independent native source markers and context, separate private codes/identities, memo content/MAC/key and transport credentials; legitimate unrelated index/staged-scan/effect state is retained. The earlier1-case paced accepted smoke is not added to the25.
+
+Positive paced reschedules keep actual elapsed time, normal session renewals and steady20ms carrier silence advancing under the existing two played pause notices and a presence turn. They ask for a current target range; no quota, stale-turn, silence, lease, proof, policy, action or memo deadline is weakened. Earlier failed probes retained wrong decoded-review and private-state/public-receipt assertions, accelerated quota exhaustion, an unrenewed direct fixture lease, a stale initial search range and a signed caller that waited without advancing carrier frames. These are preserved failures, not a release claim. Fixed-stage diagnostics expose codes/counts/timing and existing public workflow state, never private identities or native rows. The final nonemitted SQL-driver correction keeps all 71 selected source dependencies and 722 runtime bytes unchanged and passes its affected strict check (1792608640535).
+
+PR #579 normally merged as main 9f242cde after all eight exact-fbf2 jobs passed and full raw logs were archived; its actual merged-main checks remain independently tracked. This follow-up integrates that normal parent with every qualified source/runtime byte preserved. Delivery remains subject to current facts/scenario/naming/source guards, separate Standards/Spec review, its own publication and exact-head cloud jobs. Remote Cliniko/carrier/mail/ASR and clinic grants remain synthetic. No new sender SIGKILL or logical restore is claimed here. Guardian, multi-subject/class/financial/catalogue variants, complete no-stop/private/all-ASR and real clinic/source/carrier/mail/acoustic/retention acceptance remain open. No deployment or default activation follows.
+
+## Signed-call media epoch regression, 21 October 2026
+
+The original PR #580 head37dd909 passed its four PR jobs but its push PostgreSQL job failed the representative cancellation lost-memo-ACK case: the clinical change was committed while optional memo retention reported unavailable instead of uncertain. All seven successful job logs and the complete failure log are preserved. Passing jobs on the other workflow do not qualify that failed head.
+
+Ordinary exact-head repetitions and private fixed-stage diagnostics did not reproduce it. A controlled received-media regression did:24 quiet batches advanced12seconds of synthetic carrier media before confirmation, with the original lease, proof, played confirmation,180quota and memo deadline intact. Work1792615156821 reached the actual acknowledged review and inspected native change with no budget denial, but the observation was76ms before review creation; the producer correctly refused that provenance. This is direct local evidence of the matching failure, not a retroactive measurement of the uninstrumented cloud stage.
+
+The fixture had measured media from fixture creation while TwilioMediaStream measures it from authenticated stream admission. Its source clock now takes that actual stream.streamStartedAt epoch in createCall, preserving max(source time, media time) and counting real waits once. No production file, receipt, gate, expected outcome, native quota or deadline changes. The same cancellation case retains the accelerated received quiet batches, then checks clinical commitment, uncertain memo ACK, one actual memo row, its permanent consumed purpose, no replay and every-column/full unfiltered backup privacy.
+
+Current frozen qualification:71 source controls across the same9 disjoint files (1792615231652), full strict TypeScript and722 rebuilt outputs (1792615230213), ten normal-entrypoint signed representative change cases (1792615427045) and nineteen preserved outgoing/representative-booking cases (1792615428987). All source/SQL cases have zero failures, skips or cancellations;29SQL names are distinct. The regression is included in those ten, not added again. Only cliniko-workflow-voice.js changes from the original722 artifacts; all production and the other721 outputs are exact. Each SQL cohort uses isolated disposable PostgreSQL, the actual180 account budget, verification and permanent-purpose storage, and retains legitimate unrelated index/staged-scan/effect data. Full raw cloud failure and earlier failed/red evidence remain historical evidence.
+
+Actual main579 has separately passed all four checks with full raw logs archived. The correction still requires its own current review, fresh exact-head push/PR cloud, normal merge and independently checked actual main; old seven-green evidence cannot qualify it. Guardian/multi-patient and other combinations remain separate. Full thirteen-gap, complete no-stop/private/all-ASR, real clinic/source/carrier/mail/acoustic/retention and restore acceptance remain open. No live traffic, default activation or deployment follows.
+
+
+## Bounded SQL verification canaries, 21 October 2026
+
+Parents through PR #579 retain normal-merge evidence and independently green actual main9f242cde. PR #580 correction998341d passed four push jobs but its PR PostgreSQL job failed a different privacy-fixture case: the six-digit verification-code canary matched a legitimate request timestamp. Seven green jobs and the complete failure are archived; the head is not fully green. A controlled actual-clock/code-issuer witness reproduces the same scanner label/column without inserting a secret or changing timestamps. This next correction gives each case in five memo SQL suites a pre-issue bounded clock-canary scope and restores the original generator after its owner closes. Seventy-two source controls across9 disjoint files, including9 isolation/lifecycle controls, whole strict TypeScript/722 serving outputs and84 distinct normal-entrypoint PostgreSQL/privacy cases pass:55 affected individual/class memo cases plus29 preserved signed representative/outgoing cases. Only the test canary output changes relative to998; every production and other721 output byte is exact. The original code issuer/hash/salt/proof flow, native180, all quotas/deadlines, every-column and full unfiltered backup assertions remain. Current review, same-PR fast-forward publication, fresh exact-head cloud, normal merge and actual-main checks remain delivery gates. Guardian, multi-patient, further signed class/financial/catalogue combinations, complete no-stop/private/all-ASR and real clinic/provider/mail/acoustic/source/retention/restore acceptance remain separate. No deployment or activation. See [the canary correction and evidence](COMMUNICATION_MEMOS.md#bounded-sql-verification-canaries-21-october-2026).
+
+The actual998 PR failure is the reschedule/clinicalResponseLost case in postgres-appointment-change-memo.test.ts: label change_memo_3_0 matched cliniko_request_budgets.sent_at_ms. That label is the original raw six-digit verification code; the budget owner obtains these values from PostgreSQL clock_timestamp(), not patient input. The successful push does not qualify the failed PR workflow. Full raw failed-job119479556093 and seven independently green logs remain archived.
+
+Controlled work1792620290785 selected a code from the actual PostgreSQL clock prefix before the actual issuer/salt, delivery and proof path, with every original request, row, timestamp, expected clinical outcome and scanner assertion intact. The original case failed at that same label/table/column. This establishes the reproduced ambiguity; the uninstrumented cloud intentionally did not retain its private code or row values, so no exact private-value reconstruction is claimed. The controlled-draw diagnostic was removed before the correction and qualification.
+
+The existing clock-disjoint synthetic sampler now has an owned per-case interface for five concrete SQL files: individual booking, observed individual changes, class booking, class cancellation and class movement. Each snapshots legitimate prior request-clock substrings before its current challenge and uses the same bounded600s future/60s lookback window and bounded rejection sampling, including the existing microsecond-fraction rule. The window belongs to the test case, so a long unfiltered file can run several independently bounded cases without extending an application deadline or weakening its canaries. No post-issue rows or current secret can enter the exclusion snapshot to suppress a later leak.
+
+The helper restores the exact default and named crypto issuer after the actual fixture closes. Nested installation refuses, close is idempotent, and an old closed scope cannot overwrite a newer one. Only the five finite file contexts are added to the existing isolated Node-child/localhost/test-database guard. Nine current source controls include an actual isolated child exercising install/draw/restore/reinstall and unrelated-worker refusals. Production code generation remains unchanged; its actual hash/salt/delivery/verification and SQL attempt budgets still run in each fixture.
+
+Current normal unfiltered SQL qualification contains55 affected cases:booking5, observed changes13, class booking12, class cancellation15 and class movement10. All29 preserved legacy whole-child cases also pass:representative changes10, representative booking4 and outgoing15. The84 actual names are distinct; the9 isolated controls are included in72, while previous71 and other component counts are not added. Original canary arrays, every-column and complete unfiltered raw/COPY/JSON backup checks remain, as do native180 accounting, permanent exclusions, original acknowledgements/outcome assertions, real quota waits and all lease/proof/action/memo/test deadlines. Existing legitimate aliases, staged scans and opaque effects remain, and owned databases/containers/slices are cleaned. This is no new clinic, source, sender-kill or restore acceptance.
+
+Actual proof work: source=1792621520047, isolatedSubset=1792620513223, build=1792620540870, bookingSQL=1792620950480, changesSQL=1792620803509, classBookSQL=1792620769944, classCancelSQL=1792620757313, classMoveSQL=1792620744617, legacySQL=1792621078974. Only verification-code-canary.js differs from the original722 outputs; all production and other721 bytes are exact. Existing stream-epoch correction and accelerated received-media cancellation regression remain exact. Current facts/scenario/naming/source/artifact/cleanup guards and separate Standards/Spec review precede plain fast-forward publication to the same PR580. Fresh own-head cloud, normal merge and independent actual-main checks remain required; earlier seven-green evidence cannot qualify this new head. The separately qualified local guardian/task/class graph remains unpublished and must integrate this reviewed correction and requalify before its own combined follow-up. Full thirteen-gap scope and real acceptance remain open.

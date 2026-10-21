@@ -59,7 +59,9 @@
     "test/support/class-movement-memo.ts",
     "test/support/administrative-memo-recovery-worker.ts",
     "test/support/subject-memo.ts",
-    "test/support/representative-call-owner.ts"
+    "test/support/outbound-memo.ts",
+    "test/support/representative-call-owner.ts",
+    "test/support/representative-change-call.ts"
   ],
   "include": []
 }

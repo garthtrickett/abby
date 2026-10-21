@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import crypto from "node:crypto";
-import { distinctFromClock, drawDistinctCode, drawSqlCanaryCode, assertDirectSqlVerificationCanaryContext, installDirectSqlVerificationCanaries, installClinicalVerificationCanaries, installResendVerificationCanaries, installStagedVerificationCanaries } from "../support/verification-code-canary.ts";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { distinctFromClock, drawDistinctCode, drawSqlCanaryCode, assertDirectSqlVerificationCanaryContext, installDirectSqlVerificationCanaries, installScopedDirectSqlVerificationCanaries, installClinicalVerificationCanaries, installResendVerificationCanaries, installStagedVerificationCanaries } from "../support/verification-code-canary.ts";
 
 test("numeric verification canaries reject every real timestamp substring across decimal rollovers", () => {
   for (const sinceMs of [1792470200000, 1792470990000, 1792479990000]) {
@@ -58,6 +62,7 @@ test("direct SQL canary instrumentation cannot change crypto in an unrelated tes
   const before = crypto.randomInt;
   assert.throws(() => assertDirectSqlVerificationCanaryContext(), /isolated direct SQL/);
   assert.throws(() => installDirectSqlVerificationCanaries(new Set()), /isolated direct SQL/);
+  assert.throws(() => installScopedDirectSqlVerificationCanaries(new Set()), /isolated direct SQL/);
   assert.equal(crypto.randomInt, before);
 });
 
@@ -83,4 +88,37 @@ test("SQL canary selection is bounded with headroom for rejection sampling", () 
   assert.equal(drawSqlCanaryCode(() => ++calls === 4096 ? 0 : 999999, window), 0);
   assert.equal(calls, 4096);
   assert.throws(() => drawSqlCanaryCode(() => 0, window, new Set(["bad"])), /Invalid/);
+});
+
+
+test("scoped SQL canaries restore named and default issuers without letting an old scope close a new one", () => {
+  const folder = mkdtempSync(join(tmpdir(), "abby-canary-lifecycle-"));
+  try {
+    const directory = join(folder, "test", "storage"); mkdirSync(directory, { recursive: true });
+    const entry = join(directory, "postgres-appointment-change-memo.test.ts");
+    const source = new URL("../support/verification-code-canary.ts", import.meta.url).href;
+    writeFileSync(entry, `import assert from "node:assert/strict";
+import test from "node:test";
+import crypto, { randomInt } from "node:crypto";
+import { installScopedDirectSqlVerificationCanaries, distinctFromClock } from ${JSON.stringify(source)};
+test("actual isolated SQL child canary lifetime", () => {
+  const original = crypto.randomInt;
+  const first = installScopedDirectSqlVerificationCanaries(new Set());
+  try {
+    assert.notEqual(crypto.randomInt, original); assert.equal(randomInt, crypto.randomInt);
+    const drawn = randomInt(0, 1000000);
+    assert.equal(drawn % 10, 0); assert.equal(distinctFromClock(drawn, first.window), true);
+    assert.throws(() => installScopedDirectSqlVerificationCanaries(new Set()), /already installed/);
+  } finally { first.close(); }
+  assert.equal(crypto.randomInt, original); assert.equal(randomInt, original);
+  const second = installScopedDirectSqlVerificationCanaries(new Set());
+  try { const current = crypto.randomInt; first.close(); assert.equal(crypto.randomInt, current); }
+  finally { second.close(); }
+  assert.equal(crypto.randomInt, original); assert.equal(randomInt, original);
+});
+`);
+    const env: NodeJS.ProcessEnv = { ...process.env, ABBY_ISOLATED_POSTGRES_PROBE: "1", DATABASE_URL: "postgresql://localhost/abby_test_canary_lifecycle" };
+    delete env.NODE_TEST_CONTEXT;
+    execFileSync(process.execPath, ["--test", entry], { env, timeout: 10000, stdio: "pipe" });
+  } finally { rmSync(folder, { recursive: true, force: true }); }
 });

@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { randomUUID } from "node:crypto";
+import crypto, { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { sql } from "kysely";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { verificationCanaries } from "../support/caller-verification.ts";
+import { captureScopedSqlVerificationCanaryWindow, assertSqlVerificationCodeCanary } from "../support/sql-verification-canary.ts";
+
+const originalRandomInt = crypto.randomInt;
 const emitted = new URL("../../dist/runtime/", import.meta.url);
 const { bookingMemoSessionFixture } = await import(new URL("test/support/booking-memo-session.js", emitted).href) as typeof import("../support/booking-memo-session.ts");
 const { decodeAdministrativeMemo } = await import(new URL("src/cliniko/administrative-memo.js", emitted).href) as typeof import("../../src/cliniko/administrative-memo.ts");
@@ -21,10 +24,13 @@ test(`actual emitted verified booking session, independent memo and all-column/f
   const adminUrl = process.env.DATABASE_URL; assert.ok(adminUrl, "DATABASE_URL required");
   const admin = connectPostgres(adminUrl), databaseName = `abby_memo_session_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl); target.pathname = `/${databaseName}`;
+  let canary: Awaited<ReturnType<typeof captureScopedSqlVerificationCanaryWindow>> | undefined;
   let created = false, db: ReturnType<typeof connectPostgres> | undefined, f: Awaited<ReturnType<typeof bookingMemoSessionFixture>> | undefined;
   try {
     await sql.raw(`create database "${databaseName}"`).execute(admin); created = true;
     db = connectPostgres(target.toString()); await migrate(db);
+    assert.equal(crypto.randomInt, originalRandomInt);
+    canary = await captureScopedSqlVerificationCanaryWindow(db);
     // Retain legitimate unrelated phone aliases/staged scans and an opaque
     // effect while scanning every column and the whole unfiltered backup.
     const unrelated = { tenantId: `unrelated-${randomUUID()}`, clinicId: "index", locationId: "main" };
@@ -55,6 +61,7 @@ test(`actual emitted verified booking session, independent memo and all-column/f
     assert.deepEqual(await db.selectFrom("calls").selectAll().execute(), []);
     assert.equal((await sql`select * from outbound_effect_barriers where effect_ref=${retainedRef}`.execute(db)).rows.length, 1);
     assert.equal((await db.selectFrom("patient_phone_index").selectAll().execute()).length, 1);
+    await assertSqlVerificationCodeCanary(db, f.mail[0]!.code, canary.window);
     const canaries = [...verificationCanaries, f.mail[0]!.code, proof, f.callId, f.sessionId, f.key.toString("hex"), authentication,
       ...f.memoPosts.flatMap(row => [String(row.content), JSON.stringify(row)]), "2026-10-08T04:00:00.000Z"].filter(v => v.length >= 4);
     const chunks = canaries.flatMap((value, i) => Array.from({ length: Math.ceil(value.length / 256) }, (_, n) => ({ label: `memo_session_${i}_${n}`,
@@ -65,7 +72,11 @@ test(`actual emitted verified booking session, independent memo and all-column/f
     for (const raw of canaries) { const json = JSON.stringify(raw).slice(1, -1); for (const candidate of [raw, copy(raw), json, copy(json)]) assert.equal(dump.includes(candidate), false); }
     assert.equal(dump.includes(retainedRef), true, "unfiltered backup retains unrelated legitimate opaque evidence");
   } finally {
-    await f?.close(); await db?.destroy();
-    try { if (created) await sql.raw(`drop database "${databaseName}" with (force)`).execute(admin); } finally { await admin.destroy(); }
+    try { await f?.close(); } finally {
+      try { canary?.close(); assert.equal(crypto.randomInt, originalRandomInt); } finally {
+        await db?.destroy();
+        try { if (created) await sql.raw(`drop database "${databaseName}" with (force)`).execute(admin); } finally { await admin.destroy(); }
+      }
+    }
   }
 });

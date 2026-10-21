@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import type { Kysely } from "kysely";
 import type Database from "../../src/storage/generated/Database.ts";
-import { assertDirectSqlVerificationCanaryContext, distinctFromClock, installDirectSqlVerificationCanaries } from "./verification-code-canary.ts";
+import { assertDirectSqlVerificationCanaryContext, distinctFromClock, installDirectSqlVerificationCanaries, installScopedDirectSqlVerificationCanaries } from "./verification-code-canary.ts";
 import type { CanaryClockWindow } from "./verification-code-canary.ts";
 
 /** Snapshot BEFORE any fixture challenge. Existing legitimate budget rows are
@@ -9,6 +9,14 @@ import type { CanaryClockWindow } from "./verification-code-canary.ts";
  * fixture's future clock window. No current secret or post-write leak can enter
  * this snapshot to suppress its own privacy failure. */
 export async function captureSqlVerificationCanaryWindow(db: Kysely<Database>): Promise<CanaryClockWindow> {
+  return installDirectSqlVerificationCanaries(await priorClockExclusions(db));
+}
+
+export async function captureScopedSqlVerificationCanaryWindow(db: Kysely<Database>): Promise<ReturnType<typeof installScopedDirectSqlVerificationCanaries>> {
+  return installScopedDirectSqlVerificationCanaries(await priorClockExclusions(db));
+}
+
+async function priorClockExclusions(db: Kysely<Database>): Promise<ReadonlySet<string>> {
   assertDirectSqlVerificationCanaryContext();
   const rows = await db.selectFrom("cliniko_request_budgets").select("sent_at_ms").limit(20001).execute();
   assert.ok(rows.length <= 20000, "Synthetic prior-clock snapshot exceeds its declared bound");
@@ -19,7 +27,7 @@ export async function captureSqlVerificationCanaryWindow(db: Kysely<Database>): 
     }
     assert.ok(excluded.size <= 100000, "Synthetic prior-clock exclusions exceed their declared bound");
   }
-  return installDirectSqlVerificationCanaries(excluded);
+  return excluded;
 }
 
 /** This is an extra fixture precondition, never a scanner exemption. Every

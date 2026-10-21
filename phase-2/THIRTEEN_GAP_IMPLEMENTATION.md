@@ -1,6 +1,6 @@
 # Cliniko integration: thirteen-gap implementation order
 
-**Current engineering, 21 October 2026:** Confidential administrative memo PR #578 passed all eight exact-d72dd74 push/PR jobs, archived their complete raw logs and normally merged as main7a539010 at17:32:19UTC. This follow-up incorporates that actual normal parent; its new main checks are independently tracked, with no result inferred from the PR checks. That parent has local evidence for 1,200 source controls, strict TypeScript/717 outputs and 36 stopped-sender/full-restore/privacy cases. This separate test-only follow-up qualifies an incoming adult representative individual-booking memo through the reusable clinical voice host: 55 source controls, strict/720 serving and four actual emitted signed HTTP/WebSocket/PostgreSQL cases pass. Caller and patient verify independently; a wrong patient memo grant or withdrawn permission cannot erase the known booking, and a lost memo acknowledgement cannot replay it. All production output bytes are preserved. Every qualified source/runtime input and all720 artifacts remain byte-identical across this documentation-only parent integration. This follow-up's own publication/cloud/review remain required. Guardian, other operation/class/financial/catalogue/outgoing combinations, complete no-stop/private/all-ASR and real acceptance remain open. See [the precise new scope and evidence](COMMUNICATION_MEMOS.md#signed-adult-representative-booking-memos-21-october-2026).
+**Current engineering, 21 October 2026:** Parents through PR #579 retain normal-merge evidence and independently green actual main9f242cde. PR #580 correction998341d passed four push jobs but its PR PostgreSQL job failed a different privacy-fixture case: the six-digit verification-code canary matched a legitimate request timestamp. Seven green jobs and the complete failure are archived; the head is not fully green. A controlled actual-clock/code-issuer witness reproduces the same scanner label/column without inserting a secret or changing timestamps. This next correction gives each case in five memo SQL suites a pre-issue bounded clock-canary scope and restores the original generator after its owner closes. Seventy-two source controls across9 disjoint files, including9 isolation/lifecycle controls, whole strict TypeScript/722 serving outputs and84 distinct normal-entrypoint PostgreSQL/privacy cases pass:55 affected individual/class memo cases plus29 preserved signed representative/outgoing cases. Only the test canary output changes relative to998; every production and other721 output byte is exact. The original code issuer/hash/salt/proof flow, native180, all quotas/deadlines, every-column and full unfiltered backup assertions remain. Current review, same-PR fast-forward publication, fresh exact-head cloud, normal merge and actual-main checks remain delivery gates. Guardian, multi-patient, further signed class/financial/catalogue combinations, complete no-stop/private/all-ASR and real clinic/provider/mail/acoustic/source/retention/restore acceptance remain separate. No deployment or activation. See [the canary correction and evidence](COMMUNICATION_MEMOS.md#bounded-sql-verification-canaries-21-october-2026).
 
 **Recorded outbound component evidence:** PR #575 qualified 580 source controls, 693 serving outputs, 42 SQL/process cases and one restore before its eight own-head cloud jobs and normal merge. PR #577 qualified its 135 controls, 10 new and 42 preserved SQL cases, four actual callback SIGKILL cases and two restores, then passed its own eight cloud jobs and normally merged. Their actual merged-main jobs were independently green and archived. The optional combined signed receiver preserves restrictive DNC before completed-notification retention under one deadline/physical budget. It supplies no complete no-stop/private/all-ASR truth, default activation or clinical hold release.
 
@@ -19,7 +19,7 @@ The [conditional clinical session](OUTBOUND_CLINICAL_HANDOFF.md) remains PR568. 
 Through539d5f901e full1792378464534 completed4742 passed/zero failed/one existing
 C-LIVE-40 skip plus6 ordered follow-ups. Draft540's class/resend followup and
 541's native follow-up/capacity have separate focused qualification. New terminal
-observation/release has46 source controls, strict/624 serving build and25 actual
+observation/release has46 source controls, strict/624 serving build and 25 actual
 compiled SQL/native180/process/privacy cases, including permission withdrawal
 after a real SQL lock wait. Current parent541b6175a0 full1792386938614 is running
 and excludes this terminal patch. Exact cloud jobs remain refused before execution
@@ -339,7 +339,7 @@ context after uncertainty; replay remains denied.
 A frozen trusted `reschedulingDestination` is wired through the clinical host,
 call flow and session. It is validated before verification and rechecked before
 proposal/send. E2E-359 has three compiled signed/TLS caller journeys and protected
-source/edge/approval cases. Typecheck, compiled build, diff and101 checks passed
+source/edge/approval cases. Typecheck, compiled build, diff and 101 checks passed
 without failures/skips (work`Abby practitioner change final source core compiled
 and registry gate`, log`4590eee3-1791902828518.log`). Manifest1.166 retains359
 stable IDs. Exact command, API contract and diagnosed failures are recorded in
@@ -626,7 +626,7 @@ The [official Cliniko individual-appointment API](https://docs.api.cliniko.com/o
 - `src/standalone/smtp-appointment-confirmation-delivery.ts` renders an exact private DTO into fixed appointment details: clinic/location/address, appointment-local date/time, elapsed duration, practitioner and appointment type. It refuses unknown fields, malformed recipient/times/zone, empty/unbounded labels and control-character injection before SMTP. Unicode uses bounded MIME encoding. It accepts neither a verification code nor arbitrary subject/body instructions.
 - `test/cliniko/smtp-appointment-confirmation-delivery.test.ts` uses synthetic real loopback TLS/SMTP for14 cases covering local/DST time rendering, content/recipient boundaries, MIME, certificate failure, rejection, lost/unexpected acknowledgement, abort/deadline and dot transparency. The SMTP fixture adds explicit post-body rejection/unexpected-reply faults without weakening existing verification assertions.
 
-Initial qualification `Abby confirmation SMTP transport focused qualification`, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791930090535.log`, passed typecheck and25of26 tests. The only failure was the expected locale date string omitting the comma returned by `Intl.DateTimeFormat("en-GB")`; the exact-content assertion was corrected to the actual localized date. All existing12 verification-delivery cases passed, including the actual caller proof/protected-read journey.
+Initial qualification `Abby confirmation SMTP transport focused qualification`, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791930090535.log`, passed typecheck and 25of26 tests. The only failure was the expected locale date string omitting the comma returned by `Intl.DateTimeFormat("en-GB")`; the exact-content assertion was corrected to the actual localized date. All existing12 verification-delivery cases passed, including the actual caller proof/protected-read journey.
 
 Final qualification passed typecheck, fresh compiled build, diff check and83 tests with zero failures/skips: `npm run typecheck && npm run build:voice-tests && node --test --test-concurrency=4 test/cliniko/smtp-appointment-confirmation-delivery.test.ts test/cliniko/smtp-patient-code-delivery.test.ts test/cliniko/email-patient-authority.test.ts test/text/notification-policy.test.ts test/text/notification-effects.test.ts test/voice/notification-outcome-query.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts && git diff --check`, tracked job `Abby confirmation SMTP resumed qualification October14`, log `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791937144312.log`, terminal exit0. This includes14 new adapter cases,12 existing SMTP verifier cases, patient-authority/current-revision regressions, notification ownership/effects and signed notification-question/SAM/privacy cases, plus registry/trace contracts. The preceding run `4590eee3-1791930209566.log` was confirmed orphaned with no remaining process after interruption and had stopped during typecheck; it supplies no qualification evidence. The unchanged corrected source was then rerun under a tracked user-systemd scope.
 
@@ -647,7 +647,7 @@ Correction/evidence history:
 - Initial generation `4590eee3-1791937747309.log` did not include the new table because the explicit migration registry had not yet been extended; it supplies no new-table qualification. Migration047 was registered, then `npm run db:migrate && npm run db:generate` completed against fresh PostgreSQL, tracked log `4590eee3-1791937892110.log`.
 - Initial focused gate `4590eee3-1791937789295.log` stopped at typecheck: the union result needed explicit status projection, and direct migration tests required generic Kysely migration signatures. No runtime tests ran in that failed gate. Both were corrected without casts or changed assertions.
 - Corrected source/native gate `4590eee3-1791937960703.log`, `bash scripts/with-postgres.sh bash -c 'npm run db:migrate && node --test --test-concurrency=4 test/cliniko/confirmation-resend-policy.test.ts test/storage/postgres-confirmation-resend-journal.test.ts test/cliniko/caller-verification-session.test.ts test/cliniko/email-patient-authority.test.ts test/storage/postgres-contact-change-registry-migration.test.ts'`:32 passed, zero failures/skips, terminal exit0. Includes four new approval/proof cases and eight new native journal/submission cases, alongside existing caller/authority and contact-registry upgrade/retention tests. Concurrent status observers may truthfully observe accepted or unknown; one actual SMTP message, rather than the number of accepted observers, determines duplicate prevention.
-- Final qualification passed typecheck, fresh compiled build, diff check and106 tests with zero failures/skips: `npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh bash -c 'npm run db:migrate && node --test --test-concurrency=4 test/cliniko/confirmation-resend-policy.test.ts test/storage/postgres-confirmation-resend-journal.test.ts test/cliniko/caller-verification-session.test.ts test/storage/postgres-contact-change-registry-migration.test.ts test/storage/postgres-patient-correction-setting.test.ts test/cliniko/smtp-appointment-confirmation-delivery.test.ts test/cliniko/smtp-patient-code-delivery.test.ts test/cliniko/email-patient-authority.test.ts test/text/notification-policy.test.ts test/text/notification-effects.test.ts test/voice/notification-outcome-query.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts' && git diff --check`, tracked job `Abby resend policy durable journal final qualification`, log `4590eee3-1791938057178.log`, terminal exit0. Includes the12 new policy/journal cases and existing registered-proof, SMTP/notification/SAM/privacy, migration and registry contracts. Existing tests retain their original assertions, worker count and deadlines.
+- Final qualification passed typecheck, fresh compiled build, diff check and 106 tests with zero failures/skips: `npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh bash -c 'npm run db:migrate && node --test --test-concurrency=4 test/cliniko/confirmation-resend-policy.test.ts test/storage/postgres-confirmation-resend-journal.test.ts test/cliniko/caller-verification-session.test.ts test/storage/postgres-contact-change-registry-migration.test.ts test/storage/postgres-patient-correction-setting.test.ts test/cliniko/smtp-appointment-confirmation-delivery.test.ts test/cliniko/smtp-patient-code-delivery.test.ts test/cliniko/email-patient-authority.test.ts test/text/notification-policy.test.ts test/text/notification-effects.test.ts test/voice/notification-outcome-query.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts' && git diff --check`, tracked job `Abby resend policy durable journal final qualification`, log `4590eee3-1791938057178.log`, terminal exit0. Includes the12 new policy/journal cases and existing registered-proof, SMTP/notification/SAM/privacy, migration and registry contracts. Existing tests retain their original assertions, worker count and deadlines.
 
 Manifest1.179 registers E2E-371 as source/native-port evidence only. Fresh exact native appointment/verified-recipient assembly, separately played caller consent, native review binding/recovery, SAM/compiled caller routing and serving activation remain to implement; the public notification-question route remains read-only. No actual process SIGKILL, carrier/acoustic/model, real clinic sender/mailbox or production operator acceptance is claimed by these fresh-store/native tests. Journal history cutover/recovery ownership still needs qualification before activation. Gap8 remains open, alongside gap6 recurrence/historical sources, remaining clinic-specific field adapters/operator acceptance and gaps9–13. Current-head cloud qualification and real clinic/mail/model/acoustic/carrier gates remain separate.
 
@@ -984,7 +984,7 @@ The complete13 objective remains active, including the remaining gap6/8 work,
 private person speech/actions/task routing within gap9 and gaps10–13.
 
 Final frozen-source qualification completed exit0: whole-source typecheck,
-fresh compiled voice build, isolated PostgreSQL migrations and102 checks passed,
+fresh compiled voice build, isolated PostgreSQL migrations and 102 checks passed,
 zero failures/cancellations/skips, followed by `git diff --check`.
 Log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791969058497.log`.
 Exact command: `npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh bash -c "npm run db:migrate && node --test --test-concurrency=4 test/cliniko/representative-workflow.test.ts test/cliniko/representative-appointment-change.test.ts test/cliniko/native-validation-context.test.ts test/cliniko/representative-selection.test.ts test/cliniko/rescheduling-authority.test.ts test/cliniko/rescheduling-session.test.ts test/cliniko/booking-offers.test.ts test/cliniko/standalone-cancellation.test.ts test/cliniko/standalone-rescheduling.test.ts test/cliniko/caller-verification-session.test.ts test/cliniko/call-task-sequence.test.ts test/cliniko/cliniko-call-flow.test.ts test/voice/call-task-sequence-runner.test.ts test/voice/standalone-clinical-runner.test.ts test/voice/caller-identity-denial.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts" && git diff --check`.
@@ -1041,7 +1041,7 @@ repeated with the same four-worker setting as tracked job
 `Abby E384 corrected source requalification after pressure cleared`, log
 `4590eee3-1791971858998.log`. E2E-384 remains unpublished until that gate passes.
 
-The next full run (`4590eee3-1791971858998.log`) passed source/build and103/105
+The next full run (`4590eee3-1791971858998.log`) passed source/build and 103/105
 checks with zero skips. Two preparation failures remained: the related-person
 move could not select its target (48 native claims, no quota denial, no failed
 actor recheck or provider error), and the private CallFlow booking had no
@@ -1065,7 +1065,7 @@ The corrected12-case representative/task regression passed without skips in
 pending before publication; all thirteen requirements remain active.
 
 Final corrected-source qualification completed exit0: whole-source typecheck,
-fresh compiled voice build, isolated PostgreSQL migration and106 native/signed
+fresh compiled voice build, isolated PostgreSQL migration and 106 native/signed
 checks passed, zero failures/cancellations/skips, then `git diff --check`.
 Log: `/home/gust/paseo/paseo-home/work/logs/4590eee3-1791973874880.log`.
 Exact command: `npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh bash -c "npm run db:migrate && node --test --test-concurrency=4 test/cliniko/representative-call-flow.test.ts test/cliniko/representative-workflow.test.ts test/cliniko/representative-appointment-change.test.ts test/cliniko/native-validation-context.test.ts test/cliniko/representative-selection.test.ts test/cliniko/rescheduling-authority.test.ts test/cliniko/rescheduling-session.test.ts test/cliniko/booking-offers.test.ts test/cliniko/standalone-cancellation.test.ts test/cliniko/standalone-rescheduling.test.ts test/cliniko/caller-verification-session.test.ts test/cliniko/call-task-sequence.test.ts test/cliniko/cliniko-call-flow.test.ts test/voice/call-task-sequence-runner.test.ts test/voice/standalone-clinical-runner.test.ts test/voice/caller-identity-denial.test.ts test/contract/scenario-manifest.test.ts test/contract/no-number-gap-trace.test.ts" && git diff --check`.
@@ -1522,7 +1522,7 @@ synthetic voice and production full-call evidence planned.
 
 
 Final E2E-390 qualification completed exit0 in
-`4590eee3-1791986198542.log`: whole-source typecheck and106 native class,
+`4590eee3-1791986198542.log`: whole-source typecheck and 106 native class,
 appointment, shared-budget, recall, roster, catalogue and registry checks
 passed with zero failures/cancellations/skips, plus clean diff check. Source
 was frozen throughout. This verifies the read/provider stage; class mutations
@@ -1795,7 +1795,7 @@ active. Billing prevents cloud execution but does not block local implementation
 
 Final E2E-394 frozen-source qualification completed exit0 in
 `4590eee3-1791993463136.log`: whole-source typecheck, fresh compiled voice build,
-isolated PostgreSQL migrations and251 class/native/admitted owner/normal
+isolated PostgreSQL migrations and 251 class/native/admitted owner/normal
 classifier/signed serving/ordinary clinical/compiled process/task/core/privacy/
 registry checks passed with zero failures/cancellations/skips. Diff check passed.
 The new corrected-class journey uses the live account-budget counter and the
@@ -2281,7 +2281,7 @@ npm run typecheck && npm run build:voice-tests && bash scripts/with-postgres.sh 
 
 Final frozen-source qualification completed exit0 in4m42s in
 `4590eee3-1792005394941.log`: whole-source typecheck, fresh compiled voice build,
-isolated migrations and252 class/native/SAM/correction/signed/compiled/ordinary
+isolated migrations and 252 class/native/SAM/correction/signed/compiled/ordinary
 individual rescheduling/privacy/registry checks passed, with zero failures,
 cancellations or skips, followed by clean diff check. The two added full-
 replacement and changed-original cases are included. Registry1.209/401 retains
@@ -2536,7 +2536,7 @@ Initial focused qualification found three incorrect fixture expectations: noon
 was outside the daily hours; extra hours start at13:00 (02:00UTC). Correcting that
 expected time leaves the native conflict/subtraction assertions intact. Then59
 native/calendar checks passed in `4590eee3-1792009518290.log`; whole-source
-typecheck, a fresh compiled build and10 compiled current/new calendar journeys
+typecheck, a fresh compiled build and 10 compiled current/new calendar journeys
 passed in `4590eee3-1792009518444.log`. A later explicit-plan prototype check and
 a1201-row recurring-busy scenario are included in final qualification.
 
@@ -3066,7 +3066,7 @@ no own qualification job was live before starting the next investigation.
 The full thirteen-gap objective remains active and unchanged.
 
 An actual ordinary-SAM baseline varied mixed case histories across10,101,301
-and1000 linked associations. Same-case301 and cross-case101 could send all
+and 1000 linked associations. Same-case301 and cross-case101 could send all
 three native changes but then exhaust the physical180-request window before
 complete final inspection. Outcomes correctly remained uncertain; this is
 incomplete capability rather than completed movement. Baseline log:
@@ -3332,7 +3332,7 @@ All three now pass in `4590eee3-1792023263219.log` after requiring
 movement factories. The existing check binds the actual native registered
 contact to credential fingerprint and tenant/clinic; exact call/session/policy
 scope is still independently required. No provider read, recall or clinical
-mutation may occur on mismatch. This repairs part of gaps2 and10, not general
+mutation may occur on mismatch. This repairs part of gaps2 and 10, not general
 representative or financial authority.
 
 Current full source typecheck, affected native class/pass hosts and actual
@@ -4647,7 +4647,7 @@ Executable2fc107a adds a bounded v1 prospective native-note format, not a record
 
 Codec and parser reject unknown/authority-bearing fields, invalid or aliased IDs, malformed contact/scope/target/policy/time, unsorted/duplicate weekdays, expired preparation and oversized combined summaries. The existing1,000-character summary/1,050-note bounds remain. Nested decoded context is frozen, canonical re-encoding must match exactly, and a domain-separated private fingerprint changes with subject/recipient/target/schedule/policy changes. That fingerprint and context must never enter SQL; future local exclusions permit only independent random IDs and approved non-patient ownership metadata. No provider read/write, native pending discovery, audience approval, scheduler, DNC/result/callback/launcher, SQL schema or outbound contact is implemented in this patch.
 
-Qualification:71/71 context/time checks (`work1792246355481`,43 new context plus28 time, peak64,663,552B/256MiB/CPU100%/Swap0) and full strict TypeScript/serving build (`work1792246432063`, terminal14:17:30.549660UTC, peak1,489,821,696B/2GiB/CPU100%/heap1536MiB/Swap0/OOM0). All504 serving artifacts match517 because no runtime imports the codec yet. Inputs/dependencies stayed pinned and waits were reaped. Frozen515 full regression1792244823795 continues separately, not green and excluding later files/docs. Remaining gap11 integration/clinic configuration, gap12 native records/approval/contact/scheduler/launch/callback work, gap13 and real clinic/provider/sender/restore/acoustic/deployment gates remain open; no all-thirteen-gap closure is claimed.
+Qualification: 71/71 context/time checks (`work1792246355481`,43 new context plus28 time, peak64,663,552B/256MiB/CPU100%/Swap0) and full strict TypeScript/serving build (`work1792246432063`, terminal14:17:30.549660UTC, peak1,489,821,696B/2GiB/CPU100%/heap1536MiB/Swap0/OOM0). All504 serving artifacts match517 because no runtime imports the codec yet. Inputs/dependencies stayed pinned and waits were reaped. Frozen515 full regression1792244823795 continues separately, not green and excluding later files/docs. Remaining gap11 integration/clinic configuration, gap12 native records/approval/contact/scheduler/launch/callback work, gap13 and real clinic/provider/sender/restore/acoustic/deployment gates remain open; no all-thirteen-gap closure is claimed.
 
 ## Completed exact financial resend full regression,17October2026
 
@@ -5275,7 +5275,7 @@ and exact-head green, with actual main separately recorded. No activation.
 The subsequent approved-profile version2 conservatively closes an exact whole
 stop phrase at uncertain ASR quality without report/DNC retention. The real
 OpenAI adapter's uncertain quality is unchanged. Revised63 source, focused
-strict types, full strict/667 serving build and10 emitted SQL/privacy cases
+strict types, full strict/667 serving build and 10 emitted SQL/privacy cases
 pass. Two original PostgreSQL/TLS browser login journeys pass after explicit
 image preparation outside the unchanged10-second launch deadline. Revised
 exact-head cloud qualification follows; this does not promote NoStop/finality,

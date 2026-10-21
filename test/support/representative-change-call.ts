@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 import { ClinikoCallFlow } from "../../src/standalone/cliniko-call-flow.ts";
 import type { HostWriteReceipt } from "../../src/core/model.ts";
@@ -10,12 +11,15 @@ import { verificationCanaries, verificationNow } from "./caller-verification.ts"
 
 /** Native-shaped synthetic changes. All operations retain the same actual
  * shared account budget, independent caller/subject permissions and SAM. */
-export async function representativeChangeCallFixture(operation: "cancel" | "reschedule" | "appointments.read" = "cancel") {
+export async function representativeChangeCallFixture(operation: "cancel" | "reschedule" | "appointments.read" = "cancel", options: {
+  budget?: ClinikoRequestBudget; subjectIds?: readonly [string, string]
+} = {}) {
   const f = await representativeCallOwnerFixture({ multiplePatients: true, operation, appointmentChanges: true,
-    allowedOperations: ["book", "cancel", "reschedule", "appointments.read"] }); f.flow.dispose();
+    allowedOperations: ["book", "cancel", "reschedule", "appointments.read"], ...options }); f.flow.dispose();
   const base = "https://api.au5.cliniko.com/v1", rows = new Map<string, Record<string, unknown>>();
   const link = (kind: string, id: string) => ({ links: { self: `${base}/${kind}/${id}` } });
-  for (const [id, patientId, hour] of [["91", "43", "04"], ["92", "44", "05"], ["93", verificationCanaries[2]!, "06"]] as const)
+  const [firstId, secondId] = f.r.subjectIds;
+  for (const [id, patientId, hour] of [["91", firstId, "04"], ["92", secondId, "05"], ["93", verificationCanaries[2]!, "06"]] as const)
     rows.set(id, { id, starts_at: `2026-10-08T${hour}:00:00.000Z`, ends_at: `2026-10-08T${hour}:30:00.000Z`,
       cancelled_at: null, archived_at: null, deleted_at: null, notes: "synthetic appointment change",
       patient: link("patients", patientId), business: link("businesses", "11"), practitioner: link("practitioners", "22"), appointment_type: link("appointment_types", "33") });
@@ -44,7 +48,7 @@ export async function representativeChangeCallFixture(operation: "cancel" | "res
       assert.equal(method, "GET"); return Response.json(row);
     }
     if (url.pathname === "/v1/recalls" && method === "POST") {
-      const body = JSON.parse(String(init?.body)); assert.ok(["43", "44"].includes(body.patient_id));
+      const body = JSON.parse(String(init?.body)); assert.ok([firstId, secondId].includes(body.patient_id));
       const row = { id: String(701 + f.f.recalls.length), archived_at: null, recalled: false, recall_at: body.recall_at, notes: body.notes,
         patient: link("patients", body.patient_id), recall_type: link("recall_types", "7") };
       f.f.recalls.push(row); return Response.json(row, { status: 201 });

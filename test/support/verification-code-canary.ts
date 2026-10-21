@@ -76,6 +76,13 @@ export function assertDirectSqlVerificationCanaryContext(): void {
     "postgres-outbound-clinical-cancellation.test.ts", "postgres-outbound-clinical-rescheduling.test.ts",
     "postgres-outbound-clinical-voice.test.ts", "postgres-outbound-follow-up-financial.test.ts",
     "postgres-representative-booking-memo.test.ts",
+    "postgres-representative-change-memo.test.ts",
+    "postgres-outbound-administrative-memo.test.ts",
+    "postgres-booking-memo-session.test.ts",
+    "postgres-appointment-change-memo.test.ts",
+    "postgres-class-booking-memo.test.ts",
+    "postgres-class-cancellation-memo.test.ts",
+    "postgres-class-movement-memo.test.ts",
   ];
   let database: URL | undefined;
   try { database = new URL(process.env.DATABASE_URL ?? "https://invalid.local"); } catch { /* Generic guard error below. */ }
@@ -86,20 +93,41 @@ export function assertDirectSqlVerificationCanaryContext(): void {
     throw Error("Verification canary sampling requires an isolated direct SQL fixture");
 }
 export function installDirectSqlVerificationCanaries(excluded: ReadonlySet<string>): CanaryClockWindow {
+  return install(directSqlExclusions(excluded));
+}
+
+/** A long normal SQL file may have several independently bounded cases. Each
+ * gets its own pre-issue window and restores the issuer after its owner closes. */
+export function installScopedDirectSqlVerificationCanaries(excluded: ReadonlySet<string>): Readonly<{ window: CanaryClockWindow; close: () => void }> {
+  return installSampler(directSqlExclusions(excluded));
+}
+
+function directSqlExclusions(excluded: ReadonlySet<string>): ReadonlySet<string> {
   assertDirectSqlVerificationCanaryContext();
   if (!(excluded instanceof Set) || excluded.size > 100000 || [...excluded].some(v => !/^[0-9]{6}$/.test(v)))
     throw Error("Invalid synthetic prior-clock canary exclusions");
-  return install(new Set(excluded));
+  return new Set(excluded);
 }
 
 function install(excluded: ReadonlySet<string> = new Set()): CanaryClockWindow {
+  return installSampler(excluded).window;
+}
+
+function installSampler(excluded: ReadonlySet<string>): Readonly<{ window: CanaryClockWindow; close: () => void }> {
   if (installed) throw Error("Synthetic verification canary sampling already installed");
   const now = Date.now(), window = Object.freeze({ sinceMs: now - 60_000, throughMs: now + 600_000 });
   const randomInt = crypto.randomInt, descriptor = Object.getOwnPropertyDescriptor(crypto, "randomInt");
   if (!descriptor?.writable) throw Error("Synthetic verification crypto is unavailable");
-  Object.defineProperty(crypto, "randomInt", { ...descriptor, value: (...args: unknown[]) =>
-    args.length === 2 && args[0] === 0 && args[1] === space
-      ? drawSqlCanaryCode(() => randomInt(0, space), window, excluded) : Reflect.apply(randomInt, crypto, args) });
+  const sampler = (...args: unknown[]) => args.length === 2 && args[0] === 0 && args[1] === space
+    ? drawSqlCanaryCode(() => randomInt(0, space), window, excluded) : Reflect.apply(randomInt, crypto, args);
+  Object.defineProperty(crypto, "randomInt", { ...descriptor, value: sampler });
   syncBuiltinESMExports(); installed = true;
-  return window;
+  let closed = false;
+  return Object.freeze({ window, close: () => {
+    if (closed) return;
+    if (Object.getOwnPropertyDescriptor(crypto, "randomInt")?.value !== sampler)
+      throw Error("Synthetic verification canary sampler no longer owns the issuer");
+    Object.defineProperty(crypto, "randomInt", descriptor);
+    syncBuiltinESMExports(); installed = false; closed = true;
+  } });
 }

@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { randomUUID } from "node:crypto";
+import crypto, { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { sql } from "kysely";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { verificationCanaries } from "../support/caller-verification.ts";
+import { captureScopedSqlVerificationCanaryWindow, assertSqlVerificationCodeCanary } from "../support/sql-verification-canary.ts";
+
+const originalRandomInt = crypto.randomInt;
 
 const emitted = new URL("../../dist/runtime/", import.meta.url);
 const { classBookingMemoFixture } = await import(new URL("test/support/class-booking-memo.js", emitted).href) as typeof import("../support/class-booking-memo.ts");
@@ -26,10 +29,13 @@ test(`actual emitted ${passes ? "pass" : "ordinary"} admitted class session, ori
   const adminUrl = process.env.DATABASE_URL; assert.ok(adminUrl, "DATABASE_URL required");
   const admin = connectPostgres(adminUrl), databaseName = `abby_class_memo_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl); target.pathname = `/${databaseName}`;
+  let canary: Awaited<ReturnType<typeof captureScopedSqlVerificationCanaryWindow>> | undefined;
   let created = false, db: ReturnType<typeof connectPostgres> | undefined, f: Awaited<ReturnType<typeof classBookingMemoFixture>> | undefined;
   try {
     await sql.raw(`create database "${databaseName}"`).execute(admin); created = true;
     db = connectPostgres(target.toString()); await migrate(db);
+    assert.equal(crypto.randomInt, originalRandomInt);
+    canary = await captureScopedSqlVerificationCanaryWindow(db);
     const unrelated = { tenantId: `unrelated-${randomUUID()}`, clinicId: "index", locationId: "main" };
     const links = [{ normalizedPhone: "+61400111222", patientId: "101" }], fingerprint = "e".repeat(64);
     assert.ok((await new PostgresPatientPhoneIndex(db).publish(unrelated, links, "61", fingerprint)).ok);
@@ -88,6 +94,7 @@ test(`actual emitted ${passes ? "pass" : "ordinary"} admitted class session, ori
     assert.deepEqual(await db.selectFrom("calls").selectAll().execute(), []);
     assert.equal((await sql`select * from outbound_effect_barriers where effect_ref=${retainedRef}`.execute(db)).rows.length, 1);
     assert.equal((await db.selectFrom("patient_phone_index").selectAll().execute()).length, 1);
+    await assertSqlVerificationCodeCanary(db, f.mail[0]!.code, canary.window);
     const canaries = [...verificationCanaries, f.mail[0]!.code, proof, f.callId, f.sessionId, f.key.toString("hex"), authentication, review.value.marker, originalAction, f.pass.caseId, f.pass.entitlementRef,
       "private-class-shared-note", "private-attendee-note", "private-other-name", "private-pass-name-canary", "private-pass-notes-canary", "private-pass-referral-canary",
       ...f.recalls.map(row => String(row.notes)), ...f.memoPosts.flatMap(row => [String(row.content), JSON.stringify(row)]), "2026-10-08T04:00:00.000Z"].filter(v => v.length >= 4);
@@ -99,7 +106,11 @@ test(`actual emitted ${passes ? "pass" : "ordinary"} admitted class session, ori
     for (const raw of canaries) { const json = JSON.stringify(raw).slice(1, -1); for (const candidate of [raw, copy(raw), json, copy(json)]) assert.equal(dump.includes(candidate), false); }
     assert.equal(dump.includes(retainedRef), true, "unfiltered backup preserves legitimate unrelated opaque evidence");
   } finally {
-    await f?.close(); await db?.destroy();
-    try { if (created) await sql.raw(`drop database "${databaseName}" with (force)`).execute(admin); } finally { await admin.destroy(); }
+    try { await f?.close(); } finally {
+      try { canary?.close(); assert.equal(crypto.randomInt, originalRandomInt); } finally {
+        await db?.destroy();
+        try { if (created) await sql.raw(`drop database "${databaseName}" with (force)`).execute(admin); } finally { await admin.destroy(); }
+      }
+    }
   }
 });
