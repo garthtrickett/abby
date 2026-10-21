@@ -106,6 +106,44 @@ test("memo history permission must remain current across a later original-review
   finally { release?.(); }
 });
 
+test("revoking original-review permission during its budget wait prevents the protected native GET", async t => {
+  const x = await fixture(); t.after(x.f.close); let opened!: () => void, release!: () => void, current = true;
+  const waiting = new Promise<void>(resolve => { opened = resolve; }), budget = new Promise<void>(resolve => { release = resolve; });
+  const owner = resultValue(ClinikoAdministrativeMemoRecovery.create({ ...x.config, rateBudget: {
+    claim: async () => { opened(); await budget; return null; }, observe429: x.config.rateBudget.observe429.bind(x.config.rateBudget)
+  } }, x.f.authentication, "7", { allows: async () => true, current: () => current },
+  { allowsHistoryRead: async () => true, allowsRecordRead: async () => true, current: () => true }, x.port));
+  const pending = owner.recover(x.selection, new AbortController().signal);
+  try {
+    await waiting; current = false; release();
+    assert.equal((await pending).ok, false); assert.deepEqual(x.calls, []);
+  } finally { release(); }
+});
+
+test("concurrent original-review budget waits retain independent per-operation permission", async t => {
+  const x = await fixture(); t.after(x.f.close);
+  const opened: (() => void)[] = [], release: (() => void)[] = [];
+  const waiting = [0, 1].map(i => new Promise<void>(resolve => { opened[i] = resolve; }));
+  const budgets = [0, 1].map(i => new Promise<void>(resolve => { release[i] = resolve; }));
+  const queries: object[] = []; let revoked: object | undefined, claims = 0;
+  const owner = resultValue(ClinikoAdministrativeMemoRecovery.create({ ...x.config, rateBudget: {
+    claim: async () => { const i = claims++; if (i < 2) { opened[i]!(); await budgets[i]; } return null; },
+    observe429: x.config.rateBudget.observe429.bind(x.config.rateBudget)
+  } }, x.f.authentication, "7", {
+    allows: async q => { assert.equal(q.patientId, x.selection.patientId); assert.equal(q.recallRef, x.selection.recallRef); queries.push(q); return true; },
+    current: q => q !== revoked
+  }, { allowsHistoryRead: async () => true, allowsRecordRead: async () => true, current: () => true }, x.port));
+  const first = owner.recover(x.selection, new AbortController().signal); let second: ReturnType<typeof owner.recover> | undefined;
+  try {
+    await waiting[0]; second = owner.recover(x.selection, new AbortController().signal); await waiting[1];
+    assert.notEqual(queries[0], queries[1], "identical selections still own distinct operation queries");
+    revoked = queries[0]; release[0]!();
+    assert.equal((await first).ok, false); assert.deepEqual(x.calls, []);
+    release[1]!(); const found = resultValue(await second); assert.equal(found.kind, "located");
+    assert.deepEqual(x.calls, ["/v1/recalls/71", "/v1/communications", "/v1/communications"]);
+  } finally { release.forEach(done => done()); await Promise.allSettled([first, ...(second ? [second] : [])]); }
+});
+
 test("a held original permission is bounded and performs no native read after cancellation", async t => {
   const x = await fixture(); t.after(x.f.close); let release!: () => void;
   x.grants.hold = new Promise<void>(resolve => { release = resolve; }); const stop = new AbortController();

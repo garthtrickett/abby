@@ -2,11 +2,11 @@
 
 **Updated:** 21 October 2026. **Objective:** Work through [EXECUTION_ORDER.md](EXECUTION_ORDER.md), preserving its full thirteen-gap scope. This ledger records partial delivery; the integration is not complete or activated.
 
-**Current engineering, 21 October 2026:** Normally merged main095b7ba (PR #575/#577) is now integrated locally with the memo components. The class-recovery component f7ce5fb passed 437 source controls, whole strict/701 serving and 36 actual killed-sender/full-logical-restore/privacy cases in its recorded scope. The preceding parent integration passed whole strict/716 serving, matching every owning parent output byte. The class changes apply without source conflicts; fresh qualification of the final combined candidate, its own exact-head cloud checks and review remain pending. No memo release is published or activated. Broader source/subject/financial/voice, complete no-stop/private/all-ASR and real acceptance remain open. See [component scope and evidence](COMMUNICATION_MEMOS.md).
+**Current engineering, 21 October 2026:** The permission-corrected memo candidate locally integrates normally merged main095b7ba (PR #575/#577). Its deduplicated combined 60-file source regression passes 1,200 controls, full strict TypeScript and 717 serving outputs compile, and all 36 scoped actual sender-SIGKILL/fresh-process/unfiltered-logical-restore/privacy cases pass. Review reproduced and corrected a protected native-read race during asynchronous quota waits; each recovery now checks its own current grant immediately before dispatch. The independent exact inventory check confirms only that recovery module changes from the integrated `2fbf` runtime, preserving all other 716 outputs. Own exact-head cloud/review and normal merge still precede delivery; no memo release is activated. Broader source/subject/financial/voice, complete no-stop/private/all-ASR and real acceptance remain open. See [current scope and evidence](COMMUNICATION_MEMOS.md#permission-corrected-integrated-qualification-21-october-2026).
 
 **Recorded outbound component evidence:** PR #575 qualified 580 source controls, 693 serving outputs, 42 SQL/process cases and one restore before its eight own-head cloud jobs and normal merge. PR #577 qualified its 135 controls, 10 new and 42 preserved SQL cases, four actual callback SIGKILL cases and two restores, then passed its own eight cloud jobs and normally merged. Their actual merged-main jobs were independently green and archived. The optional combined signed receiver preserves restrictive DNC before completed-notification retention under one deadline/physical budget. It supplies no complete no-stop/private/all-ASR truth, default activation or clinical hold release.
 
-**Memo component evidence at f7ce5fb before final qualification:** The local memo stack passes 437 source controls, whole strict TypeScript/701 serving and thirty-six actual sender-SIGKILL/full-logical-restore/privacy cases. Recovery now includes ordinary class cancellations and the three approved pass-cancellation profiles and completed or partial ordinary and same-case pass moves, alongside individual/ordinary-class booking and individual observed changes. Historical originals and memo records include archived states under independent current grants; partial moves remain needsReview and recovery cannot continue a clinical phase or reset a purpose. The corrected native roster/case response witness preserves all production bytes. PR #576/#575/#577 are normally merged with independently green actual-main checks; this memo component needs fresh qualification on the integrated parents and its own exact-head cloud/review before publication. Broader source/subject/financial/voice and complete no-stop/private/all-ASR qualification and real acceptance remain open. No memo release is merged or activated. See [scope and evidence](COMMUNICATION_MEMOS.md).
+**Memo component evidence at f7ce5fb before final qualification:** The local memo stack passes 437 source controls, whole strict TypeScript/701 serving and thirty-six actual sender-SIGKILL/full-logical-restore/privacy cases. Recovery now includes ordinary class cancellations and the three approved pass-cancellation profiles and completed or partial ordinary and same-case pass moves, alongside individual/ordinary-class booking and individual observed changes. Historical originals and memo records include archived states under independent current grants; partial moves remain needsReview and recovery cannot continue a clinical phase or reset a purpose. The corrected native roster/case response witness preserves all production bytes. PR #576/#575/#577 are normally merged with independently green actual-main checks. Current parent integration and corrected combined local qualification are recorded above; this earlier component retains its historical scope. Own exact-head cloud/review still precede publication. Broader source/subject/financial/voice and complete no-stop/private/all-ASR qualification and real acceptance remain open. No memo release is merged or activated. See [scope and evidence](COMMUNICATION_MEMOS.md).
 
 **Reference for ongoing work:** Search the owner-supplied Karen snapshot at `/home/gust/code/karen-website-dev` when uncertain; existing solutions and regression tests should inform Abby. See [provenance](KAREN_TO_ABBY_REUSE_AUDIT.md#current-owner-supplied-reference-19-october-2026). Outbound foundations through567 are merged. The [conditional clinical session](OUTBOUND_CLINICAL_HANDOFF.md) retains independent original-patient proof and the exact sick-day appointment. Actual signed speech/private-keypad/caller-flow wiring, follow-up booking, complete no-stop/all-ASR drain, gap13 and the full thirteen-gap acceptance work continue. The dated entries below retain then-current evidence rather than overruling this checkpoint.
 
@@ -23,7 +23,7 @@ PR #576 normally merged as 1c138468b19372197c5929f6fa2ece5d1c645b25. This branch
 | Execution stage | Current evidence and next action |
 | --- | --- |
 | 1 Karen preservation | The owner-supplied19October snapshot is preserved beside Abby at `/home/gust/code/karen-website-dev`, with ZIP provenance and no Git metadata. Search it for prior solutions when uncertain. The older113 hash-checked references and original plans remain separately preserved; local-only retention/deletion still requires its stated selection and acceptance. |
-| 2 Delivery baseline | Normally merged PR576/main1c13846 and later PR575/mainca3bffbe and PR577/main095b7bad each have four independently green actual-main checks with archived raw logs. This local memo candidate remains based on main1c, with memo checkpoints through d1bb703 and locally qualified booking/observed-change cold recovery preserved; it must integrate the later reviewed outbound parents before publication. |
+| 2 Delivery baseline | Normally merged PR576/main1c13846, PR575/mainca3bffbe and PR577/main `095b7bad` each have four independently green actual-main checks with archived raw logs. The local memo candidate now integrates actual main `095b7bad`, with current combined source 1,200, full strict/717 serving and all 36 scoped emitted recovery/restore/privacy cases. Its own exact-head cloud/review and normal merge remain required. |
 | 3 Exact receipt foundation | Merged with the earlier booking sequence. The full interval is captured, sent and validated; later individual/class owners consume this exact receipt. The current combined main cloud history supersedes old draft-only publication status without erasing historical failures. |
 | 4 Individual booking | The earlier PR460 provider-acknowledged individual booking change is merged. Focused database/process/caller evidence and subsequent combined cloud qualification are recorded below. Final availability precedes one possible send; an exact acknowledgement survives later observer failure. Real clinic/provider acceptance remains separate. |
 | 5 Native class creation | The earlier PR461 change is merged and retained in the current combined graph. Ordinary/approved-pass creation uses exact acknowledgement and final double capacity ordering. Replacement creation alone does not complete a move; staged/recovery and real acceptance obligations remain operation-specific. |
@@ -31,8 +31,8 @@ PR #576 normally merged as 1c138468b19372197c5929f6fa2ece5d1c645b25. This branch
 | 7 Class/pass completion | Drafts465–473 and487 include staged caller/SAM/private renewal, separate played consent, bounded native/proposal cost admission, cold staff observation, signed uncertainty-to-staff recovery and same/cross-case date/ordinal/pass journeys. Their current composed cohorts also ran in the passing36b5285c complete clinical graph. Broader operator acceptance, original/replacement recovery obligations and separate financial provisioning remain explicit; no blanket cohort or clinic activation follows. |
 | 8 Payments | Stripe, dedicated Cliniko financial reviews and Cliniko financial records plus approved waivers remain selected. Merged financial/expiry corrections have current scoped and combined qualification recorded below. Concrete clinic mappings, approved manual-payment/waiver authoring, deployment and real payment/sender/source/restore acceptance remain separate; no default activation. |
 | 9 Outbound | Actual Twilio/Abby conversation, independent original-patient clinical handoff, follow-up/financial continuity, signed positive-stop recovery, terminal speech and authenticated status/capacity foundations are normally merged through577 with scoped evidence below. Complete no-stop/private/all-ASR finality and real carrier/clinic/acoustic acceptance remain open. Runtime interchangeability does not claim a delivered Vapi adapter. No live activation follows. |
-| 10 Writeback | Owner selected confidential Cliniko patient communication memos. Individual booking/observed changes and ordinary/pass class booking/cancellation are locally checkpointed. Movement now passes 115 source controls, current whole strict/694 serving and10 current emitted SQL/privacy cases, including partial disposal, native/memo response loss and denied memo producer, plus a fresh shared-codec cancellation SQL regression. Native reports preserve separate original/replacement/association truth and one original-action purpose; they do not claim atomic or financial success. Current native history, archived originals, booking and observed individual-change recovery pass 249 source controls, whole strict/700 serving and twelve actual killed-sender/full-restore/privacy cases. Class cancellation/movement recovery, broader subject/financial/combined voice and real clinic grants remain open. Historical cohorts do not substitute for current combined qualification. Parent integration and own cloud/review still precede publication. Other notes/attachments stay unselected. |
-| 11 Combined qualification | Latest actual normally merged main after577 independently passed all four CI jobs with archived raw evidence. That does not qualify the newer local memo branch: parent integration, current combined regression, own exact-head cloud and review still precede publication. Historical failed suites below retain their original source scope. Real clinic/provider/sender/restore/acoustic/deployment acceptance remains open. |
+| 10 Writeback | Owner selected separate confidential Cliniko communication memos. Exact individual/class booking receipts, observed cancellation/rescheduling and class movement reports preserve their distinct truth and permanent original-bound purposes. Current integrated qualification passes 1,200 source controls, strict/717 serving and36 actual killed-sender/full-logical-restore/privacy cases, including approved class cancellation profiles and completed/partial ordinary/same-case pass moves. Review corrected permission revocation during original-reader quota waits with concurrent-call isolation. Broader verified/representative subject, financial/catalogue/actual signed voice and real author/viewer/retention/source grants remain open. Own cloud/review and normal merge still precede delivery. Other notes/attachments stay unselected; no default activation. |
+| 11 Combined qualification | Actual normally merged main `095b7bad` independently passed all four CI jobs. The newer integrated memo candidate now has local current source 1,200/full strict717/36 emitted recovery-and-restore cases. Its own exact-head cloud/review and normal merge remain required. Historical failures retain their original scope. Real clinic/provider/sender/source/restore/acoustic/deployment acceptance and the full thirteen-gap objective remain open. |
 
 The three detailed plans retain the requirements and acceptance matrices. Recorded source merges do not establish deployment, real provider mutation, mail delivery, human clinic acceptance or Karen deletion readiness.
 
@@ -1124,7 +1124,7 @@ Manifest1.235 keeps419 stable IDs/full-call planned and registers this E2E-419
 operator witness. Product facts and directly cited fingerprints were reviewed
 against the new source. This tree still requires full TypeScript; current
 operator process/database/backup/output privacy, rebuilt signed serving, broad
-cohorts and real clinic/operator/cloud acceptance remain open. Gap10 and all13
+cohorts and real clinic/operator/cloud acceptance remain open. Gap10 and all 13
 gaps remain active. No heavy job was launched for this source.
 
 Two additional lost-reply contracts passed after the89-case checkpoint:
@@ -1179,7 +1179,7 @@ Manifest1.236 keeps419 stable IDs and full-call planned. Product claims and
 cited fingerprints were reviewed. Corrected-source full TypeScript, rebuilt
 signed serving, broader mixed/concurrent/high-cost cohorts, independent review,
 real clinic/operator and authoritative cloud acceptance remain open. PR467's
-billing startup failures remain unresolved externally. Gap10/all13 stay active.
+billing startup failures remain unresolved externally. Gap10/all 13 stay active.
 
 
 The full check at `2dcdcf4` emitted no runtime-source diagnostics, but the
@@ -1298,7 +1298,7 @@ log `be9df097-1792164686100.log`. These overlap the first case. A later
 abort-aware headroom await still needs its final focused rerun. Manifest1.237
 retains419 IDs/full-call planned; the compiled test remains unregistered as
 passing. Rebuild, signed ordinary/pass execution, full new-source TypeScript,
-independent/real operator/cloud acceptance and all13 gaps stay open.
+independent/real operator/cloud acceptance and all 13 gaps stay open.
 
 
 The staged native host/cost/cold recovery regression command
@@ -1516,7 +1516,7 @@ New heavy jobs require new host-local source/dependency/board/process/pressure
 checks and compute coordination. Manifest1.239 retains419 IDs/full-call planned;
 facts/fingerprints describe the source and bounded memory evidence. Current full
 TypeScript, new serving build and signed pass/ordinary qualification remain open,
-along with mixed/concurrent/clinic/operator/cloud acceptance and all13-gap work.
+along with mixed/concurrent/clinic/operator/cloud acceptance and all 13-gap work.
 
 The complete corrected affected memory command on gust-contabo passes98 cases,
 zero failures/skips, work1792169056746/log `be9df097-1792169056746.log`,
@@ -3937,7 +3937,7 @@ The parallel full graph is frozen at earlier6bdf350 and now has an observed
 signed date-corrected same-case pass failure2578 (native writes expected3/saw2),
 not a green verdict. Its job continues naturally; safe isolated diagnosis is in
 a separate checkout. Required cloud checks remain unavailable from billing;
-all13 gaps remain active and no merge or deployment is implied.
+all 13 gaps remain active and no merge or deployment is implied.
 
 Reviewed fact/fingerprint and scenario manifest work1792221723081 passed2/2
 at07:22:04.778592UTC, exit0, on845a34a. Peak66,064,384B/512MiB/
@@ -4009,7 +4009,7 @@ The final focused result supports this latency candidate, not the claim that the
 four failures are resolved across the whole current graph. A fresh combined
 regression remains required. Financial primitives in draft500-502 remain partial;
 periodic consumer, producer/restore/quiescence, delivery/receipts/independent
-expiry and all13/external acceptance requirements remain active.
+expiry and all 13/external acceptance requirements remain active.
 
 Reviewed facts/fingerprints and scenario manifest work1792223314999 passed2/2
 at07:48:36.138755UTC on138cd446, exit0; peak66,789,376B/512MiB/
@@ -4454,7 +4454,7 @@ Frozen draft515 head8e9fa7b303d6c3509a39af88726ef8cb90af8f65 completed its actua
 
 The isolated runner `/tmp/abby-explicit-resend-combined-full-postgres.py` migrated a uniquely owned disposable PostgreSQL database, ran `npm run db:migrate && NODE_OPTIONS=--max-old-space-size=1536 npm run typecheck && ABBY_LEDGER=postgres npm run test:postgres`, and verified1,698 source/doc pins, dependencies and504 pre-existing artifacts unchanged.507 final artifacts were inventoried, including the required dashboard outputs. Node peak1,501,442,048B/2GiB and PostgreSQL565,239,808B/1GiB, CPU200% each, Swap0/OOM/high/max0. Own database cleaned; scope/slice independently inactive; paired wait30064 reaped. Terminal collection was roughly30s after natural completion, not an interruption or rerun.
 
-This green qualifies combined financial request retention and independently approved financial resend processing through515. It excludes later class-source test/docs, time-only foundation, recipient codec and current unqualified native outbound record/storage work. The class follow-up separately proved identical production sources/504 serving artifacts, but that is not an exact-head whole-graph claim for later commits. Prior386525b remains3,849/0/1skip plus6ordered; historical7ae remains3,745/1documentation-fingerprint failure/1skip. Required authoritative cloud execution is still rejected before startup by billing/spending limits. Clinic/provider/sender/restore/acoustic/deployment acceptance and remaining engineering across all13 gaps remain open.
+This green qualifies combined financial request retention and independently approved financial resend processing through515. It excludes later class-source test/docs, time-only foundation, recipient codec and current unqualified native outbound record/storage work. The class follow-up separately proved identical production sources/504 serving artifacts, but that is not an exact-head whole-graph claim for later commits. Prior386525b remains3,849/0/1skip plus6ordered; historical7ae remains3,745/1documentation-fingerprint failure/1skip. Required authoritative cloud execution is still rejected before startup by billing/spending limits. Clinic/provider/sender/restore/acoustic/deployment acceptance and remaining engineering across all 13 gaps remain open.
 
 ## Gap12 native recipient records and portable permanent exclusions, 17 October 2026
 
@@ -4615,7 +4615,7 @@ The initial new chain trials are retained as failed evidence. A fixed-field comp
 
 Exact final checks: `npm run typecheck`; `npm run build:voice-tests`; disposable PostgreSQL migration then `ABBY_LEDGER=postgres node --test --test-concurrency=1 test/voice/compiled-class-financial-chain.test.ts`; original caller preservation with `--test-concurrency=2 test/voice/class-financial-voice.test.ts test/voice/compiled-class-financial-host.test.ts`; original worker preservation with `--test-concurrency=1 test/storage/postgres-financial-consumer.test.ts test/storage/postgres-financial-resend.test.ts test/storage/postgres-financial-class-resend.test.ts`; `git diff --check`. All provider/model/approval endpoints and money were synthetic; HTTP/WebSocket, SQL, cryptography, TLS mail and process loss were real. No live payment or contact occurred.
 
-This qualifies the complete synthetic paid class-caller chain, not overall gap11 completion or activation. Independent expiry/policy, real clinic/provider/sender/producer/restore/acoustic/deployment acceptance and all13 gaps retain their requirements. Full523/da4b998 remains4,275pass/1fail/1skip with ordered follow-ups unrun; draft527 supplies qualified ordinary-turn diagnostics without a production repair. Next, combine those diagnostics with current source for justified whole-graph diagnosis before new outbound features. No merge, deployment or Karen deletion is claimed.
+This qualifies the complete synthetic paid class-caller chain, not overall gap11 completion or activation. Independent expiry/policy, real clinic/provider/sender/producer/restore/acoustic/deployment acceptance and all 13 gaps retain their requirements. Full523/da4b998 remains4,275pass/1fail/1skip with ordered follow-ups unrun; draft527 supplies qualified ordinary-turn diagnostics without a production repair. Next, combine those diagnostics with current source for justified whole-graph diagnosis before new outbound features. No merge, deployment or Karen deletion is claimed.
 
 ## Original caller naturally closed-unpaid expiry, 18 October 2026
 
@@ -5113,7 +5113,7 @@ DB604835840B/1GiB, CPU200% each/Swap0/OOM0. This qualifies the combined through5
 graph and excludes this followup and537. It does not explain or relabel old6d01
 4428/1/1, whose ordered followups did not run.
 Actual financial-owner integration, waiver authoring/supersession and complete
-manual-payment decisions, outbound/writeback engineering and all13 acceptance
+manual-payment decisions, outbound/writeback engineering and all 13 acceptance
 gates remain open; no merge, deployment or live provider/contact/payment action.
 
 ## Native invoice/waiver financial consumer integration, 19 October 2026
@@ -6140,3 +6140,23 @@ case/uncertain/compensation/native-source and subject/financial/catalogue/signed
 incoming/outgoing voice combinations retain their separate scope. Parent integration and
 a scoped memo PR with current cloud/review are next; full execution and real acceptance
 remain open. No default activation or live traffic.
+
+## Combined memo review and dispatch-permission correction, 21 October 2026
+
+The local memo stack incorporates normally merged outbound parents through PR577.
+On the frozen 2fbf snapshot, the deduplicated combined 60-file source regression
+passed 1,198 tests (1792597347750), whole strict/717 serving passed
+(1792597023425), and class-cancellation recovery passed all twelve cases
+(1792597369686). These are specific snapshot results, not qualification of the
+subsequent correction or the full roadmap.
+
+Spec review identified a protected-read timing gap: withdrawing the original
+review grant during the asynchronous account-budget wait still allowed its GET
+before later checks withheld the result. Both local regression cases reproduced
+that GET (1792598289156, 0/2); no real clinic was contacted. The correction checks
+current permission inside deferred native dispatch and gives each recovery its
+own reader/closure, retaining eager configuration validation. A second concurrent
+recovery cannot grant the revoked operation permission. Corrected source 1,200, full strict/717 serving and all 36 scoped killed-sender/restore/privacy cases now pass locally. See [the current integrated evidence](COMMUNICATION_MEMOS.md#permission-corrected-integrated-qualification-21-october-2026). The review's
+optional canonical-envelope duplication cleanup is deferred; no payload bytes or
+clinical outcome semantics change. Own PR/cloud review and actual clinic grants
+remain required. Default wiring is inactive; the full execution goal remains open.

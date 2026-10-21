@@ -29,12 +29,17 @@ const numeric = (v: unknown): v is string => typeof v === "string" && /^[1-9][0-
 function discard(response: Response | undefined): void { try { void response?.body?.cancel().catch(() => {}); } catch {} }
 /** The legacy review decoder owns its schema; this owner bounds and retires
  * its transport/body under the complete recovery operation's signal. */
-function reviewPort(port: typeof fetch): typeof fetch {
+function reviewPort(port: typeof fetch, current: () => boolean): typeof fetch {
   return async (url, init) => {
     const signal = init?.signal; if (!signal || signal.aborted) throw Error("Review unavailable");
     let response: Response | undefined;
     try {
-      const found = await awaitUntilAbort(Promise.resolve().then(() => port(url, init)).then(r => {
+      const found = await awaitUntilAbort(Promise.resolve().then(() => {
+        // The SDK may have awaited its budget since the original grant.
+        // Recheck inside dispatch's deferred callback, with no intervening await.
+        if (signal.aborted || !current()) throw Error("Review unavailable");
+        return port(url, init);
+      }).then(r => {
         response = r; if (signal.aborted) discard(r); return r;
       }), signal);
       if (!found || signal.aborted || found.url && found.url !== String(url)) throw Error("Review unavailable");
@@ -74,15 +79,14 @@ function source(record: ClinikoReviewRecord): Readonly<{ root: string; matches(m
 export class ClinikoAdministrativeMemoRecovery {
   readonly #native: AdministrativeMemoConfig;
   readonly #recallTypeId: string;
-  readonly #reviews: ClinikoRecallReader;
   readonly #history: AdministrativeMemoHistoryAuthority;
   readonly #authentication: AdministrativeMemoAuthentication;
   readonly #port: typeof fetch;
   readonly #authority: AdministrativeMemoOriginalAuthority;
-  private constructor(native: AdministrativeMemoConfig, recallTypeId: string, reviews: ClinikoRecallReader,
+  private constructor(native: AdministrativeMemoConfig, recallTypeId: string,
     history: AdministrativeMemoHistoryAuthority, authority: AdministrativeMemoOriginalAuthority, authentication: AdministrativeMemoAuthentication, port: typeof fetch) {
     this.#native = native;
-    this.#recallTypeId = recallTypeId; this.#reviews = reviews; this.#authentication = authentication; this.#port = port;
+    this.#recallTypeId = recallTypeId; this.#authentication = authentication; this.#port = port;
     this.#history = Object.freeze({ allowsHistoryRead: history.allowsHistoryRead.bind(history), allowsRecordRead: history.allowsRecordRead.bind(history), current: history.current.bind(history) });
     this.#authority = Object.freeze({ allows: authority.allows.bind(authority), current: authority.current.bind(authority) });
   }
@@ -92,8 +96,8 @@ export class ClinikoAdministrativeMemoRecovery {
       if (!numeric(recallTypeId) || typeof originalAuthority?.allows !== "function" || typeof originalAuthority.current !== "function") return unavailable();
       const b = native.rateBudget, captured = Object.freeze({ ...native, scope: Object.freeze({ ...native.scope }), policy: Object.freeze({ ...native.policy }),
         rateBudget: Object.freeze({ claim: b.claim.bind(b), observe429: b.observe429.bind(b) }), clock: native.clock?.bind(native) ?? (() => new Date().toISOString()) });
-      const history = ClinikoAdministrativeMemoHistory.create(captured, authentication, historyAuthority, port), reviews = ClinikoRecallReader.create(captured, reviewPort(port), captured.clock);
-      return history.ok && reviews.ok ? ok(new ClinikoAdministrativeMemoRecovery(captured, recallTypeId, reviews.value, historyAuthority, originalAuthority, authentication, port)) : unavailable();
+      const history = ClinikoAdministrativeMemoHistory.create(captured, authentication, historyAuthority, port), reviews = ClinikoRecallReader.create(captured, port, captured.clock);
+      return history.ok && reviews.ok ? ok(new ClinikoAdministrativeMemoRecovery(captured, recallTypeId, historyAuthority, originalAuthority, authentication, port)) : unavailable();
     } catch { return unavailable(); }
   }
   async recover(input: AdministrativeMemoRecoverySelection, external: AbortSignal): Promise<Result<AdministrativeMemoHistoryResult, Failure>> {
@@ -119,7 +123,10 @@ export class ClinikoAdministrativeMemoRecovery {
     };
     try {
       if (!current() || await awaitUntilAbort(this.#authority.allows(q, signal), signal) !== true || !current()) return unavailable();
-      const original = await awaitUntilAbort(this.#reviews.readReviewHistory(c.scope, selected.recallRef, this.#recallTypeId, signal), signal);
+      // Each invocation owns its grant closure, including concurrent selections.
+      const reviews = ClinikoRecallReader.create(c, reviewPort(this.#port, current), c.clock);
+      if (!reviews.ok) return unavailable();
+      const original = await awaitUntilAbort(reviews.value.readReviewHistory(c.scope, selected.recallRef, this.#recallTypeId, signal), signal);
       if (!original?.ok || !current()) return unavailable();
       const r = original.value.envelope.request, binding = source(original.value);
       if (!binding || r.patientId !== selected.patientId || !isDeepStrictEqual(r.scope, c.scope) || r.businessId !== c.businessId || r.credentialFingerprint !== q.credentialFingerprint) return unavailable();

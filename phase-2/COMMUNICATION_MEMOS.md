@@ -402,6 +402,10 @@ from the native attendance action ID, and cancellation/rescheduling roots from
 the native reviewed-send marker. Its own original-record permission is distinct
 from collection and decoded-memo permissions and remains current across the
 operation. Source/account/patient/operation/interval bindings are rechecked.
+The original review transport checks its own operation's current grant immediately
+before native dispatch, after the asynchronous account-budget wait. Concurrent
+recoveries do not share a mutable permission callback. Service construction still
+validates native configuration before accepting any selection.
 The transport and body are owned under a whole bounded lifetime. Invalid or
 undefined windows and clocks refuse before native reads; later rollback or
 cancellation retires the remaining operation.
@@ -638,9 +642,66 @@ Extend the now-qualified history and scoped booking/change/class process/restore
 backup privacy, archived/ambiguous refusal and real physical-budget admission.
 Then qualify the actual combined host/serving paths, keep operator facts and
 scenarios current, and complete normal parent integration, exact-head cloud
-checks and review before publication. The recorded memo component was qualified on PR576/main1c. The local integrated candidate now includes normally merged outbound PR575/577; fresh combined qualification, own exact-head cloud checks and review remain pending. Attachments and
+checks and review before publication. The recorded memo component was qualified on PR576/main1c. The local integrated candidate now includes normally merged outbound PR575/577; current local combined qualification is recorded below; own exact-head cloud checks and review remain pending. Attachments and
 other storage types stay separate.
 
 Outbound complete no-stop/private/all-ASR reporting and real acoustic/provider/
 clinic acceptance remain open. Independent memo engineering does not close or
 bypass those execution-stage requirements or the full thirteen-gap goal.
+
+## Combined memo review and dispatch-permission correction, 21 October 2026
+
+The local memo stack incorporates normally merged outbound parents through PR577.
+On the frozen 2fbf snapshot, the deduplicated combined 60-file source regression
+passed 1,198 tests (1792597347750), whole strict/717 serving passed
+(1792597023425), and class-cancellation recovery passed all twelve cases
+(1792597369686). These are specific snapshot results, not qualification of the
+subsequent correction or the full roadmap.
+
+Spec review identified a protected-read timing gap: withdrawing the original
+review grant during the asynchronous account-budget wait still allowed its GET
+before later checks withheld the result. Both local regression cases reproduced
+that GET (1792598289156, 0/2); no real clinic was contacted. The correction checks
+current permission inside deferred native dispatch and gives each recovery its
+own reader/closure, retaining eager configuration validation. A second concurrent
+recovery cannot grant the revoked operation permission. Corrected source 1,200, full strict/717 serving and all 36 scoped killed-sender/restore/privacy cases now pass locally. See [the current integrated evidence](COMMUNICATION_MEMOS.md#permission-corrected-integrated-qualification-21-october-2026). The review's
+optional canonical-envelope duplication cleanup is deferred; no payload bytes or
+clinical outcome semantics change. Own PR/cloud review and actual clinic grants
+remain required. Default wiring is inactive; the full execution goal remains open.
+
+## Permission-corrected integrated qualification, 21 October 2026
+
+On the actual normally merged PR575/577 parent, the current corrected combined
+60-file source regression passes 1,200/1,200 (1792598419523,9m30s,peak 287,223,808 B/
+512MiB), zero failures/skips/cancellations. The two revoked-budget/concurrent-call
+controls first reproduced an unauthorized synthetic original GET (1792598289156,
+0/2) and now pass. Focused read-only spec follow-up confirms the dispatch guard,
+per-invocation closure and eager validation; optional codec duplication cleanup
+remains deferred.
+
+Whole strict TypeScript and actual serving compilation both pass
+(1792598420978,3m54s,peak 1,672,601,600 B/2GiB). The wrapper's later inventory guard
+failed because it incorrectly expected a contract test to emit; that file is
+not a serving entrypoint. An independent exact 717-file inventory/source-hash
+check corrected the expected set without rebuilding or rewriting failed evidence.
+Only the original-review recovery module differs from integrated `2fbf`, with all
+other 716 outputs byte-preserved. No compiler/product failure or extra output is
+hidden by that guard correction.
+
+All36 actual emitted killed-sender/fresh-GET-only-process/full-logical-restore/
+privacy cases pass with zero failures/skips/cancellations:
+1792598706713(pass complete3),1792598708190(class cancellations12),
+1792599043019(partial archived/unretained4),1792599133055(preserved booking and
+individual changes12),1792599134468(ordinary complete3),1792599135917(partial
+stored2). Every case retains native180/verification quotas, renewed proof/played
+stage approval where required, permanent spent purposes, complete unfiltered
+restores and all-column/raw-backup/output privacy while preserving legitimate
+unrelated aliases/scans/effects. Node and external PostgreSQL each have 512 MiB/
+Swap0 caps; the latter three short cohorts use 50% CPU each, earlier cohorts 100%
+each, with fresh actual admission and unchanged test/production deadlines. Owned
+databases/containers are cleaned. Native services, mail and clinic grants remain
+synthetic. This scoped result does not qualify other subjects/representatives,
+financial/catalogue/actual signed incoming/outgoing voice, complete no-stop/
+private/all-ASR or real clinic author/viewer/retention/source/restore acceptance.
+Own exact-head cloud/review and normal merge remain required. No default mounting,
+live traffic or completed thirteen-gap goal is claimed.
