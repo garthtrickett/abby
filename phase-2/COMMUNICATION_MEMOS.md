@@ -890,7 +890,7 @@ outputs remain byte-identical. No unqualified source/artifact overlay is used.
 
 All fifteen current emitted signed/PostgreSQL cases pass: clinical-response-loss3
 (1792605494854,34s,Node peak158,371,840 B) and preserved known-clinical12
-(1792605583624,1m41s,Node peak178,847,744 B). The actual180 budget, SQL verification,
+(1792605583624,1m41s,Node peak178,847,744 B). The actual 180 budget, SQL verification,
 session exclusions and permanent memo purposes remain active. Diagnostic reads
 are explicitly charged; no limit, deadline, scanner or failure assertion changes.
 The same every-column and complete-unfiltered-backup/output privacy probes retain
@@ -905,3 +905,17 @@ PR579's actual normal merge and this follow-up's current review/publication/clou
 remain separate gates. Broader subjects/classes/financial/catalogue combinations,
 complete no-stop/private/all-ASR and real clinic/provider/mail/acoustic/source/
 restore acceptance stay open. No default activation or completed execution goal.
+
+## Signed representative individual changes, 21 October 2026
+
+This test-only follow-up qualifies the optional incoming adult-representative individual cancellation and rescheduling composition, alongside the preserved original-patient outgoing memo cohort. Caller and selected patient receive separate registered-channel codes; current independent authority, public menus and actually played SAM precede the one native change. The memo is confidential and bound to the selected patient and original native review marker, never the caller or another related patient.
+
+Both operations cover accepted retention, another-patient producer grant, withdrawn memo permission, stored memo with lost ACK and lost clinical ACK. Independent memo denial or uncertainty cannot erase a known clinical outcome. A lost clinical response remains uncertain/needsReview with no memo or consumed memo purpose, even when a separately charged diagnostic observes matching native state. The clinical action and spent memo purpose cannot replay. Source controls also preserve truthful uncertainty when an accelerated reschedule exhausts its actual 180-request rolling window after its one PATCH.
+
+Current qualification uses 71 actual source controls across 9 disjoint files on one frozen source graph:32 representative/permission/canary controls (1792607862760) and39 outgoing controls (1792608037975), zero failed, cancelled or skipped. This is a current deduplicated union, not a sum of historical component claims. Whole strict TypeScript and 722 serving outputs pass (1792607864205,4m15s,peak1,695,264,768 B/2GiB). From the prior 721 outputs, only the finite direct-SQL verification-canary test helper changes and representative-change-call.js is added. All production bytes and the other 720 outputs are exact.
+
+The actual current compiled signed SQL cohort contains 25 distinct cases: 15 preserved outgoing cases (1792608235090) and 10 representative cancellation/rescheduling cases (1792608800588). Each uses fresh migrated disposable PostgreSQL, the actual shared native180 budget, persisted caller/patient verification accounting, permanent memo exclusions and the real signed HTTP/WS/reusable clinical host. Every-column and unfiltered full logical-dump privacy include independent native source markers and context, separate private codes/identities, memo content/MAC/key and transport credentials; legitimate unrelated index/staged-scan/effect state is retained. The earlier1-case paced accepted smoke is not added to the25.
+
+Positive paced reschedules keep actual elapsed time, normal session renewals and steady20ms carrier silence advancing under the existing two played pause notices and a presence turn. They ask for a current target range; no quota, stale-turn, silence, lease, proof, policy, action or memo deadline is weakened. Earlier failed probes retained wrong decoded-review and private-state/public-receipt assertions, accelerated quota exhaustion, an unrenewed direct fixture lease, a stale initial search range and a signed caller that waited without advancing carrier frames. These are preserved failures, not a release claim. Fixed-stage diagnostics expose codes/counts/timing and existing public workflow state, never private identities or native rows. The final nonemitted SQL-driver correction keeps all 71 selected source dependencies and 722 runtime bytes unchanged and passes its affected strict check (1792608640535).
+
+PR #579 normally merged as main 9f242cde after all eight exact-fbf2 jobs passed and full raw logs were archived; its actual merged-main checks remain independently tracked. This follow-up integrates that normal parent with every qualified source/runtime byte preserved. Delivery remains subject to current facts/scenario/naming/source guards, separate Standards/Spec review, its own publication and exact-head cloud jobs. Remote Cliniko/carrier/mail/ASR and clinic grants remain synthetic. No new sender SIGKILL or logical restore is claimed here. Guardian, multi-subject/class/financial/catalogue variants, complete no-stop/private/all-ASR and real clinic/source/carrier/mail/acoustic/retention acceptance remain open. No deployment or default activation follows.
