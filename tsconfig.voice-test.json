@@ -49,7 +49,8 @@
     "test/support/outbound-clinical-voice.ts",
     "test/support/outbound-follow-up-financial.ts",
     "test/support/outbound-follow-up-financial-process.ts",
-    "test/support/twilio-outbound-notification-recovery.ts"
+    "test/support/twilio-outbound-notification-recovery.ts",
+    "test/support/twilio-outbound-status-voice.ts"
   ],
   "include": []
 }

@@ -78,3 +78,16 @@ requirements in [the progress ledger](EXECUTION_PROGRESS.md). A green local
 regression closes neither those acceptance gates nor the unimplemented later
 gaps. Keep the selected Cliniko financial-work ownership, real-mail and carrier deferrals,
 provider activation and deployment decisions explicit.
+## Optional signed outbound callback: acceptance still unexecuted
+
+Local signed HTTP, actual emitted voice/SQL, killed-worker and logical-restore
+tests qualify engineering under synthetic remote transports and clinic grants;
+they do not record clinic/provider acceptance. Before relevant live traffic,
+observe the selected actual account and original conversation policy, separate
+native report/DNC/notification families and current grants, provider signature
+handling/retries, and independently approved native/source restore behavior.
+Confirm that unknown speech remains unknown, retained DNC survives notification
+failure, and an uncertain unretained purpose cannot repeat its native write.
+HTTP acknowledgement must not be presented as call end, contact settlement or a
+clinical result. Existing clinic, carrier, acoustic and deployment gates remain
+separate. See [the current local scope](OUTBOUND_STATUS_DELIVERY.md).

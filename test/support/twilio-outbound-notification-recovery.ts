@@ -10,7 +10,7 @@ import { value } from "./outbound-records.ts";
 
 type NativeGrant = Parameters<TwilioNotificationRecoveryPorts["history"]["current"]>[0];
 type ProviderGrant = Parameters<TwilioNotificationRecoveryPorts["closure"]["current"]>[0];
-type Options = Pick<NonNullable<Parameters<typeof twilioOutboundTerminalProducerFixture>[0]>, "request" | "budget" | "effectsFactory"> & { lostAck?: "stored" | "unstored" };
+type Options = Pick<NonNullable<Parameters<typeof twilioOutboundTerminalProducerFixture>[0]>, "request" | "budget" | "effectsFactory" | "legacy" | "deadlineMs"> & { lostAck?: "stored" | "unstored"; initialObservation?: boolean };
 export async function twilioNotificationRecoveryFixture(options: Options = {}) {
   const state = { history: true, decoded: true, record: true, nativeLive: true, source: true, provider: true, providerLive: true, release: true,
     child: false, active: false, reads: 0, pages: 0, releases: 0, beforeProvider: undefined as (() => void) | undefined,
@@ -32,14 +32,14 @@ export async function twilioNotificationRecoveryFixture(options: Options = {}) {
       date_created: "Sun, 01 Nov 2026 10:00:00 GMT", start_time: "Sun, 01 Nov 2026 10:00:05 GMT",
       end_time: "Sun, 01 Nov 2026 10:02:00 GMT", date_updated: "Sun, 01 Nov 2026 10:02:00 GMT" });
   };
-  const { lostAck, ...source } = options;
+  const { lostAck, initialObservation, ...source } = options;
   f = await twilioOutboundTerminalProducerFixture({ ...source, carrierRead, budget: source.budget ?? new ClinikoReadBudget(180, () => Date.parse("2026-11-01T10:03:00.000Z")),
     ...(lostAck ? { response: (row: Record<string, unknown>, method: string) => {
       if (method !== "POST") return Response.json(row);
       if (lostAck === "unstored") f.native.rows.delete(String(row.id));
       throw Error("Synthetic completed-notification acknowledgement lost");
     } } : {}) });
-  const retained = value(await f.producer.observeStatus(f.request(), new AbortController().signal)); assert.equal(retained.kind, lostAck ? "uncertain" : "accepted");
+  if (initialObservation !== false) { const retained = value(await f.producer.observeStatus(f.request(), new AbortController().signal)); assert.equal(retained.kind, lostAck ? "uncertain" : "accepted"); }
   const a = f.original.attempt, originalRow = { id: "40", patient: { links: { self: `https://api.au5.cliniko.com/v1/patients/${a.patientId}` } }, recall_at: "2026-11-02", recalled: false, recalled_at: null, archived_at: null, notes: value(encodeOutboundLaunchAttempt(a)),
     links: { self: "https://api.au5.cliniko.com/v1/recalls/40" }, recall_type: { links: { self: "https://api.au5.cliniko.com/v1/recall_types/62" } },
     created_at: a.attemptedAt, updated_at: a.attemptedAt };

@@ -18,6 +18,7 @@ import { createTwilioIngressServer } from "../../src/voice/twilio-ingress-server
 import { bindOutboundVoiceRuntime } from "../../src/voice/outbound-runtime.ts";
 import { outboundConversationProfileRef } from "../../src/voice/outbound-voice-entry.ts";
 import type { OutboundConversationApproval } from "../../src/voice/outbound-voice-entry.ts";
+import type { OutboundRecordConfig } from "../../src/cliniko/outbound-recipient-records.ts";
 import { twilioAbbyOutboundConversation } from "../../src/standalone/twilio-outbound-conversation.ts";
 import { TwilioOutboundStopSpeech, twilioStopSpeechProfileBinding } from "../../src/standalone/twilio-outbound-stop-speech.ts";
 import { ClinikoTwilioOutboundStopRecovery } from "../../src/standalone/cliniko-twilio-outbound-stop-recovery.ts";
@@ -41,12 +42,14 @@ export async function twilioOutboundStopSpeechFixture(options: Pick<BaseOptions,
   carrierRead?: typeof fetch;
   text?: string; quality?: "clear" | "needsClarification"; omitProfileBinding?: boolean; transcriptionAt?: string;
   reportResponse?: "lostStored" | "lostUnstored"; decisionResponse?: "lostStored" | "lostUnstored";
+  terminalObservationBinding?: (requests: OutboundRecordConfig) => string;
 } = {}) {
   const f = await outboundContactLifecycleFixture(options);
   try {
     const key = randomBytes(32), reports = { ...f.config.requests, outboundProviderReportRecallTypeId: "64", providerReportPolicyDigest: "b".repeat(64) };
     const approval: OutboundConversationApproval = { purpose: "outboundContact", runtimeConfigurationHash: "a".repeat(64), mediaOptions: { silenceMs: 100 },
       ...(!options.omitProfileBinding ? { stopSpeechBinding: twilioStopSpeechProfileBinding(reports, key)! } : {}),
+      ...(options.terminalObservationBinding ? { terminalObservationBinding: options.terminalObservationBinding(f.config.requests) } : {}),
       policy: approvedSyntheticPolicy({ ...referenceDefaultPolicy(f.request.scope), automationEnabled: true, greeting: {
         scope: f.request.scope, version: "outbound-v1", ownerRef: "clinic-owner", approved: true,
         approvedText: "Hello, this is Abby calling on behalf of the clinic.", effectiveFrom: "2026-10-01T00:00:00.000Z", effectiveUntil: "2026-12-01T00:00:00.000Z" } }) };
