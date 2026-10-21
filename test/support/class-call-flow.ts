@@ -11,8 +11,11 @@ import { classCancellationFixture } from "./class-cancellation.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 import type { ClassPassCancellationEffect } from "../../src/standalone/cliniko-class-pass-cancellation.ts";
 
-export async function classCallFlowFixture(operation: "book" | "cancel", multiple = false, passes = false, passCancellation?: ClassPassCancellationEffect) {
-  const f = await (operation === "book" ? classBookingFixture({ passes }) : classCancellationFixture(passCancellation ? { passes: passCancellation } : {}));
+export async function classCallFlowFixture(operation: "book" | "cancel", multiple = false, passes = false, passCancellation?: ClassPassCancellationEffect,
+  cancellationOptions: Pick<NonNullable<Parameters<typeof classCancellationFixture>[0]>,
+    "scope" | "budget" | "budgetLimit" | "verificationBudget" | "memoFor"> = {}) {
+  const f = await (operation === "book" ? classBookingFixture({ passes })
+    : classCancellationFixture({ ...cancellationOptions, ...(passCancellation ? { passes: passCancellation } : {}) }));
   f.host.dispose(); f.session.dispose();
   const source = f.classSessionConfig;
   let flowConfig: ClinikoCallFlowConfig = { ...source,
