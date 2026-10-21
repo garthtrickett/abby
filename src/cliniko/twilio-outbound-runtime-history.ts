@@ -2,12 +2,12 @@ import { isDeepStrictEqual } from "node:util";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
-import { ownedBodyBytes, OwnedBodyError } from "../shared/owned-body-bytes.ts";
+import { OwnedBodyError } from "../shared/owned-body-bytes.ts";
 import { validRecallMarker } from "./recall-note.ts";
 import { outboundConfigShard, outboundNativeInstant } from "./internal/outbound-record-context.ts";
-import { readAccountRecallHistory, PatientRecallHistoryError } from "./internal/patient-recall-history.ts";
+import { PatientRecallHistoryError } from "./internal/patient-recall-history.ts";
 import type { NativeOutboundContext, NativeOutboundFailure } from "./internal/outbound-native-record.ts";
-import { claimClinikoBudget, observeCliniko429, clinikoCredentialFingerprint } from "./read-budget.ts";
+import { clinikoCredentialFingerprint } from "./read-budget.ts";
 import { ClinikoOutboundLaunchRecords, outboundLaunchRecordSelection, outboundLaunchRecordOwnerBinding } from "./outbound-launch-records.ts";
 import type { OutboundLaunchRecordConfig, OutboundLaunchRecordQuery, OutboundLaunchRecord } from "./outbound-launch-records.ts";
 import { outboundLaunchAttemptDigest } from "./outbound-launch-attempt.ts";
@@ -15,6 +15,7 @@ import { ClinikoTwilioOutboundReportRecords, twilioOutboundReportRecordBinding }
 import type { TwilioOutboundReportConfig, TwilioOutboundReportQuery } from "./twilio-outbound-report-records.ts";
 import { decodeTwilioOutboundReport, twilioOutboundReportDigest, TwilioOutboundReportAuthentication } from "./twilio-outbound-report.ts";
 import type { TwilioOutboundReport } from "./twilio-outbound-report.ts";
+import { readNativeOutboundAccountHistory, NativeOutboundHistoryReadError } from "./internal/outbound-account-history.ts";
 import type { OutboundRuntimeCallIdentity } from "../voice/outbound-runtime.ts";
 
 type Config = Readonly<{ reports: TwilioOutboundReportConfig; attempts: OutboundLaunchRecordConfig }>;
@@ -35,7 +36,6 @@ class Refusal extends Error {
   readonly kind: NativeOutboundFailure["kind"];
   constructor(kind: NativeOutboundFailure["kind"]) { super("Native runtime evidence unavailable"); this.kind = kind; }
 }
-function discard(r: Response | undefined): void { try { void r?.body?.cancel().catch(() => {}); } catch { /* Own body only. */ } }
 function freeze<T>(v: T): T { if (v && typeof v === "object") { for (const child of Object.values(v)) freeze(child); Object.freeze(v); } return v; }
 
 /** Cold correlation from the original runtime identity, without inventing lost
@@ -103,22 +103,8 @@ export class ClinikoTwilioOutboundRuntimeHistory {
     });
     try {
       now();
-      const get = async (url: string) => {
-        await permit(); const limited = await wait(claimClinikoBudget(budget)); if (limited) throw new Refusal(limited.kind); await permit();
-        let response: Response | undefined, owned = false;
-        try {
-          current(); const found = await wait(this.#fetch(url, { method: "GET", redirect: "error", signal, headers: { Accept: "application/json",
-            Authorization: `Basic ${Buffer.from(`${r.apiKey}:`).toString("base64")}`, "User-Agent": `Abby (${r.contactEmail})` } }).then(v => { response = v; if (signal.aborted) discard(v); return v; }));
-          if (found.redirected || found.url && found.url !== url) throw new Refusal("mismatched");
-          if (found.status === 429) { await wait(observeCliniko429(budget, found.headers.get("X-RateLimit-Reset"))); throw new Refusal("rateLimited"); }
-          if (found.status === 401 || found.status === 403) throw new Refusal("forbidden");
-          if (found.status !== 200) throw new Refusal("unavailable");
-          owned = true; const bytes = await wait(ownedBodyBytes(found.body, 1000000, signal)); let raw: unknown;
-          try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); } catch { throw new Refusal("malformed"); }
-          await permit(); return raw;
-        } finally { if (!owned) discard(response); }
-      };
-      const scan = () => readAccountRecallHistory({ base: this.#base, typeIds: [r.outboundProviderReportRecallTypeId] }, get, now);
+      const scan = () => readNativeOutboundAccountHistory({ base: this.#base, typeIds: [r.outboundProviderReportRecallTypeId],
+        apiKey: r.apiKey, contactEmail: r.contactEmail, rateBudget: budget }, { signal, now, current, permit, wait }, this.#fetch);
       const history = await scan(), actions = new Set<string>(), origins = new Set<string>();
       const reports = ClinikoTwilioOutboundReportRecords.createReadOnly({ ...r, rateBudget: budget }, this.#auth,
         readAuthority(this.#authority.allowsReportRead), this.#fetch);
@@ -150,7 +136,7 @@ export class ClinikoTwilioOutboundRuntimeHistory {
       }
       await permit(); current();
       return ok(Object.freeze({ kind: "nativeRuntimeHistory", selected: history.rows.length, scanned: history.scanned, ...(evidence ? { evidence } : {}) }));
-    } catch (e) { return err({ kind: e instanceof Refusal || e instanceof OwnedBodyError || e instanceof PatientRecallHistoryError ? e.kind : "unavailable" }); }
+    } catch (e) { return err({ kind: e instanceof Refusal || e instanceof NativeOutboundHistoryReadError || e instanceof OwnedBodyError || e instanceof PatientRecallHistoryError ? e.kind : "unavailable" }); }
     finally { clearTimeout(timer); controller.abort(); }
   }
 }

@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
-import { isDeepStrictEqual } from "node:util";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
-import { ownedBodyBytes } from "../shared/owned-body-bytes.ts";
+import { readTwilioSingleRoot } from "./internal/twilio-single-root-read.ts";
 import type { OutboundProviderBinding } from "./outbound-runtime.ts";
 
 export type TwilioCallClosureInput = Readonly<{ callSid: string; number: string; attemptedAt: string; stoppedAt: string; evidenceDigest: string }>;
@@ -20,23 +19,8 @@ export type TwilioCallClosureResult = Readonly<{ kind: "unknown" | "active" }> |
   kind: "singleRootClosed"; callSid: string; endedAt: string; observedAt: string; digest: string;
 }>;
 type Config = Readonly<{ provider: OutboundProviderBinding; accountSid: string; authToken: string; from: string; deadlineMs: number; now: () => string }>;
-const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const instant = (v: unknown): v is string => typeof v === "string" && Number.isFinite(Date.parse(v)) && new Date(v).toISOString() === v;
 const hash = (v: unknown) => createHash("sha256").update(JSON.stringify(v)).digest("hex");
-function providerTime(v: unknown): string | undefined {
-  if (typeof v !== "string" || !/^[A-Z][a-z]{2}, [0-9]{2} [A-Z][a-z]{2} [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} (?:\+0000|GMT)$/.test(v)) return;
-  const n = Date.parse(v); if (!Number.isFinite(n)) return;
-  const d = new Date(n); return d.toUTCString() === v.replace(/\+0000$/, "GMT") ? d.toISOString() : undefined;
-}
-function samePage(value: unknown, expected: string): boolean {
-  try {
-    if (typeof value !== "string" || !value.startsWith("/")) return false;
-    const actual = new URL(value, "https://api.twilio.com"), target = new URL(expected, "https://api.twilio.com");
-    return actual.origin === target.origin && !actual.hash && actual.pathname === target.pathname &&
-      [...actual.searchParams].length === 3 && [...target.searchParams].every(([key, v]) => actual.searchParams.getAll(key).length === 1 && actual.searchParams.get(key) === v);
-  } catch { return false; }
-}
-function discard(r: Response | undefined): void { try { void r?.body?.cancel().catch(() => {}); } catch { /* Own response. */ } }
 
 /** Read-only provider evidence for the fixed Connect/Stream/Hangup profile.
  * No callback/root-only completion inference: independently admitted complete
@@ -74,41 +58,10 @@ export class TwilioOutboundCallClosure {
         if (live(q, signal) !== true || await wait(Promise.resolve().then(() => allows(q, signal))) !== true || live(q, signal) !== true) throw Error("Read permission unavailable");
         queries.set(operation, q); current();
       };
-      const path = `/2010-04-01/Accounts/${c.accountSid}/Calls`, root = `${path}/${captured.callSid}.json`;
-      const children = path + ".json?" + new URLSearchParams({ ParentCallSid: captured.callSid, PageSize: "100", Page: "0" });
-      const get = async (relative: string, operation: "readRootCall" | "readChildCalls") => {
-        await permit("approveExclusiveSingleRootProfile"); await permit(operation); let response: Response | undefined, owned = false;
-        try {
-          current(); const url = `https://api.twilio.com${relative}`;
-          const found = await wait(this.#fetch(url, { method: "GET", redirect: "error", signal,
-            headers: { Accept: "application/json", Authorization: `Basic ${Buffer.from(`${c.accountSid}:${c.authToken}`).toString("base64")}` } }).then(r => { response = r; if (signal.aborted) discard(r); return r; }));
-          if (found.status !== 200 || found.redirected || found.url && found.url !== url || found.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "application/json") throw Error("Unavailable provider body");
-          owned = true; const bytes = await wait(ownedBodyBytes(found.body, 131072, signal)); const raw: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
-          await permit("approveExclusiveSingleRootProfile"); await permit(operation); return raw;
-        } finally { if (!owned) discard(response); }
-      };
-      const readRoot = async () => {
-        const v = await get(root, "readRootCall");
-        if (!object(v) || v.account_sid !== c.accountSid || v.sid !== captured.callSid || v.from !== c.from || v.to !== captured.number ||
-            v.parent_call_sid !== null || v.direction !== "outbound-api" || v.uri !== root) throw Error("Unmatched root");
-        if (["queued", "initiated", "ringing", "in-progress"].includes(String(v.status))) return undefined;
-        // A signed answered-speech observation cannot coexist with busy/failed/
-        // unanswered. Those statuses also lack a trustworthy completed end time.
-        const createdAt = providerTime(v.date_created), startAt = providerTime(v.start_time), endedAt = providerTime(v.end_time), updatedAt = providerTime(v.date_updated);
-        if (v.status !== "completed" || !createdAt || !startAt || !endedAt || !updatedAt ||
-            Date.parse(createdAt) < Math.floor(Date.parse(captured.attemptedAt) / 1000) * 1000 || createdAt > startAt || startAt > captured.stoppedAt ||
-            captured.stoppedAt > endedAt || endedAt > updatedAt || updatedAt > now()) throw Error("Unmatched completed call");
-        return Object.freeze({ callSid: captured.callSid, createdAt, startAt, endedAt, updatedAt });
-      };
-      const noChildren = async () => {
-        const v = await get(children, "readChildCalls");
-        if (!object(v) || !Array.isArray(v.calls) || v.calls.length !== 0 || v.next_page_uri !== null || v.previous_page_uri !== null ||
-            v.page !== 0 || v.page_size !== 100 || !samePage(v.uri, children) || !samePage(v.first_page_uri, children)) throw Error("Incomplete single-root history");
-      };
-      now(); const first = await readRoot(); if (!first) return { kind: "active" };
-      await noChildren(); const again = await readRoot(); if (!again || !isDeepStrictEqual(again, first)) return { kind: "unknown" };
-      await noChildren(); await permit("approveExclusiveSingleRootProfile"); current();
-      return Object.freeze({ kind: "singleRootClosed", callSid: captured.callSid, endedAt: first.endedAt, observedAt: now(),
+      const found = await readTwilioSingleRoot(c, captured, { kind: "positiveStop", at: captured.stoppedAt }, { signal, now, current, permit, wait }, this.#fetch);
+      if (found.kind !== "singleRootClosed") return found;
+      const first = found.snapshot;
+      return Object.freeze({ kind: "singleRootClosed", callSid: captured.callSid, endedAt: first.endedAt, observedAt: found.observedAt,
         digest: hash(["abby.twilio.single-root-evidence.v1", this.#binding, captured, { callSid: first.callSid, createdAt: first.createdAt, startAt: first.startAt, endedAt: first.endedAt }, "twoCompleteEmptyChildPages"]) });
     } catch { return { kind: "unknown" }; } finally { clearTimeout(timer); controller.abort(); }
   }

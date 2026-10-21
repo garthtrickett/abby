@@ -9,6 +9,7 @@ import { captureOutboundOriginalSend } from "./outbound-original-send.ts";
 import type { OutboundOriginalSend } from "./outbound-original-send.ts";
 import type { OutboundProviderBinding, OutboundRuntimeCall, OutboundRuntimeLaunchResult, OutboundVoiceRuntimeAdapter } from "./outbound-runtime.ts";
 import { supportsTwilioBidirectionalAudio } from "./twilio-media-stream.ts";
+import { TwilioOutboundNotificationClosure } from "./twilio-outbound-notification-closure.ts";
 import { TwilioOutboundCallClosure } from "./twilio-outbound-call-closure.ts";
 import { TwilioOutboundContext } from "./twilio-outbound-context.ts";
 import type { TwilioOriginalCall } from "./twilio-outbound-context.ts";
@@ -80,6 +81,12 @@ export class TwilioAbbyOutboundRuntime implements OutboundVoiceRuntimeAdapter {
    * account/token/from number than the original provider binding. */
   createCallClosureReader(): TwilioOutboundCallClosure {
     return new TwilioOutboundCallClosure({ provider: this.#binding, accountSid: this.#config.accountSid, authToken: this.#config.authToken,
+      from: this.#config.from, deadlineMs: this.#config.deadlineMs ?? 15000, now: this.#now }, this.#fetch);
+  }
+  /** Separate opt-in notification purpose. Creating the reader grants no
+   * source approval and never changes the default unknown terminal answer. */
+  createNotificationClosureReader(): TwilioOutboundNotificationClosure {
+    return new TwilioOutboundNotificationClosure({ provider: this.#binding, accountSid: this.#config.accountSid, authToken: this.#config.authToken,
       from: this.#config.from, deadlineMs: this.#config.deadlineMs ?? 15000, now: this.#now }, this.#fetch);
   }
   async inspectTerminal(): Promise<Readonly<{ kind: "unknown" }>> { return { kind: "unknown" }; }
