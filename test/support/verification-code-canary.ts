@@ -21,10 +21,20 @@ export function distinctFromClock(code: number, window: CanaryClockWindow): bool
   return true;
 }
 export function drawDistinctCode(draw: () => number, window: CanaryClockWindow, excluded: ReadonlySet<string> = new Set()): number {
+  return drawCode(draw, window, excluded, 256, () => true);
+}
+/** PostgreSQL renders microseconds without trailing zeroes. Six-digit canaries
+ * ending in zero cannot equal a complete rendered timestamp fraction. Keep the
+ * epoch-window and existing-row exclusions as separate requirements. */
+export function drawSqlCanaryCode(draw: () => number, window: CanaryClockWindow, excluded: ReadonlySet<string> = new Set()): number {
+  return drawCode(draw, window, excluded, 4096, code => code % 10 === 0);
+}
+function drawCode(draw: () => number, window: CanaryClockWindow, excluded: ReadonlySet<string>, attempts: number,
+  eligible: (code: number) => boolean): number {
   if (!validWindow(window) || !(excluded instanceof Set) || excluded.size > 100000 || [...excluded].some(v => !/^[0-9]{6}$/.test(v)))
     throw Error("Invalid synthetic verification canary clock window or exclusions");
-  for (let attempt = 0; attempt < 256; attempt++) {
-    const code = draw(); if (distinctFromClock(code, window) && !excluded.has(String(code).padStart(6, "0"))) return code;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const code = draw(); if (distinctFromClock(code, window) && eligible(code) && !excluded.has(String(code).padStart(6, "0"))) return code;
   }
   throw Error("Synthetic verification canary selection exhausted");
 }
@@ -88,7 +98,7 @@ function install(excluded: ReadonlySet<string> = new Set()): CanaryClockWindow {
   if (!descriptor?.writable) throw Error("Synthetic verification crypto is unavailable");
   Object.defineProperty(crypto, "randomInt", { ...descriptor, value: (...args: unknown[]) =>
     args.length === 2 && args[0] === 0 && args[1] === space
-      ? drawDistinctCode(() => randomInt(0, space), window, excluded) : Reflect.apply(randomInt, crypto, args) });
+      ? drawSqlCanaryCode(() => randomInt(0, space), window, excluded) : Reflect.apply(randomInt, crypto, args) });
   syncBuiltinESMExports(); installed = true;
   return window;
 }
