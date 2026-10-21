@@ -3,6 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { bookingSessionFixture } from "./booking-session.ts";
 import { decodeClinikoReview } from "../../src/cliniko/review-request.ts";
 import type { FinancialVoiceProvision } from "../../src/standalone/financial-voice-provision.ts";
+import type { ClinikoBookingMemoConfig } from "../../src/standalone/cliniko-booking-memo.ts";
 import type { LocationScope } from "../../src/core/model.ts";
 import type { ClinikoCallFlowConfig, ClinikoOutboundCallFlowConfig } from "../../src/standalone/cliniko-call-flow.ts";
 import type { IntentResolver } from "../../src/voice/voice-session.ts";
@@ -41,6 +42,9 @@ async function until(check: () => boolean | Promise<boolean>, label: string, tim
  * native decoders and ordinary review/write owners. Clinic grants, remote native
  * HTTP, email, clear-final speech recognition and synthesis are synthetic. */
 export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: ClinikoRequestBudget; apiKey?: string; recipientNumber?: string; purpose?: "followUp" | "sickDay"; services?: boolean; sickDayAction?: "reschedule" | "cancel"; lostCancellationResponse?: boolean;
+  verificationBudgetFor?: (scope: LocationScope) => NonNullable<ClinikoCallFlowConfig["verificationBudget"]>;
+  realElapsedTime?: true;
+  memo?: (context: Readonly<{ scope: LocationScope; cliniko: ClinikoOutboundCallFlowConfig["cliniko"]; clock: () => string }>) => ClinikoBookingMemoConfig;
   intent?: (owner: ClinikoCallFlow) => IntentResolver;
   financial?: (context: Readonly<{ scope: LocationScope; cliniko: ClinikoOutboundCallFlowConfig["cliniko"]; clock: () => string;
     directory: ClinikoCallFlowConfig["directory"]; policyVersion: string; folder: string; clinicalReviews: () => readonly Record<string, unknown>[] }>) =>
@@ -73,7 +77,8 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
     patientId: verificationCanaries[2]!, nativeRecallId: "900", recipientNumber: contactNumber } : undefined);
   const requestId = identities?.nativeRecallId ?? "30";
   let ledger: MemoryLedger | undefined, flow: ClinikoCallFlow | undefined, sessionId: string | undefined, actualCallId: string | undefined;
-  const now = () => new Date(Date.parse(verificationNow) + nowOffset + mediaElapsedMs).toISOString();
+  const began = performance.now();
+  const now = () => new Date(Date.parse(verificationNow) + nowOffset + mediaElapsedMs + (options.realElapsedTime ? performance.now() - began : 0)).toISOString();
   const nativeCalls: { method: string; path: string }[] = [], spoken: string[] = [], modelTurns: string[] = [], transcripts: string[] = [];
   const state = { originalLive: true, targetLive: true, nativeLive: true, profileLive: true };
   const native: typeof fetch = async (input, init) => {
@@ -163,9 +168,10 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
   const finances = await options.financial?.({ scope: f.scope, cliniko: c, clock: now, directory: clinical.directory,
     policyVersion: clinical.policyVersion, folder: f.folder, clinicalReviews: () => f.recalls });
   const provider = finances ? finances.wrap(native) : native;
+  const memo = options.memo?.({ scope: f.scope, cliniko: c, clock: now });
   let utterance = 0;
   const inputs: { text: string; intent: VoiceIntent }[] = [];
-  const prepare = clinikoOutboundVoice({ clinical: { ...clinical, ...(service ? { serviceCatalogue: service.flowConfig.serviceCatalogue } : {}), cliniko: c, policies, fetchPort: provider,
+  const prepare = clinikoOutboundVoice({ clinical: { ...clinical, ...(service ? { serviceCatalogue: service.flowConfig.serviceCatalogue } : {}), ...(memo ? { memo } : {}), ...(options.verificationBudgetFor ? { verificationBudget: options.verificationBudgetFor(f.scope) } : {}), cliniko: c, policies, fetchPort: provider,
       approvals: { bookCaller: f.config.callerApprovalPath, cancelCaller: f.config.callerApprovalPath, rescheduleCaller: f.config.callerApprovalPath,
         booking: fallbackApprovalPath, cancellation: cancellationApprovalPath, rescheduling: reschedulingApprovalPath } },
     context: { requests, records: { allows: async () => true, current: () => state.nativeLive },

@@ -780,6 +780,85 @@ This adds no guardian, representative cancellation/rescheduling/class, financial
 catalogue or outgoing voice qualification. It adds no stopped-process or restore
 case; the parent's 36 restored-history cases retain their recorded scope. Real
 clinic author/content/viewer/retention, permission/source/restore, provider/mail
-and acoustic acceptance remain open. Normal parent merge and this follow-up's
-own exact-head cloud/review remain required before delivery. No default activation
+and acoustic acceptance remain open. Actual normal parent integration is recorded below; this follow-up's
+own publication/exact-head cloud/review remain required before delivery. No default activation
+or completed thirteen-gap goal is claimed.
+
+## Normally merged memo parent and subject qualification integration
+
+PR #578/exactd72dd74 passed all eight push/PR jobs; complete raw logs are
+archived. It normally merged as main7a539010914c846b006222717f14c254aab7f1f4
+at17:32:19UTC. That actual main tree exactly equals the qualified d72 parent;
+this signed representative-booking follow-up now incorporates the normal merge.
+Only reviewed documentation status changes: all qualified code, runtime inputs,
+dependencies, emitted roots and720 artifact hashes stay unchanged. Current55
+source controls and four independently canaried signed SQL cases retain their
+recorded scopes; no rebuild, duplicate runtime run or broader acceptance is
+inferred. Fresh facts/scenario/source/naming/artifact/cleanup guards precede
+this follow-up's own publication and exact-head cloud/review. Actual merged-main
+checks are separately tracked and are not inferred green from the PR's checks.
+The full thirteen-gap objective and actual clinic/provider/mail/acoustic/source/
+restore acceptance remain open. No default activation or live traffic.
+
+## Signed outgoing original-patient administrative memos, 21 October 2026
+
+The optional outgoing prepared-clinical composition now has current qualification
+for original-patient follow-up individual booking and exact sick-day individual
+cancellation/rescheduling. Actual signed HTTP/WebSocket greeting, private keypad
+verification, played clinical confirmation and native receipt/observation precede
+independently granted memo retention. Every posted memo identifies the verified
+original patient and actual outbound direction; booking uses the independently
+observed native booking marker, while observed changes use the strict original
+review marker. Those native roots are independently privacy canaries even when
+the memo grant is denied. These tests do not release a contact or call-capacity
+hold or establish complete no-stop/private/all-ASR finality.
+
+For each operation, accepted retention, wrong-patient producer grant, withdrawn
+memo permission and stored-but-lost memo acknowledgement are exercised. Denial
+suppresses retention without erasing known clinical success. Lost memo ACK stays
+uncertain; duplicate queries cannot repeat the clinical mutation or one-use memo
+purpose. Cancellation/rescheduling retain acknowledged-and-observed best-effort
+meaning. This adds no financial, atomic-diary or appointment-capacity promise.
+
+Current source work1792603533927 passes48/48 in six files (2m25s,
+peak170,172,416 B/512MiB): the twelve new signed cases plus existing outgoing
+clinical/cancellation/financial, representative memo and verification-code
+canary controls. Whole strict TypeScript and actual721-output serving build pass
+(1792603535383,3m39s,peak1,693,466,624 B/2GiB). Relative to the qualified720
+parent, only the outgoing voice and verification-code test helpers change, with
+one added shared outgoing-memo fixture. Every production output and the other718
+parent outputs are byte-identical. New fixture options have actual source/SQL
+consumers; earlier callers keep their original defaults. The new paths opt into
+real elapsed wall time alongside the fixture's actual media clock.
+
+Only the nonemitted SQL driver was refined afterward to probe independent native
+context UUIDs, carrier secrets and memo MACs rather than relying solely on whole
+payload canaries. Its affected strict graph passes (1792603796475,58s,
+peak686,026,752 B/1GiB). All721 outputs and selected48 source dependencies remain
+unchanged; no duplicate build/source run is claimed. The initial inline signed
+three-operation smoke and affected types passed before shared-helper extraction
+and these SQL/clock refinements; they are preserved as historical prototypes.
+
+Actual emitted signed/PostgreSQL work passes all twelve cases: accepted3
+(1792603795020,37s) and remaining wrong-grant/withdrawn/lost-ACK9
+(1792603888177,1m04s), zero failures/skips/cancellations. Each case owns a fresh
+migrated database and uses the real native180 account budget, actual SQL
+verification quotas, call-session exclusion and permanent memo purpose. Public
+projections, every SQL column and an unfiltered complete raw backup are checked
+for private input/identity/contact, proof/call/session, actual native source roots,
+original routing context/UUIDs, carrier keys and memo payload/MAC/key material.
+Legitimate unrelated phone aliases, staged scans and opaque effects remain.
+Node and external PostgreSQL have separate512MiB/CPU100%/Swap0 caps; peaks are
+165,490,688 B and170,573,824 B for Node across the two runs. All OOM/high/max
+counters are zero, and owned databases/containers/fixture folders are cleaned.
+There is no new process kill or logical-restore case in this cohort.
+
+Clinic/native/carrier/mail, clear-final ASR and grants remain synthetic. Guardian,
+representative/class/financial/catalogue combinations, outgoing clinical-response
+uncertainty, complete negative finality and actual clinic/provider/acoustic/source/
+restore acceptance are separate. PR578 normally merged after eight green jobs;
+actual-main checks remain independent. Representative PR579 is published and
+still has its own current cloud/normal-merge gate. This local follow-up integrates
+that exact parent with qualification inputs preserved, but remains unpublished
+until its actual normal parent and own review/cloud gates. No default activation
 or completed thirteen-gap goal is claimed.
