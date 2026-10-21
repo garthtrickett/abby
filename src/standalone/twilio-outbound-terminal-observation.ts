@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
 import type { OutboundEffectBarrier } from "../core/outbound-effect-barrier.ts";
-import { awaitUntilAbort } from "../shared/await-until-abort.ts";
+import { readTerminalObservationApproval } from "./internal/twilio-terminal-observation-approval.ts";
 import { outboundConfigShard } from "../cliniko/internal/outbound-record-context.ts";
 import type { NativeOutboundFailure, NativeOutboundRetention } from "../cliniko/internal/outbound-native-record.ts";
 import { clinikoCredentialFingerprint } from "../cliniko/read-budget.ts";
@@ -11,7 +11,6 @@ import { ClinikoTwilioOutboundTerminalObservationRecords, twilioOutboundTerminal
 import type { TwilioOutboundTerminalObservationConfig, TwilioOutboundTerminalObservationWriteAuthority } from "../cliniko/twilio-outbound-terminal-observation-records.ts";
 import { twilioOutboundTerminalActionRef, TwilioOutboundTerminalObservationAuthentication } from "../cliniko/twilio-outbound-terminal-observation.ts";
 import { TwilioAbbyOutboundRuntime } from "../voice/twilio-outbound-runtime.ts";
-import { outboundConversationProfileRef } from "../voice/outbound-voice-entry.ts";
 import type { OutboundConversationPolicySource } from "../voice/outbound-voice-entry.ts";
 import type { SignedTwilioWebhook } from "../voice/twilio-signed-ingress.ts";
 
@@ -98,15 +97,10 @@ export class TwilioOutboundTerminalObservationProducer {
         last = at; return true;
       };
       if (!selected()) return err({ kind: "unavailable" });
-      const selection = freeze({ key: { accountRef: call.accountSid, providerCallRef: call.callSid }, scope: a.scope,
-        clinicNumber: call.clinicNumber, profileRef: this.#selected.profileRef });
-      const loaded = await awaitUntilAbort(Promise.resolve().then(() => selected() ? this.#source.read(selection, signal) : err({ kind: "unavailable" as const })), signal);
-      if (!loaded?.ok || !selected()) return err({ kind: "unavailable" });
-      const approval = freeze(structuredClone(loaded.value));
-      const current = () => selected() && approval.terminalObservationBinding === this.#profile &&
-        outboundConversationProfileRef(approval) === this.#selected.profileRef && isDeepStrictEqual(approval.policy.scope, a.scope) &&
-        this.#source.current(selection, approval) === true;
-      if (!current()) return err({ kind: "forbidden" });
+      const admitted = await readTerminalObservationApproval(this.#source, call,
+        { scope: a.scope, profileRef: this.#selected.profileRef, terminalBinding: this.#profile }, signal, selected);
+      if (!admitted.ok) return admitted;
+      const current = admitted.value.current;
       const actionRef = twilioOutboundTerminalActionRef(call.context.sessionActionRef), recordedAt = this.#now();
       if (!actionRef || !instant(recordedAt) || recordedAt < last) return err({ kind: "unavailable" });
       const signed = this.#auth.sign({ actionRef, scope: a.scope, businessId: a.businessId, credentialFingerprint: a.credentialFingerprint, patientId: a.patientId,

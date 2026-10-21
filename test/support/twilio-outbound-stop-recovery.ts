@@ -11,20 +11,25 @@ import type { TwilioOutboundReport } from "../../src/cliniko/twilio-outbound-rep
 import type { TwilioOutboundReportHistoryQuery } from "../../src/cliniko/twilio-outbound-report-history.ts";
 import type { TwilioOutboundReportQuery } from "../../src/cliniko/twilio-outbound-report-records.ts";
 import { ClinikoTwilioOutboundStopRecovery } from "../../src/standalone/cliniko-twilio-outbound-stop-recovery.ts";
+import type { OutboundRecordConfig } from "../../src/cliniko/outbound-recipient-records.ts";
 
 export async function twilioOutboundStopRecoveryFixture(options: Parameters<typeof outboundStopOwnerFixture>[0] & {
+  profileRef?: (requests: OutboundRecordConfig) => string;
   recoveryRuntime?: { ClinikoTwilioOutboundStopRecovery: typeof ClinikoTwilioOutboundStopRecovery;
     TwilioAbbyOutboundRuntime: typeof TwilioAbbyOutboundRuntime; TwilioOutboundReportAuthentication: typeof TwilioOutboundReportAuthentication };
 } = {}) {
-  const { recoveryRuntime = { ClinikoTwilioOutboundStopRecovery, TwilioAbbyOutboundRuntime, TwilioOutboundReportAuthentication }, ...stopOptions } = options;
+  const { recoveryRuntime = { ClinikoTwilioOutboundStopRecovery, TwilioAbbyOutboundRuntime, TwilioOutboundReportAuthentication }, profileRef, ...stopOptions } = options;
   let now = "2026-11-02T00:00:00.000Z";
   const carrier = { ref: "synthetic-provider", profileRef: "generic-clinic-greeting", accountSid: "AC" + "a".repeat(32),
     authToken: `synthetic-stop-recovery-secret-${randomUUID()}`, from: "+61255550100", publicAnswerUrl: "https://clinic.example.invalid/outbound/answer",
     publicStatusUrl: "https://clinic.example.invalid/outbound/status", publicStreamUrl: "wss://clinic.example.invalid/outbound/stream",
     contextKey: randomBytes(32), now: () => now };
-  const runtime = new recoveryRuntime.TwilioAbbyOutboundRuntime(carrier, async () => { throw Error("Recovery must never launch a carrier request"); });
+  let runtime!: TwilioAbbyOutboundRuntime;
   const LaunchFixture = async (input: Parameters<typeof outboundLaunchOwnerFixture>[0]) => {
-    const f = await outboundLaunchOwnerFixture(input); f.controls.providerDigest = runtime.binding().bindingDigest; return f;
+    const f = await outboundLaunchOwnerFixture(input);
+    if (profileRef) carrier.profileRef = profileRef(f.config.requests);
+    runtime = new recoveryRuntime.TwilioAbbyOutboundRuntime(carrier, async () => { throw Error("Recovery must never launch a carrier request"); });
+    f.controls.providerDigest = runtime.binding().bindingDigest; return f;
   };
   const f = await outboundStopOwnerFixture({ ...stopOptions, LaunchFixture });
   try {

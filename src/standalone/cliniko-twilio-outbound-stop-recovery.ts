@@ -12,6 +12,7 @@ import type { SignedTwilioWebhook } from "../voice/twilio-signed-ingress.ts";
 import type { TwilioOriginalCall } from "../voice/twilio-outbound-context.ts";
 import { ClinikoOutboundStopOwner } from "./cliniko-outbound-stop-owner.ts";
 import type { OutboundStopOwnerConfig, OutboundStopOutcome } from "./cliniko-outbound-stop-owner.ts";
+import { NativeRequestAllowance } from "./internal/native-request-allowance.ts";
 
 type StopPorts = Parameters<typeof ClinikoOutboundStopOwner.create>[1];
 export type TwilioOutboundStopRecoveryConfig = Readonly<{ stop: OutboundStopOwnerConfig; reports: TwilioOutboundReportConfig }>;
@@ -82,12 +83,12 @@ export class ClinikoTwilioOutboundStopRecovery {
   }
   /** Delivery acknowledgement can distinguish absent producer data from an
    * authentic no-stop observation without treating either as hold clearance. */
-  async recoverStatusEvidence(request: SignedTwilioWebhook, external: AbortSignal): Promise<Result<ObservedRecovery, Failure>> {
+  async recoverStatusEvidence(request: SignedTwilioWebhook, external: AbortSignal, allowance?: NativeRequestAllowance): Promise<Result<ObservedRecovery, Failure>> {
     try {
       const authenticated = this.#authenticate(structuredClone(request));
       if (!authenticated.ok) return err({ kind: "forbidden" });
       const call = authenticated.value.call;
-      return this.recoverRetainedReport(call.context, call.accountSid, call.callSid, external);
+      return this.recoverRetainedReport(call.context, call.accountSid, call.callSid, external, allowance);
     } catch { return err({ kind: "unavailable" }); }
   }
   /** Internal producer recovery does not require inventing a signed callback.
@@ -95,9 +96,9 @@ export class ClinikoTwilioOutboundStopRecovery {
    * report/history, immutable origin and independent current grants remain
    * mandatory before any restrictive write. No clinical/contact release grant. */
   async recoverRetainedReport(input: TwilioOriginalCall, accountSid: string, callSid: string,
-    external: AbortSignal): Promise<Result<ObservedRecovery, Failure>> {
+    external: AbortSignal, allowance?: NativeRequestAllowance): Promise<Result<ObservedRecovery, Failure>> {
     try {
-      if (!(external instanceof AbortSignal) || external.aborted || !isDeepStrictEqual(this.#binding(), this.#selected) ||
+      if (!(external instanceof AbortSignal) || external.aborted || allowance !== undefined && !(allowance instanceof NativeRequestAllowance) || !isDeepStrictEqual(this.#binding(), this.#selected) ||
           this.#config.stop.policy.currentFor !== this.#policyMethod) return err({ kind: "unavailable" });
       if (!this.#account(accountSid) || !/^CA[0-9a-f]{32}$/.test(callSid)) return err({ kind: "forbidden" });
       const original = structuredClone(input), call = Object.freeze({ accountSid, callSid, recipientNumber: original.number });
@@ -111,8 +112,9 @@ export class ClinikoTwilioOutboundStopRecovery {
       // One operation allowance across report scans/rereads, the original
       // request/contact reads and the restrictive POST, using the SAME physical
       // API-user budget. A fresh owner never resets that underlying budget.
-      const budget: ClinikoRequestBudget = Object.freeze({ claim: () => ++claims <= c.stop.maximumNativeRequests ? physical.claim() : { kind: "unavailable" as const },
-        observe429: physical.observe429.bind(physical), ...(physical.checkHeadroom ? { checkHeadroom: physical.checkHeadroom.bind(physical) } : {}) });
+      const budget: ClinikoRequestBudget = Object.freeze({ claim: () => ++claims <= c.stop.maximumNativeRequests && (!allowance || allowance.take()) ? physical.claim() : { kind: "unavailable" as const },
+        observe429: physical.observe429.bind(physical), ...(physical.checkHeadroom ? { checkHeadroom: (n: number) => allowance && !allowance.hasHeadroom(n)
+          ? { kind: "unavailable" as const } : physical.checkHeadroom!(n) } : {}) });
       const matches = (g: Parameters<StopPorts["attempt"]["current"]>[0]) =>
         g.recallRef === original.original.recallRef && g.actionRef === a.actionRef && g.patientId === a.patientId &&
         (!g.attempt || outboundLaunchAttemptDigest(g.attempt) === original.attemptDigest);
