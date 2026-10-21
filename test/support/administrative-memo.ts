@@ -10,9 +10,12 @@ export function administrativeMemoInput(kind: AdministrativeMemoOutcome["kind"] 
     scope: { tenantId: "memo-tenant", clinicId: "clinic", locationId: "main" }, businessId: "1",
     credentialFingerprint: clinikoCredentialFingerprint("synthetic-memo-au5"), patientId: "321", authorRef: "approved-memo-producer",
     policy: { version: "admin-actions-v1", digest: "a".repeat(64) }, direction: "inbound",
-    outcome: { kind, appointmentRef: kind === "classBookingConfirmed" || kind === "classCancellationObserved" ? "cliniko:booking:900" : "cliniko:appointment:900", startsAt: "2026-11-05T01:00:00.000Z", endsAt: "2026-11-05T01:30:00.000Z",
+    outcome: { kind, appointmentRef: kind === "classBookingConfirmed" || kind === "classCancellationObserved" || kind === "classMovementReported" ? "cliniko:booking:900" : "cliniko:appointment:900", startsAt: "2026-11-05T01:00:00.000Z", endsAt: "2026-11-05T01:30:00.000Z",
       ...(kind === "classBookingConfirmed" || kind === "classCancellationObserved" ? { attendeeRef: "cliniko:attendee:901" } : {}),
       ...(kind === "cancellationObserved" || kind === "reschedulingObserved" || kind === "classCancellationObserved" ? { verification: { basis: "acknowledgedAndObservedBestEffort", observedAt: "2026-11-02T00:00:00.000Z" } } : {}),
+      ...(kind === "classMovementReported" ? { original: { appointmentRef: "cliniko:booking:800", attendeeRef: "cliniko:attendee:801", startsAt: "2026-11-04T01:00:00.000Z", endsAt: "2026-11-04T01:30:00.000Z" },
+        replacementAttendeeRef: "cliniko:attendee:901", progress: { original: "notSent", replacement: "inspectedActive", caseAssociation: "notApplicable" },
+        completion: "needsReview", verification: { basis: "nativeWorkflowReportBestEffort", reportedAt: "2026-11-02T00:00:00.000Z" } } : {}),
       ...(kind === "reschedulingObserved" ? { practitionerRef: "cliniko:practitioner:22",
         previous: { startsAt: "2026-11-04T01:00:00.000Z", endsAt: "2026-11-04T01:30:00.000Z", practitionerRef: "cliniko:practitioner:22" } } : {}) } as AdministrativeMemoOutcome,
     occurredAt: "2026-11-02T00:00:00.000Z", recordedAt: "2026-11-02T00:00:00.000Z" };

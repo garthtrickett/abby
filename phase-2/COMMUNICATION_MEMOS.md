@@ -6,7 +6,8 @@ appointment and treatment notes remain untouched. This branch implements the
 native-record primitive, optional individual-booking receipt capture and optional
 observed cancellation/rescheduling capture through the approved session/voice
 compositions. Patient-specific ordinary/pass class booking and class cancellation are also
-locally qualified; partial movement and complete recovery remain unfinished. No default configuration,
+locally qualified. Partial/completed class movement reports are also locally
+qualified below; complete recovery remains unfinished. No default configuration,
 live write, signed voice acceptance or completed gap 13 is claimed.
 
 ## Native contract
@@ -310,11 +311,82 @@ B/512MiB, CPU100% each, Swap0 and OOM/high/max0. Clinical/provider/mail transpor
 and grants are synthetic. Signed acoustic, full combined runtime and real clinic
 acceptance remain separate; this component is local and unpublished.
 
+## Partial and completed class movement reports, 21 October 2026
+
+The actual native movement owner now privately associates each returned result
+with the original request actually passed to execution. A result clone, public
+progress object, other mover or edited returned object cannot supply that source.
+Request capture precedes asynchronous execution, so later mutation of the caller's
+input cannot replace its original UUID, subject or targets. Reports have their
+own time and explicit `nativeWorkflowReportBestEffort` basis: the report time
+is not represented as the time of each earlier native inspection or as an exact
+causal acknowledgement.
+
+The optional producer joins this owned source to the actual host's verified
+played dispatch, exact patient/targets/account and captured incoming/outgoing
+direction. It emits `classMovementReported` with separate original attendee,
+replacement attendee when known, occurrence intervals, original/replacement
+mutation observations and membership-association observation. Fixed wording
+identifies prior observations, uncertainty and overall workflow status. It
+includes no pass balance, payment, credit, refund or shared-class note. The
+codec refuses a `moved` report unless original cancellation, active replacement
+and any required association have the existing inspected states; restoration
+has its own distinct state combination.
+
+Paused stages do not spend the one root purpose. Completion or disposal retains
+only the latest owned report, derived from the actual original native action
+UUID rather than a fresh post-action UUID or public continuation. Disposal during
+an active phase waits for its bounded native result before retaining uncertainty.
+A partial, interrupted or uncertain route stays `needsReview`; reporting cannot
+continue a clinical stage, repeat a write or promote partial success. The same
+independent memo permissions, service lifetime, physical budget and permanent
+purpose apply. Clinical stage admission, private renewed proof, distinct played
+consent, compensation policy and30s effects are unchanged. Actual host/session
+composition remains optional and inactive by default.
+
+Current source115/115 passes (1792569322980), including native source ownership,
+input/result mutation, admitted ordinary/pass stages, partial disposal, native
+and memo response loss, independent denial, non-staged completion/compensation,
+disposal during a PATCH and held memo permission. Earlier109 and115 runs passed
+before the final synthetic counter correction. The affected graph passes
+(1792568705445). Current whole strict and actual694 serving pass
+(1792569347778,4m22s,peak1,645,678,592 B/2GiB). Relative to the initial movement
+build, only its test fixture output changes; the other693 bytes remain identical.
+The initial movement build had five expected changed outputs and two additions
+relative to the prior692-output cancellation checkpoint.
+
+The first real partial SQL attempt (1792569087885) passed its clinical, memo and
+purpose assertions but failed its diagnostic comparison: spreading the fixture
+materialized the initial `claims` value instead of forwarding its live getter.
+No all-column/raw-backup pass was claimed for that failed run. Its exact2043
+source inputs and694 outputs are preserved in a hash-verified private archive.
+The correction forwards the real getter; it changes no production source,
+quota, time, assertions or privacy filters. The exact previously red case then
+passes through the full privacy checks (1792569640216,1/1).
+
+All10 current emitted PostgreSQL cases pass (1792569860967,25m31s), zero
+failures/skips/cancellations: ordinary/pass pairs of completed move, partial
+disposal, lost original reply, stored memo-response loss and producer withdrawal.
+Each uses the actual admitted class session, file approvals, private OTP, played
+SAM, native reviewed movement and independently retained memo. Real elapsed
+quota waits renew the synthetic live lease; neither SQL timestamps nor the
+native180 account limit are altered. The600s test harness accommodates several
+pre-confirmation windows and renewed proofs; production30s phase effects remain
+unchanged. One actual SQL bucket covers the full workflow and memo, and one
+permanent root purpose prevents another memo POST. Every-column scans and full
+unfiltered backups exclude tested subjects, proof/call/review/memo/key and class/
+pass values while retaining legitimate unrelated aliases, staged scans and opaque
+effects. Node peak141,721,600 B/512MiB and external PostgreSQL peak122,937,344
+B/512MiB, CPU100% each, Swap0 and OOM/high/max0; owned databases/containers clean.
+A fresh shared-codec ordinary cancellation SQL/privacy case also passes
+(1792569656098,1/1). Older memo SQL cohorts retain their historical scope rather
+than becoming a fresh combined694 pass. Provider, mail and clinic grants remain
+synthetic; signed acoustic and actual clinic acceptance are not established.
+
 ## Work still required
 
-Extend actual source capture to partial class movement facts without writing
-shared-class notes or promoting partial movement into complete success.
-Ordinary/pass class booking and cancellation are now locally qualified. Qualify distinct verified subjects, representative,
+The current individual/class source producers and partial movement reports have
+local scoped qualification. Qualify distinct verified subjects, representative,
 financial, catalogue and actual signed incoming/outgoing voice combinations.
 Keep known clinical acknowledgement irrevocable after memo quota, permission,
 source, observer or response failures.

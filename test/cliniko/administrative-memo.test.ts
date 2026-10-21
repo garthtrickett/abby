@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { AdministrativeMemoAuthentication, administrativeMemoActionRef, encodeAdministrativeMemo, decodeAdministrativeMemo } from "../../src/cliniko/administrative-memo.ts";
 import { administrativeMemoInput } from "../support/administrative-memo.ts";
 
-for (const kind of ["bookingConfirmed", "reschedulingObserved", "cancellationObserved", "classBookingConfirmed", "classCancellationObserved"] as const)
+for (const kind of ["bookingConfirmed", "reschedulingObserved", "cancellationObserved", "classBookingConfirmed", "classCancellationObserved", "classMovementReported"] as const)
 test(`administrative ${kind} has exact canonical authenticated facts without free prose`, () => {
   const auth = new AdministrativeMemoAuthentication(randomBytes(32)), input = administrativeMemoInput(kind), signed = auth.sign(input);
   assert.ok(signed.ok); if (!signed.ok) return;
@@ -98,4 +98,18 @@ test("authentication copies the key and canonical fields before a caller can rep
   key.fill(0); (input.scope as any).clinicId = "changed"; (input.outcome as any).startsAt = "private text";
   assert.equal(before.verify(signed.value), true); assert.equal(auth.verify(signed.value), true);
   assert.throws(() => { (auth as any).verify = () => true; });
+});
+
+for (const bad of ["falseCompletion", "financial", "wrongGrade", "wrongSource", "missingReplacement", "noEffect", "foreignTimestamp"] as const)
+test(`class movement memo refuses ${bad} without upgrading a partial native report`, () => {
+  const auth = new AdministrativeMemoAuthentication(randomBytes(32)), input = administrativeMemoInput("classMovementReported");
+  assert.ok(input.outcome.kind === "classMovementReported"); const outcome = structuredClone(input.outcome);
+  if (bad === "falseCompletion") (outcome as { completion: string }).completion = "moved";
+  if (bad === "financial") Object.assign(outcome, { refunded: true });
+  if (bad === "wrongGrade") Object.assign(outcome.verification, { basis: "acknowledgedAndObservedBestEffort" });
+  if (bad === "wrongSource") Object.assign(outcome.original, { appointmentRef: outcome.appointmentRef });
+  if (bad === "missingReplacement") delete (outcome as { replacementAttendeeRef?: string }).replacementAttendeeRef;
+  if (bad === "noEffect") Object.assign(outcome.progress, { replacement: "notSent" });
+  if (bad === "foreignTimestamp") Object.assign(outcome.verification, { reportedAt: "2026-11-01T00:00:00.000Z" });
+  assert.equal(auth.sign({ ...input, outcome }).ok, false);
 });

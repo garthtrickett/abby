@@ -143,6 +143,7 @@ export class ClinikoClassSession {
             ...(config.classPassCancellationAuthority ? { classPassCancellationAuthority: config.classPassCancellationAuthority } : {}) }) :
           config.operation === "reschedule" && destination?.ok && movement?.ok ? await ClinikoClassMoveHost.create({ ...common,
             sourcePolicy: classes.value, destinationPolicy: destination.value, movePolicy: movement.value, permission: config.classPermission,
+            ...(config.memo ? { memo: config.memo } : {}),
             ...(config.classPassMoveAuthority ? { classPassMoveAuthority: config.classPassMoveAuthority } : {}) }) : undefined;
         if (!created?.ok) return undefined;
         host = created.value;

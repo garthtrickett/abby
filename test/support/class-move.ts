@@ -16,14 +16,27 @@ import { declareClinikoRequestCost } from "../../src/cliniko/request-cost.ts";
 import type { ClassPassMoveAuthority, ClassPassMoveAuthorityQuery } from "../../src/standalone/cliniko-class-pass-movement.ts";
 import { addCaseHistory, addClassRosterHistory, visibleCaseRows, visibleArchivedCase } from "./class-pass-history.ts";
 
+import type { LocationScope } from "../../src/core/model.ts";
+import type { ClinikoRequestBudget, ClinikoBudgetDenial } from "../../src/cliniko/read-budget.ts";
+import type { PatientVerificationBudget } from "../../src/standalone/email-patient-authority.ts";
+import type { ClinikoAttendanceConfig } from "../../src/cliniko/class-attendance-write.ts";
+import type { ClinikoAdministrativeMemoConfig } from "../../src/standalone/administrative-memo-retention.ts";
+
 export type PassMoveOptions = Readonly<{ differentCase?: boolean; effect?: "releaseOne" | "unchanged" | "consumeOne"; full?: boolean; history?: number; rosterHistory?: number }>;
 
-export async function classMoveFixture(different = false, near = false, passes?: PassMoveOptions, staging = false, activate = true) {
+export async function classMoveFixture(different = false, near = false, passes?: PassMoveOptions, staging = false, activate = true, options: { scope?: LocationScope; budget?: ClinikoRequestBudget; verificationBudget?: PatientVerificationBudget; realQuotaWait?: boolean; memoFor?: (native: ClinikoAttendanceConfig, clock: () => string) => ClinikoAdministrativeMemoConfig } = {}) {
   let claims = 0, now = verificationNow;
-  const budget = new ClinikoReadBudget(180, () => Date.parse(now));
+  const budget = options.budget ?? new ClinikoReadBudget(180, () => Date.parse(now));
+  assert.ok(typeof budget.checkHeadroom === "function" && typeof budget.withReservation === "function");
   const windows = new Map<number, number>();
-  const rateBudget = { claim: () => { claims++; const result = budget.claim(); if (result === null) { const window = Math.floor((Date.parse(now) - Date.parse(verificationNow)) / 60000); windows.set(window, (windows.get(window) ?? 0) + 1); } return result; }, observe429: budget.observe429.bind(budget), checkHeadroom: budget.checkHeadroom.bind(budget), withReservation: budget.withReservation.bind(budget) };
-  const f = await callerVerificationFixture({ apiKey: "synthetic-class-au5", operation: "appointments.reschedule", reschedulingExecute: true, rateBudget, activate, nativeRequestCosts: staging });
+  const mark = (result: ClinikoBudgetDenial | null) => {
+    if (result === null) { const window = Math.floor((Date.parse(now) - Date.parse(verificationNow)) / 60000); windows.set(window, (windows.get(window) ?? 0) + 1); }
+    return result;
+  };
+  const rateBudget = { claim: () => { claims++; const result = budget.claim(); return result instanceof Promise ? result.then(mark) : mark(result); },
+    observe429: budget.observe429.bind(budget), checkHeadroom: budget.checkHeadroom.bind(budget), withReservation: budget.withReservation.bind(budget) };
+  const f = await callerVerificationFixture({ apiKey: "synthetic-class-au5", operation: "appointments.reschedule", reschedulingExecute: true, rateBudget, activate, nativeRequestCosts: staging,
+    ...(options.scope ? { scope: options.scope } : {}), ...(options.verificationBudget ? { budget: options.verificationBudget } : {}) });
   const native = classAttendanceFixture({ scope: f.scope, now, patientId: verificationCanaries[2]!, rateBudget });
   native.groups.splice(1, 2);
   Object.assign(native.groups[1]!, { starts_at: "2026-10-09T10:00:00.000Z", ends_at: different ? "2026-10-09T10:30:00.000Z" : "2026-10-09T11:00:00.000Z",
@@ -156,7 +169,8 @@ export async function classMoveFixture(different = false, near = false, passes?:
   }
   const config = { scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: source.policyVersion, ledger: f.ledger, policies: f.policies, verification: f.session,
     sourcePolicy, destinationPolicy, movePolicy, permission, cliniko: native.config, clock: () => now, signal: lifetime.signal, fetchPort,
-    ...(passes ? { classPassMoveAuthority: passAuthority } : {}) };
+    ...(passes ? { classPassMoveAuthority: passAuthority } : {}),
+    ...(options.memoFor ? { memo: options.memoFor(native.config, () => now) } : {}) };
   const host = resultValue(await ClinikoClassMoveHost.create(config));
   const reception = new TextReception(f.ledger, f.policies, host, undefined, undefined, undefined, undefined, () => now);
   let count = 0;
@@ -184,13 +198,16 @@ export async function classMoveFixture(different = false, near = false, passes?:
   };
   const pause = async (seconds: number) => {
     let remaining = seconds;
-    while (remaining > 0) { const step = Math.min(15, remaining); now = new Date(Date.parse(now) + step * 1000).toISOString(); f.setTime(now);
+    while (remaining > 0) { const step = Math.min(15, remaining);
+      if (options.realQuotaWait) await new Promise<void>(resolve => setTimeout(resolve, step * 1000));
+      now = new Date(Date.parse(now) + step * 1000).toISOString(); f.setTime(now);
       resultValue(await f.runtime.renewSession(f.callId, f.sessionId, (await f.state()).sessionLease!.version, now)); remaining -= step; }
   };
   const classSessionConfig = { receipt: f.receipt, inbound: f.inbound, sessionId: f.sessionId, policyVersion: source.policyVersion,
     ledger: f.ledger, policies: f.policies, lookup: f.sessionConfig.lookup, permission: f.sessionConfig.permission,
     verificationBudget: f.sessionConfig.budget, delivery: f.sessionConfig.delivery, directory: f.config.directory,
     callerApprovalPath: f.path, classApprovalPath: sourcePath, operation: "reschedule" as const,
+    ...(config.memo ? { memo: config.memo } : {}),
     classPermission: permission, moveApprovalPath: movePath, destination: { classApprovalPath: destinationPath, practitionerId: destination.practitionerId, appointmentTypeId: destination.appointmentTypeId },
     ...(passes ? { classPassMoveAuthority: passAuthority } : {}),
     cliniko: { ...native.config, timeZone: source.timeZone, countryCallingCode: "61", recallTypeId: "7" }, signal: lifetime.signal, fetchPort, clock: () => now };

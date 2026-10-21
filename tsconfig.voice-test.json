@@ -53,7 +53,8 @@
     "test/support/booking-memo-session.ts",
     "test/support/appointment-change-memo.ts",
     "test/support/class-booking-memo.ts",
-    "test/support/class-cancellation-memo.ts"
+    "test/support/class-cancellation-memo.ts",
+    "test/support/class-movement-memo.ts"
   ],
   "include": []
 }
