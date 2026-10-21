@@ -22,6 +22,12 @@ There is no contact port in this composition. The native note and callback do no
 
 ## Qualification
 
+### Current normal-parent qualification, 21 October 2026
+
+The branch integrates normally merged test correction #576/main 1c13846. Current full strict/build passes 693 artifacts (1792546181995); current outbound/source/facts/scenario checks pass 580/580 (1792547213135), combined emitted PostgreSQL/process cases pass 42/42 (1792547138510), and a separate complete logical restore passes 1/1 (1792547748602). No skips/cancellations/OOM. All notification feature inputs and production artifact bytes are unchanged from the earlier candidate; only the generic verification-code test helper changes. The original positive-stop contracts, no-lost-ID empty-directory process recovery, permanent SQL exclusions, independent capacity-only release and full-column/unfiltered-backup privacy are exercised on the combined version. Fresh exact-head cloud/review qualification is still required. Actual main 1c13846 independently passed all four jobs (39525901371), with archived raw logs. Remote transports and grants remain synthetic; this does not complete the combined callback receiver, no-stop/private/all-ASR coverage or real activation.
+
+### Historical original feature qualification
+
 Source qualification passes 257/257 with no failures, skips or cancellations (work 1792527665806). It includes actual raw signed notification production, both cold-history families, the existing positive closure contract, notification-purpose closure, legacy profile hashes and all current recovery-grant controls. Full strict TypeScript and the 693-artifact runtime build pass (1792527654154, 3m40s, 1,659,588,608 B/2 GiB). Compared with the qualified 683 parent, ten outputs are added and four existing outputs change: runtime profile projection, captured runtime reader factory, positive provider read delegation and positive native-history delegation. Existing positive public query shapes, binding/evidence domains and legacy profile hashes remain unchanged.
 
 Only nonemitted SQL/privacy/process drivers were added or extended after that build; affected strict checks pass (1792527949155 and 1792528578577), and every production input and all 693 outputs remain byte-identical to the build. The direct child .mjs file also passes Node syntax validation. These explicit driver deltas do not claim a second runtime build.
