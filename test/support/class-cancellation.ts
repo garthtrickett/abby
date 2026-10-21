@@ -17,12 +17,18 @@ import { callerVerificationFixture, verificationNow, verificationCanaries } from
 import { resultValue } from "./agent-appointment-proposals.ts";
 import type { ClassPassCancellationAuthority, ClassPassCancellationAuthorityQuery, ClassPassCancellationEffect } from "../../src/standalone/cliniko-class-pass-cancellation.ts";
 import type { ClassPassSelection } from "../../src/standalone/cliniko-class-pass-booking.ts";
-export async function classCancellationFixture(options: { operation?: "appointments.cancel" | "appointments.book"; passes?: ClassPassCancellationEffect } = {}) {
+export async function classCancellationFixture(options: { operation?: "appointments.cancel" | "appointments.book"; passes?: ClassPassCancellationEffect;
+  scope?: import("../../src/core/model.ts").LocationScope; budget?: import("../../src/cliniko/read-budget.ts").ClinikoRequestBudget; budgetLimit?: 180 | 200;
+  verificationBudget?: import("../../src/standalone/email-patient-authority.ts").PatientVerificationBudget;
+  fetchAround?: (port: typeof fetch) => typeof fetch;
+  memoFor?: (native: import("../../src/cliniko/class-attendance-write.ts").ClinikoAttendanceConfig, clock: () => string) => import("../../src/standalone/administrative-memo-retention.ts").ClinikoAdministrativeMemoConfig } = {}) {
   let sourceTime = verificationNow;
-  const nativeBudget = new ClinikoReadBudget(200, () => Date.parse(sourceTime));
+  const nativeBudget = options.budget ?? new ClinikoReadBudget(options.budgetLimit ?? 200, () => Date.parse(sourceTime));
   let claims = 0;
-  const budget = { claim: () => { claims++; return nativeBudget.claim(); }, observe429: nativeBudget.observe429.bind(nativeBudget), checkHeadroom: nativeBudget.checkHeadroom.bind(nativeBudget) };
-  const f = await callerVerificationFixture({ apiKey: "synthetic-class-au5", cancellationExecute: true, ...(options.operation === "appointments.book" ? { bookingExecute: true } : {}), operation: options.operation ?? "appointments.cancel", rateBudget: budget });
+  const budget = { claim: () => { claims++; return nativeBudget.claim(); }, observe429: nativeBudget.observe429.bind(nativeBudget),
+    ...(nativeBudget.checkHeadroom ? { checkHeadroom: nativeBudget.checkHeadroom.bind(nativeBudget) } : {}) };
+  const f = await callerVerificationFixture({ apiKey: "synthetic-class-au5", cancellationExecute: true, ...(options.operation === "appointments.book" ? { bookingExecute: true } : {}), operation: options.operation ?? "appointments.cancel", rateBudget: budget,
+    ...(options.scope ? { scope: options.scope } : {}), ...(options.verificationBudget ? { budget: options.verificationBudget } : {}) });
   let callState = () => f.state();
   const native = classAttendanceFixture({ scope: f.scope, now: verificationNow, patientId: verificationCanaries[2]!, rateBudget: budget });
   native.attendees.splice(0, native.attendees.length, ...native.attendees.filter(row => !["105", "106"].includes(String(row.id))));
@@ -65,7 +71,7 @@ export async function classCancellationFixture(options: { operation?: "appointme
     cancellationReason: 50, lateNoticeHours: 24, maxAdvanceDays: 30, standardTerms: { version: "class-cancel-standard-1", approvedText: "No cancellation fee applies." }, lateTerms: { version: "class-cancel-late-1", approvedText: "A late cancellation fee applies." } };
   await writeFile(cancellationPath, JSON.stringify(cancellationApproval), { mode: 0o600 });
   const cancellationPolicy = resultValue(await OwnerFileCancellationPolicy.capture({ path: cancellationPath, ...policy.binding(), directory: new OwnerFileAdminDirectory(f.accountPath, f.scope), clock: () => sourceTime }));
-  const fetchPort: typeof fetch = async (value, init) => {
+  const baseFetchPort: typeof fetch = async (value, init) => {
     const url = new URL(String(value)), method = init?.method ?? "GET";
     if (url.pathname.startsWith(`/v1/patient_cases/${caseId}`)) {
       assert.equal(method, "GET"); onCaseRead(url.pathname);
@@ -110,9 +116,11 @@ export async function classCancellationFixture(options: { operation?: "appointme
     if (url.pathname.startsWith("/v1/patients/")) return f.fetchPort(value, init);
     return native.fetchPort(value, init);
   };
+  const fetchPort = options.fetchAround ? options.fetchAround(baseFetchPort) : baseFetchPort;
+  const memo = options.memoFor?.(native.config, () => sourceTime);
   const host = resultValue(await ClinikoClassCancellationHost.create({ scope: f.scope, callId: f.callId, sessionId: f.sessionId, policyVersion: f.sessionConfig.policyVersion,
     ledger: f.ledger, policies: f.policies, verification: f.session, classPolicy: policy, cancellationPolicy, permission: { allows: async () => permitted },
-    ...(options.passes ? { classPassCancellationAuthority: passAuthority } : {}), cliniko: native.config, clock: () => sourceTime, signal: lifetime.signal, fetchPort }));
+    ...(options.passes ? { classPassCancellationAuthority: passAuthority } : {}), ...(memo ? { memo } : {}), cliniko: native.config, clock: () => sourceTime, signal: lifetime.signal, fetchPort }));
   const reception = new TextReception(f.ledger, f.policies, host, undefined, host, undefined, undefined, () => sourceTime), agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope: f.scope }, f.policies, reception, undefined, undefined, undefined, f.ledger);
   let turns = 0;
   const turn = (name: string, text = "Cancel my class") => ({ callId: f.callId, sessionId: f.sessionId, turnId: `class-${name}-${++turns}`, text, quality: "clear" as const, at: sourceTime });
@@ -152,7 +160,7 @@ export async function classCancellationFixture(options: { operation?: "appointme
     ledger: f.ledger, policies: f.policies, lookup: f.sessionConfig.lookup, permission: f.sessionConfig.permission,
     verificationBudget: f.sessionConfig.budget, delivery: f.sessionConfig.delivery, directory: f.config.directory,
     callerApprovalPath: f.config.path, classApprovalPath: path, operation: "cancel" as const,
-    classPermission: { allows: async () => permitted }, ...(options.passes ? { classPassCancellationAuthority: passAuthority } : {}), cliniko: { ...native.config, timeZone: approval.timeZone, countryCallingCode: "61", recallTypeId: "7" },
+    classPermission: { allows: async () => permitted }, ...(options.passes ? { classPassCancellationAuthority: passAuthority } : {}), ...(memo ? { memo } : {}), cliniko: { ...native.config, timeZone: approval.timeZone, countryCallingCode: "61", recallTypeId: "7" },
     signal: lifetime.signal, fetchPort, clock: () => sourceTime, cancellationApprovalPath: cancellationPath };
   return { ...f, classSessionConfig, bindNativeCall: (read: typeof callState) => { callState = read; }, native, host, reception, agent, recalls, writes, policy, path, cancellationPolicy, cancellationPath, turn, play, verify, propose, confirm,
     pass: { caseId, entitlementRef, record: caseRecord, rows: caseRows, queries: passQueries, authority: passAuthority, deny: () => { passAllowed = false; },

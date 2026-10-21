@@ -53,6 +53,13 @@ export type ClinikoRescheduleObservation = Readonly<{
   kind: "old" | "new" | "newWithConflict" | "changed" | "cancelled";
   observedAt: string;
 }>;
+/** An acknowledged request followed by exact inspection under the existing
+ * best-effort contract. This never proves that this writer caused the state. */
+export type ClinikoObservedChange = Readonly<{
+  selection: Readonly<{ scope: LocationScope; businessId: string; credentialFingerprint: string }>;
+  observedAt: string;
+}> & (Readonly<{ kind: "cancellationObserved"; request: ClinikoCancellationRequest; acknowledgedStatus: 204 }> |
+  Readonly<{ kind: "reschedulingObserved"; request: ClinikoRescheduleRequest; acknowledgedStatus: 200 }>);
 
 const idPattern = /^[1-9][0-9]{0,18}$/;
 const emailPattern = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
@@ -159,6 +166,7 @@ class ClinikoAppointmentWriter {
   readonly #clock: () => string;
   readonly #inFlight = new Set<string>();
   readonly #attempted = new Set<string>();
+  readonly #observed = new WeakMap<object, ClinikoObservedChange>();
 
   private constructor(config: ClinikoAppointmentWriteConfig, shard: string, fetchPort: typeof fetch,
                       clock: () => string) {
@@ -191,6 +199,15 @@ class ClinikoAppointmentWriter {
   selection(): Readonly<{ scope: LocationScope; businessId: string; credentialFingerprint: string }> {
     return { scope: structuredClone(this.#scope), businessId: this.#businessId,
       credentialFingerprint: this.#credentialFingerprint };
+  }
+
+  sharesRequestBudget(budget: ClinikoRequestBudget): boolean { return this.#rateBudget === budget; }
+  observedOutcome(receipt: unknown): ClinikoObservedChange | undefined {
+    try {
+      if (!receipt || typeof receipt !== "object" || Array.isArray(receipt) || Object.keys(receipt).join(",") !== "kind") return;
+      const found = this.#observed.get(receipt), kind = (receipt as { kind?: unknown }).kind;
+      return found && kind === (found.kind === "cancellationObserved" ? "cancelled" : "moved") ? found : undefined;
+    } catch { return; }
   }
 
   async #check(check: BeforeRead | undefined, signal: AbortSignal): Promise<Result<void, ClinikoAppointmentWriteFailure>> {
@@ -280,10 +297,11 @@ class ClinikoAppointmentWriter {
   }
 
   /** One send attempt per appointment through this writer instance. Never retries a possibly sent PATCH. */
-  async cancelOnce(request: ClinikoCancellationRequest, signal?: AbortSignal,
+  async cancelOnce(incoming: ClinikoCancellationRequest, signal?: AbortSignal,
     beforeSend?: (signal: AbortSignal) => Promise<boolean>):
     Promise<Result<ClinikoCancellationOutcome, ClinikoAppointmentWriteFailure>> {
-    if (!validCancellation(request) || (beforeSend !== undefined && typeof beforeSend !== "function")) return err({ kind: "invalidQuery" });
+    if (!validCancellation(incoming) || (beforeSend !== undefined && typeof beforeSend !== "function")) return err({ kind: "invalidQuery" });
+    const request = Object.freeze({ ...incoming, scope: Object.freeze({ ...incoming.scope }) });
     if (!sameScope(request.scope, this.#scope)) return err({ kind: "scopeMismatch" });
     if (this.#attempted.has(request.appointmentId) || this.#inFlight.has(request.appointmentId)) {
       return err({ kind: "invalidQuery" });
@@ -329,8 +347,15 @@ class ClinikoAppointmentWriter {
       if (requestSignal.aborted) return ok({ kind: "uncertain" });
       if (response.status !== 204) return ok({ kind: "uncertain" });
       const after = await this.#read(request, requestSignal);
-      return ok({ kind: !requestSignal.aborted && after.ok && after.value.kind === "cancelled"
-        ? "cancelled" : "uncertain" });
+      const outcome: ClinikoCancellationOutcome = { kind: !requestSignal.aborted && after.ok && after.value.kind === "cancelled" ? "cancelled" : "uncertain" };
+      if (outcome.kind === "cancelled" && after.ok) {
+        try {
+          const selection = this.selection(); Object.freeze(selection.scope);
+          this.#observed.set(outcome, Object.freeze({ kind: "cancellationObserved", request, acknowledgedStatus: 204,
+            observedAt: after.value.observedAt, selection: Object.freeze(selection) }));
+        } catch { /* Optional administrative provenance cannot change the clinical contract. */ }
+      }
+      return ok(outcome);
     } finally { this.#inFlight.delete(request.appointmentId); }
   }
 
@@ -443,8 +468,16 @@ class ClinikoAppointmentWriter {
       if (response.status !== 200) return ok({ kind: "uncertain" });
       // The PATCH response alone cannot prove the appointment's current state or lack of overlap.
       const after = await this.#observeReschedule(request, requestSignal, beforeRead);
-      return ok({ kind: requestSignal.aborted || !after.ok ? "uncertain" : after.value.kind === "new" ? "moved" :
-        after.value.kind === "newWithConflict" ? "movedWithConflict" : "uncertain" });
+      const outcome: ClinikoRescheduleOutcome = { kind: requestSignal.aborted || !after.ok ? "uncertain" : after.value.kind === "new" ? "moved" :
+        after.value.kind === "newWithConflict" ? "movedWithConflict" : "uncertain" };
+      if (outcome.kind === "moved" && after.ok) {
+        try {
+          const selection = this.selection(); Object.freeze(selection.scope);
+          this.#observed.set(outcome, Object.freeze({ kind: "reschedulingObserved", request, acknowledgedStatus: 200,
+            observedAt: after.value.observedAt, selection: Object.freeze(selection) }));
+        } catch { /* Optional administrative provenance cannot change the clinical contract. */ }
+      }
+      return ok(outcome);
     } finally { this.#inFlight.delete(request.appointmentId); }
   }
 }
@@ -452,7 +485,9 @@ class ClinikoAppointmentWriter {
 /** Cancellation exposes only cancellation operations to a composed host. */
 export class ClinikoCancellationWriter {
   readonly #inner: ClinikoAppointmentWriter;
-  private constructor(inner: ClinikoAppointmentWriter) { this.#inner = inner; }
+  private constructor(inner: ClinikoAppointmentWriter) {
+    this.#inner = inner; Object.defineProperty(this, "observedOutcome", { value: this.observedOutcome.bind(this) });
+  }
 
   static create(config: ClinikoAppointmentWriteConfig, fetchPort: typeof fetch = fetch,
                 clock: () => string = () => new Date().toISOString()):
@@ -463,6 +498,10 @@ export class ClinikoCancellationWriter {
 
   selection(): Readonly<{ scope: LocationScope; businessId: string; credentialFingerprint: string }> {
     return this.#inner.selection();
+  }
+  sharesRequestBudget(budget: ClinikoRequestBudget): boolean { return this.#inner.sharesRequestBudget(budget); }
+  observedOutcome(receipt: unknown): Extract<ClinikoObservedChange, { kind: "cancellationObserved" }> | undefined {
+    const found = this.#inner.observedOutcome(receipt); return found?.kind === "cancellationObserved" ? found : undefined;
   }
 
   observe(request: ClinikoAppointmentTarget | ClinikoCancellationRequest, signal?: AbortSignal):
@@ -480,7 +519,9 @@ export class ClinikoCancellationWriter {
 /** Rescheduling exposes only the single in-place move and current-state observation. */
 export class ClinikoRescheduleWriter {
   readonly #inner: ClinikoAppointmentWriter;
-  private constructor(inner: ClinikoAppointmentWriter) { this.#inner = inner; }
+  private constructor(inner: ClinikoAppointmentWriter) {
+    this.#inner = inner; Object.defineProperty(this, "observedOutcome", { value: this.observedOutcome.bind(this) });
+  }
 
   static create(config: ClinikoAppointmentWriteConfig, fetchPort: typeof fetch = fetch,
                 clock: () => string = () => new Date().toISOString()):
@@ -491,6 +532,10 @@ export class ClinikoRescheduleWriter {
 
   selection(): Readonly<{ scope: LocationScope; businessId: string; credentialFingerprint: string }> {
     return this.#inner.selection();
+  }
+  sharesRequestBudget(budget: ClinikoRequestBudget): boolean { return this.#inner.sharesRequestBudget(budget); }
+  observedOutcome(receipt: unknown): Extract<ClinikoObservedChange, { kind: "reschedulingObserved" }> | undefined {
+    const found = this.#inner.observedOutcome(receipt); return found?.kind === "reschedulingObserved" ? found : undefined;
   }
 
   observeReschedule(request: ClinikoRescheduleRequest, signal?: AbortSignal, beforeRead?: BeforeRead):

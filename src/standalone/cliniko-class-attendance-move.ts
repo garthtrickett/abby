@@ -56,6 +56,14 @@ type Config = Readonly<{
   /** Complete trusted per-invocation costs; unknown costs cannot start stages. */
   stageRequestCosts?: ClassMoveStageRequestCosts;
 }>;
+/** A private native workflow report, not a causal acknowledgement or current
+ * patient authority. Exact returned-object ownership prevents public progress,
+ * another mover or a cloned result from becoming a clinical source. */
+export type ClinikoClassMoveReport = Readonly<{
+  request: ClinikoClassMoveRequest; businessId: string; credentialFingerprint: string;
+  outcome: ClinikoClassMoveOutcome; completion: "pending" | "moved" | "restored" | "needsReview";
+  reportedAt: string;
+}>;
 export type ClinikoClassMoveFailure = Readonly<{ kind: "invalidConfig" | "invalidQuery" | "scopeMismatch" | "attemptConsumed" | "unavailable" }>;
 type Failure = ClinikoClassMoveFailure;
 type MutationState = ClassMovementMutationState;
@@ -92,9 +100,11 @@ export class ClinikoClassAttendanceMove {
   readonly #recalls: ClinikoRecallWriter;
   readonly #passes?: ClinikoClassPassMovement;
   readonly #attempted = new Set<string>();
+  readonly #reports = new WeakMap<object, Readonly<{ value: unknown; source: ClinikoClassMoveReport }>>();
   private constructor(config: Config, source: ClinikoClassAttendanceReader, destination: ClinikoClassAttendanceReader,
     writer: ClinikoClassAttendanceWriter, recalls: ClinikoRecallWriter) {
     this.#config = config; this.#source = source; this.#destination = destination; this.#writer = writer; this.#recalls = recalls;
+    Object.defineProperty(this, "reportSource", { value: this.reportSource.bind(this) });
     if (config.casePass) this.#passes = new ClinikoClassPassMovement({ ...config, fetchPort: config.fetchPort ?? fetch, ...config.casePass });
   }
   static create(input: Config): Result<ClinikoClassAttendanceMove, Failure> {
@@ -160,19 +170,49 @@ export class ClinikoClassAttendanceMove {
     const found = read.value.sessions[0];
     return found?.sessionRef === selected.sessionId && found.startsAt === selected.startsAt && found.endsAt === selected.endsAt ? found : undefined;
   }
+  reportSource(value: unknown): ClinikoClassMoveReport | undefined {
+    try {
+      const found = value && typeof value === "object" ? this.#reports.get(value) : undefined;
+      return found && isDeepStrictEqual(found.value, value) ? found.source : undefined;
+    } catch { return undefined; }
+  }
+  #report(value: object, request: ClinikoClassMoveRequest, outcome: ClinikoClassMoveOutcome, pending: boolean): void {
+    try {
+      if (outcome.original === "notSent" && outcome.replacement === "notSent") return;
+      const reportedAt = this.#config.clock();
+      if (!instant(reportedAt)) return;
+      const freeze = <T>(input: T): T => {
+        if (input && typeof input === "object") { for (const v of Object.values(input)) freeze(v); Object.freeze(input); }
+        return input;
+      };
+      const source = freeze({ request: structuredClone(request), businessId: this.#config.cliniko.businessId,
+        credentialFingerprint: clinikoCredentialFingerprint(this.#config.cliniko.apiKey), outcome: structuredClone(outcome),
+        completion: pending ? "pending" as const : outcome.kind === "moved" || outcome.kind === "restored" ? outcome.kind : "needsReview" as const, reportedAt });
+      this.#reports.set(value, { value: structuredClone(value), source });
+    } catch { /* Optional provenance cannot change an existing clinical result. */ }
+  }
   async executeOnce(input: ClinikoClassMoveRequest, external: AbortSignal, permit: ClinikoClassMovePermit): Promise<Result<ClinikoClassMoveOutcome, Failure>> {
-    return this.#execute(input, external, permit);
+    let request: ClinikoClassMoveRequest;
+    try { request = structuredClone(input); } catch { return err({ kind: "invalidQuery" }); }
+    const result = await this.#execute(request, external, permit);
+    if (result.ok) this.#report(result.value, request, result.value, false);
+    return result;
   }
   prepareStagesOnce(input: ClinikoClassMoveRequest): Result<ClinikoStagedClassMove, Failure> {
     try {
-      const c = this.#config;
+      const request = structuredClone(input), c = this.#config;
       const requestCeilings = classMoveStageRequestCeilings(c.stageRequestCosts, !!c.casePass);
-      if (!c.quotaStaging || !requestCeilings || typeof c.cliniko.rateBudget.withReservation !== "function" || !this.#valid(input) || c.signal.aborted) return err({ kind: "invalidQuery" });
-      if (this.#attempted.has(input.actionId)) return err({ kind: "attemptConsumed" });
-      const stages = new ClassMoveStageControl({ version: c.quotaStaging.version, initialExpiresAt: input.expiresAt, initialVerificationRef: input.verificationRef,
+      if (!c.quotaStaging || !requestCeilings || typeof c.cliniko.rateBudget.withReservation !== "function" || !this.#valid(request) || c.signal.aborted) return err({ kind: "invalidQuery" });
+      if (this.#attempted.has(request.actionId)) return err({ kind: "attemptConsumed" });
+      const stages = new ClassMoveStageControl({ version: c.quotaStaging.version, initialExpiresAt: request.expiresAt, initialVerificationRef: request.verificationRef,
         clock: c.clock, signal: c.signal, budget: c.cliniko.rateBudget, requestCeilings });
-      void this.#execute(input, c.signal, query => stages.authorize(query), stages).then(result => stages.finish(result), () => stages.finish(err({ kind: "unavailable" })));
-      return ok(stages.handle());
+      void this.#execute(request, c.signal, query => stages.authorize(query), stages).then(result => stages.finish(result), () => stages.finish(err({ kind: "unavailable" })));
+      const handle = stages.handle();
+      return ok(Object.freeze({ advanceOnce: async (...args: Parameters<typeof handle.advanceOnce>) => {
+        const result = await handle.advanceOnce(...args);
+        if (result.ok && result.value.kind !== "waiting") this.#report(result.value, request, result.value.observation, result.value.kind === "staged");
+        return result;
+      } }));
     } catch { return err({ kind: "invalidQuery" }); }
   }
   async #execute(input: ClinikoClassMoveRequest, external: AbortSignal, permit: ClinikoClassMovePermit, staging?: ClassMoveStageControl): Promise<Result<ClinikoClassMoveOutcome, Failure>> {

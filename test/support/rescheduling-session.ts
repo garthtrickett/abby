@@ -9,12 +9,13 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 import { verificationNow } from "./caller-verification.ts";
 
 /** Actual admitted-call composition and caller commands; clinic approval/permission/mail/provider are synthetic. */
-export async function reschedulingSessionFixture(options: Parameters<typeof reschedulingAuthorityFixture>[0] = {}) {
+export async function reschedulingSessionFixture(options: Parameters<typeof reschedulingAuthorityFixture>[0] & Pick<ClinikoReschedulingSessionConfig, "memo"> = {}) {
   const f = await reschedulingAuthorityFixture(options);
   f.host.dispose(); f.source.dispose(); f.session.dispose();
   const lifetime = new AbortController(); let owner: ClinikoReschedulingSession | undefined;
   try {
     const config: ClinikoReschedulingSessionConfig = { receipt: f.receipt, inbound: f.inbound, sessionId: f.sessionId,
+      ...(options.memo ? { memo: options.memo } : {}),
       policyVersion: f.sessionConfig.policyVersion, ledger: f.ledger, policies: f.policies, lookup: f.sessionConfig.lookup,
       permission: f.sessionConfig.permission, verificationBudget: options.verificationBudget ?? { reserve: async () => true },
       delivery: { send: async (email, code) => { f.mail.push({ email, code }); return true; } },

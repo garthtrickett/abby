@@ -44,6 +44,10 @@ import { classMovementCanContinue } from "../core/class-movement-progress.ts";
 import type { ClassMovementProgress } from "../core/class-movement-progress.ts";
 import type { ClinikoStagedClassMove, ClassMoveStageResult } from "./cliniko-class-move-stages.ts";
 
+import { captureAdministrativeMemoConfig } from "./administrative-memo-retention.ts";
+import type { ClinikoAdministrativeMemoConfig } from "./administrative-memo-retention.ts";
+import { ClinikoClassMoveMemo } from "./cliniko-class-move-memo.ts";
+
 export type ClassMovePermission = Readonly<{ allows(query: Readonly<{
   operation: "reschedule"; scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
   patientId: string; sourceClassSessionId: string; sourceAttendeeId: string; destinationClassSessionId?: string;
@@ -55,6 +59,7 @@ export type ClinikoClassMoveHostConfig = Readonly<{
   sourcePolicy: OwnerFileClassPolicy; destinationPolicy: OwnerFileClassPolicy; movePolicy: OwnerFileClassMovePolicy;
   permission: ClassMovePermission; cliniko: Omit<ClinikoAttendanceConfig, "scope">;
   classPassMoveAuthority?: ClassPassMoveAuthority;
+  memo?: ClinikoAdministrativeMemoConfig;
   clock: () => string; signal: AbortSignal; fetchPort?: typeof fetch;
 }>;
 type Move = Extract<ActionRequest, { kind: "reschedule" }>;
@@ -88,6 +93,8 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
   #staged: Staged | undefined;
   #movementVerifier: ClassMovementVerifier | undefined;
   #epoch = 0;
+  #memoDirection: "inbound" | "outbound" | undefined;
+  #memo: ClinikoClassMoveMemo | undefined;
   readonly #onClose = () => this.dispose();
   private constructor(config: ClinikoClassMoveHostConfig, source: ClassApproval, destination: ClassApproval) {
     super(); this.#config = config;
@@ -107,7 +114,9 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
           !(input.sourcePolicy instanceof OwnerFileClassPolicy) || !(input.destinationPolicy instanceof OwnerFileClassPolicy) || !(input.movePolicy instanceof OwnerFileClassMovePolicy) ||
           !input.verification.proof.matchesCall(input.scope, input.callId, input.sessionId, input.policyVersion) ||
           !input.verification.matchesClinikoAccount(clinikoCredentialFingerprint(input.cliniko.apiKey)) || typeof input.permission?.allows !== "function") return denied();
-      const config = Object.freeze({ ...input, scope: Object.freeze({ ...input.scope }), cliniko: Object.freeze({ ...input.cliniko }) });
+      const config = Object.freeze({ ...input,
+        ...(input.memo ? { memo: captureAdministrativeMemoConfig(input.memo, { scope: input.scope, businessId: input.cliniko.businessId,
+          credentialFingerprint: clinikoCredentialFingerprint(input.cliniko.apiKey), rateBudget: input.cliniko.rateBudget, clock: input.clock }) } : {}), scope: Object.freeze({ ...input.scope }), cliniko: Object.freeze({ ...input.cliniko }) });
       const signal = AbortSignal.any([config.signal, AbortSignal.timeout(15000)]);
       const [source, destination, move] = await Promise.all([config.sourcePolicy.current(config.scope), config.destinationPolicy.current(config.scope), config.movePolicy.current(config.scope)]);
       if (!source.ok || !destination.ok || !move.ok || signal.aborted || !this.#bindings(config, source.value, destination.value, move.value)) return denied();
@@ -198,11 +207,14 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
     if (mutation) {
       if (consent) {
         const active = readActiveClassMovementConsent(state, `${mutation.actionKey}:classStage:${consent.digest}`, this.#now());
-        return active && isDeepStrictEqual(active, consent) && isDeepStrictEqual(state.actions[mutation.actionKey]?.mutation, mutation) ? state : undefined;
+        if (!active || !isDeepStrictEqual(active, consent) || !isDeepStrictEqual(state.actions[mutation.actionKey]?.mutation, mutation)) return undefined;
+        this.#memoDirection = state.admission.direction === "outbound" ? "outbound" : "inbound";
+        return state;
       }
       const action = state.actions[mutation.actionKey], effect = state.effects[`${mutation.actionKey}:write`];
       if (action?.kind !== "reschedule" || action.status !== "dispatched" || action.digest !== mutation.payloadDigest || digestActionRequest(action.mutation.request) !== mutation.payloadDigest ||
           state.presentations[action.presentationId]?.status !== "played" || effect?.kind !== "hostWrite" || effect.status !== "possiblySent" || effect.mutation.actionKey !== mutation.actionKey || effect.mutation.payloadDigest !== mutation.payloadDigest) return undefined;
+      this.#memoDirection = state.admission.direction === "outbound" ? "outbound" : "inbound";
     }
     return state;
   }
@@ -537,6 +549,7 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
       return { kind: "classMovement", actionKey, progress: owner.progress, outcome: "pending", continuation: owner.continuation };
     }
     owner.continuation = undefined;
+    this.#memo?.finish(result.kind !== "finished" || !["moved", "restored"].includes(result.observation.kind));
     if (result.kind === "finished" && result.observation.kind === "moved" && result.observation.replacementAttendeeRef)
       return { kind: "classMovement", actionKey, progress: owner.progress, outcome: "moved", hostRef: result.observation.replacementAttendeeRef };
     return { kind: "classMovement", actionKey, progress: owner.progress,
@@ -548,26 +561,31 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
       owner.continuation = undefined; owner.verifier.dispose();
       return { kind: "classMovement", actionKey: mutation.actionKey, progress: owner.progress, outcome: "needsReview" };
     }
-    const result = await owner.native.advanceOnce({ contractVersion: owner.version, confirmationRef: randomUUID(),
-      verificationRef: consent?.evidence.patient.verificationRef ?? p.request.patient.verificationRef,
-      expiresAt: consent?.evidence.expiresAt ?? p.request.terms.expiresAt }, signal, async query => {
-      if (this.#staged !== owner || !isDeepStrictEqual(this.#stageRequestCosts(), owner.costs) || query.stagingContractVersion !== owner.version ||
-          query.stage !== (consent?.evidence.continuation.stage ?? "replacement") ||
-          consent && !isDeepStrictEqual(consent.evidence.continuation, owner.continuation)) return false;
-      const current = await this.#context(query.signal, query.request.verificationRef, mutation, consent);
-      if (!current || current.version !== p.version || current.move.quotaStaging?.version !== owner.version ||
-          query.request.patientId !== p.target.patientId || query.request.source.sessionId !== p.target.session.sessionRef ||
-          query.request.source.attendeeId !== p.target.attendeeId || query.request.destination.sessionId !== p.offer.session.sessionRef) return false;
-      const terms = this.#terms(current, p.target, p.offer, query.request.expiresAt);
-      if (!terms || terms.version !== p.request.terms.version || terms.approvedText !== p.request.terms.approvedText ||
-          !await this.#permit(current, p.target, p.offer, query.phase, query.signal)) return false;
-      const after = await this.#context(query.signal, query.request.verificationRef, mutation, consent);
-      return !!after && after.version === p.version && after.move.quotaStaging?.version === owner.version &&
-        !!await this.#ready(query.signal, mutation, consent) && await this.#permit(after, p.target, p.offer, query.phase, query.signal);
-    });
-    if (result.ok) return this.#stageReceipt(owner, result.value);
-    owner.continuation = undefined;
-    return { kind: "classMovement", actionKey: mutation.actionKey, progress: owner.progress, outcome: "needsReview" };
+    this.#memo?.begin();
+    let reported = false;
+    try {
+      const result = await owner.native.advanceOnce({ contractVersion: owner.version, confirmationRef: randomUUID(),
+        verificationRef: consent?.evidence.patient.verificationRef ?? p.request.patient.verificationRef,
+        expiresAt: consent?.evidence.expiresAt ?? p.request.terms.expiresAt }, signal, async query => {
+        if (this.#staged !== owner || !isDeepStrictEqual(this.#stageRequestCosts(), owner.costs) || query.stagingContractVersion !== owner.version ||
+            query.stage !== (consent?.evidence.continuation.stage ?? "replacement") ||
+            consent && !isDeepStrictEqual(consent.evidence.continuation, owner.continuation)) return false;
+        const current = await this.#context(query.signal, query.request.verificationRef, mutation, consent);
+        if (!current || current.version !== p.version || current.move.quotaStaging?.version !== owner.version ||
+            query.request.patientId !== p.target.patientId || query.request.source.sessionId !== p.target.session.sessionRef ||
+            query.request.source.attendeeId !== p.target.attendeeId || query.request.destination.sessionId !== p.offer.session.sessionRef) return false;
+        const terms = this.#terms(current, p.target, p.offer, query.request.expiresAt);
+        if (!terms || terms.version !== p.request.terms.version || terms.approvedText !== p.request.terms.approvedText ||
+            !await this.#permit(current, p.target, p.offer, query.phase, query.signal)) return false;
+        const after = await this.#context(query.signal, query.request.verificationRef, mutation, consent);
+        return !!after && after.version === p.version && after.move.quotaStaging?.version === owner.version &&
+          !!await this.#ready(query.signal, mutation, consent) && await this.#permit(after, p.target, p.offer, query.phase, query.signal);
+      });
+      this.#memo?.observe(result.ok ? result.value : undefined); reported = true;
+      if (result.ok) return this.#stageReceipt(owner, result.value);
+      owner.continuation = undefined; this.#memo?.finish(true);
+      return { kind: "classMovement", actionKey: mutation.actionKey, progress: owner.progress, outcome: "needsReview" };
+    } finally { if (!reported) { this.#memo?.observe(undefined); this.#memo?.finish(true); } }
   }
   async continueClassMovement(mutation: HostMutation, consent: ClassMovementConsent, now: string, external?: AbortSignal): Promise<HostWriteReceipt> {
     const owner = this.#staged, reject = (): HostWriteReceipt => ({ kind: "rejected", actionKey: mutation.actionKey, reason: "forbidden" });
@@ -638,7 +656,9 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
       ...(c.fetchPort ? { fetchPort: c.fetchPort } : {}) });
     if (!mover.ok) { verifier?.dispose(); return reject(); }
     if (context.move.quotaStaging && verifier) {
-      const native = mover.value.prepareStagesOnce({ ...this.#nativeRequest(context, p.target, p.offer), expiresAt: p.request.terms.expiresAt });
+      const nativeRequest = { ...this.#nativeRequest(context, p.target, p.offer), expiresAt: p.request.terms.expiresAt };
+      this.#startMemo(mover.value, nativeRequest);
+      const native = mover.value.prepareStagesOnce(nativeRequest);
       if (!native.ok) { verifier.dispose(); return reject(); }
       const owner: Staged = { mutation: structuredClone(mutation), prepared: p, verifier, native: native.value,
         version: context.move.quotaStaging.version, ordinal: 0, continuation: undefined, costs: stageRequestCosts!,
@@ -647,22 +667,37 @@ export class ClinikoClassMoveHost extends NoStoredKnowledge implements Reschedul
       return this.#advance(owner, signal);
     }
     const reserved = await withClinikoReservation(c.cliniko.rateBudget, p.offer.pass ? 180 : sameService ? 120 : 180, signal,
-      () => mover.value.executeOnce({ ...this.#nativeRequest(context, p.target, p.offer), expiresAt: p.request.terms.expiresAt }, signal, async query => {
-        const current = await this.#context(query.signal, p.target.verificationRef, mutation);
-        const fresh = current ? this.#request(current, p.target, p.offer) : undefined;
-        if (!current || current.version !== p.version || !fresh || digestActionRequest(fresh) !== mutation.payloadDigest || !await this.#permit(current, p.target, p.offer, query.phase, query.signal)) return false;
-        const after = await this.#context(query.signal, p.target.verificationRef, mutation);
-        return !!after && after.version === p.version && !!await this.#ready(query.signal, mutation) && await this.#permit(after, p.target, p.offer, query.phase, query.signal);
-      }));
+      async () => {
+        const nativeRequest = { ...this.#nativeRequest(context, p.target, p.offer), expiresAt: p.request.terms.expiresAt };
+        this.#startMemo(mover.value, nativeRequest); this.#memo?.begin();
+        try {
+        const result = await mover.value.executeOnce(nativeRequest, signal, async query => {
+          const current = await this.#context(query.signal, p.target.verificationRef, mutation);
+          const fresh = current ? this.#request(current, p.target, p.offer) : undefined;
+          if (!current || current.version !== p.version || !fresh || digestActionRequest(fresh) !== mutation.payloadDigest || !await this.#permit(current, p.target, p.offer, query.phase, query.signal)) return false;
+          const after = await this.#context(query.signal, p.target.verificationRef, mutation);
+          return !!after && after.version === p.version && !!await this.#ready(query.signal, mutation) && await this.#permit(after, p.target, p.offer, query.phase, query.signal);
+        });
+        this.#memo?.observe(result.ok ? result.value : undefined);
+        return result;
+        } catch (error) { this.#memo?.observe(undefined); this.#memo?.finish(true); throw error; }
+      });
     if (reserved.kind === "denied") return reject();
-    if (reserved.kind === "interrupted") return { kind: "uncertain", actionKey: mutation.actionKey, reconcileAfter: now, deadline: new Date(Date.parse(now) + 300000).toISOString() };
+    if (reserved.kind === "interrupted") { this.#memo?.finish(true); return { kind: "uncertain", actionKey: mutation.actionKey, reconcileAfter: now, deadline: new Date(Date.parse(now) + 300000).toISOString() }; }
     const result = reserved.value;
-    if (!result.ok || result.value.kind === "notSent" && result.value.review !== "uncertain" || result.value.kind === "restored") return reject();
-    if (result.value.kind === "moved" && !signal.aborted && await this.#ready(signal, mutation)) return { kind: "committed", actionKey: mutation.actionKey, hostRef: result.value.replacementAttendeeRef! };
+    if (!result.ok || result.value.kind === "notSent" && result.value.review !== "uncertain" || result.value.kind === "restored") { this.#memo?.finish(!result.ok); return reject(); }
+    if (result.value.kind === "moved" && !signal.aborted && await this.#ready(signal, mutation)) { this.#memo?.finish(); return { kind: "committed", actionKey: mutation.actionKey, hostRef: result.value.replacementAttendeeRef! }; }
+    this.#memo?.finish(true);
     return { kind: "uncertain", actionKey: mutation.actionKey, reconcileAfter: now, deadline: new Date(Date.parse(now) + 300000).toISOString() };
+  }
+  #startMemo(mover: ClinikoClassAttendanceMove, request: ClinikoClassMoveRequest): void {
+    try {
+      if (this.#config.memo && this.#memoDirection && !this.#memo)
+        this.#memo = new ClinikoClassMoveMemo(this.#config.memo, mover, request, this.#memoDirection);
+    } catch { /* Missing optional memo source cannot block clinical movement. */ }
   }
   async reconcile(mutation: HostMutation): Promise<ReconcileObservation> { return { kind: "stillUnknown", actionKey: mutation.actionKey }; }
   async openTask(item: StaffItem): Promise<StaffTaskReceipt> { return { kind: "rejected", taskKey: item.key }; }
   async reconcileTask(item: StaffItem): Promise<StaffTaskObservation> { return { kind: "stillUnknown", taskKey: item.key }; }
-  dispose() { this.#config.signal.removeEventListener("abort", this.#onClose); this.#lifetime.abort(); this.#movementVerifier?.dispose(); this.#movementVerifier = undefined; this.#staged = undefined; this.#menu = undefined; this.#previous = undefined; this.#target = undefined; this.#offers.clear(); this.#prepared = undefined; ++this.#epoch; }
+  dispose() { this.#memo?.finish(true); this.#config.signal.removeEventListener("abort", this.#onClose); this.#lifetime.abort(); this.#movementVerifier?.dispose(); this.#movementVerifier = undefined; this.#staged = undefined; this.#menu = undefined; this.#previous = undefined; this.#target = undefined; this.#offers.clear(); this.#prepared = undefined; ++this.#epoch; }
 }

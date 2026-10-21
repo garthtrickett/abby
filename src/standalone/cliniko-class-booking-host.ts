@@ -31,6 +31,10 @@ import { ClinikoFinancialBookingPreparation } from "./cliniko-financial-booking-
 import type { FinancialBookingPreparationConfig } from "./cliniko-financial-booking-preparation.ts";
 import { classFinancialBookingRequestPlan } from "../cliniko/class-booking-workload.ts";
 import { clinikoRequestCeiling } from "../cliniko/request-cost.ts";
+import { administrativeMemoActionRef } from "../cliniko/administrative-memo.ts";
+import type { AdministrativeMemo } from "../cliniko/administrative-memo.ts";
+import { captureAdministrativeMemoConfig, retainAdministrativeMemo } from "./administrative-memo-retention.ts";
+import type { ClinikoAdministrativeMemoConfig } from "./administrative-memo-retention.ts";
 /** Channel verification cannot establish a membership, pass, fee or booking entitlement. */
 export type ClassAttendancePermission = Readonly<{
   allows(query: Readonly<{
@@ -57,6 +61,7 @@ export type ClinikoClassBookingConfig = Readonly<{
   permission: ClassAttendancePermission;
   classPassAuthority?: ClassPassAuthority;
   financial?: FinancialBookingPreparationConfig;
+  memo?: ClinikoAdministrativeMemoConfig;
   cliniko: Omit<ClinikoAttendanceConfig, "scope">;
   clock: () => string;
   signal: AbortSignal;
@@ -103,6 +108,9 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
   #epoch = 0;
   #dispatchLeaseExpiry: number | undefined;
   #sendCostSignature: string | undefined;
+  #memoDispatch: Readonly<{ prepared: Prepared; digest: string; direction: "inbound" | "outbound" }> | undefined;
+  #memo: AdministrativeMemo | undefined;
+  #memoRetentionStarted = false;
   private constructor(config: ClinikoClassBookingConfig, approval: ClassApproval) {
     super();
     this.#config = config;
@@ -132,7 +140,9 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
         ![input.callId, input.sessionId, input.policyVersion].every(approvalRef) || typeof input.permission?.allows !== "function" ||
         typeof input.ledger?.read !== "function" || typeof input.ledger?.readWriteStop !== "function" || typeof input.policies?.read !== "function" || typeof input.clock !== "function")
         return denied();
-      const config = Object.freeze({ ...input, scope: Object.freeze({ ...input.scope }), cliniko: Object.freeze({ ...input.cliniko }) });
+      const config = Object.freeze({ ...input, scope: Object.freeze({ ...input.scope }), cliniko: Object.freeze({ ...input.cliniko }),
+        ...(input.memo ? { memo: captureAdministrativeMemoConfig(input.memo, { scope: input.scope, businessId: input.cliniko.businessId,
+          credentialFingerprint: clinikoCredentialFingerprint(input.cliniko.apiKey), rateBudget: input.cliniko.rateBudget, clock: input.clock }) } : {}) });
       const approval = await awaitUntilAbort(config.classPolicy.current(config.scope), AbortSignal.any([config.signal, AbortSignal.timeout(15000)]));
       if (!approval?.ok || config.signal.aborted || approval.value.policyVersion !== config.policyVersion || approval.value.credentialFingerprint !== clinikoCredentialFingerprint(config.cliniko.apiKey) ||
         ["businessId", "practitionerId", "appointmentTypeId"].some(key => config.cliniko[key as "businessId"] !== approval.value[key as "businessId"]) ||
@@ -376,6 +386,7 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
   async #authorizeForSend(prepared: Prepared, mutation: HostMutation, signal: AbortSignal): Promise<boolean> {
     const c = this.#config, choice = prepared.choice, now = this.#now();
     this.#dispatchLeaseExpiry = undefined;
+    this.#memoDispatch = undefined;
     if (!this.#sendCostsCurrent() || !await this.#ready(now, signal, mutation) || mutation.payloadDigest !== digestActionRequest(prepared.request)) return false;
     const patient = await this.#inspectChoice(choice, now, "commit", signal, false);
     const approval = await c.classPolicy.current(c.scope);
@@ -386,6 +397,8 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
     const state = await this.#ready(this.#now(), signal, mutation);
     if (!state) return false;
     this.#dispatchLeaseExpiry = Date.parse(state.sessionLease!.expiresAt);
+    if (c.memo) this.#memoDispatch = Object.freeze({ prepared, digest: mutation.payloadDigest,
+      direction: state.admission?.direction === "outbound" ? "outbound" : "inbound" });
     const day = clinicDateAt(approval.value.timeZone, new Date(choice.session.startsAt));
     const lower = clinicDayStartUtc(approval.value.timeZone, day);
     const next = new Date(Date.parse(`${day}T00:00:00.000Z`) + 86400000).toISOString().slice(0, 10);
@@ -432,6 +445,29 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
     if (Date.parse(p.choice.offer.expiresAt) <= Date.parse(this.#now()) + (seconds + 3) * 1000) return err({ kind: "expired", target: "offer" });
     return ok({ kind: "wait", seconds });
   }
+  #captureMemo(prepared: Prepared, receipt: unknown): void {
+    const c = this.#config, dispatch = this.#memoDispatch; this.#memoDispatch = undefined;
+    try {
+      const native = this.#writer.bookingAcknowledgement(receipt), choice = prepared.choice;
+      if (!c.memo || !native || dispatch?.prepared !== prepared || dispatch.digest !== digestActionRequest(prepared.request) ||
+          !sameScope(native.request.scope, c.scope) || !sameScope(native.selection.scope, c.scope) ||
+          native.selection.businessId !== c.cliniko.businessId || native.selection.practitionerId !== c.cliniko.practitionerId ||
+          native.selection.appointmentTypeId !== c.cliniko.appointmentTypeId || native.selection.credentialFingerprint !== clinikoCredentialFingerprint(c.cliniko.apiKey) ||
+          native.request.patientId !== choice.patientRef || native.request.patientId !== prepared.request.patient.patientRef ||
+          native.request.sessionId !== choice.session.sessionRef) return;
+      const actionRef = administrativeMemoActionRef(native.request.actionId), at = c.memo.native.clock!(); if (!actionRef) return;
+      const signed = c.memo.authentication.sign({ actionRef, sourceActionRef: native.request.actionId, scope: c.scope,
+        businessId: native.selection.businessId, credentialFingerprint: native.selection.credentialFingerprint, patientId: native.request.patientId,
+        authorRef: c.memo.native.authorRef, policy: c.memo.native.policy, direction: dispatch.direction,
+        outcome: { kind: "classBookingConfirmed", appointmentRef: `cliniko:booking:${native.request.sessionId}`, attendeeRef: native.attendeeRef,
+          startsAt: new Date(choice.session.startsAt).toISOString(), endsAt: new Date(choice.session.endsAt).toISOString() }, occurredAt: at, recordedAt: at });
+      if (signed.ok) this.#memo = signed.value;
+    } catch { /* A memo cannot veto an acknowledged patient attendance. */ }
+  }
+  #retainMemo(): void {
+    if (!this.#config.memo || this.#memoRetentionStarted) return; this.#memoRetentionStarted = true;
+    void retainAdministrativeMemo(this.#config.memo, this.#memo).finally(() => { this.#memo = undefined; }).catch(() => {});
+  }
   async write(mutation: HostMutation, now: string, external?: AbortSignal,
     onBookingAcknowledged?: Parameters<HostEffects["write"]>[3]): Promise<HostWriteReceipt> {
     const prepared = this.#prepared, c = this.#config, reject = (): HostWriteReceipt => ({ kind: "rejected", actionKey: mutation.actionKey, reason: "forbidden" });
@@ -472,6 +508,7 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
           acknowledged: (receipt: Extract<ClinikoAttendanceWrite, { kind: "accepted" }>) => {
           acknowledged = receipt;
           committed = Object.freeze({ kind: "committed", actionKey: mutation.actionKey, hostRef: receipt.attendeeRef });
+          if (c.memo) this.#captureMemo(prepared, receipt);
           try { onBookingAcknowledged?.(committed); } catch { /* Native success survives observer failure. */ }
           },
         };
@@ -484,7 +521,7 @@ export class ClinikoClassBookingHost extends NoStoredKnowledge implements Bookin
         return this.#writer.executeBookingOnce(provider, stop, checks);
       },
     }, signal);
-    if (committed) return committed;
+    if (committed) { this.#retainMemo(); return committed; }
     if (!result.ok)
       return ["reviewUncertain", "mutationUncertain"].includes(result.error.kind) ? uncertain() : reject();
     if (!result.value.outcome.ok)

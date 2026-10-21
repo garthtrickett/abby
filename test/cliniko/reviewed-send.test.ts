@@ -36,6 +36,34 @@ function setup(fetchPort: typeof fetch, rateBudget?: ClinikoRequestBudget, deadl
 }
 const live = () => new AbortController().signal;
 
+for (const kind of ["cancel", "reschedule"] as const)
+test(`${kind} memo source is only the actual run's acknowledged original native review, never a clinical receipt`, async () => {
+  let marker = "";
+  const budget: ClinikoRequestBudget = { claim: async () => null, observe429: async () => ({ kind: "rateLimited" }) };
+  const { gate } = setup(async (_url, init) => { const decoded = decodeClinikoReview(JSON.parse(String(init!.body)).notes); assert.ok(decoded.ok);
+    marker = decoded.value.marker; return accepted(init); }, budget);
+  const confirmed = request(kind), outcome = { ok: true, value: { kind: "uncertain" } };
+  const result = await gate.run(confirmed, { authorize: async () => true, send: async () => outcome }, live()); assert.ok(result.ok);
+  const source = gate.changeSource(result.value); assert.ok(source); assert.equal(source.marker, marker); assert.deepEqual(source.request, confirmed);
+  assert.equal(source.recallRef, "cliniko:recall:91"); assert.equal(gate.sharesRequestBudget(budget), true);
+  assert.equal(gate.changeSource(structuredClone(result.value)), undefined); assert.equal(gate.changeSource({ ...result.value }), undefined);
+  const other = setup(async (_url, init) => accepted(init)); assert.equal(other.gate.changeSource(result.value), undefined);
+  assert.equal(Object.isFrozen(source.request.operation), true); gate.close(); assert.equal(gate.changeSource(result.value), source);
+  (result.value as { recallRef: string }).recallRef = "cliniko:recall:92"; assert.equal(gate.changeSource(result.value), undefined);
+});
+
+test("class cancellation memo source owns its original review identity and freezes private pass terms without proving cancellation", async () => {
+  let marker = "";
+  const { gate } = setup(async (_url, init) => { const decoded = decodeClinikoReview(JSON.parse(String(init!.body)).notes); assert.ok(decoded.ok); marker = decoded.value.marker; return accepted(init); });
+  const confirmed: ClinikoReviewRequest = { ...request(), operation: { kind: "classCancel", sessionId: "94", attendeeId: "401", cancellationReason: 50,
+    practitionerId: "22", appointmentTypeId: "33", startsAt: "2026-10-08T04:00:00Z", endsAt: "2026-10-08T04:30:00Z",
+    pass: { patientCaseId: "901", entitlementRef: "approved-pass", usageFingerprint: "a".repeat(64), maximum: 4, used: 2, effect: "releaseOne" } } };
+  const outcome = { ok: true, value: { kind: "uncertain" } }, result = await gate.run(confirmed, { authorize: async () => true, send: async () => outcome }, live());
+  assert.ok(result.ok); const source = gate.changeSource(result.value); assert.ok(source); assert.equal(source.marker, marker); assert.equal(source.request.operation.kind, "classCancel");
+  assert.equal(Object.isFrozen(source.request.operation.pass), true); assert.equal(gate.changeSource({ ...result.value }), undefined);
+  gate.close(); assert.ok(gate.changeSource(result.value)); assert.equal(new ClinikoReviewedSend(setup(async (_u, init) => accepted(init)).config).changeSource(result.value), undefined);
+});
+
 test("an already validated booking outcome survives reviewed-send abort without weakening other operations", async () => {
   for (const operation of ["book", "classBook", "cancel", "reschedule"] as const) {
     const controller = new AbortController();

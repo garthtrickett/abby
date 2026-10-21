@@ -1,4 +1,6 @@
 import { ClinikoFinancialBookingPreparation } from "./cliniko-financial-booking-preparation.ts";
+import { ClinikoBookingMemo } from "./cliniko-booking-memo.ts";
+import type { ClinikoBookingMemoConfig } from "./cliniko-booking-memo.ts";
 import type { FinancialBookingPreparationConfig } from "./cliniko-financial-booking-preparation.ts";
 import { randomUUID } from "node:crypto";
 import type { ClinikoBookingFailure, ClinikoBookingWrite } from "../cliniko/booking-write.ts";
@@ -19,7 +21,7 @@ import { NoStoredKnowledge } from "./no-stored-knowledge.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { preparationMayBeDiscarded } from "./prepared-proposal.ts";
 
-export type ClinikoBookingHostConfig = ClinikoBookingGuardConfig & Readonly<{ recallWriter: ClinikoRecallWriter; recallTypeId: string; timeZone: string; menu?: BookingMenuHost; financial?: FinancialBookingPreparationConfig }>;
+export type ClinikoBookingHostConfig = ClinikoBookingGuardConfig & Readonly<{ recallWriter: ClinikoRecallWriter; recallTypeId: string; timeZone: string; menu?: BookingMenuHost; financial?: FinancialBookingPreparationConfig; memo?: ClinikoBookingMemoConfig }>;
 
 /** Standalone declared best-effort booking, with one Cliniko-owned review before one possible send.
  * This does not grant exclusive commit permission or activate the live runner. */
@@ -27,6 +29,7 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
   readonly effectDeadlineMs = 30_000;
   readonly #config: ClinikoBookingHostConfig;
   readonly #guard: ClinikoBookingGuard;
+  readonly #memo: ClinikoBookingMemo | undefined;
   readonly #review: ClinikoReviewedSend;
   readonly #lifetime = new AbortController();
   #prepared: PreparedClinikoBooking | undefined;
@@ -39,6 +42,7 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
     super();
     if (config.financial && !config.writer.sharesRequestBudget(config.financial.native.rateBudget)) throw new TypeError("Financial booking must share the physical Cliniko budget");
     this.#guard = new ClinikoBookingGuard(config);
+    this.#memo = config.memo ? new ClinikoBookingMemo(config.memo, config, this.#guard) : undefined;
     this.financial = config.financial ? new ClinikoFinancialBookingPreparation(config.financial, config) : undefined;
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }) });
     this.#review = new ClinikoReviewedSend({ scope: config.scope, businessId: config.writer.selection().businessId,
@@ -111,6 +115,7 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
     const providerRequest = bookingProviderRequest(prepared, this.#financialMarker ?? randomUUID());
     const financialCapture = this.financial ? await this.financial.capture(signal) : undefined;
     if (this.financial && !financialCapture) return reject();
+    this.#memo?.prepare(prepared, providerRequest);
     let acknowledged: Extract<ClinikoBookingWrite, { kind: "accepted" }> | undefined;
     let committed: Extract<HostWriteReceipt, { kind: "committed" }> | undefined;
     const result = await this.#review.run(confirmed, {
@@ -122,6 +127,7 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
           acknowledged = receipt;
           committed = Object.freeze({ kind: "committed", actionKey: mutation.actionKey, hostRef: receipt.appointmentRef });
           try { onBookingAcknowledged?.(committed); } catch { /* Observers cannot veto this receipt. */ }
+          this.#memo?.acknowledge(receipt);
         };
         const beforeSend = (finalStop: AbortSignal) => this.#guard.authorizeForSend(prepared, mutation, this.#now(), finalStop);
         const current = (finalStop: AbortSignal) => this.#guard.currentForSend(prepared, this.#now(), finalStop) && (!this.financial || this.financial.currentForSend(finalStop));
@@ -134,7 +140,12 @@ export class ClinikoBookingHost extends NoStoredKnowledge implements BookingEvid
         return config.writer.writeOnce(providerRequest, stop, beforeSend, acknowledgedReceipt, current);
       },
     }, signal);
-    if (committed) return committed;
+    if (committed) {
+      // The service owns this separately bounded lifetime. Optional retention
+      // must not hold the caller's already acknowledged clinical result open.
+      try { void this.#memo?.retain().catch(() => {}); } catch { /* Known clinical success remains final. */ }
+      return committed;
+    }
     if (!result.ok) return result.error.kind === "reviewUncertain" || result.error.kind === "mutationUncertain" ? uncertain() : reject();
     if (!result.value.outcome.ok) return reject();
     if (result.value.outcome.value.kind !== "accepted" || signal.aborted) return uncertain();

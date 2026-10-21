@@ -3,6 +3,7 @@ import { ClinikoCancellationAuthority } from "./cliniko-cancellation-authority.t
 import { ClinikoReschedulingAuthority } from "./cliniko-rescheduling-authority.ts";
 import { ClinikoCancellationWriter } from "../cliniko/cancellation-write.ts";
 import { ClinikoRescheduleWriter } from "../cliniko/reschedule-write.ts";
+import type { ClinikoObservedChange } from "../cliniko/appointment-write.ts";
 import { digestActionRequest } from "../core/digest.ts";
 import type { AppointmentChangeEvidenceQuery, HostReadFailure, PolicyStore } from "../core/host.ts";
 import type { LedgerStore } from "../core/ledger.ts";
@@ -36,6 +37,11 @@ export type PreparedClinikoChange = Readonly<{
   request: Change;
   selection: AppointmentChangeEvidenceQuery;
   provider: ClinikoChangeProviderRequest;
+}>;
+export type ClinikoChangeDispatchSource = Readonly<{
+  scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
+  kind: Kind; patientId: string; businessId: string; credentialFingerprint: string;
+  clinicalDigest: string; direction: "inbound" | "outbound";
 }>;
 const refPattern = /^[A-Za-z0-9:_-]{1,256}$/;
 
@@ -82,6 +88,7 @@ export class ClinikoAppointmentChangeGuard {
   readonly #clock: () => string;
   readonly #outboundCancellation: ClinikoOutboundClinicalContext | undefined;
   #closed = false;
+  readonly #authorizedSources = new WeakMap<PreparedClinikoChange, ClinikoChangeDispatchSource>();
   constructor(config: ClinikoAppointmentChangeGuardConfig) {
     if (!validScope(config.scope) ||
         ![config.callId, config.sessionId, config.policyVersion, config.businessId].every(value =>
@@ -153,11 +160,11 @@ export class ClinikoAppointmentChangeGuard {
     } catch { return undefined; }
   }
 
-  async #ready(kind: Kind, now: number, signal: AbortSignal, mutation?: HostMutation): Promise<boolean> {
-    if (this.#outboundCancellation && (kind !== "cancel" || !this.#outboundCancellation.current("appointments.cancel"))) return false;
+  async #ready(kind: Kind, now: number, signal: AbortSignal, mutation?: HostMutation): Promise<CallState | undefined> {
+    if (this.#outboundCancellation && (kind !== "cancel" || !this.#outboundCancellation.current("appointments.cancel"))) return;
     const state = await this.#active(now, signal);
     if (!state || !state.policy.automationEnabled || !state.policy.staffWorkEnabled ||
-        state.policy.capabilities[kind] !== "execute") return false;
+        state.policy.capabilities[kind] !== "execute") return;
     if (mutation) {
       const action = state.actions[mutation.actionKey];
       const effect = state.effects[`${mutation.actionKey}:write`];
@@ -168,19 +175,20 @@ export class ClinikoAppointmentChangeGuard {
           state.presentations[action.presentationId]?.status !== "played" ||
           effect?.kind !== "hostWrite" || effect.status !== "possiblySent" ||
           effect.mutation.actionKey !== mutation.actionKey ||
-          effect.mutation.payloadDigest !== mutation.payloadDigest) return false;
+          effect.mutation.payloadDigest !== mutation.payloadDigest) return;
       const stop = await untilAbort(this.#ledger.readWriteStop(this.#scope), signal);
-      if (!stop?.ok || stop.value.stopped || this.#closed || signal.aborted) return false;
+      if (!stop?.ok || stop.value.stopped || this.#closed || signal.aborted) return;
     }
     try {
       const current = await untilAbort(this.#policy.read(this.#scope), signal);
-      return !!current?.ok && !this.#closed && !signal.aborted &&
+      const allowed = !!current?.ok && !this.#closed && !signal.aborted &&
         sameScope(current.value.scope, this.#scope) &&
         (!this.#outboundCancellation || this.#outboundCancellation.current("appointments.cancel")) &&
         current.value.policyVersion === this.#policyVersion &&
         current.value.automationEnabled === true && current.value.staffWorkEnabled === true &&
         current.value.capabilities[kind] === "execute";
-    } catch { return false; }
+      return allowed ? state : undefined;
+    } catch { return; }
   }
 
   #nativeProofValidation(): boolean {
@@ -267,14 +275,39 @@ export class ClinikoAppointmentChangeGuard {
 
   /** Recheck played confirmation, exact SAM dispatch, proof, current policy/terms and emergency stop. */
   async authorize(prepared: PreparedClinikoChange, mutation: HostMutation, now: string, signal: AbortSignal): Promise<boolean> {
+    this.#authorizedSources.delete(prepared);
     const current = this.#time(now);
     if (current === undefined || signal.aborted || !await this.#ready(prepared.request.kind, current, signal, mutation)) return false;
     const fresh = await this.resolve({ ...prepared.selection, now }, "commit", signal);
     const at = this.#time(now);
-    return fresh.ok && at !== undefined && !signal.aborted && !this.#closed &&
+    const valid = fresh.ok && at !== undefined && !signal.aborted && !this.#closed &&
       digestActionRequest(fresh.value.request) === mutation.payloadDigest &&
-      sameProviderRequest(fresh.value.provider, prepared.provider) && Date.parse(prepared.request.terms.expiresAt) > at &&
-      await this.#ready(prepared.request.kind, at, signal, mutation);
+      sameProviderRequest(fresh.value.provider, prepared.provider) && Date.parse(prepared.request.terms.expiresAt) > at;
+    if (!valid || at === undefined) return false;
+    const state = await this.#ready(prepared.request.kind, at, signal, mutation);
+    if (!state) return false;
+    try {
+      this.#authorizedSources.set(prepared, Object.freeze({ scope: this.#scope, callId: this.#callId, sessionId: this.#sessionId,
+        policyVersion: this.#policyVersion, kind: prepared.request.kind, patientId: prepared.provider.patientId,
+        businessId: this.#businessId, credentialFingerprint: this.#credentialFingerprint, clinicalDigest: mutation.payloadDigest,
+        direction: state.admission!.direction === "outbound" ? "outbound" : "inbound" }));
+    } catch { /* Optional historical provenance supplies no clinical veto. */ }
+    return true;
+  }
+
+  /** Historical fact only: both this preparation and the actual owning native
+   * writer outcome are needed. A later observation has no such provenance. */
+  inspectedOutcomeSource(prepared: PreparedClinikoChange, receipt: unknown):
+    Readonly<{ dispatch: ClinikoChangeDispatchSource; native: ClinikoObservedChange }> | undefined {
+    try {
+      const dispatch = this.#authorizedSources.get(prepared);
+      const native = prepared.request.kind === "cancel" ? this.#cancellation.observedOutcome(receipt) : this.#rescheduling?.observedOutcome(receipt);
+      if (!dispatch || !native || dispatch.clinicalDigest !== digestActionRequest(prepared.request) ||
+          !sameProviderRequest(native.request, prepared.provider) || !sameScope(native.selection.scope, dispatch.scope) ||
+          native.selection.businessId !== dispatch.businessId || native.selection.credentialFingerprint !== dispatch.credentialFingerprint ||
+          native.request.patientId !== dispatch.patientId) return;
+      return Object.freeze({ dispatch, native });
+    } catch { return; }
   }
 
   /** Protected read-back while the original SAM write is dispatched; a moved source need not still be old. */
@@ -286,7 +319,7 @@ export class ClinikoAppointmentChangeGuard {
         prepared.request.kind === "cancel" ? "appointments.cancel" : "appointments.reschedule", this.#clock(), signal), signal);
       const fresh = this.#time(now);
       return !!patient?.ok && patient.value.patientRef === prepared.provider.patientId && !signal.aborted && !this.#closed &&
-        fresh !== undefined && Date.parse(patient.value.expiresAt) > fresh && await this.#ready(prepared.request.kind, fresh, signal, mutation);
+        fresh !== undefined && Date.parse(patient.value.expiresAt) > fresh && !!await this.#ready(prepared.request.kind, fresh, signal, mutation);
     } catch { return false; }
   }
 

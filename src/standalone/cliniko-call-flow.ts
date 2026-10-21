@@ -36,6 +36,7 @@ import { sameScope } from "./appointment-change-authority.ts";
 import { ClinikoClassSession } from "./cliniko-class-session.ts";
 import { OwnerFileClassPolicy } from "./owner-file-class-policy.ts";
 import { ClinikoBookingSession } from "./cliniko-booking-session.ts";
+import { captureBookingMemoConfig } from "./cliniko-booking-memo.ts";
 import type { ClinikoBookingSessionConfig } from "./cliniko-booking-session.ts";
 import { ClinikoCancellationSession } from "./cliniko-cancellation-session.ts";
 import { ClinikoIntakeBookingSession } from "./cliniko-intake-booking-session.ts";
@@ -141,6 +142,8 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     const freezeClass = (service: ClassServiceConfig) => Object.freeze({ ...service,
       ...(service.move ? { move: Object.freeze({ ...service.move, destination: Object.freeze({ ...service.move.destination }) }) } : {}) });
     super();
+    if (config.memo) config = { ...config, memo: captureBookingMemoConfig(config.memo, { scope: config.receipt.scope, ...config.cliniko,
+      credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey), ...(config.clock ? { clock: config.clock } : {}) }) };
     if (config.outbound) {
       this.#config = Object.freeze({ ...config, receipt: structuredClone(config.receipt), cliniko: Object.freeze({ ...config.cliniko }),
         approvals: Object.freeze({ ...config.approvals }),

@@ -1,4 +1,5 @@
 import { captureFinancialVoiceProvision, financialVoiceForCall } from "./financial-voice-provision.ts";
+import { captureBookingMemoConfig } from "./cliniko-booking-memo.ts";
 import type { FinancialVoiceProvision } from "./financial-voice-provision.ts";
 import { PrivateFinancialBookingInput } from "./private-financial-booking-input.ts";
 import { isDeepStrictEqual } from "node:util";
@@ -35,6 +36,8 @@ export function clinikoOutboundVoice(config: ClinikoOutboundVoiceConfig):
   (preparation: OutboundVoicePreparation) => Promise<PreparedVoiceSession> {
   if (Object.hasOwn(config.clinical, "financial")) throw Error("Clinical conversation unavailable");
   const clinical = Object.freeze({ ...config.clinical, cliniko: Object.freeze({ ...config.clinical.cliniko }),
+    ...(config.clinical.memo ? { memo: captureBookingMemoConfig(config.clinical.memo, { scope: config.context.requests.scope,
+      ...config.clinical.cliniko, credentialFingerprint: clinikoCredentialFingerprint(config.clinical.cliniko.apiKey), clock: config.clock }) } : {}),
     approvals: Object.freeze({ ...config.clinical.approvals }),
     ...(config.clinical.reschedulingDestination ? { reschedulingDestination: Object.freeze({ ...config.clinical.reschedulingDestination }) } : {}),
     ...(config.clinical.reschedulingPractitioners ? { reschedulingPractitioners: Object.freeze(config.clinical.reschedulingPractitioners.map(member => Object.freeze({ ...member }))) } : {}) });

@@ -20,6 +20,7 @@ import { standaloneReschedulingFixture } from "./standalone-rescheduling.ts";
 
 /** Concrete public policies/selection/verifier/SAM/review/write; independent permission, email and HTTP remain synthetic. */
 export async function reschedulingAuthorityFixture(options: { scope?: LocationScope; folder?: string; fetchPort?: typeof fetch; rateBudget?: ClinikoRequestBudget;
+  fetchAround?: (port: typeof fetch) => typeof fetch; lostRecall?: boolean;
   verificationBudget?: PatientVerificationBudget; timeoutMs?: number; operation?: PatientOperation; multiple?: boolean; lostMove?: boolean; startsAt?: string; cancellationExecute?: boolean;
   destinationPractitionerId?: string; sameTime?: boolean; practitionerMoves?: readonly ApprovedPractitionerMove[]; practitionerChoices?: readonly string[] } = {}) {
   const folder = options.folder ?? await mkdtemp(join(tmpdir(), "abby-move-authority-"));
@@ -38,7 +39,8 @@ export async function reschedulingAuthorityFixture(options: { scope?: LocationSc
   const replace = async (file: string, value: unknown) => { await writeFile(`${file}.new`, JSON.stringify(value), { mode: 0o600 }); await rename(`${file}.new`, file); };
   try {
     const f = await standaloneReschedulingFixture({ ...options, folder,
-      fetchAround: port => async (value, init) => {
+      fetchAround: port => {
+        const provider: typeof fetch = async (value, init) => {
         const url = new URL(String(value));
         if (url.pathname === "/v1/businesses/11") { await onBusiness(); return Response.json({ id: "11", archived_at: failure === "businessArchive" ? verificationNow : null,
           time_zone_identifier: failure === "zone" ? "Asia/Jakarta" : "Australia/Sydney", show_in_online_bookings: failure !== "businessOnline", appointment_type_ids: ["33"] }); }
@@ -77,6 +79,8 @@ export async function reschedulingAuthorityFixture(options: { scope?: LocationSc
           return Response.json(row);
         }
         return response;
+        };
+        return options.fetchAround ? options.fetchAround(provider) : provider;
       },
       authorityFor: async (config, port) => {
         account = { email: "clinic-admin@example.test", actor: { actorRef: "synthetic-admin", role: "clinicAdmin", scope: config.scope }, membershipVersion: "member-1" };

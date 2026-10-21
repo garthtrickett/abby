@@ -17,6 +17,7 @@ import type { CallerCandidateLookup } from "../voice/caller-candidates.ts";
 import { CallerVerificationSession } from "./caller-verification-session.ts";
 import { ClinikoReschedulingAuthority } from "./cliniko-rescheduling-authority.ts";
 import { ClinikoReschedulingHost } from "./cliniko-rescheduling-host.ts";
+import { captureAdministrativeMemoConfig } from "./administrative-memo-retention.ts";
 import type { PatientCodeDelivery, PatientVerificationBudget, PatientVerificationPermission } from "./email-patient-authority.ts";
 import type { AdminDirectory } from "./identity/magic-link.ts";
 import { OwnerFileCallerPolicy } from "./owner-file-caller-policy.ts";
@@ -24,6 +25,7 @@ import { OwnerFileBookingPolicy } from "./owner-file-booking-policy.ts";
 import { ClinikoOutboundClinicalContext } from "./cliniko-outbound-clinical-context.ts";
 
 export type ClinikoReschedulingSessionConfig = Readonly<{
+  memo?: import("./administrative-memo-retention.ts").ClinikoAdministrativeMemoConfig;
   receipt: AdmissionReceipt; inbound: AuthenticatedInboundCall; sessionId: string; policyVersion: string;
   ledger: LedgerStore; policies: PolicyStore; lookup: CallerCandidateLookup;
   permission: PatientVerificationPermission; verificationBudget: PatientVerificationBudget; delivery: PatientCodeDelivery;
@@ -89,6 +91,8 @@ export class ClinikoReschedulingSession {
           (incoming.timeoutMs !== undefined && (!Number.isSafeInteger(incoming.timeoutMs) || incoming.timeoutMs < 1 || incoming.timeoutMs > 20_000))) return unavailable();
       // Freeze caller/provider bindings before the first async approval read.
       const config = Object.freeze({ ...incoming, ...(incoming.representative ? { representative: Object.freeze({ ...incoming.representative }) } : {}), receipt: structuredClone(incoming.receipt), inbound: structuredClone(incoming.inbound),
+        ...(incoming.memo ? { memo: captureAdministrativeMemoConfig(incoming.memo, { scope: incoming.receipt.scope, ...incoming.cliniko,
+          credentialFingerprint: clinikoCredentialFingerprint(incoming.cliniko.apiKey), ...(incoming.clock ? { clock: incoming.clock } : {}) }) } : {}),
         ...(incoming.destination ? { destination: Object.freeze({ ...incoming.destination }) } : {}),
         ...(incoming.practitioners ? { practitioners: Object.freeze(incoming.practitioners.map(member => Object.freeze({ ...member }))) } : {}),
         cliniko: Object.freeze({ ...incoming.cliniko }), clock: incoming.clock ?? (() => new Date().toISOString()) });
@@ -175,7 +179,7 @@ export class ClinikoReschedulingSession {
           menu,
           timeZone: config.cliniko.timeZone, recallTypeId: config.cliniko.recallTypeId, rescheduling: rescheduling.value, cancellation: cancellation.value,
           businessId: config.cliniko.businessId, credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey),
-          recallWriter: recalls.value, clock: config.clock });
+          recallWriter: recalls.value, ...(config.memo ? { memo: config.memo } : {}), clock: config.clock });
         if (settled || config.signal.aborted || !await active() || settled) return undefined;
         completed = new ClinikoReschedulingSession(verification, authority, host, menu, config.signal);
         return completed;
