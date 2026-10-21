@@ -54,11 +54,11 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   const webhookUrl = "https://workflow.example.test/twilio/inbound", streamUrl = "wss://workflow.example.test/twilio/media/";
   let mediaElapsedMs = 0;
   const sourceClock = config.clock ?? (() => verificationNow);
-  const sourceStartedAt = Date.parse(sourceClock());
-  // Source ticks and quiet media represent the same elapsed interval. Use its
-  // later observation so accelerated frames cannot lead trusted time, while a
-  // real wait that advances both clocks is counted once.
-  const now = () => new Date(Math.max(Date.parse(sourceClock()), sourceStartedAt + mediaElapsedMs)).toISOString();
+  let mediaStartedAt = Date.parse(sourceClock());
+  // Source ticks and media represent the same elapsed interval. The decoder
+  // anchors frame timestamps to authenticated stream admission, so use that
+  // exact epoch when accelerated frames lead wall time. Count real waits once.
+  const now = () => new Date(Math.max(Date.parse(sourceClock()), mediaStartedAt + mediaElapsedMs)).toISOString();
   const authToken = "synthetic-workflow-voice-token", scope = config.receipt.scope;
   const ingress = new TwilioSignedIngress({ accountSid, authToken, publicWebhookUrl: webhookUrl, publicStreamUrl: streamUrl,
     fallbackNumbers: { [config.inbound.dialedNumber]: "+6125550188" }, bindingKey: Buffer.alloc(32, 0x38), now: () => new Date(now()) });
@@ -198,6 +198,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     businessTimeZone: config.cliniko.timeZone, credentialFingerprint: clinikoCredentialFingerprint(config.cliniko.apiKey),
     catalogueObservedAt: now(), approvedAt: now(), approvedBy: "synthetic-admin", patientActionMode: "unavailable", patientRequestMode: "unavailable" });
   const server = createTwilioIngressServer({ ingress, createCall: async (stream, send, close) => {
+    mediaStartedAt = Date.parse(stream.streamStartedAt);
     const composed = resultValue(await createStandaloneTransientVoiceCall({ db,
       routingHost: options.routingHost?.(accountSid) ?? new ReferenceNumberRoutingHost([{ accountRef: accountSid, dialedNumber: config.inbound.dialedNumber, ...scope, routeVersion: "workflow-voice" }]),
       ...(options.locationServiceSources ? { locationServiceSources: options.locationServiceSources } : {}),
