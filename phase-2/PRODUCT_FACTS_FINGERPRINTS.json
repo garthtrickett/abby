@@ -1,12 +1,12 @@
 {
   "verifiedDate": "2026-10-21",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "3b640fc09b547e18fda37f29c29f085a03c64a8d3c5985f3fdf76820b9150051",
+  "factsSha256": "94e93dd23c89ccda72c18452a4b2217ce15460bc32381db4d52b5b2a6e3d4d3a",
   "sources": {
     ".github/workflows/text-contract.yml": "20f47909d711b7a7d2b3916a8ef0756345b414dff225184989cd8056b5b6179b",
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
     "docs/adr/0003-class-movement-staff-resolution.md": "683bdd10660afc00309bac21e32ceda976573aa5e29aca4106fb1cddcb71b62f",
-    "phase-2/COMMUNICATION_MEMOS.md": "7909e6b934ba11469662cc5a832e7effa8db8f1ab199b97f79f38df534b8c1a4",
+    "phase-2/COMMUNICATION_MEMOS.md": "5dce836444eef3e6a1c33effb9fbf79c4ff8df2bf668fb4a768eea9a97f4aa7a",
     "phase-2/EXECUTION_ORDER.md": "9650cd00bb04ee393f9b41ebf22c178d0353d6fbd2a3ed318d83297c150920f1",
     "phase-2/EXECUTION_PROGRESS.md": "088328688b5461bb0dfb625d4e4340fc472a3c61b5f5835ae82b77bc877c5ac8",
     "phase-2/OUTBOUND_CALL_ADMISSION.md": "93edc93d8868e17133055771c98176af0d6fa13385adbf4f3700069f5d22df2f",
