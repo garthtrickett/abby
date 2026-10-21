@@ -100,9 +100,12 @@ remain zero. Remote carrier/native/acoustic services and clinic grants are
 synthetic. The failed first accepted-case fixture and failed driver typecheck
 remain historical evidence, followed by their owning corrections.
 
-This is local engineering qualification. Normal PR #575 parent integration,
-fresh exact-head cloud checks and normal review remain required before this
-change is published/merged. Default hosting configuration is unchanged. Complete
+Normally merged PR #575/main ca3bffb is integrated with every qualified
+source/runtime input and all 699 artifact bytes unchanged. Facts/scenarios and
+source/dependency/cleanup guards are rechecked; no duplicate runtime build or SQL
+pass is claimed. This remains local engineering qualification pending its own
+exact-head publication/cloud checks and normal review. Actual parent-main CI is
+independently monitored, never inferred from branch checks. Default hosting configuration is unchanged. Complete
 no-stop/private/all-ASR coverage, actual clinic/provider/source/restore and
 acoustic acceptance, gap 13 implementation and the full execution-order goal
 remain open. No deployment or live-call authorization is inferred.
