@@ -15,25 +15,26 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 export async function representativeFixture(rateBudget?: import("../../src/cliniko/read-budget.ts").ClinikoRequestBudget,
   provided?: Readonly<{ fixture: Pick<Awaited<ReturnType<typeof callerVerificationFixture>>,
     "scope" | "folder" | "sessionConfig" | "session" | "ledger" | "policies" | "inbound" | "receipt" | "callId" | "sessionId" | "mail" | "close" |
-    "state" | "runtime" | "setTime" | "setPermitted" | "setEmail" | "provider" | "replaceAccount"> & Readonly<{ config: Parameters<typeof OwnerFileCallerPolicy.capture>[0] }>; operation: PatientOperation }>) {
+    "state" | "runtime" | "setTime" | "setPermitted" | "setEmail" | "provider" | "replaceAccount"> & Readonly<{ config: Parameters<typeof OwnerFileCallerPolicy.capture>[0] }>; operation: PatientOperation; subjectIds?: readonly [string, string] }>) {
   const f = provided?.fixture ?? await callerVerificationFixture(rateBudget ? { rateBudget } : {});
   const rootApproval = JSON.parse(await readFile(f.config.path, "utf8")) as CallerVerificationApproval;
   const operation = provided?.operation ?? "appointments.read";
+  const subjectIds = provided?.subjectIds ?? ["43", "44"] as const, [firstId, secondId] = subjectIds;
   const path = join(f.folder, "representative.json"), callerPath = join(f.folder, "representative-caller.json");
   const lifetime = new AbortController(), base = "https://api.au5.cliniko.com/v1";
   const identity = { firstName: "Synthetic", lastName: "Subject Canaries", dateOfBirth: "1982-03-05" };
   const patients = new Map([
-    ["43", { id: "43", first_name: identity.firstName, last_name: identity.lastName, date_of_birth: identity.dateOfBirth,
+    [firstId, { id: firstId, first_name: identity.firstName, last_name: identity.lastName, date_of_birth: identity.dateOfBirth,
       archived_at: null, email: "subject-one-private@example.test", patient_phone_numbers: [{ number: "+61499999888", phone_type: "Mobile" }] }],
-    ["44", { id: "44", first_name: "Synthetic", last_name: "Second Person", date_of_birth: "2014-02-28",
+    [secondId, { id: secondId, first_name: "Synthetic", last_name: "Second Person", date_of_birth: "2014-02-28",
       archived_at: null, email: "subject-two-private@example.test", patient_phone_numbers: [{ number: "+61499999777", phone_type: "Mobile" }] }],
   ]);
   const relation = (id: string, subjectId: string) => ({ id, archived_at: null, updated_at: "2026-10-04T05:00:00.000Z", relation: 60,
     patient: { links: { self: `${base}/patients/${verificationCanaries[2]}` } }, related_patient: { links: { self: `${base}/patients/${subjectId}` } } });
-  let relations = [relation("101", "43"), relation("102", "44")];
+  let relations = [relation("101", firstId), relation("102", secondId)];
   const authorizations = new Map<string, RepresentativeAuthorization>([
-    ["43", { authorityRef: "approved-adult", version: "1", expiresAt: "2026-10-04T06:02:00.000Z", subjectKind: "adult", authorityKind: "adultRepresentative" }],
-    ["44", { authorityRef: "approved-guardian", version: "1", expiresAt: "2026-10-04T06:02:00.000Z", subjectKind: "minor", authorityKind: "guardian" }],
+    [firstId, { authorityRef: "approved-adult", version: "1", expiresAt: "2026-10-04T06:02:00.000Z", subjectKind: "adult", authorityKind: "adultRepresentative" }],
+    [secondId, { authorityRef: "approved-guardian", version: "1", expiresAt: "2026-10-04T06:02:00.000Z", subjectKind: "minor", authorityKind: "guardian" }],
   ]);
   const common = Object.fromEntries(["scope", "revision", "approverRef", "approvedAt", "effectiveFrom", "effectiveUntil", "approved", "enabled"].map(key => [key, rootApproval[key as keyof typeof rootApproval]]));
   let approval = { ...common, policyVersion: f.sessionConfig.policyVersion, businessId: "11", credentialFingerprint: clinikoCredentialFingerprint("synthetic-session-au5"),
@@ -79,12 +80,12 @@ export async function representativeFixture(rateBudget?: import("../../src/clini
     }
     if (url.pathname.startsWith("/v1/patients/")) {
       const row = patients.get(url.pathname.split("/").at(-1)!);
-      const response = Response.json(fault === "ambiguous" && row?.id === "44" ? { ...patients.get("43"), id: "44" } : row);
+      const response = Response.json(fault === "ambiguous" && row?.id === secondId ? { ...patients.get(firstId), id: secondId } : row);
       afterSubjectRead?.(); return response;
     }
     if (url.pathname === "/v1/businesses/11") return Response.json({ id: "11", archived_at: null, time_zone_identifier: "Australia/Sydney" });
     assert.equal(url.pathname, "/v1/individual_appointments");
-    assert.equal(url.searchParams.getAll("q[]").some(query => query.includes("patient_id:=43")), true);
+    assert.equal(url.searchParams.getAll("q[]").some(query => query.includes(`patient_id:=${firstId}`)), true);
     return Response.json({ total_entries: 0, individual_appointments: [] });
   };
   const config: ConstructorParameters<typeof ClinikoRepresentativeSelection>[0] = {
@@ -107,7 +108,7 @@ export async function representativeFixture(rateBudget?: import("../../src/clini
     while (!mail.length && Date.now() < deadline) await new Promise<void>(resolve => setTimeout(resolve, 5));
     assert.ok(mail[0]); assert.equal((await verifier.submitCode(mail[0].code)).verified, true); return verifier;
   };
-  return { f, identity, patients, authorizations, requests, queries, mail, policyConfig, config, owner, lifetime, verifyActor, select, verifySubject,
+  return { f, identity, patients, subjectIds, authorizations, requests, queries, mail, policyConfig, config, owner, lifetime, verifyActor, select, verifySubject,
     setFault: (value: typeof fault) => { fault = value; }, setLookup: (value: boolean) => { lookupAllowed = value; },
     setOperations: (value: boolean) => { operationsAllowed = value; }, setBudget: (value: boolean) => { budgetAllowed = value; },
     afterSubjectRead: (run: () => void) => { afterSubjectRead = run; },

@@ -75,6 +75,7 @@ export function assertDirectSqlVerificationCanaryContext(): void {
   const entry = process.argv[1]?.replaceAll("\\", "/"), eligible = [
     "postgres-outbound-clinical-cancellation.test.ts", "postgres-outbound-clinical-rescheduling.test.ts",
     "postgres-outbound-clinical-voice.test.ts", "postgres-outbound-follow-up-financial.test.ts",
+    "postgres-representative-booking-memo.test.ts",
   ];
   let database: URL | undefined;
   try { database = new URL(process.env.DATABASE_URL ?? "https://invalid.local"); } catch { /* Generic guard error below. */ }

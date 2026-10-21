@@ -180,9 +180,14 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     }
     return port(value, init);
   });
+  const privateRepresentativeTranscription = (sessionId: string) => ({ async accept() { return ok([]); }, async flush(generation: number) {
+    const text = privateInputs.shift(); assert.ok(text); privateTranscripts.push(text);
+    return ok([{ kind: "segmentFinal" as const, sessionId, generation, utteranceId: `representative-${privateTranscripts.length}`, text, quality: "clear" as const }]);
+  } });
   if (options.financialPolicyForCall && (!options.clinicalHost || !config.financial)) throw new Error("per-call financial host required");
   const realHost = options.clinicalHost ? new ClinikoVoiceClinicalHost({ ...config, policies: policy, scope,
     greeting: resultValue(await policy.read(scope)).greeting!, fetchPort: provider, intent,
+    ...(config.representativeInput ? { privateRepresentativeTranscription } : {}),
     ...(config.financial ? { financial: options.financialPolicyForCall
       ? (({ policy: _, ...common }) => ({ ...common, policyForCall: options.financialPolicyForCall!, native: { ...common.native, clock: now }, fetchPort: provider }))(config.financial)
       : { ...config.financial, native: { ...config.financial.native, clock: now }, fetchPort: provider } } : {}) }) : undefined;
@@ -261,10 +266,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
           const text = privateInputs.shift(); assert.ok(text); privateTranscripts.push(text);
           return ok([{ kind: "segmentFinal" as const, sessionId, generation, utteranceId: `private-${privateTranscripts.length}`, text, quality: "clear" as const }]);
         } }) } : {}),
-        ...(config.representativeInput ? { privateRepresentativeTranscription: (sessionId: string) => ({ async accept() { return ok([]); }, async flush(generation: number) {
-          const text = privateInputs.shift(); assert.ok(text); privateTranscripts.push(text);
-          return ok([{ kind: "segmentFinal" as const, sessionId, generation, utteranceId: `representative-${privateTranscripts.length}`, text, quality: "clear" as const }]);
-        } }) } : {}),
+        ...(config.representativeInput ? { privateRepresentativeTranscription } : {}),
       },
       ...syntheticSpeech({ synthesis: { async *stream(text) { spoken.push(text); yield new Uint8Array(640); } },
         transcriptionFactory: sessionId => ({ async accept() { transcriptionFrames++; return ok([]); }, async flush(generation) {
