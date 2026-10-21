@@ -757,6 +757,25 @@ effects remain in the complete database/backup. Node and external PostgreSQL
 have separate 512 MiB/CPU100%/Swap0 caps and all OOM/high/max counters stay zero;
 owned databases, containers and private fixture folders are cleaned.
 
+Review of local `07dd800` found one P2 evidence gap: the denied-retention
+modes obtained the native source marker only from memo POSTs, which they
+correctly suppress. Those earlier four passes do not cover that missing canary.
+The nonemitted driver now independently observes the actual native booking notes,
+requires their exact UUIDv4 marker in every mode, probes both full notes and marker
+in public output, every SQL column and the unfiltered raw backup, and requires any
+posted memo sourceActionRef to equal the independently observed native marker.
+Read-only spec follow-up confirms the finding is closed without weakening scope;
+Standards review found no breaches or actionable smells.
+
+The corrected complete four-mode emitted signed SQL/privacy run passes
+(1792602775930,54s; Node peak168,853,504 B and PostgreSQL peak127,062,016 B,
+separate512MiB/CPU100%/Swap0 caps; zero OOM/high/max events).
+Affected strict TypeScript also passes (1792602777380,1m15s).
+All720 runtime outputs and the selected55 source-test dependency bytes remain
+unchanged. These four current cases supersede the earlier SQL privacy witness
+for this driver; they are not four additional acceptance scenarios. Historical
+results and the original review remain preserved.
+
 This adds no guardian, representative cancellation/rescheduling/class, financial,
 catalogue or outgoing voice qualification. It adds no stopped-process or restore
 case; the parent's 36 restored-history cases retain their recorded scope. Real

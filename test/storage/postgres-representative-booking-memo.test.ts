@@ -80,6 +80,10 @@ test(`actual emitted signed representative booking keeps memo subject, native180
     assert.equal(Object.values((await call.state()).actions).at(-1)!.status, "awaitingConfirmation");
     await call.mark(); await call.turn("Yes");
     assert.equal(call.writes.length, 1); assert.equal(call.writeRequests[0]!.body.patient_id, subjects[0]);
+    const nativeNotes = call.writeRequests[0]!.body.notes;
+    assert.equal(typeof nativeNotes, "string");
+    const nativeMarker = /^Abby booking ([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i.exec(String(nativeNotes))?.[1];
+    assert.ok(nativeMarker, "actual native booking notes contain a UUIDv4 source marker");
     assert.equal(call.spoken.at(-1), "Your booking is confirmed.");
     assert.equal(Object.values((await call.state()).actions).at(-1)!.status, "committed");
     await voiceUntil(() => retention.outcomes.length === 1, "independent memo completion");
@@ -93,6 +97,7 @@ test(`actual emitted signed representative booking keeps memo subject, native180
       const decoded = resultValue(decodeAdministrativeMemo(memo.posts[0]!.content));
       assert.equal(decoded.patientId, subjects[0]); assert.notEqual(decoded.patientId, verificationCanaries[2]);
       assert.equal(decoded.direction, "inbound"); assert.equal(decoded.outcome.kind, "bookingConfirmed");
+      assert.equal(decoded.sourceActionRef, nativeMarker);
       assert.deepEqual(resultValue(await new PostgresOutboundEffectBarrier(db, f.f.scope, binding).claimOnce(decoded.actionRef)), { claimed: false });
     }
     const verification = await sql<{ kind: string; attempts: number }>`select kind, attempts from patient_verification_budgets where tenant_id = ${f.f.scope.tenantId}`.execute(db);
@@ -102,7 +107,7 @@ test(`actual emitted signed representative booking keeps memo subject, native180
     assert.ok(action.mutation.request.kind === "book");
     const proof = action.mutation.request.patient.verificationRef;
     const publicData = JSON.stringify([call.modelTurns, call.transcripts, commandProgress(state, "representative-memo"), await call.flow.publicIntentContext()]);
-    const privateValues = [...verificationCanaries, ...subjects, f.flowConfig.cliniko.apiKey, ...call.privateTranscripts,
+    const privateValues = [...verificationCanaries, ...subjects, f.flowConfig.cliniko.apiKey, ...call.privateTranscripts, String(nativeNotes), nativeMarker,
       ...[...f.r.patients.values()].flatMap(row => [row.first_name, row.last_name, row.date_of_birth, row.email, ...row.patient_phone_numbers.map(phone => phone.number)]),
       ...f.mail.flatMap(row => [row.email, row.code]), ...f.f.recalls.map(row => String(row.notes)),
       ...f.f.recalls.map(row => resultValue(decodeClinikoReview(row.notes)).marker),

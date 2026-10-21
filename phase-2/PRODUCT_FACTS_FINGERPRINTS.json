@@ -1,12 +1,12 @@
 {
   "verifiedDate": "2026-10-21",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "6f05290c2e828c75c2d7fceac95dfdbefd915a8072cf542b4870dabf6fbe9c92",
+  "factsSha256": "adbfdaaefcfb83d12558333a6bcf79e489dc280078d045668b87efc9c0f53746",
   "sources": {
     ".github/workflows/text-contract.yml": "20f47909d711b7a7d2b3916a8ef0756345b414dff225184989cd8056b5b6179b",
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
     "docs/adr/0003-class-movement-staff-resolution.md": "683bdd10660afc00309bac21e32ceda976573aa5e29aca4106fb1cddcb71b62f",
-    "phase-2/COMMUNICATION_MEMOS.md": "d0be0c059fc5d2531b99219074e7c12f2d596ba98d110a2ded99c3121cff3986",
+    "phase-2/COMMUNICATION_MEMOS.md": "55f092202c96ffd44275f11a9889d086d6bc4646e80777480a111cdb63b25be3",
     "phase-2/EXECUTION_ORDER.md": "c0d9f309c9a267d22556cc2abd549fd035e354db3b6a14216b1fdb47bfa53b50",
     "phase-2/EXECUTION_PROGRESS.md": "4621fcd10adcc66d8f784cda8e1774c0b8f1c523d8ff4622a1d09436614f64fa",
     "phase-2/OUTBOUND_CALL_ADMISSION.md": "93edc93d8868e17133055771c98176af0d6fa13385adbf4f3700069f5d22df2f",
@@ -436,7 +436,7 @@
     "test/storage/postgres-outbound-twilio-ingress.test.ts": "4e0a7a2963bf334ff0d05a1979c068ff03de6868db0d0a11847545cebe38d207",
     "test/storage/postgres-outbound-twilio.test.ts": "fa34b95955251b517e19ba71cd1c4f6bffe0be4d45bb589e63c0a68c385ea1a8",
     "test/storage/postgres-patient-correction-setting.test.ts": "1afb637ce7593e07962c0806c2e02b78db156a92bbfff48de7de0c2703b4eb8c",
-    "test/storage/postgres-representative-booking-memo.test.ts": "dc4babfbbf947595a4db22fac6667411eda6f3135cd6bd8b97ca46e5829e0683",
+    "test/storage/postgres-representative-booking-memo.test.ts": "0dbd2eea3a6f5b254b42eca6264afa65a65883c92b393a09bb581f1fe14d31d5",
     "test/storage/postgres-twilio-outbound-finality-process.test.ts": "502d2aff50d0d52e5afe3fe8d5370df521aed8d9ec2b163eacb495bb9dcf9f7a",
     "test/storage/postgres-twilio-outbound-finality.test.ts": "b35c2d0edbab5f43796d3ee244314235d2135ceb551aacbbbeab86e5c42d9e75",
     "test/storage/postgres-twilio-outbound-notification-process.test.ts": "16f5cdd103aaab13303e2fe0dab04fce126cb9ae7fc3fe033f7a96196a6669d6",
