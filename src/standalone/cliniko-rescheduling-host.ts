@@ -11,6 +11,8 @@ import { sameScope } from "./appointment-change-authority.ts";
 import { ClinikoAppointmentChangeGuard } from "./cliniko-appointment-change-guard.ts";
 import type { ClinikoAppointmentChangeGuardConfig, PreparedClinikoChange } from "./cliniko-appointment-change-guard.ts";
 import { ClinikoReviewedSend } from "./cliniko-reviewed-send.ts";
+import { ClinikoAppointmentChangeMemo } from "./cliniko-appointment-change-memo.ts";
+import type { ClinikoAdministrativeMemoConfig } from "./administrative-memo-retention.ts";
 import { NoStoredKnowledge } from "./no-stored-knowledge.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { preparationMayBeDiscarded } from "./prepared-proposal.ts";
@@ -21,16 +23,18 @@ export type ClinikoReschedulingHostConfig = ClinikoAppointmentChangeGuardConfig 
   recallTypeId: string;
   timeZone: string;
   menu?: ReschedulingMenuHost;
+  memo?: ClinikoAdministrativeMemoConfig;
 }>;
 
 /** Standalone best-effort in-place move. All call state is volatile; provider review precedes one send.
- * Construction is not clinic activation. The production caller runner does not expose this host yet. */
+ * Construction and optional memo configuration are not clinic activation. */
 export class ClinikoReschedulingHost extends NoStoredKnowledge
   implements AppointmentChangeEvidenceHost, BookingEvidenceHost, HostEffects {
   readonly effectDeadlineMs = 30_000;
   readonly #config: ClinikoReschedulingHostConfig;
   readonly #guard: ClinikoAppointmentChangeGuard;
   readonly #review: ClinikoReviewedSend;
+  readonly #memo: ClinikoAppointmentChangeMemo | undefined;
   readonly #lifetime = new AbortController();
   #prepared: PreparedClinikoChange | undefined;
   #preparedRevision = 0;
@@ -46,6 +50,7 @@ export class ClinikoReschedulingHost extends NoStoredKnowledge
       credentialFingerprint: config.credentialFingerprint, policyVersion: config.policyVersion,
       timeZone: config.timeZone, recallTypeId: config.recallTypeId, writer: config.recallWriter,
       clock: () => Date.parse(this.#now()) });
+    this.#memo = config.memo ? new ClinikoAppointmentChangeMemo(config.memo, config, this.#guard, this.#review) : undefined;
   }
 
   reschedulingMenuAvailable(): boolean { return !this.#lifetime.signal.aborted && this.#config.menu?.reschedulingMenuAvailable() === true; }
@@ -125,6 +130,8 @@ export class ClinikoReschedulingHost extends NoStoredKnowledge
     if (!result.value.outcome.ok) return reject(); // The edge returns errors only before a possible PATCH.
     if (result.value.outcome.value.kind !== "moved" || signal.aborted) return uncertain();
     if (!await this.#guard.mayInspect(prepared, mutation, this.#now(), signal) || signal.aborted) return uncertain();
+    this.#memo?.capture(prepared, result.value, confirmed);
+    try { void this.#memo?.retain().catch(() => {}); } catch { /* Memo retention cannot veto the clinical result. */ }
     return { kind: "committed", actionKey: mutation.actionKey, hostRef: provider.appointmentId };
   }
 

@@ -4,6 +4,7 @@ import { decodeClinikoReview, encodeClinikoReview } from "../cliniko/review-requ
 import type { ClinikoReviewRequest } from "../cliniko/review-request.ts";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
+import type { ClinikoRequestBudget } from "../cliniko/read-budget.ts";
 import { sameScope, validClinikoId } from "./appointment-change-authority.ts";
 import { clinicDateAt } from "./clinic-clock.ts";
 
@@ -31,6 +32,8 @@ type Config = Readonly<{
   clock?: () => number;
   deadlineMs?: number;
 }>;
+export type ClinikoReviewedChangeSource = Readonly<{ marker: string; recallRef: string;
+  request: ClinikoReviewRequest & Readonly<{ operation: Extract<ClinikoReviewRequest["operation"], { kind: "cancel" | "reschedule" }> }> }>;
 
 async function untilAbort<Value>(pending: Promise<Value>, signal: AbortSignal): Promise<Value | undefined> {
   let onAbort: () => void = () => undefined;
@@ -50,6 +53,7 @@ export class ClinikoReviewedSend {
   readonly #config: Config;
   readonly #lifetime = new AbortController();
   #consumed = false;
+  readonly #changeSources = new WeakMap<object, Readonly<{ source: ClinikoReviewedChangeSource; outcome: unknown }>>();
 
   constructor(config: Config) {
     const selection = config.writer?.selection();
@@ -67,6 +71,27 @@ export class ClinikoReviewedSend {
     try { new Intl.DateTimeFormat("en", { timeZone: config.timeZone }); }
     catch { throw new TypeError("invalid reviewed send configuration"); }
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...scope }) });
+    Object.defineProperty(this, "changeSource", { value: this.changeSource.bind(this) });
+  }
+
+  sharesRequestBudget(budget: ClinikoRequestBudget): boolean { return this.#config.writer.sharesRequestBudget(budget); }
+  /** Original acknowledged native review identity; not a clinical outcome. */
+  changeSource(result: unknown): ClinikoReviewedChangeSource | undefined {
+    try {
+      if (!result || typeof result !== "object" || Array.isArray(result) || Object.keys(result).sort().join(",") !== "outcome,recallRef") return;
+      const found = this.#changeSources.get(result), value = result as { recallRef?: unknown; outcome?: unknown };
+      return found && value.recallRef === found.source.recallRef && value.outcome === found.outcome ? found.source : undefined;
+    } catch { return; }
+  }
+  #changeResult<Value>(recallRef: string, marker: string, request: ClinikoReviewRequest, outcome: Value) {
+    const value = { recallRef, outcome };
+    if (request.operation.kind === "cancel" || request.operation.kind === "reschedule") {
+      try {
+        const copy = Object.freeze({ ...request, scope: Object.freeze({ ...request.scope }), operation: Object.freeze({ ...request.operation }) });
+        this.#changeSources.set(value, Object.freeze({ source: Object.freeze({ recallRef, marker, request: copy }), outcome }));
+      } catch { /* Optional memo provenance cannot alter the existing reviewed-send result. */ }
+    }
+    return ok(value);
   }
 
   async run<Value>(confirmed: ClinikoReviewRequest, ports: ReviewedSendPorts<Value>, external: AbortSignal):
@@ -117,7 +142,7 @@ export class ClinikoReviewedSend {
       const acknowledged = request.operation.kind === "book" || request.operation.kind === "classBook" ? ports.acknowledgedBooking?.() : undefined;
       if (acknowledged !== undefined) return ok({ recallRef: opened.value.recallRef, outcome: acknowledged });
       if (outcome === undefined || signal.aborted) return err({ kind: "mutationUncertain" });
-      return ok({ recallRef: opened.value.recallRef, outcome });
+      return this.#changeResult(opened.value.recallRef, marker, request, outcome);
     } catch { return err({ kind: "mutationUncertain" }); }
     finally { clearTimeout(timer); }
   }

@@ -60,6 +60,7 @@ export class ClinikoRecallWriter {
   selection(): Readonly<{ scope: ClinikoClinicScope; credentialFingerprint: string }> {
     return { scope: { ...this.scope }, credentialFingerprint: this.credentialHash };
   }
+  sharesRequestBudget(budget: ClinikoRequestBudget): boolean { return this.rateBudget === budget; }
 
   async openOnce(request: ClinikoRecallWriteRequest, signal?: AbortSignal):
     Promise<Result<ClinikoRecallWriteOutcome, ClinikoRecallFailure>> {

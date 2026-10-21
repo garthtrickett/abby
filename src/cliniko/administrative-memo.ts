@@ -4,9 +4,12 @@ import type { LocationScope, Result } from "../core/model.ts";
 import { validOutboundEffectRef } from "../core/outbound-effect-barrier.ts";
 
 type Appointment = Readonly<{ appointmentRef: string; startsAt: string; endsAt: string }>;
+type Observation = Readonly<{ basis: "acknowledgedAndObservedBestEffort"; observedAt: string }>;
 export type AdministrativeMemoOutcome = Appointment & (
-  | Readonly<{ kind: "bookingConfirmed" | "cancellationConfirmed" }>
-  | Readonly<{ kind: "reschedulingConfirmed"; previous: Readonly<{ startsAt: string; endsAt: string }> }>
+  | Readonly<{ kind: "bookingConfirmed" }>
+  | Readonly<{ kind: "cancellationObserved"; verification: Observation }>
+  | Readonly<{ kind: "reschedulingObserved"; verification: Observation; practitionerRef: string;
+      previous: Readonly<{ startsAt: string; endsAt: string; practitionerRef: string }> }>
 );
 /** Private native record, not a clinical receipt. A trusted workflow must
  * independently establish exact subject/result and current write permission.
@@ -43,18 +46,26 @@ export function administrativeMemoActionRef(sourceActionRef: string): string | u
   return value !== sourceActionRef ? value : undefined;
 }
 
+function validOutcome(o: AdministrativeMemoOutcome, occurredAt: string, recordedAt: string): boolean {
+  if (!o || !/^cliniko:appointment:[1-9][0-9]{0,18}$/.test(o.appointmentRef) || !interval(o)) return false;
+  if (o.kind === "bookingConfirmed") return exact(o, ["kind", "appointmentRef", "startsAt", "endsAt"]);
+  if (o.kind !== "cancellationObserved" && o.kind !== "reschedulingObserved") return false;
+  if (!exact(o.verification, ["basis", "observedAt"]) || o.verification.basis !== "acknowledgedAndObservedBestEffort" ||
+      !instant(o.verification.observedAt) || o.verification.observedAt !== occurredAt || o.verification.observedAt > recordedAt) return false;
+  if (o.kind === "cancellationObserved") return exact(o, ["kind", "appointmentRef", "startsAt", "endsAt", "verification"]);
+  const practitioner = (v: unknown) => typeof v === "string" && /^cliniko:practitioner:[1-9][0-9]{0,18}$/.test(v);
+  return exact(o, ["kind", "appointmentRef", "startsAt", "endsAt", "verification", "previous", "practitionerRef"]) &&
+    exact(o.previous, ["startsAt", "endsAt", "practitionerRef"]) && interval(o.previous) && practitioner(o.practitionerRef) && practitioner(o.previous.practitionerRef) &&
+    Date.parse(o.endsAt) - Date.parse(o.startsAt) === Date.parse(o.previous.endsAt) - Date.parse(o.previous.startsAt) &&
+    (o.previous.startsAt !== o.startsAt || o.previous.endsAt !== o.endsAt || o.previous.practitionerRef !== o.practitionerRef);
+}
 function valid(v: AdministrativeMemo): boolean {
-  const o = v?.outcome;
   return exact(v, keys) && validOutboundEffectRef(v.sourceActionRef) && v.actionRef === administrativeMemoActionRef(v.sourceActionRef) &&
     exact(v.scope, ["tenantId", "clinicId", "locationId"]) && Object.values(v.scope).every(opaque) &&
     numeric(v.businessId) && numeric(v.patientId) && digest(v.credentialFingerprint) && opaque(v.authorRef) &&
     exact(v.policy, ["version", "digest"]) && opaque(v.policy.version) && digest(v.policy.digest) &&
     ["inbound", "outbound"].includes(v.direction) && instant(v.occurredAt) && instant(v.recordedAt) && v.occurredAt <= v.recordedAt && digest(v.authentication) &&
-    !!o && /^cliniko:appointment:[1-9][0-9]{0,18}$/.test(o.appointmentRef) && interval(o) &&
-    (o.kind === "bookingConfirmed" || o.kind === "cancellationConfirmed" ? exact(o, ["kind", "appointmentRef", "startsAt", "endsAt"]) :
-      o.kind === "reschedulingConfirmed" && exact(o, ["kind", "appointmentRef", "startsAt", "endsAt", "previous"]) &&
-      exact(o.previous, ["startsAt", "endsAt"]) && interval(o.previous) &&
-      (o.previous.startsAt !== o.startsAt || o.previous.endsAt !== o.endsAt));
+    validOutcome(v.outcome, v.occurredAt, v.recordedAt);
 }
 function payload(v: AdministrativeMemo): UnsignedAdministrativeMemo {
   const o = v.outcome;
@@ -62,17 +73,21 @@ function payload(v: AdministrativeMemo): UnsignedAdministrativeMemo {
     businessId: v.businessId, credentialFingerprint: v.credentialFingerprint, patientId: v.patientId, authorRef: v.authorRef,
     policy: { version: v.policy.version, digest: v.policy.digest }, direction: v.direction,
     outcome: { kind: o.kind, appointmentRef: o.appointmentRef, startsAt: o.startsAt, endsAt: o.endsAt,
-      ...(o.kind === "reschedulingConfirmed" ? { previous: { startsAt: o.previous.startsAt, endsAt: o.previous.endsAt } } : {}) } as AdministrativeMemoOutcome,
+      ...(o.kind !== "bookingConfirmed" ? { verification: { basis: o.verification.basis, observedAt: o.verification.observedAt } } : {}),
+      ...(o.kind === "reschedulingObserved" ? { practitionerRef: o.practitionerRef,
+        previous: { startsAt: o.previous.startsAt, endsAt: o.previous.endsAt, practitionerRef: o.previous.practitionerRef } } : {}) } as AdministrativeMemoOutcome,
     occurredAt: v.occurredAt, recordedAt: v.recordedAt };
 }
 function description(v: AdministrativeMemo): string {
   const o = v.outcome, range = `${o.startsAt} to ${o.endsAt} (UTC)`;
-  return o.kind === "reschedulingConfirmed" ? `Rescheduled ${o.appointmentRef} from ${o.previous.startsAt} to ${o.previous.endsAt} (UTC), to ${range}.` :
-    `${o.kind === "bookingConfirmed" ? "Confirmed booking" : "Confirmed cancellation"} ${o.appointmentRef}: ${range}.`;
+  if (o.kind === "bookingConfirmed") return `Confirmed booking ${o.appointmentRef}: ${range}.`;
+  return o.kind === "cancellationObserved" ? `Observed cancelled ${o.appointmentRef}: ${range}; inspected ${o.verification.observedAt}.` :
+    `Observed ${o.appointmentRef} at ${range}, practitioner ${o.practitionerRef}, after a rescheduling request from ${o.previous.startsAt} to ${o.previous.endsAt} (UTC); inspected ${o.verification.observedAt}.`;
 }
 function frozen(v: AdministrativeMemo): AdministrativeMemo {
   const p = payload(v); Object.freeze(p.scope); Object.freeze(p.policy);
-  if (p.outcome.kind === "reschedulingConfirmed") Object.freeze(p.outcome.previous);
+  if (p.outcome.kind !== "bookingConfirmed") Object.freeze(p.outcome.verification);
+  if (p.outcome.kind === "reschedulingObserved") Object.freeze(p.outcome.previous);
   Object.freeze(p.outcome); return Object.freeze({ ...p, authentication: v.authentication });
 }
 export function encodeAdministrativeMemo(v: AdministrativeMemo): Result<string, Failure> {

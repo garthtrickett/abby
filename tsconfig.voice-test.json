@@ -50,7 +50,8 @@
     "test/support/outbound-follow-up-financial.ts",
     "test/support/outbound-follow-up-financial-process.ts",
     "src/cliniko/administrative-memo-records.ts",
-    "test/support/booking-memo-session.ts"
+    "test/support/booking-memo-session.ts",
+    "test/support/appointment-change-memo.ts"
   ],
   "include": []
 }

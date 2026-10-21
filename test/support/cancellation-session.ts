@@ -17,6 +17,7 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 
 /** Full trusted composition, synthetic clinical approval/permission/mail/provider. No live activation. */
 export async function cancellationSessionFixture(options: { budget?: PatientVerificationBudget; rateBudget?: ClinikoRequestBudget;
+  memo?: ClinikoCancellationSessionConfig["memo"]; fetchAround?: (port: typeof fetch) => typeof fetch;
   delivery?: PatientCodeDelivery; timeoutMs?: number; multiple?: boolean; lostRecall?: boolean; lostWrite?: boolean; scope?: LocationScope; fetchPort?: typeof fetch } = {}) {
   const f = await callerVerificationFixture({ operation: "appointments.cancel", cancellationExecute: true, ...(options.scope ? { scope: options.scope } : {}) });
   f.session.dispose();
@@ -73,14 +74,16 @@ export async function cancellationSessionFixture(options: { budget?: PatientVeri
   let owner: ClinikoCancellationSession | undefined;
   try {
     await replace();
+    const providerPort = options.fetchAround?.(options.fetchPort ?? fetchPort) ?? options.fetchPort ?? fetchPort;
     const config: ClinikoCancellationSessionConfig = { receipt: f.receipt, inbound: f.inbound, sessionId: f.sessionId,
+      ...(options.memo ? { memo: options.memo } : {}),
       policyVersion: f.sessionConfig.policyVersion, ledger: f.ledger, policies: f.policies, lookup: f.sessionConfig.lookup,
       permission: f.sessionConfig.permission, verificationBudget: options.budget ?? { reserve: async () => true },
       delivery: options.delivery ?? { send: async (email, code) => { mail.push({ email, code }); return true; } },
       directory: new OwnerFileAdminDirectory(f.accountPath, f.scope), callerApprovalPath: f.path, cancellationApprovalPath: path,
       cliniko: { apiKey, contactEmail: "test@example.test", businessId: "11", recallTypeId: "7", timeZone: "Australia/Sydney", countryCallingCode: "61",
         rateBudget: options.rateBudget ?? { claim: async () => { claims++; return null; }, observe429: async () => ({ kind: "rateLimited" }) } },
-      signal: lifetime.signal, fetchPort: options.fetchPort ?? fetchPort, clock: f.sessionConfig.clock, ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }) };
+      signal: lifetime.signal, fetchPort: providerPort, clock: f.sessionConfig.clock, ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }) };
     owner = resultValue(await ClinikoCancellationSession.create(config));
     const reception = new TextReception(f.ledger, f.policies, owner.effects, undefined, owner.appointments);
     const agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope: f.scope }, f.policies, reception, undefined, undefined, undefined, f.ledger);

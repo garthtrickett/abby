@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { AdministrativeMemoAuthentication, administrativeMemoActionRef, encodeAdministrativeMemo, decodeAdministrativeMemo } from "../../src/cliniko/administrative-memo.ts";
 import { administrativeMemoInput } from "../support/administrative-memo.ts";
 
-for (const kind of ["bookingConfirmed", "reschedulingConfirmed", "cancellationConfirmed"] as const)
+for (const kind of ["bookingConfirmed", "reschedulingObserved", "cancellationObserved"] as const)
 test(`administrative ${kind} has exact canonical authenticated facts without free prose`, () => {
   const auth = new AdministrativeMemoAuthentication(randomBytes(32)), input = administrativeMemoInput(kind), signed = auth.sign(input);
   assert.ok(signed.ok); if (!signed.ok) return;
@@ -19,10 +19,34 @@ test("the memo purpose depends only on its original action, not operation/templa
   assert.equal(action, input.actionRef); assert.notEqual(action, input.sourceActionRef);
   const auth = new AdministrativeMemoAuthentication(randomBytes(32));
   for (const patch of [{ authorRef: "another-author" }, { patientId: "322" }, { policy: { version: "v2", digest: "b".repeat(64) } },
-    { outcome: { ...input.outcome, kind: "cancellationConfirmed" as const } }]) {
+    { outcome: administrativeMemoInput("cancellationObserved").outcome }]) {
     const signed = auth.sign({ ...input, ...patch }); assert.ok(signed.ok); if (signed.ok) assert.equal(signed.value.actionRef, action);
   }
   assert.equal(administrativeMemoActionRef("caller-picked-purpose"), undefined);
+});
+
+test("observed changes retain their best-effort basis and inspection time instead of claiming writer causality", () => {
+  const auth = new AdministrativeMemoAuthentication(randomBytes(32));
+  for (const kind of ["cancellationObserved", "reschedulingObserved"] as const) {
+    const input = administrativeMemoInput(kind), result = auth.sign(input); assert.ok(result.ok);
+    const encoded = encodeAdministrativeMemo(result.value); assert.ok(encoded.ok); assert.ok(encoded.value.includes("Observed"));
+    assert.equal(encoded.value.includes("Confirmed cancellation"), false); assert.equal(encoded.value.includes("Rescheduled cliniko:"), false);
+    const changed = structuredClone(input);
+    if (changed.outcome.kind !== "bookingConfirmed") {
+      (changed.outcome.verification as { observedAt: string }).observedAt = "2026-11-01T00:00:00.000Z";
+      assert.equal(auth.sign(changed).ok, false);
+    }
+  }
+});
+
+test("a practitioner-only rescheduling observation requires a real change and the original unchanged duration", () => {
+  const auth = new AdministrativeMemoAuthentication(randomBytes(32)), input = administrativeMemoInput("reschedulingObserved");
+  assert.ok(input.outcome.kind === "reschedulingObserved");
+  const outcome = { ...input.outcome, practitionerRef: "cliniko:practitioner:23", previous: { ...input.outcome.previous,
+    startsAt: input.outcome.startsAt, endsAt: input.outcome.endsAt } };
+  assert.ok(auth.sign({ ...input, outcome }).ok);
+  assert.equal(auth.sign({ ...input, outcome: { ...outcome, practitionerRef: outcome.previous.practitionerRef } }).ok, false);
+  assert.equal(auth.sign({ ...input, outcome: { ...outcome, endsAt: "2026-11-05T02:00:00.000Z" } }).ok, false);
 });
 
 for (const changed of ["freeText", "wrongPurpose", "sharedClass", "wrongInterval", "invalidDate", "wrongTimeOrder", "foreignKey", "extraAuthentication"] as const)
