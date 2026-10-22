@@ -16,12 +16,17 @@ export function representativeInputOptions(f: Awaited<ReturnType<typeof represen
 
 export async function representativeCallOwnerFixture(options: { multiplePatients?: true; operation?: "book" | "appointments.read" | "cancel" | "reschedule";
   allowedOperations?: readonly ("book" | "appointments.read" | "cancel" | "reschedule")[]; appointmentChanges?: true; budget?: ClinikoRequestBudget;
-  subjectIds?: readonly [string, string] } = {}) {
+  subjectIds?: readonly [string, string]; guardian?: true } = {}) {
   const f = await bookingOffersFixture({ ...(options.appointmentChanges ? { appointmentChanges: true } : {}), budget: options.budget ?? new ClinikoReadBudget(200, () => Date.parse(verificationNow)) });
   const operation = options.operation ?? "book";
   const patientOperations = { book: "appointments.book", cancel: "appointments.cancel", reschedule: "appointments.reschedule", "appointments.read": "appointments.read" } as const;
   const r = await representativeFixture(f.ownerPorts.rateBudget, { fixture: f, operation: patientOperations[operation], ...(options.subjectIds ? { subjectIds: options.subjectIds } : {}) });
   const [firstId, secondId] = r.subjectIds;
+  if (options.guardian) {
+    r.identity.dateOfBirth = "2014-03-05";
+    r.patients.get(firstId)!.date_of_birth = r.identity.dateOfBirth;
+    r.authorizations.set(firstId, { ...r.authorizations.get(firstId)!, subjectKind: "minor", authorityKind: "guardian", authorityRef: "approved-first-guardian" });
+  }
   if (options.allowedOperations) {
     const operations = options.allowedOperations.map(op => patientOperations[op]);
     await r.replaceApproval({ operations }); await r.replaceCaller({ operations });

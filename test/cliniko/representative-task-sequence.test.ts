@@ -1,45 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ClinikoCallFlow } from "../../src/standalone/cliniko-call-flow.ts";
-import { TextReception } from "../../src/reference/text-reception.ts";
-import { representativeCallOwnerFixture, representativeInputOptions } from "../support/representative-call-owner.ts";
-import { syntheticMultiTaskBookingProvider, syntheticTaskSequence } from "../support/call-task-sequence.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
 import { verificationNow } from "../support/caller-verification.ts";
 
-async function fixture(mode = "independentlyVerifiedPatients") {
-  const f = await representativeCallOwnerFixture({ multiplePatients: true }); f.flow.dispose();
-  const native = syntheticMultiTaskBookingProvider();
-  const source = await syntheticTaskSequence({ ...f.flowConfig, representativeInput: representativeInputOptions(f), fetchPort: native.wrap(f.flowConfig.fetchPort) }, f.f.folder);
-  await source.replace({ patientSelection: mode });
-  const flow = resultValue(ClinikoCallFlow.create(source.config)), reception = new TextReception(f.f.ledger, f.f.policies, flow);
-  let sequence = 0;
-  const start = async () => {
-    const turn = f.f.turn(`representative-task-${++sequence}`, "Book for another person");
-    const result = await reception.startWorkflow(f.f.scope, turn, "book", verificationNow, (await f.f.state()).conversationRevision,
-      undefined, false, undefined, true);
-    resultValue(result); await f.play();
-    const owner = flow.representativeInputOwner; assert.ok(owner); return owner;
-  };
-  const verify = async (id: "43" | "44", verifySubject = true) => {
-    const owner = await start(), count = f.mail.length;
-    assert.equal(owner.beginCallerVerification(), true); await f.waitForMail(count + 1);
-    assert.equal((await owner.submitCallerCode(f.mail.at(-1)!.code)).verified, true);
-    const patient = f.r.patients.get(id)!;
-    resultValue(await owner.selectPatient({ firstName: patient.first_name, lastName: patient.last_name, dateOfBirth: patient.date_of_birth }));
-    assert.equal(owner.beginPatientVerification(), true); await f.waitForMail(count + 2);
-    if (verifySubject) assert.equal((await flow.submitCode(f.mail.at(-1)!.code)).verified, true); return owner;
-  };
-  const book = async () => {
-    resultValue(await reception.readBookingMenu(f.f.scope, f.f.turn(`menu-${sequence}`), "2026-10-08", "2026-10-08", verificationNow)); await f.play();
-    resultValue(await reception.selectBookingMenu(f.f.scope, f.f.turn(`choice-${sequence}`), 1, verificationNow)); await f.play();
-    const action = Object.values((await f.f.state()).actions).at(-1)!; assert.equal(action.status, "awaitingConfirmation");
-    resultValue(await reception.affirm(f.f.scope, f.f.turn(`yes-${sequence}`, "Yes"), action.key, action.digest, verificationNow));
-    resultValue(await reception.drain(f.f.scope, f.f.callId, verificationNow)); await f.play();
-    return (await f.f.state()).actions[action.key]!;
-  };
-  return { ...f, flow, reception, source, native, start, verify, book, closeSequence: async () => { flow.dispose(); await f.close(); } };
-}
+import { representativeTaskSequenceFixture as fixture } from "../support/representative-task-sequence.ts";
 
 test("E2E-387 two independently approved patient tasks preserve one root caller, fresh codes, native subjects and immutable receipts", async t => {
   const f = await fixture();

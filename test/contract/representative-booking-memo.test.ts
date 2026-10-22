@@ -12,11 +12,12 @@ import { representativeCallOwnerFixture } from "../support/representative-call-o
 import { resultValue } from "../support/agent-appointment-proposals.ts";
 import { verificationNow, verificationCanaries } from "../support/caller-verification.ts";
 
+for (const guardian of [false, true])
 for (const mode of ["accepted", "wrongSubjectGrant", "withdrawn", "lostStored"] as const)
-test(`actual representative booking keeps its patient distinct from the verified caller for ${mode} memo retention`, { timeout: 20000 }, async t => {
+test(`actual ${guardian ? "guardian" : "representative"} booking keeps its patient distinct from the verified caller for ${mode} memo retention`, { timeout: 20000 }, async t => {
   const physical = new ClinikoReadBudget(180); let claims = 0;
   const budget = { claim: () => { claims++; return physical.claim(); }, observe429: physical.observe429.bind(physical) };
-  const f = await representativeCallOwnerFixture({ budget }); f.flow.dispose();
+  const f = await representativeCallOwnerFixture({ budget, ...(guardian ? { guardian: true } : {}) }); f.flow.dispose();
   let owner: ClinikoRepresentativeCallOwner | undefined, ownedFlow: ClinikoCallFlow | undefined;
   const native: AdministrativeMemoConfig = { scope: f.f.scope, ...f.flowConfig.cliniko,
     authorRef: "clinic-approved-admin-memo", policy: { version: "admin-actions-v1", digest: "a".repeat(64) },
