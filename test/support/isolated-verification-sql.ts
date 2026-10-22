@@ -48,7 +48,13 @@ async function createOwnedDatabase(adminUrl: string) {
 
 async function preserveUnrelatedRows(db: Connection) {
   const scope = { tenantId: "verification-unrelated", clinicId: "index", locationId: "main" }, fingerprint = "e".repeat(64);
-  const links = [{ normalizedPhone: "+61400000000", patientId: "101" }];
+  const links = [{ normalizedPhone: "+61411111111", patientId: "101" }];
+  // SQL verification canaries always end in zero. Keep every six-digit
+  // substring of this pre-existing public sentinel outside that space.
+  for (let start = 0; start <= links[0]!.normalizedPhone.length - 6; start++) {
+    const part = links[0]!.normalizedPhone.slice(start, start + 6);
+    assert.ok(!/^[0-9]{6}$/.test(part) || Number(part) % 10 !== 0);
+  }
   assert.deepEqual(await new PostgresOutboundEffectBarrier(db, scope, fingerprint).claimOnce("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
     { ok: true, value: { claimed: true } });
   assert.ok((await new PostgresPatientPhoneIndex(db).publish(scope, links, "61", fingerprint)).ok);
