@@ -46,3 +46,20 @@ test("reply-clock reconciliation preserves the existing15s step and15min lifetim
   assert.throws(() => alignedSyntheticReplyEnd(1000, 16001));
   assert.throws(() => alignedSyntheticReplyEnd(NaN, 1000));
 });
+
+test("a seven-frame reply follows host playback after delayed quiet callbacks without changing packet sequence", () => {
+  const timeline = new SyntheticMediaTimeline();
+  for (let i = 0; i < 100; i++) timeline.next();
+  timeline.alignAfter(5000);
+  const packets = Array.from({ length: 7 }, () => timeline.next());
+  assert.deepEqual(packets.map(p => Number(p.chunk)), [101, 102, 103, 104, 105, 106, 107]);
+  assert.deepEqual(packets.map(p => Number(p.timestamp)), [5020, 5040, 5060, 5080, 5100, 5120, 5140]);
+  timeline.alignAfter(5000);
+  assert.deepEqual(timeline.next(), { chunk: "108", timestamp: "5160" }, "an older clock cannot rewind delivered media");
+});
+
+test("generic reply reconciliation retains bounds and a refusal cannot mutate its next packet", () => {
+  const timeline = new SyntheticMediaTimeline();
+  for (const invalid of [-1, NaN, 0.5, 900000, 15000]) assert.throws(() => timeline.alignAfter(invalid));
+  assert.deepEqual(timeline.next(), { chunk: "1", timestamp: "0" });
+});

@@ -6,6 +6,7 @@ import WebSocket from "ws";
 import type { Kysely } from "kysely";
 import type Database from "../../src/storage/generated/Database.ts";
 import type { MemoryLedger } from "../../src/core/ledger.ts";
+import { readActiveClassMovementConsent } from "../../src/core/class-movement-consent.ts";
 import { ok } from "../../src/core/model.ts";
 import { ReferenceNumberRoutingHost } from "../../src/reference/clinic-number-routing.ts";
 import type { ClinicNumberRoutingHost } from "../../src/reference/clinic-number-routing.ts";
@@ -23,6 +24,7 @@ import { callIdFor } from "../../src/voice/admission.ts";
 import { approvedSyntheticPolicy, syntheticSpeech } from "./approved-voice.ts";
 import { retainedNativeAppointments } from "./retained-native-appointments.ts";
 import { SyntheticPlaybackReceipts } from "./synthetic-playback-receipts.ts";
+import { SyntheticMediaTimeline } from "./synthetic-media-timeline.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 import { verificationCanaries, verificationNow } from "./caller-verification.ts";
 import { bookingMenuDeadlineMs } from "../../src/reference/booking-menu-turns.ts";
@@ -42,7 +44,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     /** Exercise the real reusable clinical host instead of fixture-owned wiring. */
     clinicalHost?: true;
     financialPolicyForCall?: NonNullable<import("../../src/standalone/cliniko-voice-clinical-host.ts").FinancialVoiceProvision["policyForCall"]>;
-    maximumWrites?: 2; classMove?: true;
+    maximumWrites?: 2 | 3; classMove?: true;
     routingHost?: (accountSid: string) => ClinicNumberRoutingHost;
     locationServiceSources?: readonly Parameters<typeof OwnerFileServiceCatalogue.capture>[0][];
     appointmentTypeMetadata?: Readonly<Record<string, Readonly<{ durationMinutes: number }>>>;
@@ -53,6 +55,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   const accountSid = `AC${"4".repeat(32)}`, callSid = `CA${randomUUID().replaceAll("-", "")}`, streamSid = `MZ${randomUUID().replaceAll("-", "")}`;
   const webhookUrl = "https://workflow.example.test/twilio/inbound", streamUrl = "wss://workflow.example.test/twilio/media/";
   let mediaElapsedMs = 0;
+  const classMedia = options.classMove ? new SyntheticMediaTimeline() : undefined;
   const sourceClock = config.clock ?? (() => verificationNow);
   let mediaStartedAt = Date.parse(sourceClock());
   // Source ticks and media represent the same elapsed interval. The decoder
@@ -137,12 +140,26 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     if (method === "GET" && inspectedId && nativeRows.has(inspectedId))
       return Response.json(url.pathname.endsWith("/conflicts") ? { conflicts: { exist: false } } : nativeRows.get(inspectedId));
     if (method === "GET" && url.pathname === "/v1/individual_appointments/91/conflicts") return Response.json({ conflicts: { exist: false } });
-    if (method === "POST" && url.pathname === "/v1/attendees" || method === "PATCH" && /^\/v1\/attendees\/[1-9][0-9]*\/cancel$/.test(url.pathname)) {
+    if (method === "POST" && url.pathname === "/v1/attendees" || method === "PATCH" &&
+        (/^\/v1\/attendees\/[1-9][0-9]*\/cancel$/.test(url.pathname) ||
+          options.classMove && /^\/v1\/attendees\/[1-9][0-9]*$/.test(url.pathname))) {
       const state = resultValue(await ledger!.read(callId, scope));
       const action = Object.values(state.actions).find(action => action.status === "dispatched"); assert.ok(action);
       assert.equal(action.kind, options.classMove ? "reschedule" : method === "POST" ? "book" : "cancel");
       assert.equal(state.presentations[action.presentationId]?.status, "played");
       assert.ok(Object.values(state.effects).some(effect => effect.kind === "hostWrite" && effect.actionKey === action.key));
+      if (action.classMovementConsent) {
+        const active = Object.values(state.effects).find(effect => effect.kind === "hostWrite" && effect.actionKey === action.key && effect.status === "possiblySent");
+        assert.ok(active && readActiveClassMovementConsent(state, active.id, now()),
+          "each staged provider mutation requires its own current played consent");
+      }
+      if (method === "PATCH" && !url.pathname.endsWith("/cancel")) {
+        assert.ok(config.classAttendance?.move?.passAuthority || config.classServices?.some(service => service.move?.passAuthority),
+          "case association requires the independently approved pass movement fixture");
+        const body = JSON.parse(String(init?.body));
+        assert.deepEqual(Object.keys(body), ["patient_case_id"]);
+        assert.match(body.patient_case_id, /^[1-9][0-9]*$/);
+      }
       const leg = options.classMove ? `${action.key}:${method}:${url.pathname}` : action.key;
       assert.equal(writtenActions.has(leg), false); writtenActions.add(leg);
       writes.push(`${method} ${url.pathname}`); assert.ok(writes.length <= (options.maximumWrites ?? 1));
@@ -313,7 +330,9 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       throw new Error(`greeting mark timed out: ${JSON.stringify(transport)}`, { cause: error });
     }
     const media = (voiced: boolean) => {
-      chunk++; mediaElapsedMs = (chunk - 1) * 20;
+      const packet = classMedia?.next();
+      chunk = packet ? Number(packet.chunk) : chunk + 1;
+      mediaElapsedMs = packet ? Number(packet.timestamp) : (chunk - 1) * 20;
       sendEvent({ event: "media", media: { track: "inbound", chunk: String(chunk), timestamp: String(mediaElapsedMs),
         payload: Buffer.alloc(160, voiced ? 0x9f : 0xff).toString("base64") } });
     };
@@ -352,6 +371,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
         assert.deepEqual(failures, []);
       },
       async turn(text: string, options: { expectedFailure?: "confirmationMissing" | "staleGeneration" | "automatedCallUnavailable"; interrupt?: boolean } = {}) {
+        classMedia?.alignAfter(Math.max(0, Date.parse(now()) - mediaStartedAt));
         stages.length = 0;
         const marks = sent.filter(item => item.event === "mark").length, clears = sent.filter(item => item.event === "clear").length;
         let replyAfterMarks = marks;
