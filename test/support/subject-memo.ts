@@ -10,10 +10,11 @@ import type { ClinikoBookingMemoConfig, BookingMemoOutcome } from "../../src/sta
 
 /** Synthetic native memo storage and independent clinic grants only.
  * The separate actual clinical owner must still supply its private receipt. */
-export function subjectMemoFixture(native: AdministrativeMemoConfig, patientId: string, options: {
+export function subjectMemoFixture(native: AdministrativeMemoConfig, patient: string | readonly [string, string], options: {
   approvedPatientId?: string; lostStored?: true;
   barrierFor?: (scope: LocationScope, binding: string) => OutboundEffectBarrier;
 } = {}) {
+  const patients = new Set(typeof patient === "string" ? [patient] : patient);
   const service = new AbortController(), key = randomBytes(32), authentication = new AdministrativeMemoAuthentication(key);
   const posts: Record<string, unknown>[] = [], rows: Record<string, unknown>[] = [], consumed = new Set<string>();
   const outcomes: BookingMemoOutcome[] = [], control = { permitted: true };
@@ -22,7 +23,7 @@ export function subjectMemoFixture(native: AdministrativeMemoConfig, patientId: 
   const config: ClinikoBookingMemoConfig = {
     native, authentication, memoSignal: service.signal,
     authority: { allows: async () => control.permitted, current: () => control.permitted,
-      producerAdmitted: async q => q.memo?.patientId === (options.approvedPatientId ?? patientId) },
+      producerAdmitted: async q => !!q.memo && (options.approvedPatientId === undefined ? patients.has(q.memo.patientId) : q.memo.patientId === options.approvedPatientId) },
     barrier: options.barrierFor?.(native.scope, binding) ?? {
       matches: (scope, owner) => JSON.stringify(scope) === JSON.stringify(native.scope) && owner === binding,
       claimOnce: async ref => { const claimed = !consumed.has(ref); consumed.add(ref); return ok({ claimed }); }
@@ -31,12 +32,12 @@ export function subjectMemoFixture(native: AdministrativeMemoConfig, patientId: 
     fetchPort: async (url, init) => {
       assert.equal(String(url), "https://api.au5.cliniko.com/v1/communications"); assert.equal(init?.method, "POST");
       const body = JSON.parse(String(init.body)); posts.push(body);
-      assert.equal(body.patient_id, patientId); assert.equal(body.confidential, true);
-      const memo = resultMemo(body.content); assert.equal(memo.patientId, patientId); assert.equal(authentication.verify(memo), true);
-      const now = memo.recordedAt;
-      const row = { ...body, id: "701", created_at: now, updated_at: now, archived_at: null,
-        patient: { links: { self: `https://api.au5.cliniko.com/v1/patients/${patientId}` } },
-        links: { self: "https://api.au5.cliniko.com/v1/communications/701" } };
+      assert.ok(typeof body.patient_id === "string" && patients.has(body.patient_id)); assert.equal(body.confidential, true);
+      const memo = resultMemo(body.content); assert.equal(memo.patientId, body.patient_id); assert.equal(authentication.verify(memo), true);
+      const now = memo.recordedAt, id = String(701 + rows.length);
+      const row = { ...body, id, created_at: now, updated_at: now, archived_at: null,
+        patient: { links: { self: `https://api.au5.cliniko.com/v1/patients/${memo.patientId}` } },
+        links: { self: `https://api.au5.cliniko.com/v1/communications/${id}` } };
       rows.push(row); if (options.lostStored) throw Error("Synthetic memo acknowledgement lost after storage");
       return Response.json(row, { status: 201 });
     }

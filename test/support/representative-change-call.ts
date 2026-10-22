@@ -12,7 +12,7 @@ import { verificationCanaries, verificationNow } from "./caller-verification.ts"
 /** Native-shaped synthetic changes. All operations retain the same actual
  * shared account budget, independent caller/subject permissions and SAM. */
 export async function representativeChangeCallFixture(operation: "cancel" | "reschedule" | "appointments.read" = "cancel", options: {
-  budget?: ClinikoRequestBudget; subjectIds?: readonly [string, string]
+  budget?: ClinikoRequestBudget; subjectIds?: readonly [string, string]; guardian?: true
 } = {}) {
   const f = await representativeCallOwnerFixture({ multiplePatients: true, operation, appointmentChanges: true,
     allowedOperations: ["book", "cancel", "reschedule", "appointments.read"], ...options }); f.flow.dispose();

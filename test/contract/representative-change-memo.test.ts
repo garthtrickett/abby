@@ -12,13 +12,14 @@ import { subjectMemoFixture } from "../support/subject-memo.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
 import { verificationCanaries, verificationNow } from "../support/caller-verification.ts";
 
+for (const guardian of [false, true])
 for (const operation of ["cancel", "reschedule"] as const)
 for (const mode of ["accepted", "wrongSubjectGrant", "withdrawn", "lostStored", "nativeUncertain", ...(operation === "reschedule" ? ["fastBudgetExhausted"] as const : [])] as const)
-test(`representative ${operation} memo belongs to the separately verified patient: ${mode}`, { timeout: 120000 }, async t => {
+test(`${guardian ? "guardian" : "representative"} ${operation} memo belongs to the separately verified patient: ${mode}`, { timeout: 120000 }, async t => {
   const physical = new ClinikoReadBudget(180); let claims = 0, deniedClaims = 0;
   const budget = { claim: () => { claims++; const result = physical.claim(); if (result) deniedClaims++; return result; }, observe429: physical.observe429.bind(physical) };
   const subjects = ["583746192837465", "683746192837465"] as const;
-  const f = await representativeChangeCallFixture(operation, { budget, subjectIds: subjects }); f.flow.dispose();
+  const f = await representativeChangeCallFixture(operation, { budget, subjectIds: subjects, ...(guardian ? { guardian: true } : {}) }); f.flow.dispose();
   const began = performance.now();
   const clock = () => { const now = new Date(Date.parse(verificationNow) + performance.now() - began).toISOString(); f.f.setTime(now); return now; };
   const turn = (id: string, text?: string) => ({ ...f.f.turn(id, text), at: clock() });
@@ -52,7 +53,7 @@ test(`representative ${operation} memo belongs to the separately verified patien
     stages.push({ phase: "resolve", ok: result.ok, ...(!result.ok ? { code: result.error.kind } : {}) }); return result; };
   const agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope: f.f.scope }, f.f.policies, reception,
     undefined, undefined, undefined, f.f.ledger);
-  resultValue(await reception.startWorkflow(f.f.scope, turn("memo-related-start", "Change an appointment for my partner"), operation,
+  resultValue(await reception.startWorkflow(f.f.scope, turn("memo-related-start", guardian ? "Change an appointment for my child" : "Change an appointment for my partner"), operation,
     clock(), (await f.f.state()).conversationRevision, undefined, false, undefined, true)); await play();
   const owner = flow.representativeInputOwner; assert.ok(owner);
   assert.equal(owner.beginCallerVerification(), true); await f.waitForMail(1);
