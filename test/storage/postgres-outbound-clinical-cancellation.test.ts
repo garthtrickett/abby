@@ -1,33 +1,31 @@
 // E2E-422: exact original-target signed outgoing cancellation; remote native/speech/grants are synthetic.
 // Actual emitted original-target outgoing cancellation; remote native/speech/grants remain synthetic.
 import assert from "node:assert/strict";
-import test, { after } from "node:test";
+import test from "node:test";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { connectPostgres } from "../../src/storage/connect.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { verificationCanaries, verificationNow } from "../support/caller-verification.ts";
 
-import { captureSqlVerificationCanaryWindow, assertSqlVerificationCodeCanary } from "../support/sql-verification-canary.ts";
+import { assertSqlVerificationCodeCanary } from "../support/sql-verification-canary.ts";
+import { withIsolatedVerificationSql } from "../support/isolated-verification-sql.ts";
 
 if (!process.env.DATABASE_URL) throw Error("DATABASE_URL required");
-const db = connectPostgres(process.env.DATABASE_URL), peer = connectPostgres(process.env.DATABASE_URL);
-after(async () => { await Promise.all([db.destroy(), peer.destroy()]); });
-const canaryWindow = await captureSqlVerificationCanaryWindow(db);
+const adminUrl = process.env.DATABASE_URL;
 const emitted = new URL("../../dist/runtime/", import.meta.url);
 const { outboundClinicalVoiceFixture } = await import(new URL("test/support/outbound-clinical-voice.js", emitted).href) as typeof import("../support/outbound-clinical-voice.ts");
 const { PostgresClinikoRequestBudget } = await import(new URL("src/storage/postgres-cliniko-request-budget.js", emitted).href) as typeof import("../../src/storage/postgres-cliniko-request-budget.ts");
 const { PostgresOutboundEffectBarrier } = await import(new URL("src/storage/postgres-outbound-effect-barrier.js", emitted).href) as typeof import("../../src/storage/postgres-outbound-effect-barrier.ts");
 
 for (const scenario of ["accepted", "originalEdited", "peerQuota", "lostAcknowledgement"] as const)
-test(`actual emitted signed cancellation private keypad with shared native180, SQL exclusion and backup privacy: ${scenario}`, { timeout: 170000 }, async t => {
+test(`actual emitted signed cancellation private keypad with shared native180, SQL exclusion and backup privacy: ${scenario}`, { timeout: 170000 }, async () => withIsolatedVerificationSql(adminUrl, async ({ db, peer, connectionString, canaryWindow, defer }) => {
   const apiKey = `synthetic-outbound-cancel-${randomUUID()}-au5`, recipientNumber = `+614${randomInt(10_000_000, 99_999_999)}`;
   const identities = { accountSid: `AC${randomUUID().replaceAll("-", "")}`, callSid: `CA${randomUUID().replaceAll("-", "")}`,
     streamSid: `MZ${randomUUID().replaceAll("-", "")}`, authToken: `synthetic-clinical-${randomUUID()}`, contextKey: randomBytes(32),
     patientId: verificationCanaries[2]!, nativeRecallId: "30", recipientNumber };
   const budget = new PostgresClinikoRequestBudget(db, { apiKey, maxPerMinute: 180 });
   const f = await outboundClinicalVoiceFixture({ apiKey, budget, recipientNumber, identities, sickDayAction: "cancel", lostCancellationResponse: scenario === "lostAcknowledgement",
-    sessionEffects: (scope, binding) => new PostgresOutboundEffectBarrier(db, scope, binding) }); t.after(f.close);
+    sessionEffects: (scope, binding) => new PostgresOutboundEffectBarrier(db, scope, binding) }); defer(f.close);
   assert.notEqual(recipientNumber, f.inbound.presentedCallerNumber);
   await f.open(); await f.mark();
   assert.deepEqual(f.spoken, ["Hello, this is Abby calling on behalf of the clinic."]);
@@ -57,7 +55,7 @@ test(`actual emitted signed cancellation private keypad with shared native180, S
     await f.mark(); await f.say("Did it finish", { kind: "outcome" }); assert.equal(f.cancellations, 1);
     assert.equal(Object.values((await f.current()).actions)[0]!.status, "uncertain");
   }
-  const second = await f.transport.listen(f.transport.makeRouter()); t.after(second.close);
+  const second = await f.transport.listen(f.transport.makeRouter()); defer(second.close);
   const response = await second.post(), duplicate = await second.open(await response.text()); assert.equal(await duplicate.outcome, "closed");
   assert.equal(f.transport.state.created, 1);
   await assertSqlVerificationCodeCanary(db, code, canaryWindow);
@@ -69,7 +67,7 @@ test(`actual emitted signed cancellation private keypad with shared native180, S
     const chunk = text.slice(part * 256, (part + 1) * 256); return { label: `outbound_cancel_${i}_${part}`, value: chunk.length < 4 ? text.slice(-4) : chunk };
   }));
   for (let i = 0; i < probes.length; i += 12) assert.deepEqual(await scanPatientDataCanaries(db, probes.slice(i, i + 12)), { ok: true, value: [] });
-  const dump = execFileSync("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"], { timeout: 10000, maxBuffer: 8000000 }).toString();
+  const dump = execFileSync("pg_dump", [connectionString, "--no-owner", "--no-privileges"], { timeout: 10000, maxBuffer: 8000000 }).toString();
   const copy = (v: string) => v.replaceAll("\\", "\\\\").replaceAll("\n", "\\n").replaceAll("\r", "\\r").replaceAll("\t", "\\t");
   for (const text of canaries) {
     const json = JSON.stringify(text).slice(1, -1);
@@ -77,4 +75,4 @@ test(`actual emitted signed cancellation private keypad with shared native180, S
   }
   for (const secret of [apiKey, ...verificationCanaries, recipientNumber, code, f.requestNotes, identities.authToken])
     assert.equal(JSON.stringify([f.spoken, f.transcripts, f.modelTurns, f.sent]).includes(secret), false);
-});
+}));
