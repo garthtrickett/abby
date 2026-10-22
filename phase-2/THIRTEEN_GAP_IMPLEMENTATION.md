@@ -5430,3 +5430,10 @@ case/uncertain/compensation/native-source and subject/financial/catalogue/signed
 incoming/outgoing voice combinations retain their separate scope. Parent integration and
 a scoped memo PR with current cloud/review are next; full execution and real acceptance
 remain open. No default activation or live traffic.
+
+
+## Verified incoming callback context and original appointment, 22 October 2026
+
+This local R21/gap12 slice adds optional verified native prior-call context to the incoming Cliniko call flow. It preserves explicit unknown guidance without current independent proof, and requires a new operation code/played consent before an original-bound move or cancellation. A separate authenticated no-answer family can supply prior-call evidence; it is not completed speech, opt-out completeness or hold-release authority.
+
+The complete current correction passes438 source controls. Current whole strict/740 serving, fixed180 physical move (173nativeHTTP plus one setup/no denials) and four actual emitted signed PostgreSQL/private-keypad/privacy cases pass. Fresh incoming owners require fresh proof and native reads; they inherit no private context. This change is not yet reviewed/published/cloud-qualified or activated. Full-call/real clinic/source/provider/retention/acoustic/restore acceptance and all remaining thirteen-gap work stay open. See [contract and evidence](INCOMING_MISSED_CALL_CONTEXT.md) and [execution ledger](EXECUTION_PROGRESS.md#verified-incoming-native-callback-and-original-move-22-october-2026). Earlier dated results keep their original scope.

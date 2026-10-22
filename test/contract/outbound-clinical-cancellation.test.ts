@@ -83,7 +83,7 @@ test("lost outgoing cancellation acknowledgement stays uncertain after native ta
 test("outgoing cancellation rejects incoming identity, cross-admission bindings and replacement physical budgets", { timeout: 15000 }, async t => {
   const f = await outboundClinicalCancellationFixture(); t.after(f.close);
   const c = f.outgoingConfig;
-  const bad = [ { ...c, inbound: undefined }, { ...c, representative: undefined },
+  const bad = [ { ...c, inbound: undefined }, { ...c, representative: undefined }, { ...c, incomingOriginal: undefined },
     { ...c, outbound: {} }, { ...c, receipt: { ...c.receipt, admission: { ...c.receipt.admission, direction: "inbound" } } },
     { ...c, cliniko: { ...c.cliniko, businessId: "12" } },
     { ...c, cliniko: { ...c.cliniko, rateBudget: { claim: async () => null, observe429: async () => ({ kind: "rateLimited" }) } } } ];

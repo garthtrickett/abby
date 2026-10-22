@@ -59,6 +59,14 @@ export async function readPatientRecallHistory(selection: Readonly<{ base: strin
   const found = await readRecallHistory({ base: selection.base, patientId: selection.patientId, typeIds: [selection.typeId] }, load, clock);
   return Object.freeze({ scanned: found.scanned, rows: Object.freeze(found.rows.map(({ typeId: _typeId, ...r }) => Object.freeze(r))) });
 }
+/** A verified-patient consumer may correlate several explicitly approved record
+ * families without broadening to an account read or multiplying the bounds. */
+export async function readPatientRecallFamilies(selection: Readonly<{ base: string; patientId: string; typeIds: readonly string[] }>,
+  load: (url: string) => Promise<unknown>, clock: () => string): Promise<Readonly<{ scanned: number; rows: readonly AccountRecallRow[] }>> {
+  if (!selection || Object.keys(selection).sort().join(",") !== "base,patientId,typeIds" || !outboundNativeId(selection.patientId))
+    throw new PatientRecallHistoryError();
+  return readRecallHistory(selection, load, clock);
+}
 /** Broad account-body visibility must be independently approved by the caller.
  * There is no documented native type/phone filter. Historical closed/archived
  * rows stay visible; the unchanged500-row/50-selected bounds apply in aggregate. */

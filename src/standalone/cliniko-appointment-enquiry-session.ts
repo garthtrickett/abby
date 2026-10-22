@@ -72,6 +72,8 @@ export class ClinikoAppointmentEnquirySession {
     } catch { return unavailable(); }
     finally { if (!completed) { reads?.dispose(); verification?.dispose(); } }
   }
+  /** Trusted call-flow wiring only; never a caller/model proof surface. */
+  get verification(): CallerVerificationSession { return this.#verification; }
   beginVerification() { return this.#verification.begin(); }
   submitCode(code: string) { return this.#verification.submitCode(code); }
   verified(signal?: AbortSignal) { return this.#verification.verified(signal); }

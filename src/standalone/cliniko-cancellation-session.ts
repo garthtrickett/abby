@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { ClinikoOutboundClinicalContext } from "./cliniko-outbound-clinical-context.ts";
+import { ClinikoIncomingCallContext } from "./cliniko-incoming-call-context.ts";
 import { createWorkflowCallerVerification } from "./workflow-caller-verification.ts";
 import type { RepresentativeWorkflowSelection } from "./workflow-caller-verification.ts";
 import { ClinikoCancellationWriter } from "../cliniko/cancellation-write.ts";
@@ -23,6 +24,7 @@ import { OwnerFileCallerPolicy } from "./owner-file-caller-policy.ts";
 import { OwnerFileCancellationPolicy } from "./owner-file-cancellation-policy.ts";
 
 export type ClinikoCancellationSessionConfig = Readonly<{
+  incomingOriginal?: ClinikoIncomingCallContext;
   memo?: import("./administrative-memo-retention.ts").ClinikoAdministrativeMemoConfig;
   receipt: AdmissionReceipt; inbound: AuthenticatedInboundCall; sessionId: string; policyVersion: string;
   ledger: LedgerStore; policies: PolicyStore; lookup: CallerCandidateLookup;
@@ -33,8 +35,8 @@ export type ClinikoCancellationSessionConfig = Readonly<{
   representative?: RepresentativeWorkflowSelection;
   signal: AbortSignal; fetchPort?: typeof fetch; clock?: () => string; timeoutMs?: number;
 }>;
-export type ClinikoOutboundCancellationSessionConfig = Omit<ClinikoCancellationSessionConfig, "inbound" | "representative"> &
-  Readonly<{ outbound: ClinikoOutboundClinicalContext; inbound?: never; representative?: never }>;
+export type ClinikoOutboundCancellationSessionConfig = Omit<ClinikoCancellationSessionConfig, "inbound" | "representative" | "incomingOriginal"> &
+  Readonly<{ outbound: ClinikoOutboundClinicalContext; inbound?: never; representative?: never; incomingOriginal?: never }>;
 type SessionConfig = Omit<ClinikoCancellationSessionConfig, "inbound"> &
   Readonly<{ inbound?: AuthenticatedInboundCall; outbound?: ClinikoOutboundClinicalContext }>;
 type Failure = Readonly<{ kind: "cancellationSessionUnavailable" }>;
@@ -58,13 +60,16 @@ export class ClinikoCancellationSession {
   static async create(incoming: ClinikoCancellationSessionConfig): Promise<Result<ClinikoCancellationSession, Failure>> {
     if (!incoming || Object.hasOwn(incoming, "outbound") || incoming.receipt?.admission?.direction === "outbound")
       return err({ kind: "cancellationSessionUnavailable" });
+    if (incoming.incomingOriginal && (!(incoming.incomingOriginal instanceof ClinikoIncomingCallContext) ||
+        !incoming.incomingOriginal.hasOriginalAppointment() || !incoming.incomingOriginal.current() || !incoming.incomingOriginal.matchesCall(incoming.receipt, incoming.sessionId, incoming.policyVersion) ||
+        !incoming.incomingOriginal.usesBudget(incoming.cliniko.rateBudget))) return err({ kind: "cancellationSessionUnavailable" });
     return this.#create(incoming);
   }
   /** The original native sick-day target constrains an independently verified
    * cancellation; routing never becomes incoming identity or patient proof. */
   static async createOutbound(incoming: ClinikoOutboundCancellationSessionConfig): Promise<Result<ClinikoCancellationSession, Failure>> {
     try {
-      if (!incoming || Object.hasOwn(incoming, "inbound") || Object.hasOwn(incoming, "representative") ||
+      if (!incoming || Object.hasOwn(incoming, "inbound") || Object.hasOwn(incoming, "representative") || Object.hasOwn(incoming, "incomingOriginal") ||
           !(incoming.outbound instanceof ClinikoOutboundClinicalContext) || !incoming.outbound.matchesAdmission(incoming.receipt) ||
           !incoming.outbound.usesBudget(incoming.cliniko.rateBudget) || !incoming.outbound.current("appointments.cancel") ||
           !incoming.outbound.matchesWorkflow({ scope: incoming.receipt.scope, callId: incoming.receipt.callId,
@@ -136,7 +141,8 @@ export class ClinikoCancellationSession {
         if (settled || config.signal.aborted) { verification.dispose(); return undefined; }
         const source = ClinikoCancellationAuthority.create({ ...config.cliniko, scope, callId: config.receipt.callId,
           sessionId: config.sessionId, policyVersion: config.policyVersion, proof: verification.proof,
-          policy: policy.value, ...(config.outbound ? { outbound: config.outbound } : {}), clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) }, fetchPort);
+          policy: policy.value, ...(config.outbound ? { outbound: config.outbound } : {}),
+          ...(config.incomingOriginal ? { incomingOriginal: { context: config.incomingOriginal, verification } } : {}), clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) }, fetchPort);
         const cancellation = ClinikoCancellationWriter.create({ ...config.cliniko, scope }, fetchPort, config.clock);
         const recalls = ClinikoRecallWriter.create({ ...config.cliniko, scope }, fetchPort);
         if (!source.ok || !cancellation.ok || !recalls.ok || settled) return undefined;

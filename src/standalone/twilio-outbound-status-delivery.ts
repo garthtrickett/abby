@@ -4,6 +4,7 @@ import type { Result } from "../core/model.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import type { SignedTwilioWebhook } from "../voice/twilio-signed-ingress.ts";
 import { TwilioAbbyOutboundRuntime } from "../voice/twilio-outbound-runtime.ts";
+import { ClinikoTwilioOutboundUnansweredDelivery } from "./cliniko-twilio-outbound-unanswered-delivery.ts";
 import { ClinikoTwilioOutboundNotificationDelivery } from "./cliniko-twilio-outbound-notification-delivery.ts";
 import { ClinikoTwilioOutboundStopRecovery } from "./cliniko-twilio-outbound-stop-recovery.ts";
 import { NativeRequestAllowance } from "./internal/native-request-allowance.ts";
@@ -12,6 +13,7 @@ import { TwilioOutboundTerminalObservationAuthentication } from "../cliniko/twil
 
 type Config = Readonly<{
   notifications: Readonly<{ config: Parameters<typeof ClinikoTwilioOutboundNotificationDelivery.create>[0]; ports: Parameters<typeof ClinikoTwilioOutboundNotificationDelivery.create>[1] }>;
+  unanswered?: Readonly<{ config: Parameters<typeof ClinikoTwilioOutboundUnansweredDelivery.create>[0]; ports: Parameters<typeof ClinikoTwilioOutboundUnansweredDelivery.create>[1] }>;
   stop: Readonly<{ config: Parameters<typeof ClinikoTwilioOutboundStopRecovery.create>[0]; ports: Parameters<typeof ClinikoTwilioOutboundStopRecovery.create>[1] }>;
   staffReview?: Readonly<{ config: Parameters<typeof ClinikoTwilioOutboundStaffReview.create>[0]; ports: Parameters<typeof ClinikoTwilioOutboundStaffReview.create>[1] }>;
   maximumNativeRequests: number; deadlineMs?: number;
@@ -19,20 +21,22 @@ type Config = Readonly<{
 type Failure = Readonly<{ kind: "invalidConfig" | "unavailable" | "forbidden" }>;
 
 /** One signed delivery, one cumulative allowance and one deadline. Restrictive
- * stop recovery runs first. Completed provenance may be acknowledged with
+ * stop recovery runs first. Completed and explicitly selected no-answer
+ * provenance may be acknowledged with
  * absent speech evidence, without converting that absence into no-stop truth. */
 export class TwilioOutboundStatusDelivery {
   readonly #authenticate: TwilioAbbyOutboundRuntime["authenticateStatus"];
   readonly #runtime: TwilioAbbyOutboundRuntime;
   readonly #notifications: ClinikoTwilioOutboundNotificationDelivery;
+  readonly #unanswered: ClinikoTwilioOutboundUnansweredDelivery | undefined;
   readonly #stop: ClinikoTwilioOutboundStopRecovery;
   readonly #staffReview: ClinikoTwilioOutboundStaffReview | undefined;
   readonly #maximum: number;
   readonly #deadline: number;
   private constructor(runtime: TwilioAbbyOutboundRuntime, notifications: ClinikoTwilioOutboundNotificationDelivery,
-    stop: ClinikoTwilioOutboundStopRecovery, maximum: number, deadline: number, staffReview?: ClinikoTwilioOutboundStaffReview) {
+    stop: ClinikoTwilioOutboundStopRecovery, maximum: number, deadline: number, staffReview?: ClinikoTwilioOutboundStaffReview, unanswered?: ClinikoTwilioOutboundUnansweredDelivery) {
     this.#runtime = runtime; this.#notifications = notifications; this.#stop = stop; this.#maximum = maximum; this.#deadline = deadline;
-    this.#staffReview = staffReview;
+    this.#staffReview = staffReview; this.#unanswered = unanswered;
     this.#authenticate = runtime.authenticateStatus.bind(runtime);
   }
   static create(c: Config): Result<TwilioOutboundStatusDelivery, Failure> {
@@ -59,11 +63,24 @@ export class TwilioOutboundStatusDelivery {
               s.reports.outboundProviderReportRecallTypeId, n.observations.outboundTerminalObservationRecallTypeId].includes(r.reviews.outboundStaffReviewRecallTypeId)) return err({ kind: "invalidConfig" });
         const review = ClinikoTwilioOutboundStaffReview.create(r, c.staffReview.ports); if (!review.ok) return err({ kind: "invalidConfig" }); staffReview = review.value;
       }
-      return notifications.ok && stop.ok ? ok(new TwilioOutboundStatusDelivery(n.runtime, notifications.value, stop.value, c.maximumNativeRequests, deadline, staffReview)) : err({ kind: "invalidConfig" });
+      let unanswered: ClinikoTwilioOutboundUnansweredDelivery | undefined;
+      if (c.unanswered) {
+        const u = c.unanswered.config;
+        if (u.runtime !== n.runtime || [u.observations, u.attempts].some(v => v.rateBudget !== physical || v.apiKey !== n.observations.apiKey ||
+            v.businessId !== n.observations.businessId || !isDeepStrictEqual(v.scope, n.observations.scope)) ||
+            u.attempts.outboundAttemptRecallTypeId !== n.attempts.outboundAttemptRecallTypeId || u.attempts.attemptPolicyDigest !== n.attempts.attemptPolicyDigest ||
+            [s.stop.requests.outboundRecallTypeId, s.stop.attempts.outboundAttemptRecallTypeId, s.stop.dnc.source.contactReviewRecallTypeId,
+              s.reports.outboundProviderReportRecallTypeId, n.observations.outboundTerminalObservationRecallTypeId,
+              ...(c.staffReview ? [c.staffReview.config.reviews.outboundStaffReviewRecallTypeId] : [])].includes(u.observations.outboundUnansweredObservationRecallTypeId)) return err({ kind: "invalidConfig" });
+        const delivery = ClinikoTwilioOutboundUnansweredDelivery.create(u, c.unanswered.ports);
+        if (!delivery.ok) return err({ kind: "invalidConfig" }); unanswered = delivery.value;
+      }
+      return notifications.ok && stop.ok ? ok(new TwilioOutboundStatusDelivery(n.runtime, notifications.value, stop.value, c.maximumNativeRequests, deadline, staffReview, unanswered)) : err({ kind: "invalidConfig" });
     } catch { return err({ kind: "invalidConfig" }); }
   }
   matchesRuntime(runtime: TwilioAbbyOutboundRuntime): boolean {
-    return this.#notifications.matchesRuntime(runtime) && this.#stop.matchesRuntime(runtime);
+    return this.#notifications.matchesRuntime(runtime) && this.#stop.matchesRuntime(runtime) &&
+      (!this.#unanswered || this.#unanswered.matchesRuntime(runtime));
   }
   async receiveStatus(request: SignedTwilioWebhook, external: AbortSignal): Promise<Result<Readonly<{ kind: "acknowledged" }>, Failure>> {
     if (!(external instanceof AbortSignal) || external.aborted) return err({ kind: "unavailable" });
@@ -75,10 +92,15 @@ export class TwilioOutboundStatusDelivery {
       if (!authenticated.ok || !current()) return err({ kind: "forbidden" });
       const status = authenticated.value.status;
       if (!["completed", "busy", "failed", "no-answer", "canceled"].includes(status)) return ok({ kind: "acknowledged" });
+      const unanswered = status === "no-answer" ? this.#unanswered : undefined;
       const recovered = await awaitUntilAbort(this.#stop.recoverStatusEvidence(raw, signal, allowance), signal);
       if (!current() || !recovered?.ok || recovered.value.outcome.kind === "uncertain" ||
           recovered.value.evidence === "stop" && recovered.value.outcome.kind === "unresolved" ||
-          status !== "completed" && recovered.value.evidence === "missing") return err({ kind: "unavailable" });
+          status !== "completed" && !unanswered && recovered.value.evidence === "missing") return err({ kind: "unavailable" });
+      if (unanswered) {
+        const notification = await awaitUntilAbort(unanswered.receiveStatus(raw, signal, allowance), signal);
+        if (!notification?.ok || notification.value.kind !== "notificationRetained" || !current()) return err({ kind: "unavailable" });
+      }
       if (status === "completed") {
         const notification = await awaitUntilAbort(this.#notifications.receiveStatus(raw, signal, allowance), signal);
         if (!notification?.ok || notification.value.kind !== "notificationRetained" || !current()) return err({ kind: "unavailable" });

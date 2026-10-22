@@ -23,8 +23,10 @@ import type { AdminDirectory } from "./identity/magic-link.ts";
 import { OwnerFileCallerPolicy } from "./owner-file-caller-policy.ts";
 import { OwnerFileBookingPolicy } from "./owner-file-booking-policy.ts";
 import { ClinikoOutboundClinicalContext } from "./cliniko-outbound-clinical-context.ts";
+import { ClinikoIncomingCallContext } from "./cliniko-incoming-call-context.ts";
 
 export type ClinikoReschedulingSessionConfig = Readonly<{
+  incomingOriginal?: ClinikoIncomingCallContext;
   memo?: import("./administrative-memo-retention.ts").ClinikoAdministrativeMemoConfig;
   receipt: AdmissionReceipt; inbound: AuthenticatedInboundCall; sessionId: string; policyVersion: string;
   ledger: LedgerStore; policies: PolicyStore; lookup: CallerCandidateLookup;
@@ -37,8 +39,8 @@ export type ClinikoReschedulingSessionConfig = Readonly<{
   representative?: RepresentativeWorkflowSelection;
   signal: AbortSignal; fetchPort?: typeof fetch; clock?: () => string; timeoutMs?: number;
 }>;
-export type ClinikoOutboundReschedulingSessionConfig = Omit<ClinikoReschedulingSessionConfig, "inbound" | "representative"> &
-  Readonly<{ outbound: ClinikoOutboundClinicalContext; inbound?: never; representative?: never }>;
+export type ClinikoOutboundReschedulingSessionConfig = Omit<ClinikoReschedulingSessionConfig, "inbound" | "representative" | "incomingOriginal"> &
+  Readonly<{ outbound: ClinikoOutboundClinicalContext; inbound?: never; representative?: never; incomingOriginal?: never }>;
 type SessionConfig = Omit<ClinikoReschedulingSessionConfig, "inbound"> & Readonly<{ inbound?: AuthenticatedInboundCall; outbound?: ClinikoOutboundClinicalContext }>;
 type Failure = Readonly<{ kind: "reschedulingSessionUnavailable" }>;
 
@@ -61,6 +63,9 @@ export class ClinikoReschedulingSession {
 
   static async create(incoming: ClinikoReschedulingSessionConfig): Promise<Result<ClinikoReschedulingSession, Failure>> {
     if (!incoming || Object.hasOwn(incoming, "outbound")) return err({ kind: "reschedulingSessionUnavailable" });
+    if (incoming.incomingOriginal && (!(incoming.incomingOriginal instanceof ClinikoIncomingCallContext) ||
+        !incoming.incomingOriginal.hasOriginalAppointment() || !incoming.incomingOriginal.current() || !incoming.incomingOriginal.matchesCall(incoming.receipt, incoming.sessionId, incoming.policyVersion) ||
+        !incoming.incomingOriginal.usesBudget(incoming.cliniko.rateBudget))) return err({ kind: "reschedulingSessionUnavailable" });
     return this.#create(incoming);
   }
   /** Explicit outgoing composition; all normal verifier, fee, SAM and write
@@ -68,7 +73,7 @@ export class ClinikoReschedulingSession {
    * menu/proposal/commit and cannot become a soonest-appointment fallback. */
   static async createOutbound(incoming: ClinikoOutboundReschedulingSessionConfig): Promise<Result<ClinikoReschedulingSession, Failure>> {
     try {
-      if (Object.hasOwn(incoming, "inbound") || Object.hasOwn(incoming, "representative") ||
+      if (Object.hasOwn(incoming, "inbound") || Object.hasOwn(incoming, "representative") || Object.hasOwn(incoming, "incomingOriginal") ||
           !(incoming.outbound instanceof ClinikoOutboundClinicalContext) || !incoming.outbound.matchesAdmission(incoming.receipt) ||
           !incoming.outbound.usesBudget(incoming.cliniko.rateBudget) ||
           !incoming.outbound.current("appointments.reschedule")) return err({ kind: "reschedulingSessionUnavailable" });
@@ -167,6 +172,7 @@ export class ClinikoReschedulingSession {
         const source = ClinikoReschedulingAuthority.create({ ...config.cliniko, practitionerId: destinationId, scope, callId: config.receipt.callId,
           sessionId: config.sessionId, policyVersion: config.policyVersion, proof: verification.proof,
           policy: policy.value, feePolicy: fees.value, ...(config.outbound ? { outbound: config.outbound } : {}),
+          ...(config.incomingOriginal ? { incomingOriginal: { context: config.incomingOriginal, verification } } : {}),
           ...(config.practitioners !== undefined ? { practitionerPolicies } : {}), clock: config.clock, ...(config.timeoutMs === undefined ? {} : { timeoutMs: config.timeoutMs }) }, fetchPort);
         const cancellation = ClinikoCancellationWriter.create({ ...config.cliniko, scope }, fetchPort, config.clock);
         const rescheduling = ClinikoRescheduleWriter.create({ ...config.cliniko, scope }, fetchPort, config.clock);

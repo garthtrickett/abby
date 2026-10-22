@@ -3,6 +3,7 @@ import { validStaffMessageNotice } from "../core/staff-message-notice.ts";
 import { StaffOutcomeTurns } from "./staff-outcome-turns.ts";
 import { ReschedulingMenuTurns } from "./rescheduling-menu-turns.ts";
 import { AppointmentEnquiryTurns } from "./appointment-enquiry-turns.ts";
+import { MissedCallTurns } from "./missed-call-turns.ts";
 import { BookingMenuTurns } from "./booking-menu-turns.ts";
 import { ClassMovementTurns } from "./class-movement-turns.ts";
 import { EffectWorker } from "../core/effect-worker.ts";
@@ -26,7 +27,7 @@ import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { patientCorrectionEvidenceFailure } from "../core/patient-correction.ts";
 import type { ModelWork } from "../model/work.ts";
 
-export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").ClassMovementContinuationHost & import("../core/host.ts").StaffReviewProcessHost & import("../core/host.ts").BookingHorizonHost & import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").PreviousPractitionerHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost & import("../core/host.ts").PatientCorrectionEvidenceHost & import("../core/host.ts").ConfirmationResendEvidenceHost>;
+export type TextHost = BookingEvidenceHost & HostEffects & KnowledgeHost & Partial<import("../core/host.ts").MissedCallContextHost & import("../core/host.ts").ClassMovementContinuationHost & import("../core/host.ts").StaffReviewProcessHost & import("../core/host.ts").BookingHorizonHost & import("../core/host.ts").RequestBoundaryHost & import("../core/host.ts").CallerIdentityHost & import("../core/host.ts").PreviousPractitionerHost & import("../core/host.ts").AppointmentEnquiryHost & import("../core/host.ts").StaffRequestHost & WorkflowHost & ReschedulingMenuHost & BookingMenuHost & ModelKnowledgeContextHost & StaffLifecycleHost & OperatorAlertHost & IntakeEvidenceHost & AppointmentChangeEvidenceHost & NotificationHost & import("../core/host.ts").PatientCorrectionEvidenceHost & import("../core/host.ts").ConfirmationResendEvidenceHost>;
 export type TextReceptionFailure = TransitionFailure | PolicyFailure | Readonly<{ kind: "effectFailure" }>;
 
 export const appointmentProposalEvidenceDeadlineMs = 15_000;
@@ -204,8 +205,8 @@ export class TextReception {
   conversationControlAccepted(turn: FinalCallerTurn, state: CallState): void {
     this.host.conversationControlAccepted?.(turn, state);
   }
-  respondMissedCall(scope: LocationScope, turn: FinalCallerTurn, expectedRevision?: number) {
-    return this.respondPublicRepair(scope, turn, "missedCallReasonUnavailable", expectedRevision);
+  respondMissedCall(scope: LocationScope, turn: FinalCallerTurn, expectedRevision?: number, external?: AbortSignal) {
+    return new MissedCallTurns(this.ledger, this.host, this.clock).respond(scope, turn, expectedRevision, external);
   }
   private async respondPublicRepair(scope: LocationScope, turn: FinalCallerTurn, kind: "conversationPresence" | "missedCallReasonUnavailable", expectedRevision?: number) {
     const now = this.currentInstant();

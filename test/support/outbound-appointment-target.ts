@@ -7,17 +7,17 @@ import { outboundRequestValue } from "./outbound-recipient-request.ts";
 import { value } from "./outbound-records.ts";
 
 export function outboundTargetFixture(options: {
-  Reader?: typeof ClinikoOutboundAppointmentTarget; apiKey?: string; budget?: ClinikoRequestBudget;
+  Reader?: typeof ClinikoOutboundAppointmentTarget; apiKey?: string; budget?: ClinikoRequestBudget; patientId?: string;
   authority?: Partial<OutboundTargetAuthority>; deadlineMs?: number;
   response?(row: Record<string, unknown>, signal: AbortSignal): Response | Promise<Response>;
   claim?(): Promise<null | { kind: "rateLimited" }>;
 } = {}) {
   const base = "https://api.au5.cliniko.com/v1", apiKey = options.apiKey ?? "synthetic-target-au5";
   let now = "2026-11-01T10:00:00.000Z", live = true, allowed = true, claims = 0, fetches = 0;
-  const input = { patientId: "21", appointmentRef: "cliniko:appointment:71" };
-  const request = { ...outboundRequestValue(), credentialFingerprint: clinikoCredentialFingerprint(apiKey) };
+  const input = { patientId: options.patientId ?? "21", appointmentRef: "cliniko:appointment:71" };
+  const request = { ...outboundRequestValue(), patientId: input.patientId, credentialFingerprint: clinikoCredentialFingerprint(apiKey) };
   const row: Record<string, unknown> = { id: "71", links: { self: `${base}/individual_appointments/71` },
-    patient: { links: { self: `${base}/patients/21` } }, business: { links: { self: `${base}/businesses/11` } },
+    patient: { links: { self: `${base}/patients/${input.patientId}` } }, business: { links: { self: `${base}/businesses/11` } },
     practitioner: { links: { self: `${base}/practitioners/31` } }, appointment_type: { links: { self: `${base}/appointment_types/41` } },
     starts_at: "2026-11-02T10:00:00.000001+11:00", ends_at: "2026-11-02T10:30:00.000001+11:00",
     created_at: "2026-10-01T00:00:00.000001Z", updated_at: "2026-10-02T00:00:00.000001Z",
