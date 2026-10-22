@@ -6208,3 +6208,39 @@ Fresh whole strict and actual740-output serving passed1792695059659. Only the sn
 
 
 **Current terminal qualification:** The complete current32-root functional graph passed438/438 with zero skips/cancellations in9m21s (1792695332505), including both runtime-owner controls and exact frozen legacy codec comparison. The current740-output/strict47 and signed SQL4/49 results above are terminal and independently rehashed; their owned database containers are stopped. Facts/scenario contracts passed2/2 (1792695807169) before this terminal-only documentation refresh. This change remains local pending final review/publication/cloud; full-call and clinic acceptance stay separate.
+
+
+## Verified callback and independent memo composition, 22 October 2026
+
+The narrow follow-up to reviewed draft PR587/264fa07 adds five actual signed
+incoming memo modes to the four existing callback cases. The complete SQL9/9
+passes1792697692399 in2m41s, with zero skips/cancellations. Exact original71,
+independent read/new rescheduling codes, played menus/SAM, real SQL180 and
+separate memo grants remain. The native memo source equals the actual clinical
+review marker and retains inbound direction; the outbound attempt grants
+neither action nor memo authority. Wrong-subject/withdrawn memo grants create no
+memo purpose. Clinical ACK loss retains uncertainty and creates no memo;
+stored memo ACK loss preserves clinical completion and spends the memo purpose.
+A later explicit outcome question leaves the original action and both send
+counts unchanged; a direct SQL barrier claim independently refuses replay.
+
+Whole strict1792697693574 passes2m43s, peak1698701312B/2GiB, heap1536MiB.
+SQL Node183259136B/512MiB plus owned PostgreSQL124637184B/512MiB,
+CPU100% each/Swap0/allOOM-high-max0; sources/artifacts pinned and database
+cleanup verified. All740 copied parent serving outputs stay exact, without
+new emission. This is no newly rerun438-source graph. All application-column
+and complete unfiltered backup scans retain unrelated rows and exclude memo
+content/key plus existing private source/code/session canaries.
+
+The initial new SQL witness passed4/9 and failed5: two bare71 expectations
+contradicted the correct namespaced native memo reference, while three repeated
+Yes turns after the action correctly received confirmationMissing. Those logs
+remain preserved. The corrected witness asserts cliniko:appointment:71 and
+asks the explicit outcome question; no production code, quota, deadline,
+authority check or scanner changes. Initial full strict also passed.
+
+Parent PR587 remains in its own CI; this follow-up is local pending final
+facts/scenario/source/runtime guards, review, actual normal-parent integration
+and ordinary delivery. No new sender-kill/restore, clinic/provider/acoustic
+acceptance, default activation or thirteen-gap completion is claimed. See
+[the exact callback memo scope](INCOMING_MISSED_CALL_CONTEXT.md#independently-approved-callback-memo-composition-22-october-2026).

@@ -130,3 +130,41 @@ synthetic. Fresh owners are not a killed-process/full logical-restore proof.
 Real clinic/native-source/retention/provider/acoustic acceptance, deployment,
 default activation and the remaining full roadmap retain their separate gates.
 `E2E-424` and `E2E-425` record synthetic evidence; full-call evidence stays planned.
+
+## Independently approved callback memo composition, 22 October 2026
+
+The optional existing administrative-memo owner now has actual signed callback
+composition evidence. The incoming caller obtains a read code, hears the
+verified sick-day purpose, then obtains a separate rescheduling code and plays
+the original target, offer and final consent. A successful observed move creates
+one confidential inbound communication memo for the verified patient and
+`cliniko:appointment:71`. Its source is the actual clinical review marker,
+not the earlier outbound attempt or the reason-disclosure grant. Earlier
+appointment 70 remains unchanged.
+
+Five new modes cover accepted retention, a different patient's memo grant,
+withdrawn memo permission, stored memo acknowledgement loss and clinical
+acknowledgement loss. Memo denial preserves known clinical success without
+consuming a memo purpose; a lost memo acknowledgement stays uncertain with its
+purpose spent. A lost clinical acknowledgement creates no memo or memo purpose.
+An explicit later outcome question changes neither the clinical action nor the
+number of clinical or memo sends. The SQL barrier independently refuses a
+second claim for either stored memo, and each memo source matches the native
+review exactly.
+
+The complete nine-case signed SQL file passes: these five and the four preserved
+incoming cases above, with no skips or cancellations. Whole strict TypeScript
+passes. Only the nonemitted SQL driver and documentation change; all 740 copied
+parent serving outputs are hash-identical, with no rebuild or newly claimed
+438-source run. The same native180 budget, verification, played confirmation,
+independent grants and all-column/unfiltered raw-backup privacy checks remain,
+including the memo content and key. Node peaked at 183,259,136 B and the owned
+PostgreSQL at 124,637,184 B, each capped at 512 MiB/CPU100%/Swap0 with no OOM,
+high or max event. Both completed naturally and database cleanup passed.
+
+The parent is reviewed draft PR587 at264fa07, still awaiting its own cloud and
+ordinary delivery. This follow-up requires its own review, normal-parent
+integration and delivery checks. No current memo recovery, killed sender,
+restore, real clinic/provider/acoustic acceptance or activation is established
+by this cohort. It extends the existing owner-selected communication-memo
+operation, leaving appointment/treatment notes and contact decisions separate.
