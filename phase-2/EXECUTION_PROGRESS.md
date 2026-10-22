@@ -6244,3 +6244,26 @@ facts/scenario/source/runtime guards, review, actual normal-parent integration
 and ordinary delivery. No new sender-kill/restore, clinic/provider/acoustic
 acceptance, default activation or thirteen-gap completion is claimed. See
 [the exact callback memo scope](INCOMING_MISSED_CALL_CONTEXT.md#independently-approved-callback-memo-composition-22-october-2026).
+
+
+## Actual callback parent and memo integration, 22 October 2026
+
+PR587/264fa07 passed all eight exact-head push/PR checks. Both text logs report
+5,833 tests:5,575 passes/zero failures/258 existing mode skips, then6 ordered
+passes; both PostgreSQL logs report6,890 tests:6,889 passes/zero failures/one
+existing skip, then6 ordered passes. Typecheck/browser jobs passed. All eight
+complete raw logs and actual-parent337 main4 raw logs were independently
+verified before normal SHA-guarded merge asc3af48c3348f73e9bc8fc6d68debce42995e981a
+at21:12:39UTC. The merged tree exactly equals the reviewed264 source; the
+actual new main has its own separate four-check observer. No deployment follows.
+
+This memo follow-up integrates that actual normal parent. The entire local
+source tree, all seven owned files and740 runtime artifacts are unchanged by
+the ancestry-only import; its actual-normal-parent patch exactly equals the
+reviewed component diff. Thus signedSQL9, whole strict and original metadata
+qualification retain their original exact inputs. The current status/facts
+refresh has a separate metadata check and exact-normal review before its own
+narrow publication/CI. No duplicate rebuild or new438-source pass is claimed.
+Parent actual-main4 remains a required separate delivery gate. Wider thirteen-gap
+engineering, full-call and clinic/provider/source/retention/restore/acoustic
+acceptance remain open; no default activation or live traffic is authorized.

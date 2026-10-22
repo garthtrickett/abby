@@ -9,8 +9,11 @@ cases, with whole strict TypeScript and all740 parent serving outputs unchanged.
 Memo-grant denial and clinical uncertainty create no memo purpose; stored memo
 ACK loss preserves clinical success and a permanently spent memo purpose.
 Outcome questions cannot replay either send. All-column and full unfiltered
-backup privacy includes memo content/key. This component awaits review,
-normal-parent integration and ordinary delivery; parent PR587 is still in CI.
+backup privacy includes memo content/key. Parent PR587 normally merged at
+c3af48c after eight own-head checks/raw logs passed. Its actual normal tree is
+integrated here without changing any qualified source or740 serving bytes.
+Exact-normal review and this follow-up’s own CI/ordinary delivery remain;
+parent actual-main checks are tracked separately.
 It supplies no new sender-kill/restore or real acceptance. See the [exact callback
 memo scope](INCOMING_MISSED_CALL_CONTEXT.md#independently-approved-callback-memo-composition-22-october-2026).
 

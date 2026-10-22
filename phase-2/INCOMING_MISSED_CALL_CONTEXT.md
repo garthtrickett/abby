@@ -2,9 +2,11 @@
 
 This opt-in Cliniko component implements the verified callback part of
 [R21](KAREN_TO_ABBY_REUSE_AUDIT.md#r21-pin-the-exact-sick-day-or-callback-appointment-end-to-end)
-and [execution stage 9](EXECUTION_ORDER.md). It is local engineering, awaiting
-this change's review, publication and cloud checks. It enables no clinic or
-provider by default and does not complete the thirteen-gap roadmap.
+and [execution stage 9](EXECUTION_ORDER.md). The callback foundation normally
+merged as PR587 at c3af48c after all eight own-head jobs and their raw logs
+passed. Its actual-main checks are separately tracked. This local callback-memo
+follow-up is integrated with that actual parent and retains its own review,
+publication and cloud checks. It enables no clinic or provider by default and does not complete the thirteen-gap roadmap.
 
 ## Caller behavior
 
@@ -162,9 +164,11 @@ including the memo content and key. Node peaked at 183,259,136 B and the owned
 PostgreSQL at 124,637,184 B, each capped at 512 MiB/CPU100%/Swap0 with no OOM,
 high or max event. Both completed naturally and database cleanup passed.
 
-The parent is reviewed draft PR587 at264fa07, still awaiting its own cloud and
-ordinary delivery. This follow-up requires its own review, normal-parent
-integration and delivery checks. No current memo recovery, killed sender,
+The parent PR587 normally merged atc3af48c after its eight own-head jobs and
+raw logs passed. The actual normal parent is integrated with all source and740
+runtime outputs unchanged; its actual-main checks remain separate. This
+follow-up retains its own exact-normal review, publication/CI and normal
+delivery checks. No current memo recovery, killed sender,
 restore, real clinic/provider/acoustic acceptance or activation is established
 by this cohort. It extends the existing owner-selected communication-memo
 operation, leaving appointment/treatment notes and contact decisions separate.
