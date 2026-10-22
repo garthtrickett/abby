@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { sql } from "kysely";
@@ -25,6 +25,14 @@ const { PostgresOutboundEffectBarrier } = await import(new URL("storage/postgres
 for (const mode of ["accepted", "unknown", "targetDenied", "staleAudience", "staleEdge", "scheduleDenied", "lateSchedule", "quotaChanged", "concurrent", "abortAfterAck"] as const)
 test(`actual emitted exact sick-day scheduler preserves SQL native180 and full privacy: ${mode}`, { timeout: 125_000 }, async t => {
   const apiKey = `synthetic-sick-day-scheduler-${randomUUID()}-au5`, scope = { tenantId: `sick-day-${randomUUID()}`, clinicId: "clinic", locationId: "main" };
+  const budgetRef = createHash("sha256").update(`abby-cliniko-budget-v1\0${apiKey}`).digest("hex");
+  const unrelatedKey = `synthetic-unrelated-budget-${randomUUID()}-au5`;
+  const unrelatedRef = createHash("sha256").update(`abby-cliniko-budget-v1\0${unrelatedKey}`).digest("hex");
+  const unrelatedBudget = new PostgresClinikoRequestBudget(db, { apiKey: unrelatedKey, maxPerMinute: 1 });
+  assert.equal(await unrelatedBudget.claim(), null);
+  const preservedBudget = (await db.selectFrom("cliniko_request_budgets").selectAll().execute())
+    .filter(row => row.budget_ref === unrelatedRef);
+  assert.equal(preservedBudget.length, 1);
   const physical = new PostgresClinikoRequestBudget(db, { apiKey, maxPerMinute: 180 });
   const f = await outboundSchedulerFixture({ exactSickDay: true, apiKey, scope, patientId: verificationCanaries[2]!, budget: physical,
     Scheduler: ClinikoOutboundScheduler, runtime: { ClinikoOutboundLaunchOwner, OwnerFileOutboundCampaign },
@@ -94,6 +102,9 @@ test(`actual emitted exact sick-day scheduler preserves SQL native180 and full p
   assert.deepEqual((await sql`select * from outbound_effect_barriers where effect_ref = ${retainedRef}`.execute(db)).rows, preserved.effect);
   assert.ok((await scans.verifyPage(unrelated, begun.scanRef, { page: 1, totalEntries: 1, patientIds: ["101"], links })).ok);
   assert.ok(dump.includes(retainedRef));
-  const budgets = await db.selectFrom("cliniko_request_budgets").selectAll().execute();
-  assert.ok(budgets.length > 0 && budgets.every(row => row.max_per_minute === 180 && Array.isArray(row.sent_at_ms) && row.sent_at_ms.length <= 180));
+  const storedBudgets = await db.selectFrom("cliniko_request_budgets").selectAll().execute();
+  const budgets = storedBudgets.filter(row => row.budget_ref === budgetRef);
+  assert.equal(budgets.length, 1);
+  assert.ok(budgets.every(row => row.max_per_minute === 180 && Array.isArray(row.sent_at_ms) && row.sent_at_ms.length <= 180));
+  assert.deepEqual(storedBudgets.filter(row => row.budget_ref === unrelatedRef), preservedBudget);
 });
