@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.246
+# Scenario manifest, version 1.247
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -1044,3 +1044,5 @@ E2E-423 qualifies bounded terminal public-tail ASR through actual signed wire/so
 Completed-notification capacity recovery is a separately qualified lower-level dependency, with 257 source controls, a 693-artifact strict build, 42 emitted SQL/process cases and one actual logical restore. It adds no caller/acoustic scenario ID and promotes no full-call state. The existing 423 IDs and version 1.246 remain unchanged. Notifications and actual provider closure cannot become speech/no-stop, patient or contact-settlement evidence. See [scope and evidence](../phase-2/OUTBOUND_NOTIFICATION_CAPACITY.md).
 
 The optional combined signed status receiver adds lower-level recovery evidence without changing the 423 IDs or version 1.246/full-call states. It qualifies 135 source controls, 699 actual serving outputs, 10 new callback SQL and 42 preserved recovery SQL cases, four real HTTP worker SIGKILL boundaries and two logical-restore cases. The actual original voice/ASR report producer is used; callbacks never infer no-stop or settle/release contact. Remote transports/grants remain synthetic. See [exact current proof and limits](../phase-2/OUTBOUND_STATUS_DELIVERY.md).
+
+E2E-176 additionally qualifies the declared shared-budget storage gate at standalone startup, signed webhook admission and fresh stream construction. Thirteen new source-loaded signed/SQL controls and two actual compiled startup cases retain the distinction between database ping, supported storage and clinic readiness. Missing/changed schema, a disabled/changed hold guard, late attachment and a stalled shared probe refuse without spending quota; repair permits a fresh call and the schema gate does not terminate an active one. The current combined27 and strict/727-output evidence retains synthetic/partial scope. Prior active-database-loss and pooled-client assertions remain; full-call and actual clinic/provider acceptance stay planned. See [the precise contract and coverage limits](../phase-2/SHARED_BUDGET_STORAGE_READINESS.md).

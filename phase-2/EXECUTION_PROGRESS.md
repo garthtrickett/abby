@@ -6181,3 +6181,60 @@ Parents through PR #579 retain normal-merge evidence and independently green act
 ### Combined memo qualification after bounded canary correction, 21 October 2026
 
 The guardian, independent patient-task and signed self class memo checks now share one qualified graph: 199 distinct source controls across17 files, whole strict TypeScript/722 serving outputs and73 distinct actual emitted signed PostgreSQL/privacy cases (adult14, guardian14, consecutive patient tasks6, outgoing15 and self ordinary/pass class creation8 and self class cancellation16). Independent patient proof and memo grants preserve the original native subject/action across denied grants, clinical uncertainty and pending prior retention. Pass capacity waiting uses real elapsed time, quiet20ms carrier frames and a fresh affirmative. Reviewed per-case canary correction c39017f is integrated; the finite filename guard retains all guardian/task/class contexts. Only four test-helper outputs differ from c390: class-call-flow, representative-call-owner, subject-memo and verification-code-canary. Every production and the other718 output bytes are exact. Corrected parent PR #580 normally merged at d37cb90e8fce after its own eight exact-head cloud checks and complete raw-log archive; its actual-main checks are independent. Current combined review, own publication/cloud and normal merge remain gates. This covers separate booking tasks and self class creation plus ordinary/approved-pass cancellation. Class creation uses an approved notRequired financial assessment; a pass proves no payment, fee waiver or refund. Representative classes, required financial/catalogue and signed class movement combinations, complete no-stop/private/all-ASR and real clinic/provider/mail/acoustic/source/retention/restore acceptance remain open. No deployment or activation. See [the combined evidence](COMMUNICATION_MEMOS.md#combined-guardian-patient-task-and-class-memo-qualification-21-october-2026).
+
+
+## Required shared-budget schema at voice admission, 22 October 2026
+
+This local component starts from actual delivered337/PR586, independently green
+on its four main jobs. Pending incoming callback PR587 is a separate candidate;
+its eventual normal source is not silently included here. Source audit R01 pins
+seven files unchanged from337: known-call expiry, aggregate/day counters, native
+queue health and exact-original outbound closure do not establish independently
+complete never-admitted carrier inventory. That limit is reported rather than
+introducing a private call ledger or provider query.
+
+Actual R23 owning probe1792699387564 passed0/2 on unchanged production: both
+renamed-budget table/column cases still returnedConnect and a binding after a
+healthy voice baseline and SELECT1. Its first correction1792699830450 refused
+with503, but the initial witness incorrectly expected200/Dial; that distinct
+failure remains preserved. The corrected503 witness runs with identical test
+and helper bytes against an independently pinned337 source snapshot and the
+new code: original1792700044963 is0/2, corrected1792700046132 is2/2; both waits
+reaped and owned databases stopped. No old failed result is called green.
+
+The read-only budget schema owner checks declared migration020/048 table,
+column/type/default/constraint and enabled hold-trigger properties with the
+selected function body hash. It claims no quota, row change, full database
+integrity, clinic permission or carrier completeness. The existing1500ms
+bounded-health owner coalesces pending checks. Startup, new authenticated
+webhook and later stream construction recheck; schema failure cannot terminate
+an existing call or change a known clinical result. Other operational failures
+retain their normal contracts.
+
+Expanded source/signedSQL13 passed1792700357160 (46s, Node208658432B plus
+DB160628736B, each512MiB). Complete strict/serving1792700358410 passed4m12s,
+peak1772240896B/2GiB:727 outputs, only server/budget change and one new checker,
+other724 parent outputs exact. After adding the nonemitted compiled startup
+driver, fresh strict1792700852438 passed2m31s, peak1684750336B/2GiB, all727
+bytes unchanged. Current combined27 passed1792700851255 in1m41s with zero
+skips/cancellations:13 new signed/source schema controls,2 new actual compiled
+startup cases and12 preserved budget/profile/service/bounded-health checks.
+Node205758464B/512MiB plus owned PostgreSQL132153344B/512MiB; CPU100% each,
+Swap0 and allOOM-high-max0. Sources/dependencies/artifacts stayed pinned; both
+paired waits and all owned database resources were reaped/cleaned. Source13
+is included in27, never summed again.
+
+This is source plus actual compiled exported-runner engineering with synthetic
+remote services. Existing E2E-176 admission/lease infrastructure gains these
+storage-failure variants while full-call remains planned. Final current cohort
+1792701566438 passed68/68 including nested tests, with zero skips/cancellations,
+in4m20s: Node357400576B plus owned PostgreSQL253968384B, each512MiB/CPU100%/
+Swap0, allOOM-high-max0 and owned container stopped. It includes the27 above,
+preserved original176 operational-failure cases and current facts/scenario
+contracts; these overlapping counts are not summed. Final whole strict
+1792701567712 passed2m41s at1686994944B/2GiB, all727 artifacts exact, no new
+emission. Both paired waits reaped. Real clinic/provider/source,
+retention/restore/acoustic acceptance, full thirteen-gap engineering and actual
+current-parent review/publication/cloud/delivery remain open. No patient calls,
+money, recording, automatic migration or default activation follows. See [the
+precise contract](SHARED_BUDGET_STORAGE_READINESS.md).

@@ -18,6 +18,8 @@
 
 Preserve access to the useful Karen material now. For Abby engineering, deliver the provider acknowledged booking change first, requalify the affected receptionist flows, finish the remaining earlier-gap and class work, then build payments, outbound and approved writeback in that order. Apply the Karen lessons inside those changes rather than creating a separate Karen feature-parity project.
 
+**Current gap3 storage-readiness engineering, 22 October 2026:** On delivered parent337, a required shared-budget table/column could disappear while a new signed webhook still received a stream binding. The new read-only startup/webhook/stream guard passes a final68-test cohort (including nested source/signed/compiled-runner/preserved/metadata controls) and strict/727 serving, with724 prior outputs unchanged. This local component is separate from pending callback PR587 and needs current-parent integration, review and its own delivery. Existing known-call/aggregate/queue/root monitors do not prove all-carrier completeness; R01 retains its explicit source coverage limit. See [the declared storage contract and exact scope](SHARED_BUDGET_STORAGE_READINESS.md). No whole gap, real acceptance or default activation is claimed.
+
 ## The three source documents
 
 | Document | Role in execution |

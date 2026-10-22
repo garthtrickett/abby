@@ -135,3 +135,26 @@ The local finite scheduler qualifies synthetic exact-appointment pending request
 ## Optional transcription settings: acknowledgment acceptance
 
 Under separately authorized provider testing, inspect the effective session acknowledgment for each requested delay or noise-reduction option. An omitted optional field is unverified; do not label a requested profile confirmed from successful transcription alone. An explicit mismatch must retire transcription, including a changed configuration during a pending turn, without accepting late text or reopening the socket. The current 36 synthetic controls and strict/726 build qualify the protocol correction only. Fixed noisy/safety/latency thresholds and representative microphone, accent, public-route and carrier acceptance remain unexecuted or failed as previously recorded. No new live provider evaluation, paid call or acoustic pass is recorded here.
+
+
+## Shared native budget storage and completion coverage, 22 October 2026
+
+The new local [budget storage guard](SHARED_BUDGET_STORAGE_READINESS.md) does
+not execute clinic acceptance. In a separately approved disposable environment,
+confirm the deployed PostgreSQL version/role exposes the supported budget
+catalog properties and that a compatible exported runner starts. Keep normal
+clinic admission, speech quality and all patient/provider grants independent.
+With only the owned test database, remove a required table/column or disable its
+hold guard: startup must refuse before listening, and an existing listener must
+return503 for a fresh signed webhook or reject a later stream without provider
+creation. A successful SELECT1/health ping is insufficient. Observe a repair
+through a new call; never replay a denied or uncertain clinical action or claim
+that an old active result was undone. No automatic migration/repair is supplied.
+
+Known application-session expiry, aggregate counts, native review queue health
+and one captured outbound root do not cover a carrier call never admitted by
+Abby. Record that explicit limitation. Any independent completion inventory
+needs separate current source/coverage/grant qualification under R01; a native
+queueKnown result or absent local event cannot prove that an uncertain booking
+was never sent. These observations remain proposed and unexecuted. No private
+call ledger, live carrier/clinic request, deployment or activation is authorized.

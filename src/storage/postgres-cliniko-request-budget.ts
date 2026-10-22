@@ -10,6 +10,7 @@ import type { BudgetState } from "../cliniko/request-budget-state.ts";
 import type Database from "./generated/Database.ts";
 import type { ClinikoRequestBudgetsBudgetRef } from "./generated/public/ClinikoRequestBudgets.ts";
 import type { ClinikoRequestReservationsLeaseRef } from "./generated/public/ClinikoRequestReservations.ts";
+import { checkClinikoRequestBudgetSchema } from "./internal/cliniko-request-budget-schema.ts";
 
 const minuteMs = 60_000;
 
@@ -70,6 +71,10 @@ export class PostgresClinikoRequestBudget implements ClinikoRequestBudget {
 
   /** Standalone listeners must share their own database connection with this budget. */
   matchesDatabase(db: Kysely<Database>): boolean { return this.db === db; }
+
+  /** Read-only compatibility of this budget's SQL storage, without claiming
+   * quota, reserving capacity or establishing clinic/provider readiness. */
+  schemaCompatible(): Promise<boolean> { return checkClinikoRequestBudgetSchema(this.db); }
 
   matchesCredentialFingerprint(fingerprint: string): boolean { return this.credentialFingerprint === fingerprint; }
 
