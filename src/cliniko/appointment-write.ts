@@ -1,3 +1,4 @@
+import { clinikoNativeTime } from "./internal/native-instant.ts";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
 import { claimClinikoBudget, ClinikoReadBudget, clinikoCredentialFingerprint,
@@ -264,8 +265,8 @@ class ClinikoAppointmentWriter {
     const link = (name: string) => record(record(row?.[name])?.links)?.self;
     if (!row || row.id !== request.appointmentId ||
         [row.cancelled_at, row.archived_at, row.deleted_at]
-          .some(value => value !== null && instant(value) === undefined) ||
-        instant(row.starts_at) === undefined || instant(row.ends_at) === undefined ||
+          .some(value => value !== null && clinikoNativeTime(value) === undefined) ||
+        clinikoNativeTime(row.starts_at) === undefined || clinikoNativeTime(row.ends_at) === undefined ||
         ["patient", "business", "practitioner", "appointment_type"].some(name => typeof link(name) !== "string")) {
       return err({ kind: "malformed" });
     }
@@ -279,8 +280,8 @@ class ClinikoAppointmentWriter {
         link("business") !== `${this.#baseUrl}/businesses/${this.#businessId}` ||
         link("practitioner") !== `${this.#baseUrl}/practitioners/${request.practitionerId}` ||
         link("appointment_type") !== `${this.#baseUrl}/appointment_types/${request.appointmentTypeId}` ||
-        instant(row.starts_at) !== instant(request.startsAt) ||
-        instant(row.ends_at) !== instant(request.endsAt) || row.archived_at || row.deleted_at) {
+        clinikoNativeTime(row.starts_at) !== instant(request.startsAt) ||
+        clinikoNativeTime(row.ends_at) !== instant(request.endsAt) || row.archived_at || row.deleted_at) {
       return ok({ kind: "changed", observedAt });
     }
     return ok({ kind: row.cancelled_at ? "cancelled" : "active", observedAt });

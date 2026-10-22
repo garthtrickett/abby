@@ -1,3 +1,4 @@
+import { PatientRecallSnapshot } from "./patient-recall-snapshot.ts";
 import { err, ok } from "../../core/model.ts";
 import type { LocationScope, Result } from "../../core/model.ts";
 import type { OutboundEffectBarrier } from "../../core/outbound-effect-barrier.ts";
@@ -20,7 +21,7 @@ export type NativeOutboundCodec<T> = Readonly<{ encode(record: T): Result<string
   recordedAt(record: T): string; expiresAt(record: T): string }>;
 export type NativeOutboundConfig = Readonly<{ scope: LocationScope; businessId: string; credentialFingerprint: string; typeId: string;
   apiKey: string; contactEmail: string; rateBudget: ClinikoRequestBudget; clock?: () => string; deadlineMs?: number }>;
-type NativeInput<T> = Readonly<{ method: "POST"; record: T; notes: string; recallAt: string }> | Readonly<{ method: "GET"; binding: NativeOutboundReadBinding }>;
+type NativeInput<T> = Readonly<{ method: "POST"; record: T; notes: string; recallAt: string }> | Readonly<{ method: "GET"; binding: NativeOutboundReadBinding; history?: PatientRecallSnapshot }>;
 const object = (v: unknown): Record<string, unknown> | undefined => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : undefined;
 const link = (v: unknown) => object(object(v)?.links)?.self;
 const recallId = (v: unknown) => typeof v === "string" ? /^cliniko:recall:([1-9][0-9]{0,18})$/.exec(v)?.[1] : undefined;
@@ -71,11 +72,12 @@ export class NativeOutboundRecords<T extends NativeOutboundIdentity, Q> {
     const result=await this.#perform({method:"POST",record:record.value,notes:notes.value,recallAt},signal);
     return !result.ok?result:result.value.kind==="uncertain"?ok(result.value):ok({kind:"accepted",recallRef:result.value.recallRef,actionRef:record.value.actionRef});
   }
-  async read(input: NativeOutboundReadBinding, signal: AbortSignal): Promise<Result<NativeOutboundContext<T>,NativeOutboundFailure>> {
+  async read(input: NativeOutboundReadBinding, signal: AbortSignal, history?: PatientRecallSnapshot): Promise<Result<NativeOutboundContext<T>,NativeOutboundFailure>> {
     try {
+      if (history !== undefined && !(history instanceof PatientRecallSnapshot)) return err({ kind: "invalidQuery" });
       const binding=Object.freeze({...input});
       if(Object.keys(binding).sort().join(",")!=="actionRef,patientId,recallRef"||!recallId(binding.recallRef)||!validRecallMarker(binding.actionRef)||!outboundNativeId(binding.patientId))return err({kind:"invalidQuery"});
-      const result=await this.#perform({method:"GET",binding},signal);return !result.ok?result:result.value.kind==="uncertain"?err({kind:"unavailable"}):ok(result.value);
+      const result=await this.#perform({method:"GET",binding,...(history ? { history } : {})},signal);return !result.ok?result:result.value.kind==="uncertain"?err({kind:"unavailable"}):ok(result.value);
     }catch{return err({kind:"invalidQuery"});}
   }
   async #perform(input: NativeInput<T>, external: AbortSignal): Promise<Result<NativeOutboundContext<T> | Readonly<{ kind: "uncertain" }>, NativeOutboundFailure>> {
@@ -119,26 +121,38 @@ export class NativeOutboundRecords<T extends NativeOutboundIdentity, Q> {
         const claim = await wait(this.#barrier.claimOnce(input.record.actionRef));
         if (claim?.ok !== true || claim.value?.claimed !== true) throw new Failure(claim?.ok === true && claim.value?.claimed === false ? "alreadyClaimed" : "unavailable");
       }
-      const limited = await wait(claimClinikoBudget(this.#budget)); if (limited) return err(limited);
-      await permit(); fresh();
-      if (input.method === "POST" && this.#barrier?.matches(this.#selection.scope, this.#owner) !== true) throw new Failure("forbidden");
-      current();
       const id = input.method === "GET" ? recallId(input.binding.recallRef)! : undefined;
-      // Exact archived evidence must remain reachable after closure/archive.
-      const url = `${this.#base}/recalls${id ? `/${id}?q%5B%5D=archived_at%3A*` : ""}`;
-      const init: RequestInit = { method: input.method, redirect: "error", signal,
-        headers: { Accept: "application/json", Authorization: this.#authorization, "Content-Type": "application/json", "User-Agent": this.#agent },
-        ...(input.method === "POST" ? { body: JSON.stringify({ patient_id: input.record.patientId, recall_type_id: this.#typeId,
-          recall_at: input.recallAt, notes: input.notes, recalled: false }) } : {}) };
-      current(); dispatched = input.method === "POST";
-      const response = await wait(this.#fetch(url, init).then(r => { responseOwned = r; if (signal.aborted) discard(r); return r; }));
-      if (response.status === 429) {
-        const reset = await wait(observeCliniko429(this.#budget, response.headers.get("X-RateLimit-Reset")));
-        return dispatched ? ok({ kind: "uncertain" }) : err(reset);
+      let raw: unknown;
+      if (input.method === "GET" && input.history) {
+        // This body was already fetched under an independent whole-patient
+        // history grant in this exact read operation. Keep all family/decoded
+        // grants and the SAME metadata/codec validation below; no new request
+        // or physical budget claim is made for data we already possess.
+        await permit(); fresh(); current();
+        raw = input.history.nativeRow(this.#base, this.#selection.credentialFingerprint, input.binding.patientId,
+          this.#typeId, input.binding.recallRef, external);
+        if (!raw) throw new Failure("mismatched");
+      } else {
+        const limited = await wait(claimClinikoBudget(this.#budget)); if (limited) return err(limited);
+        await permit(); fresh();
+        if (input.method === "POST" && this.#barrier?.matches(this.#selection.scope, this.#owner) !== true) throw new Failure("forbidden");
+        current();
+        // Exact archived evidence must remain reachable after closure/archive.
+        const url = `${this.#base}/recalls${id ? `/${id}?q%5B%5D=archived_at%3A*` : ""}`;
+        const init: RequestInit = { method: input.method, redirect: "error", signal,
+          headers: { Accept: "application/json", Authorization: this.#authorization, "Content-Type": "application/json", "User-Agent": this.#agent },
+          ...(input.method === "POST" ? { body: JSON.stringify({ patient_id: input.record.patientId, recall_type_id: this.#typeId,
+            recall_at: input.recallAt, notes: input.notes, recalled: false }) } : {}) };
+        current(); dispatched = input.method === "POST";
+        const response = await wait(this.#fetch(url, init).then(r => { responseOwned = r; if (signal.aborted) discard(r); return r; }));
+        if (response.status === 429) {
+          const reset = await wait(observeCliniko429(this.#budget, response.headers.get("X-RateLimit-Reset")));
+          return dispatched ? ok({ kind: "uncertain" }) : err(reset);
+        }
+        if (response.status !== (dispatched ? 201 : 200)) return dispatched ? ok({ kind: "uncertain" }) : err({ kind: response.status === 401 || response.status === 403 ? "forbidden" : "unavailable" });
+        bodyOwned = true; const bytes = await ownedBodyBytes(response.body, 1_000_000, signal);
+        try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); } catch { throw new Failure("malformed"); }
       }
-      if (response.status !== (dispatched ? 201 : 200)) return dispatched ? ok({ kind: "uncertain" }) : err({ kind: response.status === 401 || response.status === 403 ? "forbidden" : "unavailable" });
-      bodyOwned = true; const bytes = await ownedBodyBytes(response.body, 1_000_000, signal);
-      let raw: unknown; try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); } catch { throw new Failure("malformed"); }
       const row = object(raw), createdAt = outboundNativeInstant(row?.created_at), updatedAt = outboundNativeInstant(row?.updated_at),
         recalledAt = row?.recalled_at === null ? null : outboundNativeInstant(row?.recalled_at),
         archivedAt = row?.archived_at === null ? null : outboundNativeInstant(row?.archived_at);

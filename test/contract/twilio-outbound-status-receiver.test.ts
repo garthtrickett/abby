@@ -35,3 +35,24 @@ test("the actual router deadline aborts an ignored stop grant and prevents late 
   assert.equal(await f.sendStatus(), 503); release(); await new Promise<void>(r => setImmediate(r));
   assert.equal(f.dncPosts.length, 0); assert.equal(f.notificationPosts.length, 0); assert.equal(f.httpState.sessions, 0);
 });
+
+
+test("actual signed no-answer HTTP callback retains its own provenance while missing speech leaves contact blocked", async t => {
+  const f = await fixture({ missingReport: true, unanswered: true }); t.after(f.closeReceiver);
+  assert.equal(await f.sendStatus(f.request({ CallStatus: "no-answer" })), 204);
+  assert.equal(await f.sendStatus(f.request({ CallStatus: "no-answer" })), 204);
+  assert.equal(f.unansweredPosts.length, 1); assert.equal(f.notificationPosts.length, 0); assert.equal(f.staffPosts.length, 0);
+  assert.equal(f.dncPosts.length, 0); assert.equal(f.released.size, 0); assert.equal(f.held.size, 1);
+  assert.equal(f.httpState.sessions, 0); assert.equal(f.calls.length, 1);
+});
+
+for (const unansweredAck of ["stored", "unstored"] as const) {
+  test(`actual signed no-answer HTTP ${unansweredAck} response loss is reconciled without a second POST`, async t => {
+    const f = await fixture({ missingReport: true, unanswered: true, unansweredAck }); t.after(f.closeReceiver);
+    const expected = unansweredAck === "stored" ? 204 : 503;
+    assert.equal(await f.sendStatus(f.request({ CallStatus: "no-answer" })), expected);
+    assert.equal(await f.sendStatus(f.request({ CallStatus: "no-answer" })), expected);
+    assert.equal(f.unansweredPosts.length, 1); assert.equal(f.notificationPosts.length, 0); assert.equal(f.dncPosts.length, 0);
+    assert.equal(f.released.size, 0); assert.equal(f.held.size, 1); assert.equal(f.httpState.sessions, 0);
+  });
+}

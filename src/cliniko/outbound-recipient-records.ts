@@ -1,3 +1,4 @@
+import type { PatientRecallSnapshot } from "./internal/patient-recall-snapshot.ts";
 import { err, ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
 import type { OutboundEffectBarrier } from "../core/outbound-effect-barrier.ts";
@@ -61,8 +62,8 @@ export class ClinikoOutboundRecipientRecords {
   retainRequestOnce(input: OutboundRecipientRequest, recallAt: string, signal: AbortSignal): Promise<Result<OutboundRecordRetention,OutboundRecordFailure>> {
     return this.#records.retain(input,recallAt,signal);
   }
-  async readRequest(input: NativeOutboundReadBinding, signal: AbortSignal): Promise<Result<OutboundRecipientRecord,OutboundRecordFailure>> {
-    const result=await this.#records.read(input,signal);if(!result.ok)return result;const r=result.value;
+  async readRequest(input: NativeOutboundReadBinding, signal: AbortSignal, history?: PatientRecallSnapshot): Promise<Result<OutboundRecipientRecord,OutboundRecordFailure>> {
+    const result=await this.#records.read(input,signal,history);if(!result.ok)return result;const r=result.value;
     return ok(Object.freeze({kind:"recipientRequestContext",recallRef:r.recallRef,request:r.record,recallAt:r.recallAt,
       createdAt:r.createdAt,updatedAt:r.updatedAt,recalled:r.recalled,recalledAt:r.recalledAt,archivedAt:r.archivedAt}));
   }

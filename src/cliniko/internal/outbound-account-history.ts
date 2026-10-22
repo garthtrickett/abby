@@ -2,7 +2,7 @@ import { ownedBodyBytes } from "../../shared/owned-body-bytes.ts";
 import { claimClinikoBudget, observeCliniko429 } from "../read-budget.ts";
 import type { ClinikoRequestBudget } from "../read-budget.ts";
 import type { NativeOutboundFailure } from "./outbound-native-record.ts";
-import { readAccountRecallHistory } from "./patient-recall-history.ts";
+import { readAccountRecallHistory, readPatientRecallFamilies } from "./patient-recall-history.ts";
 
 type Selection = Readonly<{ base: string; typeIds: readonly string[]; apiKey: string; contactEmail: string; rateBudget: ClinikoRequestBudget }>;
 type ReadControl = Readonly<{
@@ -22,7 +22,7 @@ function discard(r: Response | undefined): void { try { void r?.body?.cancel().c
  * all-page decoder owns the endpoint and archived/closed collection shape.
  * Family-specific producer/key/source/read grants and original correlation stay
  * with the caller; no transport result attests call/contact completeness. */
-export async function readNativeOutboundAccountHistory(selection: Selection, control: ReadControl, port: typeof fetch) {
+async function readNativeOutboundHistory(selection: Selection, control: ReadControl, port: typeof fetch, patientId?: string) {
   const { signal, current, permit, wait } = control, budget = selection.rateBudget;
   const get = async (url: string): Promise<unknown> => {
     await permit(); const limited = await wait(claimClinikoBudget(budget));
@@ -42,5 +42,17 @@ export async function readNativeOutboundAccountHistory(selection: Selection, con
       await permit(); return raw;
     } finally { if (!owned) discard(response); }
   };
-  return readAccountRecallHistory({ base: selection.base, typeIds: selection.typeIds }, get, control.now);
+  return patientId === undefined
+    ? readAccountRecallHistory({ base: selection.base, typeIds: selection.typeIds }, get, control.now)
+    : readPatientRecallFamilies({ base: selection.base, patientId, typeIds: selection.typeIds }, get, control.now);
+}
+
+/** Preserve the full account-body scope for existing account-history owners. */
+export function readNativeOutboundAccountHistory(selection: Selection, control: ReadControl, port: typeof fetch) {
+  return readNativeOutboundHistory(selection, control, port);
+}
+/** Patient selection comes from the independently authenticated original call;
+ * the caller still owns explicit whole-patient history grants and all bounds. */
+export function readNativeOutboundPatientHistory(selection: Selection & Readonly<{ patientId: string }>, control: ReadControl, port: typeof fetch) {
+  return readNativeOutboundHistory(selection, control, port, selection.patientId);
 }

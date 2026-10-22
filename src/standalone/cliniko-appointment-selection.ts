@@ -1,3 +1,4 @@
+import { clinikoNativeInstant, clinikoNativeTime } from "../cliniko/internal/native-instant.ts";
 import { randomBytes } from "node:crypto";
 import { ClinikoAppointmentReader } from "../cliniko/appointments.ts";
 import { boundedClinikoJson } from "../cliniko/bounded-json.ts";
@@ -13,11 +14,14 @@ import { OwnerFileReschedulingPolicy } from "./owner-file-rescheduling-policy.ts
 import { OwnerFileCancellationPolicy } from "./owner-file-cancellation-policy.ts";
 import { TransientPatientProofHost } from "./transient-patient-proof.ts";
 import { ClinikoOutboundClinicalContext } from "./cliniko-outbound-clinical-context.ts";
+import { ClinikoIncomingCallContext } from "./cliniko-incoming-call-context.ts";
+import { CallerVerificationSession } from "./caller-verification-session.ts";
 
 export type ClinikoAppointmentSelectionConfig = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string; apiKey: string;
   contactEmail: string; businessId: string; proof: TransientPatientProofHost; policy: OwnerFileCancellationPolicy | OwnerFileReschedulingPolicy;
   rateBudget?: ClinikoRequestBudget; clock?: () => string; timeoutMs?: number;
-  outbound?: ClinikoOutboundClinicalContext }>;
+  outbound?: ClinikoOutboundClinicalContext;
+  incomingOriginal?: Readonly<{ context: ClinikoIncomingCallContext; verification: CallerVerificationSession }> }>;
 type Config = ClinikoAppointmentSelectionConfig;
 export type SelectedAppointmentEvidence = Omit<AppointmentChangeAuthorityEvidence, "kind" | "offer" | "cancellationReason"> &
   Readonly<{ cancellationReason?: 10 | 20 | 30 | 40 | 50 | 60 }>;
@@ -49,7 +53,8 @@ export class ClinikoAppointmentSelection implements AppointmentHost {
   #listing = 0;
   clearSelection(): void { ++this.#listing; this.#targets.clear(); this.#choices = undefined; }
   private constructor(config: Config, shard: string, fetchPort: typeof fetch) {
-    this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }) });
+    this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }),
+      ...(config.incomingOriginal ? { incomingOriginal: Object.freeze({ ...config.incomingOriginal }) } : {}) });
     this.#base = `https://api.${shard}.cliniko.com/v1`; this.#budget = config.rateBudget ?? new ClinikoReadBudget(); this.#fetch = fetchPort;
   }
   static create(config: Config, fetchPort: typeof fetch = fetch): Result<ClinikoAppointmentSelection, Readonly<{ kind: "invalidConfig" }>> {
@@ -69,11 +74,26 @@ export class ClinikoAppointmentSelection implements AppointmentHost {
           config.outbound !== undefined && (!(config.outbound instanceof ClinikoOutboundClinicalContext) || !config.outbound.matchesWorkflow({
             scope: config.scope, callId: config.callId, credentialFingerprint: clinikoCredentialFingerprint(config.apiKey), businessId: config.businessId }) ||
             !config.rateBudget || !config.outbound.usesBudget(config.rateBudget))) return err({ kind: "invalidConfig" });
+      const incoming = config.incomingOriginal;
+      if (incoming && (config.outbound || !(incoming.context instanceof ClinikoIncomingCallContext) || incoming.context.constructor !== ClinikoIncomingCallContext ||
+          !(incoming.verification instanceof CallerVerificationSession) || incoming.verification.constructor !== CallerVerificationSession || incoming.verification.proof !== config.proof ||
+          !incoming.context.hasOriginalAppointment() || !incoming.context.current() || !incoming.context.matchesWorkflow({ scope: config.scope, callId: config.callId,
+            sessionId: config.sessionId, policyVersion: config.policyVersion, credentialFingerprint: clinikoCredentialFingerprint(config.apiKey), businessId: config.businessId }) ||
+          !config.rateBudget || !incoming.context.usesBudget(config.rateBudget))) return err({ kind: "invalidConfig" });
       return ok(new ClinikoAppointmentSelection(config, shard, fetchPort));
     } catch { return err({ kind: "invalidConfig" }); }
   }
   #operation(): "appointments.cancel" | "appointments.reschedule" {
     return this.#config.policy instanceof OwnerFileCancellationPolicy ? "appointments.cancel" : "appointments.reschedule";
+  }
+  #hasOriginal(): boolean { return !!(this.#config.outbound || this.#config.incomingOriginal); }
+  #originalCurrent(): boolean {
+    return this.#config.outbound ? this.#config.outbound.current(this.#operation()) :
+      !this.#config.incomingOriginal || this.#config.incomingOriginal.context.current();
+  }
+  #inspectOriginal(signal: AbortSignal) {
+    return this.#config.outbound ? this.#config.outbound.inspectAppointment(this.#operation(), signal) :
+      this.#config.incomingOriginal?.context.inspectAppointment(this.#config.incomingOriginal.verification, this.#operation(), signal);
   }
   #now(): string { return (this.#config.clock ?? (() => new Date().toISOString()))(); }
   #currentTime(now: string): boolean {
@@ -111,17 +131,22 @@ export class ClinikoAppointmentSelection implements AppointmentHost {
           !this.#currentTime(now) || !(await this.#config.policy.current(scope)).ok) return undefined;
       const verified = await this.#config.proof.verifyOperation(scope, verificationRef, this.#operation(), this.#now(), signal);
       if (!verified.ok || signal.aborted || epoch !== this.#listing || verified.value.patientRef !== result.value.patientRef) return undefined;
-      const original = this.#config.outbound ? await this.#config.outbound.inspectAppointment(this.#operation(), signal) : undefined;
-      if (this.#config.outbound && (!original?.ok || verified.value.patientRef !== original.value.target.patientId || signal.aborted || epoch !== this.#listing)) return undefined;
-      if (this.#config.outbound) {
+      const original = await this.#inspectOriginal(signal);
+      if (this.#hasOriginal() && (!original?.ok || verified.value.patientRef !== original.value.target.patientId || signal.aborted || epoch !== this.#listing)) return undefined;
+      if (this.#hasOriginal()) {
         const finalProof = await this.#config.proof.verifyOperation(scope, verificationRef, this.#operation(), this.#now(), signal);
         if (!finalProof.ok || finalProof.value.patientRef !== verified.value.patientRef || signal.aborted || epoch !== this.#listing ||
-            !this.#config.outbound.current(this.#operation())) return undefined;
+            !this.#originalCurrent()) return undefined;
       }
-      const appointments = result.value.appointments.filter(item => !original?.ok ||
+      const candidates = this.#config.incomingOriginal && result.value.appointments.length === 0 && original?.ok
+        ? [{ appointmentRef: original.value.target.appointmentRef.slice("cliniko:appointment:".length),
+          startsAt: clinikoNativeInstant(original.value.target.startsAt)!, endsAt: clinikoNativeInstant(original.value.target.endsAt)! }]
+        : result.value.appointments;
+      const appointments = candidates.filter(item => !original?.ok ||
         item.appointmentRef === original.value.target.appointmentRef.slice("cliniko:appointment:".length) &&
         Date.parse(item.startsAt) === Date.parse(original.value.target.startsAt) && Date.parse(item.endsAt) === Date.parse(original.value.target.endsAt))
         .sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+      if (this.#config.incomingOriginal && appointments.length !== 1) return undefined;
       if (appointments.some(target => instant(target.startsAt) === undefined || instant(target.endsAt) === undefined || instant(target.endsAt)! <= instant(target.startsAt)!) ||
           new Set(appointments.map(target => instant(target.startsAt))).size !== appointments.length) return undefined;
       const targets = appointments.map(target => {
@@ -181,6 +206,42 @@ export class ClinikoAppointmentSelection implements AppointmentHost {
       evidence.patientId === query.patientId && evidence.target.appointmentRef === selected.appointmentId;
   }
 
+  async #selectedNativeTarget(selected: Selection, signal: AbortSignal): Promise<Readonly<{ practitionerId: string; appointmentTypeId: string }> | undefined> {
+    // The incoming context reads this exact native target, under the same
+    // independent operation verifier, between its two fresh history scans.
+    // Consume that observation here instead of fetching the target twice.
+    // There is no cross-operation cache and the full original version digest
+    // remains checked by the context's native target reader.
+    if (this.#config.incomingOriginal) {
+      const original = await this.#inspectOriginal(signal);
+      if (!original?.ok || signal.aborted) return undefined;
+      const target = original.value.target;
+      if (target.appointmentRef !== `cliniko:appointment:${selected.appointmentId}` || target.patientId !== selected.patientId ||
+          target.businessId !== this.#config.businessId || target.archivedAt !== null || target.deletedAt !== null || target.cancelledAt !== null ||
+          clinikoNativeTime(target.startsAt) !== instant(selected.startsAt) || clinikoNativeTime(target.endsAt) !== instant(selected.endsAt)) return undefined;
+      return { practitionerId: target.practitionerId, appointmentTypeId: target.appointmentTypeId };
+    }
+    const appointment = await this.#get(`/individual_appointments/${selected.appointmentId}`, signal);
+    const original = await this.#inspectOriginal(signal);
+    if (this.#hasOriginal() && (!original?.ok || original.value.target.appointmentRef !== `cliniko:appointment:${selected.appointmentId}` ||
+        original.value.target.patientId !== selected.patientId || !appointment ||
+        ["starts_at", "ends_at", "created_at", "updated_at", "archived_at", "cancelled_at", "deleted_at", "did_not_arrive", "patient_arrived"].some((key, i) =>
+          appointment[key] !== [original.value.target.startsAt, original.value.target.endsAt, original.value.target.createdAt, original.value.target.updatedAt,
+            original.value.target.archivedAt, original.value.target.cancelledAt, original.value.target.deletedAt, original.value.target.didNotArrive, original.value.target.patientArrived][i]))) return undefined;
+    const link = (name: string) => row(row(appointment?.[name])?.links)?.self;
+    const linkedId = (name: string, collection: string): string | undefined => {
+      const value = link(name), prefix = `${this.#base}/${collection}/`;
+      return typeof value === "string" && value.startsWith(prefix) && validClinikoId(value.slice(prefix.length)) ? value.slice(prefix.length) : undefined;
+    };
+    const practitionerId = linkedId("practitioner", "practitioners"), appointmentTypeId = linkedId("appointment_type", "appointment_types");
+    if (!appointment || appointment.id !== selected.appointmentId || appointment.archived_at !== null || appointment.deleted_at !== null ||
+        appointment.cancelled_at !== null || link("patient") !== `${this.#base}/patients/${selected.patientId}` ||
+        link("business") !== `${this.#base}/businesses/${this.#config.businessId}` || !practitionerId || !appointmentTypeId ||
+        original?.ok && (practitionerId !== original.value.target.practitionerId || appointmentTypeId !== original.value.target.appointmentTypeId) ||
+        clinikoNativeTime(appointment.starts_at) !== instant(selected.startsAt) || clinikoNativeTime(appointment.ends_at) !== instant(selected.endsAt) || signal.aborted) return undefined;
+    return { practitionerId, appointmentTypeId };
+  }
+
   async resolveTarget(incoming: Omit<Parameters<AppointmentChangeAuthority["resolve"]>[0], "kind" | "offerRef"> & Readonly<{ kind: "cancel" | "reschedule" }>): Promise<Result<SelectedAppointmentEvidence, HostReadFailure>> {
     const query = { ...incoming, scope: { ...incoming.scope } };
     const config = this.#config, selected = this.#targets.get(query.targetRef);
@@ -190,32 +251,20 @@ export class ClinikoAppointmentSelection implements AppointmentHost {
         selected.patientId !== query.patientId || selected.verificationRef !== query.verificationRef ||
         !this.#currentTime(query.now) || (query.phase !== "proposal" && query.phase !== "commit")) return denied();
     const result = await this.#bounded(async signal => {
-      const verified = await config.proof.verifyOperation(config.scope, query.verificationRef, this.#operation(), this.#now(), signal);
+      // Only the concrete incoming context below owns the native contact and
+      // operation checks around its protected reads. This first gate selects
+      // private routing metadata; it grants no native appointment disclosure.
+      const verified = await (config.incomingOriginal
+        ? config.proof.currentReference(config.scope, query.verificationRef, this.#operation(), this.#now())
+        : config.proof.verifyOperation(config.scope, query.verificationRef, this.#operation(), this.#now(), signal));
       if (!verified.ok || verified.value.patientRef !== selected.patientId || signal.aborted) return undefined;
       const policy = await config.policy.current(config.scope);
       if (!policy.ok || signal.aborted) return undefined;
       const business = await this.#get(`/businesses/${config.businessId}`, signal);
       if (!business || business.id !== config.businessId || business.archived_at !== null || business.time_zone_identifier !== selected.timeZone ||
           business.time_zone_identifier !== policy.value.timeZone || signal.aborted) return undefined;
-      const appointment = await this.#get(`/individual_appointments/${selected.appointmentId}`, signal);
-      const original = config.outbound ? await config.outbound.inspectAppointment(this.#operation(), signal) : undefined;
-      if (config.outbound && (!original?.ok || original.value.target.appointmentRef !== `cliniko:appointment:${selected.appointmentId}` ||
-          original.value.target.patientId !== selected.patientId || !appointment ||
-          ["starts_at", "ends_at", "created_at", "updated_at", "archived_at", "cancelled_at", "deleted_at", "did_not_arrive", "patient_arrived"].some((key, i) =>
-            appointment[key] !== [original.value.target.startsAt, original.value.target.endsAt, original.value.target.createdAt, original.value.target.updatedAt,
-              original.value.target.archivedAt, original.value.target.cancelledAt, original.value.target.deletedAt, original.value.target.didNotArrive, original.value.target.patientArrived][i]))) return undefined;
-      const link = (name: string) => row(row(appointment?.[name])?.links)?.self;
-      const linkedId = (name: string, collection: string): string | undefined => {
-        const value = link(name), prefix = `${this.#base}/${collection}/`;
-        return typeof value === "string" && value.startsWith(prefix) && validClinikoId(value.slice(prefix.length)) ? value.slice(prefix.length) : undefined;
-      };
-      const practitionerId = linkedId("practitioner", "practitioners"), appointmentTypeId = linkedId("appointment_type", "appointment_types");
-      if (!appointment || appointment.id !== selected.appointmentId || appointment.archived_at !== null || appointment.deleted_at !== null ||
-          appointment.cancelled_at !== null || link("patient") !== `${this.#base}/patients/${selected.patientId}` ||
-          link("business") !== `${this.#base}/businesses/${config.businessId}` || !practitionerId || !appointmentTypeId ||
-          original?.ok && (practitionerId !== original.value.target.practitionerId || appointmentTypeId !== original.value.target.appointmentTypeId) ||
-          instant(appointment.starts_at) !== instant(selected.startsAt) || instant(appointment.ends_at) !== instant(selected.endsAt) ||
-          !this.#currentTime(query.now) || Date.parse(selected.expiresAt) <= Date.parse(this.#now()) || signal.aborted) return undefined;
+      const target = await this.#selectedNativeTarget(selected, signal);
+      if (!target || !this.#currentTime(query.now) || Date.parse(selected.expiresAt) <= Date.parse(this.#now()) || signal.aborted) return undefined;
       const terms = OwnerFileReschedulingPolicy.termsFor(policy.value, selected.startsAt, this.#now());
       const freshPolicy = await config.policy.current(config.scope);
       const freshProof = await config.proof.verifyOperation(config.scope, query.verificationRef, this.#operation(), this.#now(), signal);
@@ -224,7 +273,7 @@ export class ClinikoAppointmentSelection implements AppointmentHost {
           JSON.stringify(terms) !== JSON.stringify(OwnerFileReschedulingPolicy.termsFor(freshPolicy.value, selected.startsAt, this.#now()))) return undefined;
       return { scope: config.scope, callId: config.callId, sessionId: config.sessionId, policyVersion: config.policyVersion,
         patientId: selected.patientId, targetRef: query.targetRef, businessId: config.businessId, credentialFingerprint: policy.value.credentialFingerprint,
-        practitionerId, appointmentTypeId, terms,
+        practitionerId: target.practitionerId, appointmentTypeId: target.appointmentTypeId, terms,
         ...("cancellationReason" in policy.value ? { cancellationReason: policy.value.cancellationReason } : {}),
         target: { scope: config.scope, appointmentRef: selected.appointmentId, patientRef: selected.patientId,
           startsAt: selected.startsAt, endsAt: selected.endsAt, timeZone: selected.timeZone } };

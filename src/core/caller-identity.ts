@@ -11,6 +11,7 @@ export function validCallerIdentityDenial(value: unknown): value is CallerIdenti
 export function restrictDeniedCaller(state: CallState, interpretation: TurnInterpretation): TurnInterpretation {
   if (!state.callerIdentityDenied) return interpretation;
   switch (interpretation.kind) {
+    case "missedCallContext": return { kind: "missedCallReasonUnavailable" };
     case "conversationControl": case "conversationPresence": case "missedCallReasonUnavailable": return interpretation;
     case "answer": case "knowledgeFailure": case "availability": case "availabilityFailure": return interpretation;
     case "clarify": if (interpretation.reason === "clinicalAdviceUnavailable" || interpretation.reason === "arrivalAccessUnavailable" || interpretation.reason === "publicFactConflict" || interpretation.reason === "serviceArrangementUnavailable" || isFinancialEvidenceReason(interpretation.reason)) return interpretation; break;

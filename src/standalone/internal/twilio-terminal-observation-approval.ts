@@ -13,7 +13,7 @@ function freeze<T>(v: T): T { if (v && typeof v === "object") { for (const x of 
  * This reads approval only: it neither authenticates caller-supplied events nor
  * grants a native write, delivery ACK, closure or contact/clinical result. */
 export async function readTerminalObservationApproval(source: OutboundConversationPolicySource, call: AuthenticatedTwilioOutboundCall,
-  expected: Readonly<{ scope: LocationScope; profileRef: string; terminalBinding: string }>, signal: AbortSignal, selected: () => boolean):
+  expected: Readonly<{ scope: LocationScope; profileRef: string; terminalBinding: string; bindingField?: "terminalObservationBinding" | "unansweredCallObservationBinding" }>, signal: AbortSignal, selected: () => boolean):
   Promise<Result<Readonly<{ current(): boolean }>, Readonly<{ kind: "unavailable" | "forbidden" }>>> {
   try {
     const read = source.read.bind(source), live = source.current.bind(source), choice = freeze(structuredClone(expected));
@@ -23,7 +23,7 @@ export async function readTerminalObservationApproval(source: OutboundConversati
     const loaded = await awaitUntilAbort(Promise.resolve().then(() => selected() ? read(selection, signal) : err({ kind: "unavailable" as const })), signal);
     if (!loaded?.ok || signal.aborted || !selected()) return err({ kind: "unavailable" });
     const approval = freeze(structuredClone(loaded.value));
-    const current = () => !signal.aborted && selected() && approval.terminalObservationBinding === choice.terminalBinding &&
+    const current = () => !signal.aborted && selected() && approval[choice.bindingField ?? "terminalObservationBinding"] === choice.terminalBinding &&
       outboundConversationProfileRef(approval) === choice.profileRef && isDeepStrictEqual(approval.policy.scope, choice.scope) &&
       live(selection, approval) === true && selected();
     return current() ? ok(Object.freeze({ current })) : err({ kind: "forbidden" });

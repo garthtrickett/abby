@@ -97,7 +97,7 @@ export async function outboundClinicalCancellationFixture(options: Readonly<{ bu
     const receipt = value(await f.ledger.findAdmission(callId))!;
     const context = value(await ClinikoOutboundClinicalContext.capture({ original, key, clinicNumber, requests, signal: lifetime.signal, fetchPort: native, target,
       records: { allows: async () => true, current: () => state.nativeLive }, authority: { allows: async () => true, current: () => state.live } }));
-    const { inbound: _, representative: __, ...config } = f.config;
+    const { inbound: _, representative: __, incomingOriginal: ___, ...config } = f.config;
     const outgoingConfig = { ...config, cliniko: c, receipt, sessionId, outbound: context, fetchPort: native, signal: lifetime.signal };
     const owner = value(await ClinikoCancellationSession.createOutbound(outgoingConfig));
     const reception = new TextReception(f.ledger, f.policies, owner.effects, undefined, owner.appointments);

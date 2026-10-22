@@ -1,3 +1,4 @@
+import type { PatientRecallSnapshot } from "./internal/patient-recall-snapshot.ts";
 import { createHash } from "node:crypto";
 import { err, ok } from "../core/model.ts";
 import type { LocationScope, Result } from "../core/model.ts";
@@ -95,7 +96,7 @@ export class ClinikoTwilioOutboundTerminalObservationRecords {
     if (!this.#matchesOriginal(observation, original, accountSid)) return Promise.resolve(err({ kind: "invalidQuery" }));
     return this.#records.retain(observation, recallAt, signal);
   }
-  readObservation(binding: NativeOutboundReadBinding, signal: AbortSignal): Promise<Result<NativeOutboundContext<TwilioOutboundTerminalObservation>, NativeOutboundFailure>> {
-    return this.#records.read(binding, signal);
+  readObservation(binding: NativeOutboundReadBinding, signal: AbortSignal, history?: PatientRecallSnapshot): Promise<Result<NativeOutboundContext<TwilioOutboundTerminalObservation>, NativeOutboundFailure>> {
+    return this.#records.read(binding, signal, history);
   }
 }

@@ -28,6 +28,8 @@ export type OutboundConversationApproval = Readonly<{
   /** Separate optional provider-notification producer selection. A profile
    * without this field grants no new native terminal-observation producer. */
   terminalObservationBinding?: string;
+  /** Separate explicit no-answer provenance producer; never inherited by older profiles. */
+  unansweredCallObservationBinding?: string;
   policy: CallPolicy;
   /** Trusted physical host's model/runtime configuration, in addition to the
    * speech profile's own fully validated primary/fallback configuration hash. */
@@ -57,6 +59,7 @@ export function outboundConversationProfileRef(approval: OutboundConversationApp
     if (approval.purpose !== "outboundContact" || !/^[a-f0-9]{64}$/.test(runtimeConfigurationHash) ||
         approval.stopSpeechBinding !== undefined && !/^[a-f0-9]{64}$/.test(approval.stopSpeechBinding) ||
         approval.terminalObservationBinding !== undefined && !/^[a-f0-9]{64}$/.test(approval.terminalObservationBinding) ||
+        approval.unansweredCallObservationBinding !== undefined && !/^[a-f0-9]{64}$/.test(approval.unansweredCallObservationBinding) ||
         !policy || !validVoicePolicy(policy, policy.scope) || !policy.voiceProfile ||
         !validGreetingShape(policy.greeting, policy.scope) ||
         !policy.greeting.effectiveFrom || !policy.greeting.effectiveUntil ||
@@ -66,7 +69,8 @@ export function outboundConversationProfileRef(approval: OutboundConversationApp
       voiceSettings: policy.voiceSettings, voiceProfile: policy.voiceProfile, greeting: policy.greeting, runtimeConfigurationHash,
       mediaOptions: approval.mediaOptions ?? {}, playbackOptions: approval.playbackOptions ?? {},
       ...(approval.stopSpeechBinding !== undefined ? { stopSpeechBinding: approval.stopSpeechBinding } : {}),
-      ...(approval.terminalObservationBinding !== undefined ? { terminalObservationBinding: approval.terminalObservationBinding } : {}) };
+      ...(approval.terminalObservationBinding !== undefined ? { terminalObservationBinding: approval.terminalObservationBinding } : {}),
+      ...(approval.unansweredCallObservationBinding !== undefined ? { unansweredCallObservationBinding: approval.unansweredCallObservationBinding } : {}) };
     return `abby-outbound-v1:${createHash("sha256").update(JSON.stringify(canonical(projection))).digest("hex")}`;
   } catch { return; }
 }
