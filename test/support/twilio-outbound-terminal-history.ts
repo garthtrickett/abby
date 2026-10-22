@@ -26,6 +26,6 @@ export async function twilioTerminalHistoryFixture() {
   };
   const identity = { effectRef: f.context.original.attempt.effectRef, capacityAllocationRef: f.context.original.attempt.capacityAllocationRef! };
   const make = (auth = f.auth) => value(ClinikoTwilioOutboundTerminalHistory.create({ observations: f.config, attempts }, auth, authority, wire));
-  return { ...f, originalRow: row, attempts, historyState: state, identity, makeTerminalHistory: make,
+  return { ...f, originalRow: row, attempts, historyState: state, historyAuthority: authority, historyPort: wire, identity, makeTerminalHistory: make,
     find: () => make().findForRuntime(identity, f.observation.accountSid, signal()) };
 }

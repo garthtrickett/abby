@@ -16,15 +16,19 @@ const { PostgresOutboundCapacity } = await import(new URL("src/storage/postgres-
 const { PostgresClinikoRequestBudget } = await import(new URL("src/storage/postgres-cliniko-request-budget.js", emitted).href) as typeof import("../../src/storage/postgres-cliniko-request-budget.ts");
 const { outboundContactGuardOwnerBinding } = await import(new URL("src/core/outbound-capacity.js", emitted).href) as typeof import("../../src/core/outbound-capacity.ts");
 const { outboundDncRecordBinding } = await import(new URL("src/cliniko/outbound-dnc-records.js", emitted).href) as typeof import("../../src/cliniko/outbound-dnc-records.ts");
+const { outboundStaffReviewRecordBinding } = await import(new URL("src/cliniko/outbound-staff-review-records.js", emitted).href) as typeof import("../../src/cliniko/outbound-staff-review-records.ts");
+const { TwilioOutboundTerminalObservationAuthentication } = await import(new URL("src/cliniko/twilio-outbound-terminal-observation.js", emitted).href) as typeof import("../../src/cliniko/twilio-outbound-terminal-observation.ts");
 const { TwilioAbbyOutboundRuntime } = await import(new URL("src/voice/twilio-outbound-runtime.js", emitted).href) as typeof import("../../src/voice/twilio-outbound-runtime.ts");
 const { TwilioOutboundReportAuthentication } = await import(new URL("src/cliniko/twilio-outbound-report.js", emitted).href) as typeof import("../../src/cliniko/twilio-outbound-report.ts");
 const { OwnerFileOutboundDncPolicy } = await import(new URL("src/standalone/owner-file-outbound-dnc-policy.js", emitted).href) as typeof import("../../src/standalone/owner-file-outbound-dnc-policy.ts");
 const { TwilioOutboundStatusDelivery } = await import(new URL("src/standalone/twilio-outbound-status-delivery.js", emitted).href) as typeof import("../../src/standalone/twilio-outbound-status-delivery.ts");
 
-test("actual emitted combined signed callback after full logical restore uses restored SQL and cold native truth without repeating either write", { timeout: 60000 }, async t => {
+for (const staffReviewEnabled of [false, true])
+test(`actual emitted signed callback full logical restore preserves ${staffReviewEnabled ? "unclear clinic review" : "positive STOP"} without another native write`, { timeout: 60000 }, async t => {
   const scope = { tenantId: `status-restore-${randomUUID()}`, clinicId: "clinic", locationId: "main" }, apiKey = `synthetic-status-restore-${randomUUID()}-au5`, guardRef = randomUUID();
   const budget = new PostgresClinikoRequestBudget(db, { apiKey, maxPerMinute: 180 });
   const f = await twilioOutboundStatusVoiceFixture({ apiKey, scope, guardRef, budget,
+    ...(staffReviewEnabled ? { staffReview: true, quality: "needsClarification" } : {}),
     patientId: (BigInt("0x" + randomUUID().replaceAll("-", "")) % 1_000_000_000_000_000_000n + 1_000_000_000_000_000_000n).toString(),
     effectFactory: (s, b) => new PostgresOutboundEffectBarrier(db, s, b), capacityFactory: (s, b) => new PostgresOutboundCapacity(db, s, b),
     capacity: new PostgresOutboundCapacity(db, scope, outboundContactGuardOwnerBinding(guardRef)!) }); t.after(f.close);
@@ -32,7 +36,8 @@ test("actual emitted combined signed callback after full logical restore uses re
   const voice = await f.listen(); t.after(voice.close); const wire = await f.start(voice), closed = once(wire.socket, "close");
   wire.sendTurn(); await closed; await f.finished; f.stateSpeech.decision = true;
   const callback = await f.listenStatus(); t.after(callback.close); assert.equal(await callback.send(), 204);
-  assert.equal(f.reportPosts.length, 1); assert.equal(f.dncPosts.length, 1); assert.equal(f.notificationPosts.length, 1);
+  assert.equal(f.reportPosts.length, staffReviewEnabled ? 0 : 1); assert.equal(f.dncPosts.length, staffReviewEnabled ? 0 : 1);
+  assert.equal(f.notificationPosts.length, 1); assert.equal(f.staffPosts.length, staffReviewEnabled ? 1 : 0);
   const peer = connectPostgres(process.env.DATABASE_URL!); t.after(() => peer.destroy());
   const peerScope = { tenantId: `status-restore-peer-${randomUUID()}`, clinicId: "independent", locationId: "main" };
   const peerEffects = new PostgresOutboundEffectBarrier(peer, peerScope, "f".repeat(64));
@@ -71,14 +76,21 @@ test("actual emitted combined signed callback after full logical restore uses re
     const selected = runtime.binding(), policy = value(await OwnerFileOutboundDncPolicy.capture({ path: f.policyPath, scope, directory: f.directory, clock }, new AbortController().signal));
     const prior = f.statusConfig, record = <T extends object>(config: T) => ({ ...config, clock, rateBudget: freshBudget });
     const dnc = { ...f.config.stop.dnc, source: record(f.config.stop.dnc.source) };
+    const priorReview = prior.staffReview;
+    const staffReview = priorReview && { config: { ...priorReview.config, observations: record(priorReview.config.observations),
+      attempts: record(priorReview.config.attempts), reviews: record(priorReview.config.reviews) }, ports: { ...priorReview.ports,
+      authentication: new TwilioOutboundTerminalObservationAuthentication(f.notificationKey, { ref: selected.ref, bindingDigest: selected.bindingDigest }),
+      effects: new PostgresOutboundEffectBarrier(restored, scope, outboundStaffReviewRecordBinding(priorReview.config.reviews)!) } };
     const delivery = value(TwilioOutboundStatusDelivery.create({
+      ...(staffReview ? { staffReview } : {}),
       notifications: { config: { ...prior.notifications.config, runtime, observations: record(prior.notifications.config.observations), attempts: record(prior.notifications.config.attempts) },
         ports: { ...prior.notifications.ports, effects: (s, b) => new PostgresOutboundEffectBarrier(restored!, s, b) } },
       stop: { config: { reports: record(f.reports), stop: { ...f.config.stop, requests: record(f.config.stop.requests), attempts: record(f.config.stop.attempts), dnc, policy } },
         ports: { ...prior.stop.ports, runtime, authentication: new TwilioOutboundReportAuthentication(f.key, { ref: selected.ref, bindingDigest: selected.bindingDigest }),
           effects: new PostgresOutboundEffectBarrier(restored, scope, outboundDncRecordBinding(dnc)!) } }, maximumNativeRequests: 180, deadlineMs: 5000 }));
     for (let n = 0; n < 2; n++) assert.deepEqual(value(await delivery.receiveStatus(f.statusRequest(), new AbortController().signal)), { kind: "acknowledged" });
-    assert.equal(f.dncPosts.length, 1); assert.equal(f.notificationPosts.length, 1); assert.equal(f.reportPosts.length, 1); assert.equal(f.carrierCalls, 1);
+    assert.equal(f.dncPosts.length, staffReviewEnabled ? 0 : 1); assert.equal(f.notificationPosts.length, 1);
+    assert.equal(f.staffPosts.length, staffReviewEnabled ? 1 : 0); assert.equal(f.reportPosts.length, staffReviewEnabled ? 0 : 1); assert.equal(f.carrierCalls, 1);
     assert.deepEqual((await sql`select * from outbound_effect_barriers order by tenant_id,effect_ref`.execute(restored)).rows, originalEffects);
     assert.deepEqual((await sql`select * from outbound_capacity_allocations order by tenant_id,allocation_ref`.execute(restored)).rows, originalHolds);
     await assertStatusPrivacy(restored, f, url.href);

@@ -17,20 +17,22 @@ const { PostgresOutboundEffectBarrier } = await import(new URL("src/storage/post
 const { PostgresOutboundCapacity } = await import(new URL("src/storage/postgres-outbound-capacity.js", emitted).href) as typeof import("../../src/storage/postgres-outbound-capacity.ts");
 const { PostgresClinikoRequestBudget } = await import(new URL("src/storage/postgres-cliniko-request-budget.js", emitted).href) as typeof import("../../src/storage/postgres-cliniko-request-budget.ts");
 const { outboundContactGuardOwnerBinding } = await import(new URL("src/core/outbound-capacity.js", emitted).href) as typeof import("../../src/core/outbound-capacity.ts");
+const { outboundStaffReviewActionRef } = await import(new URL("src/cliniko/outbound-staff-review-request.js", emitted).href) as typeof import("../../src/cliniko/outbound-staff-review-request.ts");
 const { twilioOutboundTerminalActionRef } = await import(new URL("src/cliniko/twilio-outbound-terminal-observation.js", emitted).href) as typeof import("../../src/cliniko/twilio-outbound-terminal-observation.ts");
 
-for (const family of ["91", "66"] as const) for (const stored of [false, true])
+for (const family of ["91", "66", "75"] as const) for (const stored of [false, true])
 test(`emitted signed HTTP callback SIGKILL ${stored ? "after" : "before"} native ${family} storage recovers only independently retained truth`, { timeout: 60000 }, async t => {
   const scope = { tenantId: `status-crash-${randomUUID()}`, clinicId: "clinic", locationId: "main" }, apiKey = `synthetic-status-crash-${randomUUID()}-au5`, guardRef = randomUUID();
   const budget = new PostgresClinikoRequestBudget(db, { apiKey, maxPerMinute: 180 });
   const f = await twilioOutboundStatusVoiceFixture({ apiKey, scope, guardRef, budget,
+    ...(family === "75" ? { staffReview: true, quality: "needsClarification" } : {}),
     patientId: (BigInt("0x" + randomUUID().replaceAll("-", "")) % 1_000_000_000_000_000_000n + 1_000_000_000_000_000_000n).toString(),
     effectFactory: (s, b) => new PostgresOutboundEffectBarrier(db, s, b), capacityFactory: (s, b) => new PostgresOutboundCapacity(db, s, b),
     capacity: new PostgresOutboundCapacity(db, scope, outboundContactGuardOwnerBinding(guardRef)!) }); t.after(f.close);
   f.stateSpeech.decision = false;
   const voice = await f.listen(); t.after(voice.close); const wire = await f.start(voice), closed = once(wire.socket, "close");
   wire.sendTurn(); await closed; await f.finished; f.stateSpeech.decision = true;
-  assert.equal(f.reportPosts.length, 1); assert.equal(f.dncPosts.length, 0); assert.equal(f.notificationPosts.length, 0);
+  assert.equal(f.reportPosts.length, family === "75" ? 0 : 1); assert.equal(f.dncPosts.length, 0); assert.equal(f.notificationPosts.length, 0); assert.equal(f.staffPosts.length, 0);
   const cwd = await mkdtemp(join(tmpdir(), "abby-status-empty-")); t.after(() => rm(cwd, { recursive: true, force: true }));
   let reached!: () => void; const boundary = new Promise<void>(resolve => { reached = resolve; });
   const peer = await twilioStatusPeer(f, cwd, { family, stored, reached }); t.after(peer.kill);
@@ -40,16 +42,21 @@ test(`emitted signed HTTP callback SIGKILL ${stored ? "after" : "before"} native
   try { await Promise.race([boundary, peer.errors, timeout]); } finally { clearTimeout(timer!); }
   const purposes = async () => (await sql<{ effect_ref: string }>`select effect_ref from outbound_effect_barriers where tenant_id=${scope.tenantId}`.execute(db)).rows.map(r => r.effect_ref).sort();
   const before = await purposes(), dncAction = f.attempt.dncReferences!.actionRef, notificationAction = twilioOutboundTerminalActionRef(f.original().sessionActionRef)!;
-  assert.ok(before.includes(dncAction)); assert.equal(before.includes(notificationAction), family === "66");
-  assert.equal(f.dncPosts.length, family === "91" ? Number(stored) : 1); assert.equal(f.notificationPosts.length, family === "66" ? Number(stored) : 0);
+  assert.equal(before.includes(dncAction), family !== "75"); assert.equal(before.includes(notificationAction), family !== "91");
+  const reviewAction = outboundStaffReviewActionRef(f.attempt.actionRef)!;
+  assert.equal(before.includes(reviewAction), family === "75");
+  assert.equal(f.dncPosts.length, Number(family === "66" || family === "91" && stored)); assert.equal(f.notificationPosts.length, Number(family === "75" || family === "66" && stored));
+  assert.equal(f.staffPosts.length, family === "75" ? Number(stored) : 0);
   await peer.kill(); await interrupted; assert.deepEqual(peer.output, []); assert.deepEqual(await readdir(cwd), []);
   const fresh = await twilioStatusPeer(f, cwd); t.after(fresh.kill);
   assert.equal(await fresh.send(), stored ? 204 : 503); assert.equal(await fresh.send(), stored ? 204 : 503); await fresh.close();
   assert.deepEqual(fresh.output, []); assert.deepEqual(await readdir(cwd), []);
-  assert.equal(f.dncPosts.length, family === "91" ? Number(stored) : 1);
-  assert.equal(f.notificationPosts.length, stored ? 1 : 0); assert.equal(f.reportPosts.length, 1); assert.equal(f.carrierCalls, 1);
-  const after = await purposes(); assert.equal(after.filter(r => r === dncAction).length, 1);
-  assert.equal(after.filter(r => r === notificationAction).length, family === "66" || stored ? 1 : 0);
+  assert.equal(f.dncPosts.length, Number(family === "66" || family === "91" && stored));
+  assert.equal(f.notificationPosts.length, family === "75" || stored ? 1 : 0); assert.equal(f.reportPosts.length, family === "75" ? 0 : 1);
+  assert.equal(f.staffPosts.length, family === "75" ? Number(stored) : 0); assert.equal(f.carrierCalls, 1);
+  const after = await purposes(); assert.equal(after.filter(r => r === dncAction).length, family === "75" ? 0 : 1);
+  assert.equal(after.filter(r => r === reviewAction).length, family === "75" ? 1 : 0);
+  assert.equal(after.filter(r => r === notificationAction).length, family !== "91" || stored ? 1 : 0);
   const holds = (await sql<{ released_at: Date | null }>`select released_at from outbound_capacity_allocations where tenant_id=${scope.tenantId}`.execute(db)).rows;
   assert.equal(holds.length, 2); assert.ok(holds.every(h => h.released_at === null));
   await assertStatusPrivacy(db, f, process.env.DATABASE_URL!);
