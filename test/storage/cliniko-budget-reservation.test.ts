@@ -189,9 +189,18 @@ test("E2E-416 allocation migration preserves prior claims and refuses rollback o
     assert.equal(await cohort.claim(), null);
     // Rollback owns only this database; concurrent readers retain the current schema.
     await migrateTo(isolated, "047_confirmation_resend_journal");
+    const legacyState = await sql<Record<string, unknown>>`select * from cliniko_request_budgets
+      where budget_ref = ${ref(apiKey)}`.execute(isolated);
+    assert.equal(legacyState.rows.length, 1);
+    assert.equal(await budget.schemaCompatible(), false, "an older schema cannot admit the current budget owner");
     assert.deepEqual(await budget.claim(), { kind: "unavailable" });
     assert.equal(await cohort.claim(), null, "migration rollback must not remove another test owner's allocation table");
-    await migrate(isolated); assert.equal(await budget.checkHeadroom(2), null);
+    await migrate(isolated);
+    assert.equal(await budget.schemaCompatible(), true, "the supported upgrade must restore readiness");
+    assert.deepEqual((await sql<Record<string, unknown>>`select * from cliniko_request_budgets
+      where budget_ref = ${ref(apiKey)}`.execute(isolated)).rows, legacyState.rows,
+      "readiness and migration must retain every prior account value, including spent requests");
+    assert.equal(await budget.checkHeadroom(2), null);
     assert.equal((await budget.withReservation(2, new AbortController().signal, async () => {
       await assert.rejects(migrateTo(other, "047_confirmation_resend_journal"), /active Cliniko allocations/);
       assert.equal(await budget.claim(), null);

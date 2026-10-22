@@ -167,3 +167,21 @@ This is targeted evidence for the concrete shared-budget owner under
 not qualification of every storage adapter, a new voice scenario, the complete
 regression or clinic activation. Other transaction owners retain their own
 required evidence.
+
+## Compatibility through a persisted-budget upgrade
+
+The existing real E2E-416 migration case now checks this readiness guard as
+well as allocation ownership. After a claim is stored, its isolated database
+is returned to migration047. The current budget owner refuses that incompatible
+schema. Applying the supported migrations restores schema compatibility while
+retaining every value of the original budget row, including requests already
+spent. Existing quota assertions still prevent an extra claim, and rollback
+over another live allocation remains refused.
+
+All11 allocation controls pass, including separate legacy/current processes,
+owner death/expiry and the strengthened upgrade case. Whole strict TypeScript
+passes with all741 runtime artifacts unchanged. This is a separate source-loaded
+cohort, not a rerun or sum of the earlier68 or transaction12. No migration,
+production source or scenario ID changes. Actual release-target selection,
+retirement of real consumers and clinic restore acceptance remain separate R25
+requirements; this local migration probe cannot establish them.

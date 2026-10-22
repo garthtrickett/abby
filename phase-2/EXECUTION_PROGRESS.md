@@ -6322,3 +6322,16 @@ preserved; correcting its invalid setup value exercises the actual application
 guard rather than PostgreSQL's earlier bigint cast. These are storage contracts,
 not new voice/full-call scenario IDs or a completed gap. The broader current
 component still awaits actual-parent integration, review and its own delivery.
+
+
+### 22 October 2026 — budget readiness across a real upgrade (R25)
+
+The existing allocation migration case now refuses the incompatible047 schema,
+accepts its supported upgrade and compares every original budget-row value
+without resetting spent requests. All11 allocation controls pass, retaining
+legacy/current process isolation, owner-death/expiry, live-owner rollback denial
+and physical-account limits. Whole strict passes with741 unchanged runtime
+artifacts. No production source, migration, case count or scenario ID changes.
+This separate source-loaded evidence does not rerun or add the earlier68 or
+transaction12. Actual deployment target/consumer retirement and clinic restore
+acceptance remain unexecuted; no activation follows.
