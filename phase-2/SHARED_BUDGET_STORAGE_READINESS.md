@@ -120,3 +120,23 @@ and extended176 are all retained under manifest1.248/425. Original727 outputs
 were independently hash-copied before import. Fresh combined source/types/
 serving/SQL/metadata qualification, review and this component’s own delivery
 remain required; pending callback-memo PR588 is not silently included.
+
+## Current actual-parent qualification
+
+On local50f0157 with actual normal parentc3af48c, whole strict TypeScript and
+serving emission pass1792704451137 in4m13s at1785651200B/2GiB. The741 outputs
+add the private checker and change only server/budget from the740 parent; the
+other738 parent outputs remain exact. All three schema-owner outputs equal
+the preserved originally qualified bytes. Current metadata passes2/2 in
+1792704488809. The complete current mixed cohort passes68/68, zero failure,
+skip or cancellation, in1792704804999/4m42s: source-loaded signed schema, actual
+compiled startup, preserved budget/voice/storage failures and facts/scenarios.
+Node383729664B/512MiB plus owned PostgreSQL254881792B/512MiB, CPU100% each,
+Swap0/allOOM-high-max0; database cleaned and paired waits reaped. Counts include
+nested/overlapping tests and are not summed with the prior68 or parent cohorts.
+
+This fresh proof qualifies this actual-parent component, not all425 scenarios
+or a full regression. Pending memo PR588 and real clinic/operator/provider/
+acoustic/retention/restore acceptance stay separate. A later actual normal
+parent must be explicitly integrated and any changed inputs requalified before
+this component’s own publication/delivery.

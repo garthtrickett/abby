@@ -1,5 +1,7 @@
 # Execution progress and evidence
 
+**Current delivery checkpoint, 22 October 2026:** Foundations through PR587 are normally merged atc3af48c. PR587’s eight own-head jobs/raw logs passed; its actual-main checks are separately tracked and not all qualified yet. The independent callback-memo follow-up is published as PR588/5c29d06 with its own CI running. This local schema component integrates actualc3 and passes current68/68, whole strict TypeScript and741 serving outputs, plus current facts/scenario checks. It is not published, does not include PR588 and still needs final current-parent review/ordinary delivery. The full thirteen-gap engineering and real acceptance remain open; no patient traffic, deployment or default activation follows. Earlier dated entries retain their original source/build/publication scopes.
+
 **Updated:** 22 October 2026. **Objective:** Work through [EXECUTION_ORDER.md](EXECUTION_ORDER.md), preserving its full thirteen-gap scope. This ledger records partial delivery; the integration is not complete or activated.
 
 **Current incoming callback engineering, 22 October 2026:** Explicit incoming-only provisioning now explains an unambiguous clinic-native prior call only after independent patient verification, then constrains separately verified moves/cancellations to the original appointment. Unverified/shared/wrong-patient/stale/withdrawn context stays unknown. The complete current correction passes438 source controls; fresh whole strict/740 serving and four actual signed PostgreSQL cases qualify the current fixture graph, including a fresh incoming owner needing its own code and full SQL/raw-backup privacy. The complete source move uses173 native HTTP requests plus one setup under unchanged180, with no denied claim. These are local synthetic results, not this change's review/publication/cloud, clinic/provider/acoustic/full-call acceptance or activation. All thirteen gaps remain in scope. See [contract, exact behavior and limits](INCOMING_MISSED_CALL_CONTEXT.md).
@@ -6276,8 +6278,7 @@ and facts are retained; no production-code conflict or source change to the
 six schema owning source/test paths occurs. All425 parent scenario IDs remain;
 only176 receives the already qualified storage extension, while424/425 stay
 exact. Combined manifest1.248 distinguishes this graph from the two original
-1.247 components. The595/596-style source counts are not validation totals;
-the merged product-facts reference binds604 distinct directly cited files.
+1.247 components. The merged product-facts reference binds604 distinct directly cited files.
 
 Before importing, all727 prior serving outputs were copied and SHA256-verified
 under private retained evidence, without rewriting their original manifests.
@@ -6285,3 +6286,20 @@ The original68/strict727 evidence remains scoped to delivered337. Fresh current
 combined qualification and exact-normal review remain required before this
 component’s publication; callback-memo PR588 is separately published and not
 integrated here. This is no full regression, clinic acceptance or activation.
+
+
+## Schema current actual-parent terminal qualification, 22 October 2026
+
+Actual normalc3/50f0157 whole strict and serving1792704451137 passed4m13s,
+peak1785651200B/2GiB. The741 outputs add only the schema checker and change
+server/budget relative to740; the other738 outputs stay exact. Those three
+owner outputs also match the preserved originally qualified727 candidate.
+Current604-source/425-scenario contracts passed2/2 in1792704488809/6s. The
+actual741 source/compiled/preserved SQL/metadata cohort1792704804999 passed
+68/68 including nested tests, zero failures/skips/cancellations in4m42s.
+Node383729664B/512MiB plus PostgreSQL254881792B/512MiB, CPU100% each/Swap0,
+allOOM-high-max0; source/dependencies/artifacts pinned, database cleanup and
+paired waits reaped. Current metadata is separately refreshed after these
+terminal-only documentation changes. No new full regression or entire gap is
+claimed; actual memo-parent integration/final review/publication/cloud and all
+real acceptance retain their separate gates.
