@@ -166,3 +166,7 @@ Combined work 1792528008545 ended 2026-10-20T20:34:59.589973+00:00; Node peak 16
 ## Optional signed status delivery
 
 The Twilio/Abby path now has a separately configured combined HTTP status receiver. It reauthenticates the raw callback with the original runtime, performs restrictive stop recovery first, and acknowledges a completed notification only after a known native ACK or independently permitted cold native discovery. One cumulative allowance and whole deadline span both owners; native180 and real SQL exclusions remain unchanged. Status handling invokes no clinical, launch, session or hold-release owner; the reused ingress retains its separate authenticated answer/stream handling. Unknown speech never becomes no-stop. Actual emitted voice/PostgreSQL, killed-worker and full logical-restore proof is local; default configuration and future Vapi integration remain unchanged. See [delivery contract and qualification](OUTBOUND_STATUS_DELIVERY.md).
+
+## Explicit finite exact sick-day scheduling, 22 October 2026
+
+An explicitly invoked finite tick can dispatch already approved exact sick-day requests through the existing selected runtime adapter when independent target configuration and grants are supplied. The runtime interface is unchanged: appointment, contact, scheduling, quota, one-use and capacity decisions remain Abby workflow responsibilities. No hosted adapter, automatic runtime selection or live call is enabled. See [current qualification and limits](OUTBOUND_SICK_DAY_CONTRACT.md#explicit-finite-exact-sick-day-scheduling-22-october-2026).
