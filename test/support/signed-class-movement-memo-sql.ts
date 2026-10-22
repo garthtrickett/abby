@@ -28,10 +28,37 @@ const { administrativeMemoRecordBinding } = await import(new URL("src/cliniko/ad
 const { commandProgress } = await import(new URL("src/reference/command-progress.js", emitted).href) as typeof import("../../src/reference/command-progress.ts");
 const { ok } = await import(new URL("src/core/model.js", emitted).href) as typeof import("../../src/core/model.ts");
 
+type MovementReport = Extract<import("../../src/cliniko/administrative-memo.ts").AdministrativeMemoOutcome, { kind: "classMovementReported" }>;
+type MovementExpectation = Readonly<{
+  status: import("../../src/core/model.ts").ActionStatus; writes: readonly string[]; memoRows: 0 | 1;
+  memoOutcome?: import("../../src/standalone/administrative-memo-retention.ts").MemoRetentionOutcome["kind"];
+  report?: Pick<MovementReport, "completion" | "replacementAttendeeRef"> & Pick<MovementReport["progress"], "original" | "replacement">;
+}>;
+const originalCancellation = ["POST /v1/attendees", "PATCH /v1/attendees/101/cancel"] as const;
+const replacementCancellation = ["POST /v1/attendees", "PATCH /v1/attendees/401/cancel"] as const;
+const moved: MovementExpectation = { status: "committed", writes: originalCancellation, memoRows: 1, memoOutcome: "accepted",
+  report: { completion: "moved", original: "inspectedCancelled", replacement: "inspectedActive", replacementAttendeeRef: "cliniko:attendee:401" } };
+const expectations = {
+  moved,
+  wrongSubjectGrant: { ...moved, memoRows: 0, memoOutcome: "unavailable" },
+  withdrawn: { ...moved, memoRows: 0, memoOutcome: "unavailable" },
+  lostStored: { ...moved, memoOutcome: "uncertain" },
+  lostOriginal: { status: "uncertain", writes: originalCancellation, memoRows: 1, memoOutcome: "accepted",
+    report: { completion: "needsReview", original: "uncertain", replacement: "inspectedActive", replacementAttendeeRef: "cliniko:attendee:401" } },
+  lostReplacement: { status: "uncertain", writes: ["POST /v1/attendees"], memoRows: 1, memoOutcome: "accepted",
+    report: { completion: "needsReview", original: "notSent", replacement: "uncertain" } },
+  restored: { status: "rejected", writes: replacementCancellation, memoRows: 1, memoOutcome: "accepted",
+    report: { completion: "restored", original: "notSent", replacement: "inspectedCancelled", replacementAttendeeRef: "cliniko:attendee:401" } },
+  lostCompensation: { status: "uncertain", writes: replacementCancellation, memoRows: 1, memoOutcome: "accepted",
+    report: { completion: "needsReview", original: "notSent", replacement: "uncertain", replacementAttendeeRef: "cliniko:attendee:401" } },
+  lostReview: { status: "uncertain", writes: [], memoRows: 0 }
+} as const satisfies Record<string, MovementExpectation>;
+
 /** One patient and an actual two-leg workflow, never an inferred atomic move. */
 export function runSignedClassMovementMemoCases(): void {
-for (const mode of ["moved", "wrongSubjectGrant", "withdrawn", "lostStored", "lostOriginal", "lostReplacement", "restored", "lostCompensation", "lostReview"] as const)
+for (const mode of Object.keys(expectations) as (keyof typeof expectations)[])
 test(`actual emitted signed ordinary class movement keeps its original report and native180/privacy: ${mode}`, { timeout: 180000 }, async () => {
+  const expected: MovementExpectation = expectations[mode];
   const admin = connectPostgres(adminUrl), databaseName = `abby_signed_class_move_memo_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl); target.pathname = `/${databaseName}`;
   let created = false, db: ReturnType<typeof connectPostgres> | undefined;
@@ -93,26 +120,24 @@ test(`actual emitted signed ordinary class movement keeps its original report an
     const proof = action.mutation.request.patient.verificationRef;
     await serving.mark(); if (mode === "withdrawn") retention.control.permitted = false;
     await serving.turn("Yes"); state = await serving.state();
-    const uncertain = ["lostOriginal", "lostReplacement", "lostCompensation", "lostReview"].includes(mode);
-    assert.equal(state.actions[action.key]!.status, uncertain ? "uncertain" : mode === "restored" ? "rejected" : "committed",
+    assert.equal(state.actions[action.key]!.status, expected.status,
       JSON.stringify({ phase: "signed-class-move-result", mode, status: state.actions[action.key]!.status, claims: f.claims, writes: serving.writes.length }));
-    const expectedWrites = mode === "lostReview" ? 0 : mode === "lostReplacement" ? 1 : 2;
-    assert.equal(f.writes.length, expectedWrites); assert.equal(serving.writes.length, expectedWrites); assert.equal(f.recalls.length, 1);
-    if (expectedWrites) assert.deepEqual(serving.writes, ["POST /v1/attendees", ...(expectedWrites === 2 ? [mode === "restored" || mode === "lostCompensation" ? "PATCH /v1/attendees/401/cancel" : "PATCH /v1/attendees/101/cancel"] : [])]);
+    const expectedWrites = expected.writes.length;
+    assert.equal(f.writes.length, expectedWrites); assert.deepEqual(serving.writes, expected.writes); assert.equal(f.recalls.length, 1);
     const review = resultValue(decodeClinikoReview(f.recalls[0]!.notes)); assert.equal(review.request.operation.kind, "classMove");
     if (review.request.operation.kind !== "classMove") throw Error("Expected original movement review");
     const originalAction = review.request.operation.attendanceActionId;
     assert.equal(review.request.operation.attendeeId, "101"); assert.equal(review.request.operation.sessionId, "91");
     assert.equal(review.request.operation.newSessionId, "94");
-    if (mode !== "lostReview") await voiceUntil(() => retention.outcomes.length === 1, "independent move report retention");
-    const expected = mode === "wrongSubjectGrant" || mode === "withdrawn" || mode === "lostReview" ? 0 : 1;
-    assert.equal(retention.posts.length, expected); assert.equal(retention.rows.length, expected);
-    assert.equal(retention.outcomes.length, mode === "lostReview" ? 0 : 1);
-    if (mode !== "lostReview") assert.equal(retention.outcomes[0]!.kind, mode === "wrongSubjectGrant" || mode === "withdrawn" ? "unavailable" : mode === "lostStored" ? "uncertain" : "accepted");
+    if (expected.memoOutcome) await voiceUntil(() => retention.outcomes.length === 1, "independent move report retention");
+    assert.equal(retention.posts.length, expected.memoRows); assert.equal(retention.rows.length, expected.memoRows);
+    assert.equal(retention.outcomes.length, expected.memoOutcome ? 1 : 0);
+    if (expected.memoOutcome) assert.equal(retention.outcomes[0]!.kind, expected.memoOutcome);
     const binding = administrativeMemoRecordBinding(retention.config.native, retention.authentication)!;
     const purposes = await sql<{ total: number }>`select count(*)::int as total from outbound_effect_barriers where owner_binding = ${binding}`.execute(db);
-    assert.equal(purposes.rows[0]!.total, expected);
-    if (expected) {
+    assert.equal(purposes.rows[0]!.total, expected.memoRows);
+    if (expected.memoRows) {
+      assert.ok(expected.report);
       const decoded = resultValue(decodeAdministrativeMemo(retention.posts[0]!.content));
       assert.equal(decoded.patientId, verificationCanaries[2]); assert.equal(decoded.direction, "inbound"); assert.equal(decoded.sourceActionRef, originalAction);
       assert.equal(decoded.actionRef, administrativeMemoActionRef(originalAction)); assert.equal(decoded.outcome.kind, "classMovementReported");
@@ -121,10 +146,9 @@ test(`actual emitted signed ordinary class movement keeps its original report an
       assert.equal(outcome.appointmentRef, "cliniko:booking:94"); assert.equal(outcome.original.appointmentRef, "cliniko:booking:91");
       assert.equal(outcome.original.attendeeRef, "cliniko:attendee:101"); assert.equal(outcome.verification.basis, "nativeWorkflowReportBestEffort");
       assert.equal(outcome.verification.reportedAt, decoded.occurredAt); assert.equal(outcome.progress.caseAssociation, "notApplicable");
-      assert.equal(outcome.completion, uncertain ? "needsReview" : mode === "restored" ? "restored" : "moved");
-      assert.equal(outcome.progress.original, mode === "lostOriginal" ? "uncertain" : ["restored", "lostCompensation", "lostReplacement"].includes(mode) ? "notSent" : "inspectedCancelled");
-      assert.equal(outcome.progress.replacement, mode === "lostReplacement" || mode === "lostCompensation" ? "uncertain" : mode === "restored" ? "inspectedCancelled" : "inspectedActive");
-      assert.equal(outcome.replacementAttendeeRef, mode === "lostReplacement" ? undefined : "cliniko:attendee:401");
+      assert.equal(outcome.completion, expected.report.completion);
+      assert.equal(outcome.progress.original, expected.report.original); assert.equal(outcome.progress.replacement, expected.report.replacement);
+      assert.equal(outcome.replacementAttendeeRef, expected.report.replacementAttendeeRef);
       assert.deepEqual(resultValue(await new PostgresOutboundEffectBarrier(db, scope, binding).claimOnce(decoded.actionRef)), { claimed: false });
     }
     const requests = await db.selectFrom("cliniko_request_budgets").selectAll().execute();
@@ -132,7 +156,7 @@ test(`actual emitted signed ordinary class movement keeps its original report an
     assert.ok(Array.isArray(requests[0]!.sent_at_ms) && requests[0]!.sent_at_ms.length > 0 && requests[0]!.sent_at_ms.length <= 180);
     const verification = await sql<{ kind: string; attempts: number }>`select kind, attempts from patient_verification_budgets where tenant_id = ${scope.tenantId}`.execute(db);
     for (const kind of ["issue", "answer"]) assert.ok(verification.rows.some(row => row.kind === kind && row.attempts >= 1));
-    await serving.mark(); await serving.turn("Did it finish"); assert.equal(serving.writes.length, expectedWrites); assert.equal(retention.posts.length, expected);
+    await serving.mark(); await serving.turn("Did it finish"); assert.equal(serving.writes.length, expectedWrites); assert.equal(retention.posts.length, expected.memoRows);
     state = await serving.state();
     const privateValues = [...verificationCanaries, f.flowConfig.cliniko.apiKey, Buffer.from(`${f.flowConfig.cliniko.apiKey}:`).toString("base64"),
       f.mail[0]!.email, f.mail[0]!.code, proof, originalAction, review.marker,
