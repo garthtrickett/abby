@@ -199,12 +199,16 @@ export class OpenAIRealtimeTranscription implements TranscriptionPort {
     if (event.type === "session.updated") {
       const session = event.session as { type?: unknown; audio?: { input?: {
         format?: { type?: unknown; rate?: unknown }; transcription?: {
-          model?: unknown; prompt?: unknown; languages?: unknown; keywords?: unknown;
-        }; turn_detection?: unknown;
+          model?: unknown; prompt?: unknown; languages?: unknown; keywords?: unknown; delay?: unknown;
+        }; noise_reduction?: { type?: unknown } | null; turn_detection?: unknown;
       } } } | undefined;
       if (session?.type !== "transcription" || session.audio?.input?.format?.type !== "audio/pcm" ||
           session.audio.input.format.rate !== 24000 ||
           session.audio.input.transcription?.model !== this.model ||
+          (this.delay !== undefined && session.audio.input.transcription?.delay !== undefined &&
+            session.audio.input.transcription.delay !== this.delay) ||
+          (this.noiseReduction !== undefined && session.audio.input.noise_reduction !== undefined &&
+            session.audio.input.noise_reduction?.type !== this.noiseReduction) ||
           (this.context !== undefined &&
             (session.audio.input.transcription?.prompt !== this.context.prompt ||
              !sameStrings(session.audio.input.transcription?.languages, this.context.languages) ||

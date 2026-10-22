@@ -293,6 +293,110 @@ test("opt-in transcription delay is bounded, tolerated when not echoed, and cann
   /invalid transcription configuration/);
 });
 
+test("E2E-129 rejects an explicitly contradictory transcription delay before forwarding audio", async t => {
+  const socket = new FakeSocket();
+  const transcription = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+    delay: "high", socketFactory: () => socket as unknown as WebSocket });
+  t.after(() => transcription.close());
+  socket.open();
+  socket.receive({ type: "session.updated", session: { type: "transcription", audio: { input: {
+    format: { type: "audio/pcm", rate: 24000 },
+    transcription: { model: "gpt-live-transcribe", delay: "low" }, turn_detection: null,
+  } } } });
+  assert.deepEqual(await transcription.accept(frame(0, 2_000), 1, new AbortController().signal),
+    { ok: false, error: { kind: "transcriptionUnavailable" } });
+  assert.equal(socket.terminateCount, 1);
+  assert.equal(socket.sent.filter(event => event.type === "input_audio_buffer.append").length, 0);
+});
+
+for (const [label, noiseReduction] of [
+  ["different mode", { type: "far_field" }], ["disabled", null], ["malformed", {}],
+] as const) {
+  test(`E2E-129 rejects explicitly contradictory noise reduction: ${label}`, async t => {
+    const socket = new FakeSocket();
+    const transcription = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+      noiseReduction: "near_field", socketFactory: () => socket as unknown as WebSocket });
+    t.after(() => transcription.close());
+    socket.open();
+    socket.receive({ type: "session.updated", session: { type: "transcription", audio: { input: {
+      format: { type: "audio/pcm", rate: 24000 }, transcription: { model: "gpt-live-transcribe" },
+      noise_reduction: noiseReduction, turn_detection: null,
+    } } } });
+    assert.deepEqual(await transcription.accept(frame(0, 2_000), 1, new AbortController().signal),
+      { ok: false, error: { kind: "transcriptionUnavailable" } });
+    assert.equal(socket.terminateCount, 1);
+    assert.equal(socket.sent.filter(event => event.type === "input_audio_buffer.append").length, 0);
+  });
+}
+
+for (const echoed of [true, false]) {
+  test(`E2E-129 ${echoed ? "matched" : "omitted"} optional settings preserve untrusted finals`, async t => {
+    const socket = new FakeSocket();
+    const transcription = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+      delay: "high", noiseReduction: "near_field", socketFactory: () => socket as unknown as WebSocket });
+    t.after(() => transcription.close());
+    socket.open();
+    socket.receive({ type: "session.updated", session: { type: "transcription", audio: { input: {
+      format: { type: "audio/pcm", rate: 24000 },
+      transcription: { model: "gpt-live-transcribe", ...(echoed ? { delay: "high" } : {}) },
+      ...(echoed ? { noise_reduction: { type: "near_field" } } : {}), turn_detection: null,
+    } } } });
+    assert.ok((await transcription.accept(frame(0, 2_000), 1, new AbortController().signal)).ok);
+    const pending = transcription.flush(1, new AbortController().signal);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    socket.receive({ type: "input_audio_buffer.committed", item_id: "optional-settings" });
+    socket.receive({ type: "conversation.item.input_audio_transcription.completed", item_id: "optional-settings",
+      transcript: "Book physiotherapy" });
+    assert.deepEqual(await pending, { ok: true, value: [{ kind: "segmentFinal", sessionId: "session",
+      generation: 1, utteranceId: "optional-settings", text: "Book physiotherapy", quality: "needsClarification" }] });
+  });
+}
+
+for (const changed of ["delay", "noise reduction"] as const) {
+  test(`E2E-129 a later contradictory ${changed} retires a pending transcription`, async t => {
+    const socket = new FakeSocket();
+    const transcription = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+      delay: "high", noiseReduction: "near_field", socketFactory: () => socket as unknown as WebSocket });
+    t.after(() => transcription.close());
+    socket.open();
+    const input = { format: { type: "audio/pcm", rate: 24000 },
+      transcription: { model: "gpt-live-transcribe", delay: "high" },
+      noise_reduction: { type: "near_field" }, turn_detection: null };
+    socket.receive({ type: "session.updated", session: { type: "transcription", audio: { input } } });
+    assert.ok((await transcription.accept(frame(0, 2_000), 1, new AbortController().signal)).ok);
+    const pending = transcription.flush(1, new AbortController().signal);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    const appends = socket.sent.filter(event => event.type === "input_audio_buffer.append").length;
+    socket.receive({ type: "session.updated", session: { type: "transcription", audio: { input: {
+      ...input, transcription: { ...input.transcription, delay: changed === "delay" ? "low" : "high" },
+      noise_reduction: { type: changed === "noise reduction" ? "far_field" : "near_field" },
+    } } } });
+    const unavailable = { ok: false, error: { kind: "transcriptionUnavailable" } };
+    assert.deepEqual(await pending, unavailable);
+    socket.receive({ type: "input_audio_buffer.committed", item_id: "late-configuration" });
+    socket.receive({ type: "conversation.item.input_audio_transcription.completed", item_id: "late-configuration",
+      transcript: "Book physiotherapy" });
+    socket.receive({ type: "session.updated", session: { type: "transcription", audio: { input } } });
+    assert.deepEqual(await transcription.accept(frame(1, 2_000), 1, new AbortController().signal), unavailable);
+    assert.equal(socket.sent.filter(event => event.type === "input_audio_buffer.append").length, appends);
+    assert.equal(socket.terminateCount, 1);
+  });
+}
+
+test("E2E-129 provider defaults do not invent requested transcription settings", async t => {
+  const socket = new FakeSocket();
+  const transcription = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
+    socketFactory: () => socket as unknown as WebSocket });
+  t.after(() => transcription.close());
+  socket.open();
+  socket.receive({ type: "session.updated", session: { type: "transcription", audio: { input: {
+    format: { type: "audio/pcm", rate: 24000 },
+    transcription: { model: "gpt-live-transcribe", delay: "low" },
+    noise_reduction: { type: "far_field" }, turn_detection: null,
+  } } } });
+  assert.ok((await transcription.accept(frame(0, 2_000), 1, new AbortController().signal)).ok);
+});
+
 test("opt-in transcription noise reduction is sent to the provider without changing final trust", async () => {
   const socket = new FakeSocket();
   const transcription = new OpenAIRealtimeTranscription({ apiKey: "synthetic-key", sessionId: "session",
