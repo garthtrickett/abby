@@ -82,5 +82,21 @@ test(`emitted unclear-call clinic review uses signed HTTP, native provenance and
   assert.equal(effects.filter(row => row.effect_ref === f.attempt.dncReferences!.actionRef).length, f.dncPosts.length);
   const holds = (await sql<{ released_at: Date | null }>`select released_at from outbound_capacity_allocations where tenant_id=${scope.tenantId}`.execute(db)).rows;
   assert.equal(holds.length, 2); assert.ok(holds.every(row => row.released_at === null)); assert.equal(f.carrierCalls, 1);
+  if (scenario === "unclear") {
+    // This fixture records all delivered ASR events, including unclear input.
+    // Prove the existing privacy scan actually rejects that private text.
+    const text = "Please remove my number from your calling list.";
+    assert.equal(f.acceptedTranscripts.includes(text), true);
+    const probe = "abby_private_audio_probe_" + randomUUID().replaceAll("-", "");
+    assert.match(probe, /^abby_private_audio_probe_[a-f0-9]{32}$/);
+    await sql.raw(`create database "${probe}"`).execute(db);
+    const probeUrl = new URL(process.env.DATABASE_URL!); probeUrl.pathname = "/" + probe;
+    const probeDb = connectPostgres(probeUrl.href);
+    try {
+      await sql.raw("create table captured_audio (captured_text text not null)").execute(probeDb);
+      await sql`insert into captured_audio (captured_text) values (${text})`.execute(probeDb);
+      await assert.rejects(assertStatusPrivacy(probeDb, f, probeUrl.href), { code: "ERR_ASSERTION" });
+    } finally { await probeDb.destroy(); await sql.raw(`drop database "${probe}"`).execute(db); }
+  }
   await assertStatusPrivacy(db, f, process.env.DATABASE_URL!);
 });
