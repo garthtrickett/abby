@@ -1,6 +1,6 @@
 # Execution progress and evidence
 
-**Current delivery checkpoint, 22 October 2026:** Foundations through PR587 are normally merged atc3af48c. PR587’s eight own-head jobs/raw logs passed; its actual-main checks are separately tracked and not all qualified yet. The independent callback-memo follow-up is published as PR588/5c29d06 with its own CI running. This local schema component integrates actualc3 and passes current68/68, whole strict TypeScript and741 serving outputs, plus current facts/scenario checks. It is not published, does not include PR588 and still needs final current-parent review/ordinary delivery. The full thirteen-gap engineering and real acceptance remain open; no patient traffic, deployment or default activation follows. Earlier dated entries retain their original source/build/publication scopes.
+**Current delivery checkpoint, 22 October 2026:** Foundations through PR588 are normally merged at848b8c5. Its eight own checks and the actual parentc3af48c main4/raw logs passed before merge; its new actual-main qualification remains separately pending. This schema component imports that real parent while preserving its owning schema/R24/R25 source and741 serving outputs. Prior68, transaction12 and allocation11 proofs retain their original inputs; the imported nine-case callback-memo driver, current whole strict and refreshed facts/scenario contracts still require qualification before final actual-parent review/publication. The full thirteen-gap engineering and real acceptance remain open; no patient traffic, deployment or default activation follows. Earlier dated entries retain their original scopes.
 
 **Updated:** 22 October 2026. **Objective:** Work through [EXECUTION_ORDER.md](EXECUTION_ORDER.md), preserving its full thirteen-gap scope. This ledger records partial delivery; the integration is not complete or activated.
 
@@ -28,7 +28,7 @@ The optional signed callback composes existing positive DNC recovery before comp
 
 PR #576 normally merged as 1c138468b19372197c5929f6fa2ece5d1c645b25. This branch integrates that normal parent; prior notification-capacity inputs and all production output bytes remain preserved. Current full strict/build work 1792546181995 passes 693 artifacts (4m 39s, peak 1,651,761,152 B/2 GiB). Only the generic verification-code fixture output changes from the earlier candidate. Current outbound/source/facts/scenario work 1792547213135 passes 580/580 (9m 16s, peak 253,063,168 B/512 MiB), combined actual emitted SQL/process work 1792547138510 passes 42/42 (9m 26s, peak 188,354,560 B/1 GiB) and full logical restore 1792547748602 passes 1/1 (19s, peak 134,090,752 B/1 GiB), all zero skips/cancellations/OOM. Disposable databases are separately bounded 512 MiB and cleaned; every-column and complete raw-backup privacy remain enabled. Remote native/carrier and approval grants are synthetic. Exact new-head eight cloud checks and normal review remain required; actual parent main 1c13846 independently passed all four cloud jobs (39525901371), with complete raw logs archived. No default wiring, clinical permission, live traffic or complete-no-stop claim. Earlier checkpoints below remain historical.
 
-## Current position
+## Earlier position checkpoint (retained history)
 
 | Execution stage | Current evidence and next action |
 | --- | --- |
@@ -6211,6 +6211,66 @@ Fresh whole strict and actual740-output serving passed1792695059659. Only the sn
 
 **Current terminal qualification:** The complete current32-root functional graph passed438/438 with zero skips/cancellations in9m21s (1792695332505), including both runtime-owner controls and exact frozen legacy codec comparison. The current740-output/strict47 and signed SQL4/49 results above are terminal and independently rehashed; their owned database containers are stopped. Facts/scenario contracts passed2/2 (1792695807169) before this terminal-only documentation refresh. This change remains local pending final review/publication/cloud; full-call and clinic acceptance stay separate.
 
+
+## Verified callback and independent memo composition, 22 October 2026
+
+The narrow follow-up to reviewed draft PR587/264fa07 adds five actual signed
+incoming memo modes to the four existing callback cases. The complete SQL9/9
+passes1792697692399 in2m41s, with zero skips/cancellations. Exact original71,
+independent read/new rescheduling codes, played menus/SAM, real SQL180 and
+separate memo grants remain. The native memo source equals the actual clinical
+review marker and retains inbound direction; the outbound attempt grants
+neither action nor memo authority. Wrong-subject/withdrawn memo grants create no
+memo purpose. Clinical ACK loss retains uncertainty and creates no memo;
+stored memo ACK loss preserves clinical completion and spends the memo purpose.
+A later explicit outcome question leaves the original action and both send
+counts unchanged; a direct SQL barrier claim independently refuses replay.
+
+Whole strict1792697693574 passes2m43s, peak1698701312B/2GiB, heap1536MiB.
+SQL Node183259136B/512MiB plus owned PostgreSQL124637184B/512MiB,
+CPU100% each/Swap0/allOOM-high-max0; sources/artifacts pinned and database
+cleanup verified. All740 copied parent serving outputs stay exact, without
+new emission. This is no newly rerun438-source graph. All application-column
+and complete unfiltered backup scans retain unrelated rows and exclude memo
+content/key plus existing private source/code/session canaries.
+
+The initial new SQL witness passed4/9 and failed5: two bare71 expectations
+contradicted the correct namespaced native memo reference, while three repeated
+Yes turns after the action correctly received confirmationMissing. Those logs
+remain preserved. The corrected witness asserts cliniko:appointment:71 and
+asks the explicit outcome question; no production code, quota, deadline,
+authority check or scanner changes. Initial full strict also passed.
+
+Parent PR587 remains in its own CI; this follow-up is local pending final
+facts/scenario/source/runtime guards, review, actual normal-parent integration
+and ordinary delivery. No new sender-kill/restore, clinic/provider/acoustic
+acceptance, default activation or thirteen-gap completion is claimed. See
+[the exact callback memo scope](INCOMING_MISSED_CALL_CONTEXT.md#independently-approved-callback-memo-composition-22-october-2026).
+
+
+## Actual callback parent and memo integration, 22 October 2026
+
+PR587/264fa07 passed all eight exact-head push/PR checks. Both text logs report
+5,833 tests:5,575 passes/zero failures/258 existing mode skips, then6 ordered
+passes; both PostgreSQL logs report6,890 tests:6,889 passes/zero failures/one
+existing skip, then6 ordered passes. Typecheck/browser jobs passed. All eight
+complete raw logs and actual-parent337 main4 raw logs were independently
+verified before normal SHA-guarded merge asc3af48c3348f73e9bc8fc6d68debce42995e981a
+at21:12:39UTC. The merged tree exactly equals the reviewed264 source; the
+actual new main has its own separate four-check observer. No deployment follows.
+
+This memo follow-up integrates that actual normal parent. The entire local
+source tree, all seven owned files and740 runtime artifacts are unchanged by
+the ancestry-only import; its actual-normal-parent patch exactly equals the
+reviewed component diff. Thus signedSQL9, whole strict and original metadata
+qualification retain their original exact inputs. The current status/facts
+refresh has a separate metadata check and exact-normal review before its own
+narrow publication/CI. No duplicate rebuild or new438-source pass is claimed.
+Parent actual-main4 remains a required separate delivery gate. Wider thirteen-gap
+engineering, full-call and clinic/provider/source/retention/restore/acoustic
+acceptance remain open; no default activation or live traffic is authorized.
+
+
 ## Required shared-budget schema at voice admission, 22 October 2026
 
 This local component starts from actual delivered337/PR586, independently green
@@ -6335,3 +6395,21 @@ artifacts. No production source, migration, case count or scenario ID changes.
 This separate source-loaded evidence does not rerun or add the earlier68 or
 transaction12. Actual deployment target/consumer retirement and clinic restore
 acceptance remain unexecuted; no activation follows.
+
+
+## Actual memo-parent import for schema qualification, 22 October 2026
+
+PR588 normally merged at848b8c516e103e9a32423977cade55ff5dec3743 after its exact-head
+eight checks/raw logs and actual parentc3 main4/raw logs passed. Its merged
+tree equals reviewed5c29d06 and its new actual-main checks are independent.
+This schema branch imports that actual parent. Three documentation/metadata
+conflicts retain both memo and schema histories and every current fact; no
+production, owning-test or scenario conflict occurred. All741 serving outputs
+remain exact, including the schema checker/server/budget owner bytes.
+
+The imported callback-memo SQL driver has nine cases. Current composed SQL9,
+whole strict, final facts/scenarios and exact-normal review remain required.
+The prior schema68, transaction12 and allocation11 retain their separately
+qualified source graphs and overlapping counts, without a new combined pass
+or automatic serving rebuild. Clinic/provider/source/retention/restore/acoustic
+acceptance and the full thirteen-gap goal remain open.

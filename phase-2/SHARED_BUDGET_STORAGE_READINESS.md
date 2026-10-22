@@ -185,3 +185,15 @@ cohort, not a rerun or sum of the earlier68 or transaction12. No migration,
 production source or scenario ID changes. Actual release-target selection,
 retirement of real consumers and clinic restore acceptance remain separate R25
 requirements; this local migration probe cannot establish them.
+
+## Actual callback-memo parent import
+
+This component now imports normal PR588 main848b8c5, whose tree matches
+reviewed5c29d06 after all eight own checks/raw logs and actual parentc3 main4
+passed. Its new main checks remain independent. The memo parent changes no
+serving input; all741 existing runtime bytes and owning schema/R24/R25 code
+remain exact. Both documentation histories and every changed fact are retained.
+The imported nonemitted memo driver requires current composed SQL9/strict and
+refreshed metadata before final actual-parent review and this component's own
+publication. Prior68/transaction12/allocation11 evidence keeps its earlier
+inputs; those runs are not summed or relabelled as a fresh combined cohort.
