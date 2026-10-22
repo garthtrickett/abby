@@ -6303,3 +6303,22 @@ paired waits reaped. Current metadata is separately refreshed after these
 terminal-only documentation changes. No new full regression or entire gap is
 claimed; actual memo-parent integration/final review/publication/cloud and all
 real acceptance retain their separate gates.
+
+
+### 22 October 2026 — concrete budget transaction ownership (R24)
+
+The existing Kysely budget owner now has five explicit real-PostgreSQL failure
+contracts: early denial, application throw after cleanup, statement failure,
+deferred commit failure and nested caller-owned work. A one-slot pool and an
+independent observer prove that a later acknowledged autocommit write survives
+a stale rollback. Failed work cannot commit its caller's unrelated changes or
+report a granted claim, and diagnostics retain fixed classifications.
+
+The targeted12/12 run includes five new cases and seven preserved controls;
+the seven overlap the earlier68 and are not counted twice. Whole strict passes
+with all741 serving artifacts unchanged. No production transaction change or
+raw-pg monkeypatch was needed. The original11/12 fixture failure remains
+preserved; correcting its invalid setup value exercises the actual application
+guard rather than PostgreSQL's earlier bigint cast. These are storage contracts,
+not new voice/full-call scenario IDs or a completed gap. The broader current
+component still awaits actual-parent integration, review and its own delivery.

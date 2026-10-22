@@ -140,3 +140,30 @@ or a full regression. Pending memo PR588 and real clinic/operator/provider/
 acoustic/retention/restore acceptance stay separate. A later actual normal
 parent must be explicitly integrated and any changed inputs requalified before
 this component’s own publication/delivery.
+
+## Transaction ownership regression
+
+Five additional R24 storage-owner cases use real disposable PostgreSQL and a
+single-connection Kysely pool: early budget denial, an application exception
+after transactional cleanup, failed statement, failed deferred commit and a
+caller-owned outer transaction. A separate backend observes the next borrower's
+autocommit write before a stale rollback; that write remains committed. The
+nested case also proves that the budget cannot commit its caller's unrelated
+work, and failed claims expose only the fixed unavailable diagnostic.
+
+The targeted run passes12/12: these five cases plus seven preserved budget
+controls. The earlier68 already includes those seven; the two runs are not
+added into a new combined cohort. Whole strict TypeScript passes for the new
+source-loaded driver, and all741 qualified serving artifacts remain unchanged.
+No production transaction implementation, migration or pool monkeypatch was
+introduced. The initial application-exception witness failed during fixture
+setup because the legacy hold trigger rejected its invalid bigint; the corrected
+fixture uses a PostgreSQL-valid integer outside JavaScript's safe range, which
+the existing application guard rejects inside its transaction. The original
+11/12 result is retained separately.
+
+This is targeted evidence for the concrete shared-budget owner under
+[R24](KAREN_TO_ABBY_REUSE_AUDIT.md#r24-protect-database-transaction-ownership),
+not qualification of every storage adapter, a new voice scenario, the complete
+regression or clinic activation. Other transaction owners retain their own
+required evidence.
