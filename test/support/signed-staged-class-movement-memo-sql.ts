@@ -42,13 +42,38 @@ const scenarios: readonly Scenario[] = [
   { label: "cross-case pass association response lost", pass: "transfer", result: "lostAssociation", memo: "accepted" },
 ];
 
+type ExpectedOutcome = Readonly<{
+  status: "committed" | "needsReview"; completion: "moved" | "needsReview";
+  writes: readonly string[];
+  passState: Readonly<{ sourceUsed: number; destinationUsed: number; caseLinked: boolean }> | undefined;
+  progress: Readonly<{ original: "notSent" | "inspectedCancelled"; replacement: "inspectedActive";
+    caseAssociation: "notApplicable" | "unlinked" | "uncertain" | "inspectedLinked" }>;
+  memo: Readonly<{ count: number; outcome: "accepted" | "uncertain" | "unavailable" }>;
+}>;
+
+function expectedOutcome(scenario: Scenario): ExpectedOutcome {
+  const disposed = scenario.result === "disposed", moved = scenario.result === "moved", hasPass = scenario.pass !== "none";
+  return {
+    status: moved ? "committed" : "needsReview", completion: moved ? "moved" : "needsReview",
+    writes: disposed ? ["POST /v1/attendees"] : ["POST /v1/attendees", "PATCH /v1/attendees/101/cancel",
+      ...(hasPass ? ["PATCH /v1/attendees/401"] : [])],
+    // Native counters can be known even when the association ACK/report is uncertain.
+    passState: !hasPass ? undefined : { sourceUsed: scenario.pass === "transfer" && !disposed ? 1 : 2,
+      destinationUsed: scenario.pass === "transfer" && disposed ? 1 : 2, caseLinked: !disposed },
+    progress: { original: disposed ? "notSent" : "inspectedCancelled", replacement: "inspectedActive",
+      caseAssociation: !hasPass ? "notApplicable" : disposed ? "unlinked" : scenario.result === "lostAssociation" ? "uncertain" : "inspectedLinked" },
+    memo: { count: scenario.memo === "wrongSubject" ? 0 : 1,
+      outcome: scenario.memo === "wrongSubject" ? "unavailable" : scenario.memo === "lostStored" ? "uncertain" : "accepted" },
+  };
+}
+
 /** Each stage uses actual signed HTTP/WS serving, independent memo grants,
  * real elapsed native180 quota windows and played renewed consent. */
 export function runSignedStagedClassMovementMemoCases(): void {
 for (const scenario of scenarios) test(`actual emitted signed staged class movement retains only its owned report: ${scenario.label}`, {
   timeout: scenario.pass !== "none" ? 360000 : 180000,
 }, async () => {
-  const hasPass = scenario.pass !== "none";
+  const hasPass = scenario.pass !== "none", expected = expectedOutcome(scenario);
   const admin = connectPostgres(adminUrl), databaseName = `abby_signed_staged_memo_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl); target.pathname = `/${databaseName}`;
   let created = false, db: ReturnType<typeof connectPostgres> | undefined;
@@ -158,23 +183,20 @@ for (const scenario of scenarios) test(`actual emitted signed staged class movem
       }
     }
     const state = await serving.state();
-    assert.equal(state.actions[action.key]!.status, scenario.result === "moved" ? "committed" : "needsReview");
+    assert.equal(state.actions[action.key]!.status, expected.status);
     await voiceUntil(() => retention.outcomes.length === 1, "independent final or disposed movement report");
-    const count = scenario.memo === "wrongSubject" ? 0 : 1;
+    const count = expected.memo.count;
     assert.equal(retention.posts.length, count); assert.equal(retention.rows.length, count);
-    assert.equal(retention.outcomes[0]!.kind, scenario.memo === "wrongSubject" ? "unavailable" : scenario.memo === "lostStored" ? "uncertain" : "accepted");
+    assert.equal(retention.outcomes[0]!.kind, expected.memo.outcome);
     const review = resultValue(decodeClinikoReview(fixture.recalls[0]!.notes)); assert.equal(review.request.operation.kind, "classMove");
     if (review.request.operation.kind !== "classMove") throw Error("Expected original native movement review");
     assert.equal(review.request.operation.attendeeId, "101"); assert.equal(review.request.operation.sessionId, "91");
     assert.equal(review.request.operation.newSessionId, "94");
     const originalAction = review.request.operation.attendanceActionId;
-    const expectedWrites = scenario.result === "disposed" ? ["POST /v1/attendees"] : ["POST /v1/attendees", "PATCH /v1/attendees/101/cancel", ...(hasPass ? ["PATCH /v1/attendees/401"] : [])];
+    const expectedWrites = expected.writes;
     assert.deepEqual(serving.writes, expectedWrites); assert.equal(fixture.writes.length, expectedWrites.length); assert.equal(fixture.recalls.length, 1);
-    if (hasPass) assert.deepEqual(passState(), {
-      sourceUsed: scenario.pass === "transfer" && scenario.result !== "disposed" ? 1 : 2,
-      destinationUsed: scenario.pass === "transfer" && scenario.result === "disposed" ? 1 : 2,
-      caseLinked: scenario.result !== "disposed",
-    }, "native counter truth stays separate from a lost association acknowledgement and the retained workflow report");
+    if (hasPass) assert.deepEqual(passState(), expected.passState,
+      "native counter truth stays separate from a lost association acknowledgement and the retained workflow report");
     if (count) {
       const decoded = resultValue(decodeAdministrativeMemo(retention.posts[0]!.content)); assert.equal(decoded.patientId, verificationCanaries[2]);
       assert.equal(decoded.direction, "inbound"); assert.equal(decoded.businessId, "11");
@@ -185,9 +207,8 @@ for (const scenario of scenarios) test(`actual emitted signed staged class movem
       assert.equal(decoded.outcome.original.appointmentRef, "cliniko:booking:91");
       assert.equal(decoded.outcome.original.attendeeRef, "cliniko:attendee:101");
       assert.equal(decoded.outcome.replacementAttendeeRef, "cliniko:attendee:401");
-      assert.equal(decoded.outcome.completion, scenario.result === "moved" ? "moved" : "needsReview");
-      assert.deepEqual(decoded.outcome.progress, { original: scenario.result === "disposed" ? "notSent" : "inspectedCancelled", replacement: "inspectedActive",
-        caseAssociation: !hasPass ? "notApplicable" : scenario.result === "disposed" ? "unlinked" : scenario.result === "lostAssociation" ? "uncertain" : "inspectedLinked" });
+      assert.equal(decoded.outcome.completion, expected.completion);
+      assert.deepEqual(decoded.outcome.progress, expected.progress);
       assert.equal(decoded.outcome.verification.basis, "nativeWorkflowReportBestEffort");
       const binding = administrativeMemoRecordBinding(retention.config.native, retention.authentication)!;
       assert.deepEqual(resultValue(await new PostgresOutboundEffectBarrier(db, scope, binding).claimOnce(decoded.actionRef)), { claimed: false });
