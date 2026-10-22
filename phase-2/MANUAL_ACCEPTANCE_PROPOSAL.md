@@ -135,3 +135,33 @@ The local finite scheduler qualifies synthetic exact-appointment pending request
 ## Optional transcription settings: acknowledgment acceptance
 
 Under separately authorized provider testing, inspect the effective session acknowledgment for each requested delay or noise-reduction option. An omitted optional field is unverified; do not label a requested profile confirmed from successful transcription alone. An explicit mismatch must retire transcription, including a changed configuration during a pending turn, without accepting late text or reopening the socket. The current 36 synthetic controls and strict/726 build qualify the protocol correction only. Fixed noisy/safety/latency thresholds and representative microphone, accent, public-route and carrier acceptance remain unexecuted or failed as previously recorded. No new live provider evaluation, paid call or acoustic pass is recorded here.
+
+## Verified incoming callback and separate memo: proposed observations
+
+These observations complete the proposal for the [verified callback and memo
+composition](INCOMING_MISSED_CALL_CONTEXT.md). They remain unexecuted. The local
+438-source callback result, four original signed cases and five additional memo
+modes are synthetic engineering evidence with their separate recorded scopes;
+they do not supply these real clinic/provider/acoustic observations or current
+normal delivery. Pin the actual accepted source/build before an independently
+authorized exercise, with a clinic staff owner and an approved patient-free
+environment. Use that clinic's approved timezone and allied-health service.
+
+| Trigger | Required observation |
+| --- | --- |
+| A sick-day original names the later of two appointments; an incoming caller asks why the clinic rang before verification. | Abby retains the unknown-reason response without disclosing the patient, purpose or appointment. Shared-household, wrong-patient, expired, ambiguous and withdrawn-source variants also refuse disclosure; a number or campaign is not patient authority. |
+| The correct subject independently completes the registered-channel read verification and asks again. | Current approved request, possible attempt and authenticated completed/no-answer evidence agree. Abby gives only the approved follow-up or rescheduling purpose. An absent or conflicting source stays unknown. Verify the actual clinic record/grants privately; caller speech alone supplies no campaign provenance. |
+| The caller requests a move after hearing the reason. | A new rescheduling code and current operation authority are required. Played original-target/offer choices and final consent precede one native review and mutation of the campaign original; the earlier appointment remains unchanged. Empty general lookup may expose only the independently checked original; a contradictory populated lookup refuses. A changed/cancelled original, revoked grant or exhausted physical quota prevents dispatch without silently selecting another target. |
+| A separately approved confidential communication memo is selected for the successful observed move. | Inspect the exact verified patient, original appointment, inbound direction and actual clinical review marker under independent native permissions. Its content/category/API author/viewers/retention must match clinic approval. No transcript, diagnosis, private code, appointment/treatment note edit or shared-class text is introduced. Purpose disclosure grants neither memo nor clinical authority. |
+| The memo grant is for another patient or is withdrawn before confirmation. | The correctly authorized clinical result remains truthful; no memo or memo-purpose claim occurs. Staff must not report a saved memo from the clinical confirmation. |
+| The clinical acknowledgement or memo acknowledgement is lost. | A clinical unknown remains uncertain and creates no memo. A lost stored memo acknowledgement preserves known clinical success while leaving memo retention uncertain and its one-use purpose spent. An outcome question or a new owner cannot replay either send. Any recovery requires its independently approved native history/source path; this proposed exercise does not establish cold recovery or restore by itself. |
+| The first incoming call ends and a new signed incoming owner asks the same reason. | It needs its own read verification before fresh clinic-native context can be disclosed. It cannot inherit the first owner's proof, context, write consent or memo permission. Inspect SQL columns and the complete unfiltered backup for private context/code/session/memo leakage while retaining unrelated records. |
+
+Retain fixed expected-versus-observed wording, native outcome and unresolved
+obligations in the clinic-approved private evidence destination, plus cleanup
+and staff ownership. Keep real identifiers and private source material out of
+the repository. Future outbound contact/capacity decisions retain their own
+owners; a reason, clinical success, memo, completed notification or closed staff
+task establishes no complete whole-call no-stop truth or contact release.
+No recording, deferred carrier traffic, payment, deployment or default
+activation is authorized by this proposal.
