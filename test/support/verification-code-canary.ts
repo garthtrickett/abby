@@ -86,6 +86,7 @@ export function assertDirectSqlVerificationCanaryContext(): void {
     "postgres-required-financial-ordinary-class-memo.test.ts",
     "postgres-required-financial-pass-class-memo.test.ts",
     "postgres-signed-class-cancellation-memo.test.ts",
+    "postgres-signed-class-movement-memo.test.ts",
     "postgres-outbound-administrative-memo.test.ts",
     "postgres-booking-memo-session.test.ts",
     "postgres-appointment-change-memo.test.ts",
