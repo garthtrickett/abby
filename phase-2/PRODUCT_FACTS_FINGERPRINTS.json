@@ -1,7 +1,7 @@
 {
   "verifiedDate": "2026-10-22",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "f2d7e6f33b09f911a50a9186813ef37edb1a643fd119d20b05838f8db075bdeb",
+  "factsSha256": "7a4cc2f6c03b6fdd5e828b5e0454c88dc5d309091c31f0fa47cd9c53fa427d1d",
   "sources": {
     ".github/workflows/text-contract.yml": "20f47909d711b7a7d2b3916a8ef0756345b414dff225184989cd8056b5b6179b",
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
