@@ -1,3 +1,4 @@
+import type { ClinikoRequestBudget } from "../../src/cliniko/read-budget.ts";
 import type { OutboundRecipientRequest } from "../../src/cliniko/outbound-recipient-request.ts";
 import assert from "node:assert/strict";
 import { outboundRequestValue } from "./outbound-recipient-request.ts";
@@ -8,7 +9,7 @@ import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 export function value<T>(r: { ok: true; value: T } | { ok: false; error: unknown }): T { assert.ok(r.ok, JSON.stringify(r)); return r.value; }
 export const outboundNow = "2026-11-01T10:00:00.000Z", outboundReviewDate = "2026-11-02";
 export async function outboundRecordsFixture(options: {
-  typeId?: string;
+  typeId?: string; budget?: ClinikoRequestBudget;
   request?: OutboundRecipientRequest;
   response?(row: Record<string, unknown>, method: string): Response | Promise<Response>;
   authority?: Partial<OutboundRecordAuthority>; deadlineMs?: number;
@@ -19,7 +20,10 @@ export async function outboundRecordsFixture(options: {
   const rows = new Map<string, Record<string, unknown>>(), burned = new Set<string>(), queries: OutboundRecordQuery[] = [], calls: { method: string; path: string }[] = [];
   const config: OutboundRecordConfig = { scope: request.scope, apiKey, contactEmail: "clinic@example.invalid", businessId: request.businessId,
     outboundRecallTypeId: options.typeId ?? "61", recordPolicyDigest: "d".repeat(64), clock: () => now, ...(options.deadlineMs === undefined ? {} : { deadlineMs: options.deadlineMs }),
-    rateBudget: { claim: async () => { claims++; return null; }, observe429: async () => ({ kind: "rateLimited" }) } };
+    rateBudget: { claim: async () => { claims++; return options.budget ? options.budget.claim() : null; },
+      observe429: options.budget ? options.budget.observe429.bind(options.budget) : async () => ({ kind: "rateLimited" }),
+      ...(options.budget?.checkHeadroom ? { checkHeadroom: options.budget.checkHeadroom.bind(options.budget) } : {}),
+      ...(options.budget?.withReservation ? { withReservation: options.budget.withReservation.bind(options.budget) } : {}) } };
   const binding = outboundRecordOwnerBinding(config)!;
   const barrier: OutboundEffectBarrier = options.barrierFactory?.(config) ?? {
     matches: (scope, owner) => JSON.stringify(scope) === JSON.stringify(config.scope) && owner === binding,

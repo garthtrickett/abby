@@ -231,7 +231,7 @@ export type CapabilityPrecondition = "expectedPolicyVersion" | "expectedAutomati
   "appointmentHostConfigured" | "hostIssuedPatientProof" |
   "callReviewAvailable" | "outcomeReportAvailable" | "staffQueueAvailable" | "operationalDailyAvailable" |
   "hostConfirmedTask" | "expectedCallVersion" | "availabilitySetupAvailable" | "expectedAvailabilityApprovalVersion" |
-  "independentStaffVerification" | "approvedClinikoQueue" | "independentAppointmentReadVerification" | "approvedAppointmentReadRange";
+  "independentStaffVerification" | "approvedClinikoQueue" | "independentAppointmentReadVerification" | "approvedAppointmentReadRange" | "verifiedOriginalContextForDisclosure";
 
 function entry(id: string, input: JsonSchema, success: JsonSchema, effect: CapabilityDescriptor["effect"],
                authority: CapabilityDescriptor["authority"], approval: CapabilityDescriptor["approval"] = "none",
@@ -401,7 +401,7 @@ export const capabilityCatalogue = {
     reply("urgentResponseProgress", "progress", progress), "proposalOnly", "permittedActor", "none", ["activeCall"]),
   "calls.missedCall.respond.v1": entry("calls.missedCall.respond.v1",
     object({ kind: { const: "calls.missedCall.respond.v1" }, turn: sessionTurn, now: str }),
-    reply("missedCallProgress", "progress", progress), "proposalOnly", "permittedActor", "none", ["activeCall", "currentCallSession"]),
+    reply("missedCallProgress", "progress", progress), "proposalOnly", "permittedActor", "none", ["activeCall", "currentCallSession", "verifiedOriginalContextForDisclosure"]),
   "calls.presence.respond.v1": entry("calls.presence.respond.v1",
     object({ kind: { const: "calls.presence.respond.v1" }, turn: sessionTurn, now: str }),
     reply("conversationPresenceProgress", "progress", progress), "proposalOnly", "permittedActor", "none", ["activeCall", "currentCallSession"]),

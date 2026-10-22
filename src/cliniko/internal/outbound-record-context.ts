@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import type { LocationScope } from "../../core/model.ts";
 import { clinikoCredentialFingerprint, isClinikoRequestBudget } from "../read-budget.ts";
 import type { ClinikoRequestBudget } from "../read-budget.ts";
-import { validRecallDate } from "../recall-note.ts";
 
 /** Explicit outbound type/content selection, never a copied financial config. */
 export type OutboundRecordConfig = Readonly<{
@@ -42,8 +41,4 @@ export function outboundRecordOwnerBinding(config: OutboundRecordConfig): string
   return createHash("sha256").update(JSON.stringify(["abby.outbound-record-owner.v1", s.scope.tenantId, s.scope.clinicId,
     s.scope.locationId, s.businessId, s.credentialFingerprint, s.outboundRecallTypeId, s.recordPolicyDigest])).digest("hex");
 }
-export function outboundNativeInstant(value: unknown): string | undefined {
-  if (typeof value !== "string" || value.length > 40 || !validRecallDate(value.slice(0, 10)) ||
-      !/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(value)) return undefined;
-  const n = Date.parse(value); return Number.isFinite(n) ? new Date(n).toISOString() : undefined;
-}
+export { clinikoNativeInstant as outboundNativeInstant } from "./native-instant.ts";

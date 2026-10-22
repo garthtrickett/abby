@@ -136,11 +136,12 @@ export class CallerVerificationSession {
 
   /** Private native composition only. Scope/call matching cannot substitute for
    * the Cliniko account that supplied the registered verification channel. */
-  matchesClinikoAccount(credentialFingerprint: string): boolean {
+  matchesClinikoAccount(credentialFingerprint: string, budget?: ClinikoCostBinding["budget"]): boolean {
     const contact = this.#config.contact;
     if (this.#closed || !(contact instanceof ClinikoVerificationContactReader)) return false;
     const selection = contact.selection(), scope = this.#config.receipt.scope;
-    return selection.credentialFingerprint === credentialFingerprint && selection.scope.tenantId === scope.tenantId && selection.scope.clinicId === scope.clinicId;
+    return selection.credentialFingerprint === credentialFingerprint && selection.scope.tenantId === scope.tenantId && selection.scope.clinicId === scope.clinicId &&
+      (budget === undefined || ClinikoVerificationContactReader.prototype.usesBudget.call(contact, budget));
   }
   /** Cost of the actual composed proof recheck and non-disclosing ownership
    * check. Native contact, lookup, patient permission and all four underlying

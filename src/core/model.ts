@@ -267,6 +267,7 @@ export type TurnInterpretation =
   | Readonly<{ kind: "conversationControl"; notice: import("./conversation-control.ts").ConversationControlNotice }>
   | Readonly<{ kind: "conversationPresence" }>
   | Readonly<{ kind: "missedCallReasonUnavailable" }>
+  | Readonly<{ kind: "missedCallContext"; context: import("./missed-call.ts").MissedCallContext }>
   | Readonly<{ kind: "bookingHorizon"; snapshot: import("./booking-horizon.ts").BookingHorizonRead }>
   | Readonly<{ kind: "bookingHorizonFailure" }>
   | Readonly<{ kind: "requestBoundary"; reason: import("./request-boundary.ts").RequestBoundary }>

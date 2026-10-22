@@ -1,3 +1,4 @@
+import { clinikoNativeTime } from "./internal/native-instant.ts";
 import type { PatientProofHost } from "../core/host.ts";
 import { err, ok } from "../core/model.ts";
 import type { AppointmentRead, AppointmentReadFailure, LocationScope, Result } from "../core/model.ts";
@@ -190,18 +191,18 @@ export class ClinikoAppointmentReader {
         const row = record(candidate);
         const patientSelf = record(record(row?.patient)?.links)?.self;
         const businessSelf = record(record(row?.business)?.links)?.self;
-        const start = instant(row?.starts_at);
-        const end = instant(row?.ends_at);
+        const start = clinikoNativeTime(row?.starts_at);
+        const end = clinikoNativeTime(row?.ends_at);
         if (!row || !validId(row.id) || seen.has(row.id) ||
             patientSelf !== `${this.baseUrl}/patients/${patient.patientRef}` ||
             businessSelf !== `${this.baseUrl}/businesses/${this.businessId}` ||
             start === undefined || end === undefined || end <= start || (cancelled ? start < fromMs || start > toMs : start <= fromMs || start >= toMs) ||
-            (row.cancelled_at !== null && row.cancelled_at !== undefined && instant(row.cancelled_at) === undefined) ||
-            (row.archived_at !== null && row.archived_at !== undefined && instant(row.archived_at) === undefined) ||
-            (row.deleted_at !== null && row.deleted_at !== undefined && instant(row.deleted_at) === undefined)) return err({ kind: "malformed" });
+            (row.cancelled_at !== null && row.cancelled_at !== undefined && clinikoNativeTime(row.cancelled_at) === undefined) ||
+            (row.archived_at !== null && row.archived_at !== undefined && clinikoNativeTime(row.archived_at) === undefined) ||
+            (row.deleted_at !== null && row.deleted_at !== undefined && clinikoNativeTime(row.deleted_at) === undefined)) return err({ kind: "malformed" });
         seen.add(row.id);
         if (cancelled) {
-          const at = instant(row.cancelled_at);
+          const at = clinikoNativeTime(row.cancelled_at);
           if (at === undefined || at > nowMs || row.archived_at !== null || row.deleted_at !== null) return err({ kind: "malformed" });
           appointments.push({ appointmentRef: row.id, startsAt: new Date(start).toISOString(), endsAt: new Date(end).toISOString(), cancelledAt: new Date(at).toISOString() });
         } else {

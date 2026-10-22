@@ -69,6 +69,19 @@ operational E2E-176 failures and the product-facts/scenario contracts. Fresh
 whole strict passes again with all727 serving artifacts unchanged. These68
 include nested tests; they are not68 distinct end-to-end scenarios.
 
+## Fresh work and deploying-host observation
+
+The existing independent queue worker returns queueKnown only after its awaited
+complete current scan, current approval checks and known transport outcomes.
+Its compiled one-shot command exits0 for that result,2 for queueUnavailable and1
+for other failure. Rendering its persistent timer and210-second service bound
+does not prove that an owner installed it or detects missed/stopped runs.
+The [deploying-host contract](../deploy/voice/CLINIKO_QUEUE_MONITOR.md#independent-timer)
+requires a separate infrastructure channel for failed units and missing/late
+polls. No actual channel, recipient or duty/backup escalation is established by
+this schema cohort. Boot, process presence and receiver acceptance cannot
+satisfy that acceptance; no additional daemon is introduced here.
+
 ## Independent completion coverage remains limited
 
 R01 requires evaluating calls lost before application admission using an
@@ -96,3 +109,14 @@ This component remains local pending review, actual current-parent
 integration, its own CI and normal delivery. It completes no entire gap or
 roadmap. Clinic/operator/source/restore/acoustic acceptance, live provider
 traffic, deployment and default activation retain their separate gates.
+
+## Actual normal-parent integration, 22 October 2026
+
+The original68/727 proof above retains its delivered337 inputs. PR587 normally
+merged asc3af48c after all eight own checks/raw logs passed; its actual-main
+checks remain separate. This schema component imports that actual normal tree,
+retaining its six owning source/test files exactly. Existing callbacks424/425
+and extended176 are all retained under manifest1.248/425. Original727 outputs
+were independently hash-copied before import. Fresh combined source/types/
+serving/SQL/metadata qualification, review and this component’s own delivery
+remain required; pending callback-memo PR588 is not silently included.

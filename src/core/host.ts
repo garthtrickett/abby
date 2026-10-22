@@ -173,6 +173,12 @@ export interface WorkflowHost {
 }
 
 export type AppointmentEnquiryQuery = Omit<WorkflowQuery, "operation" | "replaceCanceledChange"> & Readonly<{ now: string }>;
+export interface MissedCallContextHost {
+  /** Existing verified subject plus separate current original-call disclosure
+   * authority. A reason-only question never starts verification or staff work. */
+  readMissedCallContext(query: AppointmentEnquiryQuery & Readonly<{ turnId: string; expectedConversationRevision: number }>):
+    Promise<Result<import("./missed-call.ts").MissedCallContext, Readonly<{ kind: "missedCallContextUnavailable" }>>>;
+}
 export interface PreviousPractitionerHost {
   readPreviousPractitioner(query: AppointmentEnquiryQuery & Readonly<{ turnId: string }>): Promise<Result<
     Readonly<{ kind: "codeRequired" }> | Readonly<{ kind: "history"; snapshot: import("./previous-practitioner.ts").PreviousPractitionerRead }>, Readonly<{ kind: "historyUnavailable" }>>>;

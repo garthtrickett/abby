@@ -41,6 +41,9 @@ export async function voiceUntil(check: () => boolean, label: string, timeoutMs 
  * Cliniko HTTP, clear-final transcription and speech synthesis are explicitly synthetic. */
 export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: ClinikoCallFlowConfig,
   intent: (flow: ClinikoCallFlow) => IntentResolver, options: { lostWrite?: boolean;
+    /** The native fixture owns the actual in-place mutation and read-back;
+     * avoid inventing a second target or making an unbudgeted observer GET. */
+    nativeIndividualChanges?: true;
     /** Exercise the real reusable clinical host instead of fixture-owned wiring. */
     clinicalHost?: true;
     financialPolicyForCall?: NonNullable<import("../../src/standalone/cliniko-voice-clinical-host.ts").FinancialVoiceProvision["policyForCall"]>;
@@ -179,6 +182,12 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       writes.push(`${method} ${url.pathname}`); assert.ok(writes.length <= (options.maximumWrites ?? 1));
       const body = JSON.parse(String(init?.body));
       writeRequests.push({ method, path: url.pathname, body: structuredClone(body) });
+      if (options.nativeIndividualChanges) {
+        const response = await port(value, init);
+        if (options.beforeWriteResponse) await options.beforeWriteResponse();
+        if (options.lostWrite) throw new Error("synthetic lost native voice write response");
+        return response;
+      }
       const appointmentId = method === "PATCH" ? url.pathname.split("/")[3]! : String(90 + writeRequests.length);
       const before = method === "PATCH" ? await (await port(`${base}/individual_appointments/${appointmentId}`, { method: "GET", redirect: "error", ...(init?.signal ? { signal: init.signal } : {}) })).json() : {};
       const starts = body.starts_at ?? before.starts_at;

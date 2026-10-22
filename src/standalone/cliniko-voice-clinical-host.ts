@@ -62,6 +62,7 @@ export class ClinikoVoiceClinicalHost {
       ...(config.correction ? { correction: Object.freeze({ ...config.correction }) } : {}),
       ...(config.staff ? { staff: Object.freeze({ ...config.staff }) } : {}),
       ...(config.enquiry ? { enquiry: Object.freeze({ ...config.enquiry }) } : {}),
+      ...(config.missedCall ? { missedCall: Object.freeze({ ...config.missedCall }) } : {}),
       ...(config.history ? { history: Object.freeze({ ...config.history }) } : {}),
       ...(config.serviceCatalogue ? { serviceCatalogue: Object.freeze({ ...config.serviceCatalogue,
         services: Object.freeze(config.serviceCatalogue.services.map(service => Object.freeze({ ...service,

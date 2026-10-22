@@ -79,6 +79,7 @@ test("a distinct outgoing recipient uses its actual registered contact without c
 
 test("outgoing rescheduling cannot reset the shared physical native budget", { timeout: 15000 }, async t => {
   const f = await outboundClinicalReschedulingFixture(); t.after(f.close);
+  assert.equal((await ClinikoReschedulingSession.createOutbound({ ...f.outgoingConfig, incomingOriginal: undefined } as never)).ok, false);
   assert.equal((await ClinikoReschedulingSession.createOutbound({ ...f.outgoingConfig, cliniko: { ...f.outgoingConfig.cliniko,
     rateBudget: { claim: async () => null, observe429: async () => ({ kind: "rateLimited" }) } } })).ok, false);
 });

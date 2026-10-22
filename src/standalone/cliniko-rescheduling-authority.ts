@@ -16,7 +16,8 @@ import { normalizedSpokenName } from "../core/pending-location.ts";
 import type { ClinikoOutboundClinicalContext } from "./cliniko-outbound-clinical-context.ts";
 
 export type ClinikoReschedulingAuthorityConfig = Omit<ClinikoBookingOffersConfig, "operation"> &
-  Readonly<{ feePolicy: OwnerFileReschedulingPolicy; practitionerPolicies?: readonly OwnerFileBookingPolicy[]; outbound?: ClinikoOutboundClinicalContext }>;
+  Readonly<{ feePolicy: OwnerFileReschedulingPolicy; practitionerPolicies?: readonly OwnerFileBookingPolicy[]; outbound?: ClinikoOutboundClinicalContext;
+    incomingOriginal?: NonNullable<ClinikoAppointmentSelectionConfig["incomingOriginal"]> }>;
 const denied = <T>(): Result<T, HostReadFailure> => err({ kind: "unavailable", target: "offer" });
 type PractitionerDirectory = Readonly<{ choices: readonly Readonly<{ practitionerId: string; name: string; expiresAt: string }>[];
   hasMore: boolean; timeZone: string }>;
