@@ -12,6 +12,8 @@ const { TwilioAbbyOutboundRuntime } = await load('voice/twilio-outbound-runtime.
 const { TwilioOutboundReportAuthentication } = await load('cliniko/twilio-outbound-report.js');
 const { OwnerFileOutboundDncPolicy } = await load('standalone/owner-file-outbound-dnc-policy.js');
 const { outboundDncRecordBinding } = await load('cliniko/outbound-dnc-records.js');
+const { outboundStaffReviewRecordBinding } = await load('cliniko/outbound-staff-review-records.js');
+const { TwilioOutboundTerminalObservationAuthentication } = await load('cliniko/twilio-outbound-terminal-observation.js');
 const { clinikoCredentialFingerprint } = await load('cliniko/read-budget.js');
 const { TwilioOutboundStatusDelivery } = await load('standalone/twilio-outbound-status-delivery.js');
 const { twilioOutboundStatusReceiver } = await load('standalone/twilio-outbound-status-receiver.js');
@@ -61,7 +63,18 @@ process.on('message', async message => {
       authority: grant('authority'), reports: history('reports', ['allowsHistoryRead', 'allowsRecordRead']),
       runtime, native, authentication: new TwilioOutboundReportAuthentication(Buffer.from(s.reportKey, 'base64'), { ref: selected.ref, bindingDigest: selected.bindingDigest }),
       effects: new PostgresOutboundEffectBarrier(db, requests.scope, outboundDncRecordBinding(dnc)) };
+    const staffReviews = s.staffReviews && record(s.staffReviews);
+    const staffReview = staffReviews && {
+      config: { observations, attempts, reviews: staffReviews, maximumNativeRequests: 180 },
+      ports: { authentication: new TwilioOutboundTerminalObservationAuthentication(Buffer.from(s.notificationKey, 'base64'),
+          { ref: selected.ref, bindingDigest: selected.bindingDigest }),
+        sources: history('notificationHistory', ['allowsHistoryRead', 'allowsObservationRead', 'allowsAttemptRead']),
+        records: { ...grant('staffRecord'), producerAdmitted: query => rpc('grant', { family: 'staffRecord', method: 'producerAdmitted', query }) },
+        history: history('staffHistory', ['allowsHistoryRead', 'allowsRecordRead']), native,
+        effects: new PostgresOutboundEffectBarrier(db, requests.scope, outboundStaffReviewRecordBinding(staffReviews)) }
+    };
     const delivery = TwilioOutboundStatusDelivery.create({
+      ...(staffReview ? { staffReview } : {}),
       notifications: { config: { runtime, observations, attempts, key: Buffer.from(s.notificationKey, 'base64'), maximumNativeRequests: 180 },
         ports: { source: { read: () => rpc('source'), current: () => process.connected },
           record: { ...grant('notificationRecord'), producerAdmitted: query => rpc('grant', { family: 'notificationRecord', method: 'producerAdmitted', query }) },

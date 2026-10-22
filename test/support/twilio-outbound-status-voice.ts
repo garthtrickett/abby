@@ -14,31 +14,39 @@ import { TwilioOutboundTerminalObservationAuthentication, decodeTwilioOutboundTe
 import { twilioTerminalObservationProfileBinding } from "../../src/standalone/twilio-outbound-terminal-observation.ts";
 import { TwilioOutboundStatusDelivery } from "../../src/standalone/twilio-outbound-status-delivery.ts";
 import { twilioOutboundStatusReceiver } from "../../src/standalone/twilio-outbound-status-receiver.ts";
+import { decodeOutboundStaffReviewRequest } from "../../src/cliniko/outbound-staff-review-request.ts";
+import { outboundStaffReviewRecordBinding } from "../../src/cliniko/outbound-staff-review-records.ts";
+import type { OutboundStaffReviewQuery } from "../../src/cliniko/outbound-staff-review-records.ts";
 
 type Options = Omit<NonNullable<Parameters<typeof twilioOutboundStopSpeechFixture>[0]>, "terminalObservationBinding"> & {
   notificationResponse?: "lostStored" | "lostUnstored";
+  staffReview?: boolean;
+  staffReviewResponse?: "lostStored" | "lostUnstored";
 };
 /** Actual original carrier POST, signed HTTP/WSS and ASR/native report producer.
  * Callback modules use their real native/SQL owners; remote native/carrier and
  * acoustic providers remain synthetic. No prepared stop report is inserted. */
 export async function twilioOutboundStatusVoiceFixture(options: Options = {}) {
-  const { notificationResponse, ...rest } = options, notificationKey = randomBytes(32);
+  const { notificationResponse, staffReview, staffReviewResponse, ...rest } = options, notificationKey = randomBytes(32);
   const observationsFor = (r: OutboundRecordConfig) => ({ ...r, outboundTerminalObservationRecallTypeId: "66", terminalObservationPolicyDigest: "a".repeat(64) });
   const f = await twilioOutboundStopSpeechFixture({ ...rest, terminalObservationBinding: r => twilioTerminalObservationProfileBinding(observationsFor(r), notificationKey)! });
   try {
     const state = { source: true, record: true, producer: true, history: true, decoded: true, current: true, ingress: true };
-    const posts: Record<string, unknown>[] = []; let next = 900;
+    const staffState = { allowed: true, producer: true, history: true, decoded: true, current: true };
+    const posts: Record<string, unknown>[] = [], staffPosts: Record<string, unknown>[] = []; let next = 900;
     const native: typeof fetch = async (input, init) => {
       const body = init?.method === "POST" ? JSON.parse(String(init.body)) : undefined;
-      if (body?.recall_type_id !== "66") return f.nativeSpeech(input, init);
+      if (body?.recall_type_id !== "66" && body?.recall_type_id !== "75") return f.nativeSpeech(input, init);
+      const staff = body.recall_type_id === "75", response = staff ? staffReviewResponse : notificationResponse;
       assert.equal(String(input), "https://api.au5.cliniko.com/v1/recalls"); assert.equal(init!.redirect, "error");
       assert.equal(new Headers(init!.headers).get("Authorization"), `Basic ${Buffer.from(`${f.config.stop.requests.apiKey}:`).toString("base64")}`);
-      assert.equal(body.patient_id, f.request.patientId); assert.equal(body.recalled, false); value(decodeTwilioOutboundTerminalObservation(body.notes));
-      posts.push(body); const id = String(next++), row = { ...f.retained().row, id, notes: body.notes, recall_at: body.recall_at,
+      assert.equal(body.patient_id, f.request.patientId); assert.equal(body.recalled, false);
+      if (staff) value(decodeOutboundStaffReviewRequest(body.notes)); else value(decodeTwilioOutboundTerminalObservation(body.notes));
+      (staff ? staffPosts : posts).push(body); const id = String(next++), row = { ...f.retained().row, id, notes: body.notes, recall_at: body.recall_at,
         recalled: false, recalled_at: null, archived_at: null, created_at: f.state.now, updated_at: f.state.now,
-        links: { self: `https://api.au5.cliniko.com/v1/recalls/${id}` }, recall_type: { links: { self: "https://api.au5.cliniko.com/v1/recall_types/66" } } };
-      if (notificationResponse !== "lostUnstored") f.contactControls.rows.push(row);
-      if (notificationResponse) throw Error("Synthetic notification acknowledgement lost");
+        links: { self: `https://api.au5.cliniko.com/v1/recalls/${id}` }, recall_type: { links: { self: `https://api.au5.cliniko.com/v1/recall_types/${body.recall_type_id}` } } };
+      if (response !== "lostUnstored") f.contactControls.rows.push(row);
+      if (response) throw Error("Synthetic native acknowledgement lost");
       return Response.json(row, { status: 201 });
     };
     const selected = f.runtime.binding(), auth = new TwilioOutboundTerminalObservationAuthentication(notificationKey, { ref: selected.ref, bindingDigest: selected.bindingDigest });
@@ -53,7 +61,16 @@ export async function twilioOutboundStatusVoiceFixture(options: Options = {}) {
           current: () => state.current, producerAdmitted: async () => state.producer }, effects: f.effects, history, native } },
       stop: { config: f.config, ports: { ...reads, native, runtime: f.runtime, authentication: new TwilioOutboundReportAuthentication(f.key, f.attempt.provider),
         effects: f.effects(f.request.scope, outboundDncRecordBinding(f.config.stop.dnc)!) } }, maximumNativeRequests: 180, deadlineMs: 5000 };
-    const make = () => TwilioOutboundStatusDelivery.create(config);
+    const reviews = { ...observationsFor(f.config.stop.requests), outboundStaffReviewRecallTypeId: "75", staffReviewPolicyDigest: "d".repeat(64) };
+    const staffRecord = { allows: async (q: OutboundStaffReviewQuery) => staffState.allowed && (!q.request || staffState.decoded),
+      current: () => staffState.current, producerAdmitted: async () => staffState.producer };
+    const complete = { ...config, ...(staffReview ? { staffReview: {
+      config: { observations: config.notifications.config.observations, attempts: config.notifications.config.attempts, reviews, maximumNativeRequests: 180 },
+      ports: { authentication: auth, sources: history, records: staffRecord,
+        history: { allowsHistoryRead: async () => staffState.history, allowsRecordRead: staffRecord.allows, current: staffRecord.current },
+        effects: f.effects(reviews.scope, outboundStaffReviewRecordBinding(reviews)!), native }
+    } } : {}) };
+    const make = () => TwilioOutboundStatusDelivery.create(complete);
     const request = (patch: Record<string, string> = {}) => {
       const url = new URL(f.form.get("StatusCallback")!), fields = { AccountSid: f.carrier.accountSid, CallSid: f.callSid, From: f.carrier.from,
         To: f.request.recipient.number, Direction: "outbound-api", CallStatus: "completed", ...patch };
@@ -70,6 +87,7 @@ export async function twilioOutboundStatusVoiceFixture(options: Options = {}) {
         headers: { "content-type": raw.contentType, "x-twilio-signature": raw.signature }, body: raw.body }); assert.equal(await response.text(), ""); return response.status; },
         close: async () => { receiver.close(); server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(e => e ? reject(e) : resolve())); } };
     };
-    return { ...f, get admitted() { return f.admitted; }, get carrierCalls() { return f.carrierCalls; }, notificationKey, notificationState: state, notificationPosts: posts, statusConfig: config, statusRequest: request, makeStatus: make, listenStatus };
+    return { ...f, get admitted() { return f.admitted; }, get carrierCalls() { return f.carrierCalls; }, notificationKey, notificationState: state, notificationPosts: posts,
+      staffState, staffPosts, statusConfig: complete, statusRequest: request, makeStatus: make, listenStatus };
   } catch (e) { await f.close(); throw e; }
 }
