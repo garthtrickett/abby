@@ -186,7 +186,7 @@ production source or scenario ID changes. Actual release-target selection,
 retirement of real consumers and clinic restore acceptance remain separate R25
 requirements; this local migration probe cannot establish them.
 
-## Actual callback-memo parent import
+## Earlier actual callback-memo parent import checkpoint
 
 This component now imports normal PR588 main848b8c5, whose tree matches
 reviewed5c29d06 after all eight own checks/raw logs and actual parentc3 main4
@@ -197,3 +197,24 @@ The imported nonemitted memo driver requires current composed SQL9/strict and
 refreshed metadata before final actual-parent review and this component's own
 publication. Prior68/transaction12/allocation11 evidence keeps its earlier
 inputs; those runs are not summed or relabelled as a fresh combined cohort.
+
+## Current qualification on actual memo main848
+
+On the real normal PR588 parent848b8c5, the composed signed incoming callback
+and separately authorized memo cohort passes9/9 with zero failure, skip or
+cancellation (1792710914252). It loads the actual741-artifact server/budget
+graph, including the schema guard, without another serving emission. Native180,
+independent subject/memo grants, unknown results, one-use exclusions and the
+full-column/unfiltered-backup privacy scans remain unchanged. The owned database
+is stopped; Node256757760B/512MiB plus PostgreSQL124502016B/512MiB retain
+CPU100% each, Swap0 and allOOM-high-max0.
+
+Whole strict1792711033724 passes at1781350400B/2GiB, CPU100%/heap1536MiB/
+Swap0/allOOM-high-max0. Both paired waits are reaped. The nonemitted imported
+SQL driver was the only changed code input; all existing schema/R24/R25 source
+and741 output bytes remain exact. Prior c3-based68, transaction12 and
+allocation11 retain their original scopes and are not added or relabelled as a
+fresh combined68. Current metadata and final exact-parent review/publication/
+cloud/ordinary delivery remain separate checks. No entire gap, full regression,
+real clinic/provider/source/retention/restore/acoustic acceptance or activation
+is established by these local results.
