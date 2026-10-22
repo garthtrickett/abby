@@ -38,7 +38,29 @@ test(`actual emitted signed callback full logical restore preserves ${staffRevie
   const callback = await f.listenStatus(); t.after(callback.close); assert.equal(await callback.send(), 204);
   assert.equal(f.reportPosts.length, staffReviewEnabled ? 0 : 1); assert.equal(f.dncPosts.length, staffReviewEnabled ? 0 : 1);
   assert.equal(f.notificationPosts.length, 1); assert.equal(f.staffPosts.length, staffReviewEnabled ? 1 : 0);
-  const dump = await assertStatusPrivacy(db, f, process.env.DATABASE_URL!);
+  const peer = connectPostgres(process.env.DATABASE_URL!); t.after(() => peer.destroy());
+  const peerScope = { tenantId: `status-restore-peer-${randomUUID()}`, clinicId: "independent", locationId: "main" };
+  const peerEffects = new PostgresOutboundEffectBarrier(peer, peerScope, "f".repeat(64));
+  const peerCapacity = new PostgresOutboundCapacity(peer, peerScope, "f".repeat(64));
+  const priorEffect = randomUUID(), priorHold = randomUUID(), laterEffect = randomUUID(), laterHold = randomUUID();
+  assert.deepEqual(value(await peerEffects.claimOnce(priorEffect)), { claimed: true });
+  assert.deepEqual(value(await peerCapacity.acquireOnce(priorHold, 2)), { kind: "acquired" });
+  const { dump, originalEffects, originalHolds } = await db.transaction().setIsolationLevel("repeatable read").execute(async trx => {
+    // The complete expected tables and unfiltered export must describe one
+    // snapshot, even while other test files add legitimate opaque state.
+    const snapshot = (await sql<{ snapshot: string }>`select pg_export_snapshot() as snapshot`.execute(trx)).rows[0]!.snapshot;
+    const originalEffects = await trx.selectFrom("outbound_effect_barriers").selectAll().orderBy("tenant_id").orderBy("effect_ref").execute();
+    const originalHolds = await trx.selectFrom("outbound_capacity_allocations").selectAll().orderBy("tenant_id").orderBy("allocation_ref").execute();
+    assert.ok(originalEffects.some(row => row.effect_ref === priorEffect));
+    assert.ok(originalHolds.some(row => row.allocation_ref === priorHold));
+    assert.deepEqual(value(await peerEffects.claimOnce(laterEffect)), { claimed: true });
+    assert.deepEqual(value(await peerCapacity.acquireOnce(laterHold, 2)), { kind: "acquired" });
+    assert.equal((await sql`select * from outbound_effect_barriers where effect_ref=${laterEffect}`.execute(peer)).rows.length, 1);
+    assert.equal((await sql`select * from outbound_capacity_allocations where allocation_ref=${laterHold}`.execute(peer)).rows.length, 1);
+    assert.equal(originalEffects.some(row => row.effect_ref === laterEffect), false);
+    assert.equal(originalHolds.some(row => row.allocation_ref === laterHold), false);
+    return { dump: await assertStatusPrivacy(db, f, process.env.DATABASE_URL!, snapshot), originalEffects, originalHolds };
+  });
   const name = "abby_status_restore_" + randomUUID().replaceAll("-", "");
   assert.match(name, /^abby_status_restore_[a-f0-9]{32}$/);
   await sql.raw(`create database "${name}"`).execute(db);
@@ -47,9 +69,7 @@ test(`actual emitted signed callback full logical restore preserves ${staffRevie
   try {
     execFileSync("psql", [url.href, "--no-psqlrc", "--set", "ON_ERROR_STOP=1", "--quiet"], { input: dump, timeout: 10000, stdio: ["pipe", "pipe", "pipe"], maxBuffer: 8000000 });
     restored = connectPostgres(url.href);
-    const originalEffects = (await sql`select * from outbound_effect_barriers order by tenant_id,effect_ref`.execute(db)).rows;
     assert.deepEqual((await sql`select * from outbound_effect_barriers order by tenant_id,effect_ref`.execute(restored)).rows, originalEffects);
-    const originalHolds = (await sql`select * from outbound_capacity_allocations order by tenant_id,allocation_ref`.execute(db)).rows;
     assert.deepEqual((await sql`select * from outbound_capacity_allocations order by tenant_id,allocation_ref`.execute(restored)).rows, originalHolds);
     const freshBudget = new PostgresClinikoRequestBudget(restored, { apiKey, maxPerMinute: 180 }), clock = () => f.state.now;
     const runtime = new TwilioAbbyOutboundRuntime({ ...f.carrier, now: clock }, async () => { throw Error("Restored callback cannot launch a call"); });
