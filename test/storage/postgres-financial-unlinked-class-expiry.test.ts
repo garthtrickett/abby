@@ -84,10 +84,24 @@ test("killed compiled unlinked class sender cannot repeat after local claim loss
 });
 test("concurrent compiled financial unlinked class owners share the real permanent SQL exclusion", { timeout: 35_000 }, async t => {
   const f = await setup(), dir = await mkdtemp(join(tmpdir(), "abby-clinical-expiry-race-")); t.after(f.close); t.after(() => rm(dir, { recursive: true, force: true }));
+  let release!: () => void, held = false, resumedAfterCancellation = false;
+  const blocked = new Promise<void>(resolve => { release = resolve; }); t.after(release);
+  const native = f.dependencies.native;
+  f.dependencies.native = async (input, init) => {
+    const url = new URL(String(input)), filters = url.searchParams.getAll("q[]");
+    if (url.pathname === "/v1/attendees" && filters.includes("patient_case_id:!?") && !filters.includes("cancelled_at:*") && !held) {
+      held = true; await blocked;
+      assert.ok(f.attendee.cancelled_at, "the competing owner cancelled before this active query completed"); resumedAfterCancellation = true;
+    }
+    const response = await native(input, init);
+    if (init?.method === "PATCH" && url.pathname === "/v1/attendees/91/cancel") release();
+    return response;
+  };
   await withSmtpVerificationServer(async smtp => {
     const [a, b] = await Promise.all([financialConsumerPeer(f, smtp.config, dir, peerOptions(f)), financialConsumerPeer(f, smtp.config, dir, peerOptions(f))]);
     t.after(a.kill); t.after(b.kill); const cycles = await Promise.all([a.nextCycle(), b.nextCycle()]);
     await a.kill(); await b.kill(); assert.equal(cycles.reduce((n, c) => n + c.clinicalExpiryCancelled, 0), 1);
+    assert.equal(held, true); assert.equal(resumedAfterCancellation, true);
     assert.equal(f.cancellations.length, 1); assert.equal(smtp.messages.length, 0); await privacy(f);
   });
 });

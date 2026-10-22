@@ -4,8 +4,9 @@ import { classMoveFixture } from "./class-move.ts";
 import type { PassMoveOptions } from "./class-move.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 
-export async function classMoveCallFlowFixture(different = false, multiple = false, passes?: PassMoveOptions, staging = false, activate = true) {
-  const f = await classMoveFixture(different, false, passes, staging, activate);
+export async function classMoveCallFlowFixture(different = false, multiple = false, passes?: PassMoveOptions, staging = false, activate = true,
+  options: Pick<NonNullable<Parameters<typeof classMoveFixture>[5]>, "scope" | "budget" | "verificationBudget" | "memoFor"> = {}) {
+  const f = await classMoveFixture(different, false, passes, staging, activate, options);
   f.host.dispose(); f.session.dispose();
   const c = f.classSessionConfig, forbidden = { allows: async () => false };
   const service = { approvalPath: c.classApprovalPath, practitionerId: c.cliniko.practitionerId, appointmentTypeId: c.cliniko.appointmentTypeId,
