@@ -1,6 +1,6 @@
 # Exact sick-day call launch
 
-`ClinikoOutboundLaunchOwner` supports an explicitly configured sick-day call against one original native individual appointment. General follow-up retains its existing grant requirements; the default composition still refuses appointment-targeted work. This extends call preparation only. The finite scheduler remains follow-up-only, and protected callback cancellation, movement, booking and disclosure require separate verified patient authority.
+`ClinikoOutboundLaunchOwner` supports an explicitly configured sick-day call against one original native individual appointment. General follow-up retains its existing grant requirements; the default composition still refuses appointment-targeted work. This extends call preparation only. The finite scheduler now has a separately qualified explicit exact sick-day composition; protected callback cancellation, movement, booking and disclosure still require separate verified patient authority.
 
 ## Explicit composition
 
@@ -20,6 +20,6 @@ Known exact provider acceptance survives later target-permission withdrawal. Unk
 
 ## Remaining requirements
 
-Concrete Twilio/Abby outbound conversation and authenticated recovery, Vapi integration, durable number-wide stop suppression, verified callback handoff and actual clinic/producer/restore/acoustic acceptance remain unfinished. An approved generic greeting is not permission to reveal appointment details before verification. Future sick-day rescheduling must preserve the original appointment duration and independently validate both original and replacement targets; Karen's original-span handoff is a reference for that later clinical step.
+Separately qualified optional Twilio/Abby conversation, authenticated recovery, number-wide blocking and verified original-appointment clinical owners retain their own evidence and grants. This scheduler supplies none of that clinical or contact authority. A hosted Vapi adapter remains a separate future implementation. Actual clinic/producer/source/retention/restore/acoustic acceptance and inferred sick-practitioner/date audience generation remain unqualified. An approved generic greeting cannot disclose appointment details before verification; the existing rescheduling owner must preserve its original-span and independent destination checks.
 
-No default outbound listener, scheduler expansion, live call, clinic write, activation, local patient store or schema is added. See [runtime responsibilities](OUTBOUND_RUNTIME.md), [outbound contract](OUTBOUND_SICK_DAY_CONTRACT.md) and [qualification evidence](EXECUTION_PROGRESS.md).
+Finite sick-day scheduling is explicit and bounded. No default outbound listener, live call, activation, new local patient store or schema is added; native pending-request grants do not authorize clinical callback actions. See [runtime responsibilities](OUTBOUND_RUNTIME.md), [outbound contract](OUTBOUND_SICK_DAY_CONTRACT.md) and [qualification evidence](EXECUTION_PROGRESS.md).

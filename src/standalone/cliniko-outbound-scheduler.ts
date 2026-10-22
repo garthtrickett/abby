@@ -94,7 +94,11 @@ export class ClinikoOutboundScheduler {
       const policy = await wait(this.#campaign(signal));
       if (!policy.ok) return summary("blocked");
       if (!policy.value) return summary("idle");
-      if (policy.value.campaignRef !== this.#config.launch.campaignRef || policy.value.purpose !== "followUp") return summary("blocked");
+      // Exact sick-day targets still belong to the one-shot launch owner. Its
+      // separately configured reader/grants recheck the original at dispatch.
+      const supported = policy.value.purpose === "followUp" ||
+        policy.value.purpose === "sickDay" && this.#config.launch.individualTarget !== undefined;
+      if (policy.value.campaignRef !== this.#config.launch.campaignRef || !supported) return summary("blocked");
       const due = outboundContactTime(policy.value.schedule, now());
       if (due.kind === "invalid") return summary("blocked");
       if (due.kind !== "due") return summary("idle");

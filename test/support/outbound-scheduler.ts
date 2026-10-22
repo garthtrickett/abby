@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { outboundLaunchOwnerFixture } from "./outbound-launch-owner.ts";
+import { outboundTargetedLaunchFixture } from "./outbound-targeted-launch.ts";
 import { value } from "./outbound-records.ts";
 import { encodeOutboundRecipientRequest } from "../../src/cliniko/outbound-recipient-request.ts";
 import { ClinikoOutboundScheduler } from "../../src/standalone/cliniko-outbound-scheduler.ts";
 
 export async function outboundSchedulerFixture(options: NonNullable<Parameters<typeof outboundLaunchOwnerFixture>[0]> & {
-  Scheduler?: typeof ClinikoOutboundScheduler; tickDeadlineMs?: number } = {}) {
-  const { Scheduler = ClinikoOutboundScheduler, tickDeadlineMs = 120_000, ...launchOptions } = options;
-  const f = await outboundLaunchOwnerFixture(launchOptions);
+  Scheduler?: typeof ClinikoOutboundScheduler; tickDeadlineMs?: number; exactSickDay?: boolean } = {}) {
+  const { Scheduler = ClinikoOutboundScheduler, tickDeadlineMs = 120_000, exactSickDay = false, ...launchOptions } = options;
+  const targetedLaunch = exactSickDay ? await outboundTargetedLaunchFixture(launchOptions) : undefined;
+  const f = targetedLaunch ?? await outboundLaunchOwnerFixture(launchOptions);
   try {
+    const launchConfig = targetedLaunch?.targetConfig ?? f.config, launchPorts = targetedLaunch?.targetPorts ?? f.ports;
     const state: { schedule: boolean; pending: boolean; record: boolean; waits: number; accountReads: number;
       beforeWait?: (ms: number, signal: AbortSignal) => void | Promise<void>;
       onAccount?: () => void | Promise<void> } = { schedule: true, pending: true, record: true, waits: 0, accountReads: 0 };
@@ -37,10 +40,10 @@ export async function outboundSchedulerFixture(options: NonNullable<Parameters<t
         const page = Number(url.searchParams.get("page"));
         return Response.json({ total_entries: rows.length, recalls: rows.slice((page - 1) * 100, page * 100) });
       }
-      return f.native(input, init);
+      return (launchPorts.native ?? f.native)(input, init);
     };
-    const config = { launch: f.config, maximumScanNativeRequests: 55, tickDeadlineMs };
-    const ports = { launch: { ...f.ports, native }, pending: { allowsPendingRead: async () => state.pending,
+    const config = { launch: launchConfig, maximumScanNativeRequests: 55, tickDeadlineMs };
+    const ports = { launch: { ...launchPorts, native }, pending: { allowsPendingRead: async () => state.pending,
       allowsRecordRead: async () => state.record, current: () => state.pending && state.record },
       schedule: { allows: async () => state.schedule, current: () => state.schedule },
       waitForQuota: async (ms: number, signal: AbortSignal) => {
@@ -59,7 +62,7 @@ export async function outboundSchedulerFixture(options: NonNullable<Parameters<t
         notes: value(encodeOutboundRecipientRequest(request)) });
       return request;
     };
-    return { ...f, get claims() { return f.claims; }, get posts() { return f.posts; }, scheduleState: state,
+    return { ...f, targetedLaunch, get claims() { return f.claims; }, get posts() { return f.posts; }, scheduleState: state,
       schedulerConfig: config, schedulerPorts: ports, scheduler, makeScheduler: make, addRequest,
       tick: (signal = new AbortController().signal) => scheduler.tick(signal) };
   } catch (error) { await f.close(); throw error; }
