@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { getExpectedTwilioSignature } from "twilio/lib/webhooks/webhooks.js";
 import { outboundStopOwnerFixture } from "./outbound-stop-owner.ts";
 import { outboundLaunchOwnerFixture } from "./outbound-launch-owner.ts";
+import { outboundContactLifecycleFixture } from "./outbound-contact-lifecycle.ts";
 import { value } from "./outbound-records.ts";
 import { TwilioAbbyOutboundRuntime } from "../../src/voice/twilio-outbound-runtime.ts";
 import { TwilioOutboundContext } from "../../src/voice/twilio-outbound-context.ts";
@@ -14,19 +15,25 @@ import { ClinikoTwilioOutboundStopRecovery } from "../../src/standalone/cliniko-
 import type { OutboundRecordConfig } from "../../src/cliniko/outbound-recipient-records.ts";
 
 export async function twilioOutboundStopRecoveryFixture(options: Parameters<typeof outboundStopOwnerFixture>[0] & {
+  contactLifecycle?: boolean;
   profileRef?: (requests: OutboundRecordConfig) => string;
   recoveryRuntime?: { ClinikoTwilioOutboundStopRecovery: typeof ClinikoTwilioOutboundStopRecovery;
     TwilioAbbyOutboundRuntime: typeof TwilioAbbyOutboundRuntime; TwilioOutboundReportAuthentication: typeof TwilioOutboundReportAuthentication };
 } = {}) {
-  const { recoveryRuntime = { ClinikoTwilioOutboundStopRecovery, TwilioAbbyOutboundRuntime, TwilioOutboundReportAuthentication }, profileRef, ...stopOptions } = options;
+  const { recoveryRuntime = { ClinikoTwilioOutboundStopRecovery, TwilioAbbyOutboundRuntime, TwilioOutboundReportAuthentication }, profileRef, contactLifecycle = false, ...stopOptions } = options;
   let now = "2026-11-02T00:00:00.000Z";
   const carrier = { ref: "synthetic-provider", profileRef: "generic-clinic-greeting", accountSid: "AC" + "a".repeat(32),
     authToken: `synthetic-stop-recovery-secret-${randomUUID()}`, from: "+61255550100", publicAnswerUrl: "https://clinic.example.invalid/outbound/answer",
     publicStatusUrl: "https://clinic.example.invalid/outbound/status", publicStreamUrl: "wss://clinic.example.invalid/outbound/stream",
     contextKey: randomBytes(32), now: () => now };
   let runtime!: TwilioAbbyOutboundRuntime;
+  let contactHeld: Set<string> | undefined, contactReleased: Set<string> | undefined;
   const LaunchFixture = async (input: Parameters<typeof outboundLaunchOwnerFixture>[0]) => {
-    const f = await outboundLaunchOwnerFixture(input);
+    let f: Awaited<ReturnType<typeof outboundLaunchOwnerFixture>>;
+    if (contactLifecycle) {
+      const guarded = await outboundContactLifecycleFixture(input);
+      contactHeld = guarded.contactHeld; contactReleased = guarded.contactReleased; f = guarded;
+    } else f = await outboundLaunchOwnerFixture(input);
     if (profileRef) carrier.profileRef = profileRef(f.config.requests);
     runtime = new recoveryRuntime.TwilioAbbyOutboundRuntime(carrier, async () => { throw Error("Recovery must never launch a carrier request"); });
     f.controls.providerDigest = runtime.binding().bindingDigest; return f;
@@ -66,7 +73,7 @@ export async function twilioOutboundStopRecoveryFixture(options: Parameters<type
     const make = () => recoveryRuntime.ClinikoTwilioOutboundStopRecovery.create(config, ports);
     const recover = (signal = new AbortController().signal) => value(make()).recoverStatus(request(), signal);
     return { ...f, get claims() { return f.claims; }, key, recoveryConfig: config, recoveryPorts: ports, reportState: state, reportQueries: queries, reportRow, report, unsigned, auth,
-      context, carrier, callSid, request, makeRecovery: make, recover,
+      context, carrier, callSid, request, makeRecovery: make, recover, contactHeld, contactReleased,
       replaceReport: (patch: Partial<Omit<TwilioOutboundReport, "authentication">>) => { reportRow.notes = value(encodeTwilioOutboundReport(value(auth.sign({ ...unsigned, ...patch })))); } };
   } catch (e) { await f.close(); throw e; }
 }

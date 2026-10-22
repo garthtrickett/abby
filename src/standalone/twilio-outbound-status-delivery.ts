@@ -7,10 +7,13 @@ import { TwilioAbbyOutboundRuntime } from "../voice/twilio-outbound-runtime.ts";
 import { ClinikoTwilioOutboundNotificationDelivery } from "./cliniko-twilio-outbound-notification-delivery.ts";
 import { ClinikoTwilioOutboundStopRecovery } from "./cliniko-twilio-outbound-stop-recovery.ts";
 import { NativeRequestAllowance } from "./internal/native-request-allowance.ts";
+import { ClinikoTwilioOutboundStaffReview } from "./cliniko-twilio-outbound-staff-review.ts";
+import { TwilioOutboundTerminalObservationAuthentication } from "../cliniko/twilio-outbound-terminal-observation.ts";
 
 type Config = Readonly<{
   notifications: Readonly<{ config: Parameters<typeof ClinikoTwilioOutboundNotificationDelivery.create>[0]; ports: Parameters<typeof ClinikoTwilioOutboundNotificationDelivery.create>[1] }>;
   stop: Readonly<{ config: Parameters<typeof ClinikoTwilioOutboundStopRecovery.create>[0]; ports: Parameters<typeof ClinikoTwilioOutboundStopRecovery.create>[1] }>;
+  staffReview?: Readonly<{ config: Parameters<typeof ClinikoTwilioOutboundStaffReview.create>[0]; ports: Parameters<typeof ClinikoTwilioOutboundStaffReview.create>[1] }>;
   maximumNativeRequests: number; deadlineMs?: number;
 }>;
 type Failure = Readonly<{ kind: "invalidConfig" | "unavailable" | "forbidden" }>;
@@ -23,11 +26,13 @@ export class TwilioOutboundStatusDelivery {
   readonly #runtime: TwilioAbbyOutboundRuntime;
   readonly #notifications: ClinikoTwilioOutboundNotificationDelivery;
   readonly #stop: ClinikoTwilioOutboundStopRecovery;
+  readonly #staffReview: ClinikoTwilioOutboundStaffReview | undefined;
   readonly #maximum: number;
   readonly #deadline: number;
   private constructor(runtime: TwilioAbbyOutboundRuntime, notifications: ClinikoTwilioOutboundNotificationDelivery,
-    stop: ClinikoTwilioOutboundStopRecovery, maximum: number, deadline: number) {
+    stop: ClinikoTwilioOutboundStopRecovery, maximum: number, deadline: number, staffReview?: ClinikoTwilioOutboundStaffReview) {
     this.#runtime = runtime; this.#notifications = notifications; this.#stop = stop; this.#maximum = maximum; this.#deadline = deadline;
+    this.#staffReview = staffReview;
     this.#authenticate = runtime.authenticateStatus.bind(runtime);
   }
   static create(c: Config): Result<TwilioOutboundStatusDelivery, Failure> {
@@ -42,7 +47,19 @@ export class TwilioOutboundStatusDelivery {
           [s.stop.requests.outboundRecallTypeId, s.stop.attempts.outboundAttemptRecallTypeId, s.stop.dnc.source.contactReviewRecallTypeId,
             s.reports.outboundProviderReportRecallTypeId].includes(n.observations.outboundTerminalObservationRecallTypeId)) return err({ kind: "invalidConfig" });
       const notifications = ClinikoTwilioOutboundNotificationDelivery.create(n, c.notifications.ports), stop = ClinikoTwilioOutboundStopRecovery.create(s, c.stop.ports);
-      return notifications.ok && stop.ok ? ok(new TwilioOutboundStatusDelivery(n.runtime, notifications.value, stop.value, c.maximumNativeRequests, deadline)) : err({ kind: "invalidConfig" });
+      let staffReview: ClinikoTwilioOutboundStaffReview | undefined;
+      if (c.staffReview) {
+        const r = c.staffReview.config, binding = n.runtime.binding();
+        const authentication = new TwilioOutboundTerminalObservationAuthentication(n.key, { ref: binding.ref, bindingDigest: binding.bindingDigest });
+        if (r.reviews.rateBudget !== physical || r.reviews.apiKey !== n.observations.apiKey || r.reviews.businessId !== n.observations.businessId || !isDeepStrictEqual(r.reviews.scope, n.observations.scope) ||
+            r.attempts.outboundAttemptRecallTypeId !== n.attempts.outboundAttemptRecallTypeId || r.attempts.attemptPolicyDigest !== n.attempts.attemptPolicyDigest ||
+            r.observations.outboundTerminalObservationRecallTypeId !== n.observations.outboundTerminalObservationRecallTypeId || r.observations.terminalObservationPolicyDigest !== n.observations.terminalObservationPolicyDigest ||
+            c.staffReview.ports.authentication.authenticationBinding() !== authentication.authenticationBinding() ||
+            [s.stop.requests.outboundRecallTypeId, s.stop.attempts.outboundAttemptRecallTypeId, s.stop.dnc.source.contactReviewRecallTypeId,
+              s.reports.outboundProviderReportRecallTypeId, n.observations.outboundTerminalObservationRecallTypeId].includes(r.reviews.outboundStaffReviewRecallTypeId)) return err({ kind: "invalidConfig" });
+        const review = ClinikoTwilioOutboundStaffReview.create(r, c.staffReview.ports); if (!review.ok) return err({ kind: "invalidConfig" }); staffReview = review.value;
+      }
+      return notifications.ok && stop.ok ? ok(new TwilioOutboundStatusDelivery(n.runtime, notifications.value, stop.value, c.maximumNativeRequests, deadline, staffReview)) : err({ kind: "invalidConfig" });
     } catch { return err({ kind: "invalidConfig" }); }
   }
   matchesRuntime(runtime: TwilioAbbyOutboundRuntime): boolean {
@@ -65,6 +82,17 @@ export class TwilioOutboundStatusDelivery {
       if (status === "completed") {
         const notification = await awaitUntilAbort(this.#notifications.receiveStatus(raw, signal, allowance), signal);
         if (!notification?.ok || notification.value.kind !== "notificationRetained" || !current()) return err({ kind: "unavailable" });
+        // A MAC-protected no-stop assertion is not whole-call completeness.
+        // First retain restrictive STOP, then notification provenance, then
+        // optional pending review for unresolved coverage. All share this one
+        // deadline and allowance; no contact release port is introduced.
+        if (this.#staffReview && recovered.value.evidence !== "stop") {
+          const a = authenticated.value.call.context.original.attempt;
+          if (!a.capacityAllocationRef || !a.contactReferences) return err({ kind: "unavailable" });
+          const review = await awaitUntilAbort(this.#staffReview.retainForRuntime({ effectRef: a.effectRef, capacityAllocationRef: a.capacityAllocationRef },
+            authenticated.value.call.accountSid, signal, allowance), signal);
+          if (!review?.ok || review.value.kind !== "reviewRetained" || !current()) return err({ kind: "unavailable" });
+        }
       }
       return ok({ kind: "acknowledged" });
     } catch { return err({ kind: "unavailable" }); }
