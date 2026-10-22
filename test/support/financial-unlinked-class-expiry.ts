@@ -72,8 +72,11 @@ export async function unlinkedClassExpiryFixture(options: {
       reads++; await options.read?.(url.pathname, reads, init!.signal!);
       if (url.pathname === "/v1/attendees" && url.searchParams.getAll("q[]").includes("patient_case_id:!?")) {
         const q = url.searchParams.getAll("q[]"); filters.push(q);
-        assert.deepEqual(q, ["id:=91", `patient_id:=${intent.patientId}`, "booking_id:=91", "patient_case_id:!?", ...(attendee.cancelled_at ? ["cancelled_at:*"] : [])]);
-        const selected = attendee.patient_case == null ? [attendee] : [];
+        // An active query can complete after another owner cancels. Honour
+        // its requested scope rather than deriving that scope from the row.
+        const includesCancelled = q.includes("cancelled_at:*");
+        assert.deepEqual(q, ["id:=91", `patient_id:=${intent.patientId}`, "booking_id:=91", "patient_case_id:!?", ...(includesCancelled ? ["cancelled_at:*"] : [])]);
+        const selected = attendee.patient_case == null && (includesCancelled || attendee.cancelled_at == null) ? [attendee] : [];
         return Response.json({ total_entries: selected.length, attendees: selected });
       }
       return attendance.fetchPort(input, init);
