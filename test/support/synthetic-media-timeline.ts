@@ -13,6 +13,14 @@ export class SyntheticMediaTimeline {
   #chunk = 0;
   #elapsedMs = -20;
   get nextTurnEndMs(): number { return this.#elapsedMs + 42 * 20; }
+  /** Reconcile a reply of any packet count after delayed silence callbacks.
+   * The next delivered packet follows the observed host time; no packet or
+   * audio content is invented, and elapsed time can never run backwards. */
+  alignAfter(hostElapsedMs: number): void {
+    if (!Number.isSafeInteger(hostElapsedMs) || hostElapsedMs < 0 || hostElapsedMs + 20 > 900000 ||
+        hostElapsedMs - this.#elapsedMs > 15000) throw new Error("invalid bounded synthetic media alignment");
+    this.#elapsedMs = Math.max(this.#elapsedMs, hostElapsedMs);
+  }
   alignTurnEnd(hostElapsedMs: number): void {
     const proposed = this.nextTurnEndMs;
     if (!Number.isSafeInteger(hostElapsedMs) || hostElapsedMs < proposed || hostElapsedMs > 900000 || hostElapsedMs - proposed > 15000)
