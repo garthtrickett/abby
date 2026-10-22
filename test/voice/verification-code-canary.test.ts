@@ -6,6 +6,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { distinctFromClock, drawDistinctCode, drawSqlCanaryCode, assertDirectSqlVerificationCanaryContext, installDirectSqlVerificationCanaries, installScopedDirectSqlVerificationCanaries, installClinicalVerificationCanaries, installResendVerificationCanaries, installStagedVerificationCanaries } from "../support/verification-code-canary.ts";
+import { withIsolatedVerificationSql, assertIsolatedVerificationCanary } from "../support/isolated-verification-sql.ts";
 
 test("numeric verification canaries reject every real timestamp substring across decimal rollovers", () => {
   for (const sinceMs of [1792470200000, 1792470990000, 1792479990000]) {
@@ -64,6 +65,13 @@ test("direct SQL canary instrumentation cannot change crypto in an unrelated tes
   assert.throws(() => installDirectSqlVerificationCanaries(new Set()), /isolated direct SQL/);
   assert.throws(() => installScopedDirectSqlVerificationCanaries(new Set()), /isolated direct SQL/);
   assert.equal(crypto.randomInt, before);
+});
+
+test("owned verification databases and negative probes refuse an unregistered test before opening SQL or changing crypto", async () => {
+  const before = crypto.randomInt; let invoked = false;
+  await assert.rejects(withIsolatedVerificationSql("postgresql://postgres@127.0.0.1:1/postgres", async () => { invoked = true; }), /isolated direct SQL/);
+  await assert.rejects(assertIsolatedVerificationCanary("postgresql://postgres@127.0.0.1:1/postgres", "123450"), /isolated direct SQL/);
+  assert.equal(invoked, false); assert.equal(crypto.randomInt, before);
 });
 
 

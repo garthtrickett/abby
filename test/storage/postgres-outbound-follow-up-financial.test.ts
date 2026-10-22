@@ -1,20 +1,18 @@
 // E2E-421: original-patient signed follow-up booking with actual private financial consent; synthetic remote grants and speech.
 import assert from "node:assert/strict";
-import test, { after } from "node:test";
+import test from "node:test";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { connectPostgres } from "../../src/storage/connect.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { verificationCanaries } from "../support/caller-verification.ts";
 import { financialConsentReadback } from "../../src/standalone/financial-consent-readback.ts";
 import { decodeClinikoFinancialIntent } from "../../src/cliniko/financial-review-intent.ts";
 
-import { captureSqlVerificationCanaryWindow, assertSqlVerificationCodeCanary } from "../support/sql-verification-canary.ts";
+import { assertSqlVerificationCodeCanary } from "../support/sql-verification-canary.ts";
+import { withIsolatedVerificationSql, assertIsolatedVerificationCanary } from "../support/isolated-verification-sql.ts";
 
 if (!process.env.DATABASE_URL) throw Error("DATABASE_URL required");
-const db = connectPostgres(process.env.DATABASE_URL), peer = connectPostgres(process.env.DATABASE_URL);
-after(async () => { await Promise.all([db.destroy(), peer.destroy()]); });
-const canaryWindow = await captureSqlVerificationCanaryWindow(db);
+const adminUrl = process.env.DATABASE_URL;
 const emitted = new URL("../../dist/runtime/", import.meta.url);
 const { financialCall, selectBooking, playTerms, until } = await import(new URL("test/support/outbound-follow-up-financial.js", emitted).href) as typeof import("../support/outbound-follow-up-financial.ts");
 const { PostgresClinikoRequestBudget } = await import(new URL("src/storage/postgres-cliniko-request-budget.js", emitted).href) as typeof import("../../src/storage/postgres-cliniko-request-budget.ts");
@@ -23,7 +21,7 @@ const { PostgresFinancialEffectBarrier } = await import(new URL("src/storage/pos
 const { financialRecordOwnerBinding } = await import(new URL("src/cliniko/financial-record-retention.js", emitted).href) as typeof import("../../src/cliniko/financial-record-retention.ts");
 
 for (const scenario of ["accepted", "originalEdited", "peerQuota"] as const)
-test(`emitted outgoing follow-up private financial consent, shared native180 and backup privacy: ${scenario}`, { timeout: 170000 }, async t => {
+test(`emitted outgoing follow-up private financial consent, shared native180 and backup privacy: ${scenario}`, { timeout: 170000 }, async () => withIsolatedVerificationSql(adminUrl, async ({ db, peer, connectionString, canaryWindow, defer }) => {
   const apiKey = `synthetic-follow-up-${randomUUID()}-au5`, recipientNumber = `+614${randomInt(10_000_000, 99_999_999)}`;
   const identities = { accountSid: `AC${randomUUID().replaceAll("-", "")}`, callSid: `CA${randomUUID().replaceAll("-", "")}`,
     streamSid: `MZ${randomUUID().replaceAll("-", "")}`, authToken: `synthetic-follow-up-${randomUUID()}`, contextKey: randomBytes(32),
@@ -34,7 +32,7 @@ test(`emitted outgoing follow-up private financial consent, shared native180 and
     financialBarrier: native => {
       const binding = financialRecordOwnerBinding(native); assert.ok(binding.ok);
       return new PostgresFinancialEffectBarrier(db, native.scope, binding.value);
-    } }); t.after(c.close);
+    } }); defer(c.close);
   const f = c.f, { code, input } = await selectBooking(c);
   assert.notEqual(recipientNumber, f.inbound.presentedCallerNumber);
   await f.mark(); const privateStart = f.spoken.length; await playTerms(c);
@@ -53,7 +51,7 @@ test(`emitted outgoing follow-up private financial consent, shared native180 and
   assert.equal(Object.values((await f.current()).actions)[0]!.status === "committed", scenario === "accepted");
   const observations = [...c.funding.rows.values()].filter(row => String(row.notes).includes("financial booking observation"));
   assert.equal(observations.length, scenario === "accepted" ? 1 : 0);
-  const second = await f.transport.listen(f.transport.makeRouter()); t.after(second.close);
+  const second = await f.transport.listen(f.transport.makeRouter()); defer(second.close);
   const response = await second.post(), replay = await second.open(await response.text()); assert.equal(await replay.outcome, "closed");
   assert.equal(f.transport.state.created, 1);
   const financialNotes = [...c.funding.rows.values()].map(row => String(row.notes));
@@ -67,8 +65,9 @@ test(`emitted outgoing follow-up private financial consent, shared native180 and
   const probes = canaries.flatMap((text, i) => Array.from({ length: Math.ceil(text.length / 256) }, (_, part) => {
     const chunk = text.slice(part * 256, (part + 1) * 256); return { label: `follow_up_${i}_${part}`, value: chunk.length < 4 ? text.slice(-4) : chunk };
   }));
+  if (scenario === "accepted") await assertIsolatedVerificationCanary(adminUrl, code);
   for (let i = 0; i < probes.length; i += 12) assert.deepEqual(await scanPatientDataCanaries(db, probes.slice(i, i + 12)), { ok: true, value: [] });
-  const dump = execFileSync("pg_dump", [process.env.DATABASE_URL!, "--no-owner", "--no-privileges"], { timeout: 10000, maxBuffer: 8000000 }).toString();
+  const dump = execFileSync("pg_dump", [connectionString, "--no-owner", "--no-privileges"], { timeout: 10000, maxBuffer: 8000000 }).toString();
   const copy = (v: string) => v.replaceAll("\\", "\\\\").replaceAll("\n", "\\n").replaceAll("\r", "\\r").replaceAll("\t", "\\t");
   for (const text of canaries) {
     const json = JSON.stringify(text).slice(1, -1);
@@ -92,4 +91,4 @@ test(`emitted outgoing follow-up private financial consent, shared native180 and
   for (const secret of [apiKey, verificationCanaries[0]!, verificationCanaries[1]!, recipientNumber, code, f.requestNotes, identities.authToken, "GBP 50.00"])
     assert.equal(transient.includes(secret), false);
   assert.ok(c.claims <= 180);
-});
+}));
