@@ -16,6 +16,46 @@ To make the latest validated set available to an owner-run operations check, add
 
 For the separate `tts-1` primary latency candidate, pass `--speech-profile tts-1-primary-v1` with a report produced by `npm run eval:speech-fallback -- --primary-model tts-1 --fallback-model tts-1 --primary-first-chunk-ms 2500 --repeats 20 --concurrency 4 --out <owner-only-report>`. The assessor pins those exact models, voice, deadlines, corpus, source hash and job count; the numerical thresholds above do not change. Omit `--speech-profile` to assess the default `gpt-4o-mini-tts` primary / `tts-1` fallback profile. Selecting a speech profile does not change the standalone voice runner.
 
+
+## Source-matched speech checkpoint, 23 October 2026
+
+The [aggregate evidence](baselines/synthetic-speech-current-20261023-v1.json)
+records the current transcription adapter and unchanged pinned corpora. Three
+repeats per case at provider concurrency two completed all 51 recognitions:
+
+| Declared default `gpt-live-transcribe` corpus | Runs | Critical runs | WER | Final p95 | Gate |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Clean telephone | 9 | 0 | 0% | 712 ms | Pass |
+| 10 dB noise | 18 | 12 | 40.91% | 1,252 ms | Fail |
+| Safety | 24 | 11 | 26.11% | 871 ms | Fail |
+
+No provider, empty, truncated or delayed result was reported. Accuracy still
+fails the original zero-critical and at-most-10% WER limits. Timing alone does
+not pass this gate.
+
+One predeclared alternative used the existing committed-turn `gpt-transcribe`
+model with static `clinic-v1` context on all six original noisy clips at three
+repeats. All 18 recognitions completed: four critical runs, 13.64% WER and
+1,142 ms final p95. It also fails. Actual errors include a booking request
+becoming rescheduling and chest pain becoming fast pain or fasting. These
+cannot be normalized into success. The alternative has no new clean, safety
+or representative-call qualification and is not selected for the runtime.
+
+The four-input assessor validates the three new transcription reports and the
+original October 1 synthesis report against their current source/corpus hashes.
+That retained synthesis evidence passes its original 40-job limits; it is not
+a fresh synthesis run or a current backend latency guarantee. The assessor
+exits 1 for quality failure and the owner status reader exits 2, rather than
+reporting missing or stale inputs. A private report set holds this assessment;
+the historical default set is unchanged.
+
+No fixture, threshold, prompt in the default profile, production model, audio
+transform or caller-action quality changed. Realtime finals remain
+`needsClarification`, `representativeCallGate` is `notRun`, and `releaseGate`
+is `unverified`. Any other provider remains an unselected experiment requiring
+its own exact configuration and qualification. Synthetic results do not close
+the representative acoustic or clinic/provider acceptance gates below.
+
 ## Representative call gate
 
 Before any patient call or natural-language availability is enabled, record a consented, patient-free evaluation over the intended carrier and clinic acoustic route. Predeclare at least **100 complete calls** from at least **10 speakers**, covering each intended locale and varied accents, quiet and noisy rooms, interruptions, numbers, dates, email, currency, clinic names, urgent language, and long turns. Keep source audio and review notes in a restricted evaluation store outside Abby's patient database. Compare final transcripts with human-labeled words and review all critical errors plus a predeclared sample of other calls.

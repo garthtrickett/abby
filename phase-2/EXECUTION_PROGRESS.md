@@ -1,8 +1,8 @@
 # Execution progress and evidence
 
-**Current delivery checkpoint, 22 October 2026:** Foundations through PR588 are normally merged at848b8c5. Its eight own checks and actual parentc3af48c main4/raw logs passed before merge; its new actual-main qualification remains independent. This schema component imports that real parent and passes current composed callback-memo SQL9/9 and whole strict TypeScript, with all741 serving outputs unchanged. Earlier schema68, transaction12 and allocation11 retain their original separately qualified inputs and overlapping counts. Refreshed facts/scenario contracts accompany this component; final exact-parent review, its own publication/cloud and ordinary delivery remain required. The full thirteen-gap engineering and real clinic/provider/source/retention/restore/acoustic acceptance remain open; no patient traffic, deployment or default activation follows. Earlier dated entries retain their original scopes.
+**Current delivery checkpoint, 23 October 2026:** PR590 normally merged at `327d0c3` after all eight corrected-head jobs and their raw logs/counts passed, along with the qualified actual parent-main evidence. Its resulting main checks remain independently pending. PR589 at `78158d9` has separately qualified all four actual-main jobs/raw logs. This optional Deepgram branch incorporates the actual shutdown parent; fresh combined whole strict/serving and final qualification remain required. Original component counts retain their inputs and overlaps. All three Deepgram noisy profiles and current OpenAI noisy/safety profiles fail the original acoustic gates. The full thirteen-gap roadmap and real clinic/provider/source/retention/restore/acoustic acceptance remain open; no deployment or default activation follows.
 
-**Updated:** 22 October 2026. **Objective:** Work through [EXECUTION_ORDER.md](EXECUTION_ORDER.md), preserving its full thirteen-gap scope. This ledger records partial delivery; the integration is not complete or activated.
+**Updated:** 23 October 2026. **Objective:** Work through [EXECUTION_ORDER.md](EXECUTION_ORDER.md), preserving its full thirteen-gap scope. This ledger records partial delivery; the integration is not complete or activated.
 
 **Historical incoming callback engineering checkpoint, 22 October 2026:** Explicit incoming-only provisioning now explains an unambiguous clinic-native prior call only after independent patient verification, then constrains separately verified moves/cancellations to the original appointment. Unverified/shared/wrong-patient/stale/withdrawn context stays unknown. The complete current correction passes438 source controls; fresh whole strict/740 serving and four actual signed PostgreSQL cases qualify the current fixture graph, including a fresh incoming owner needing its own code and full SQL/raw-backup privacy. The complete source move uses173 native HTTP requests plus one setup under unchanged180, with no denied claim. These are local synthetic results, not this change's review/publication/cloud, clinic/provider/acoustic/full-call acceptance or activation. All thirteen gaps remain in scope. See [contract, exact behavior and limits](INCOMING_MISSED_CALL_CONTEXT.md).
 
@@ -6436,6 +6436,54 @@ independent later-merge gate. The thirteen-gap roadmap and real acceptance
 remain open, without new live calls, money, deployment or default activation.
 
 
+## Delivered schema foundation and current speech result, 23 October 2026
+
+PR589 normally merged as `78158d9` after all eight exact-head push/PR jobs and
+their complete raw logs passed, with the actual PR588 parent main also
+independently qualified. Each PostgreSQL pool ran 6,915 tests: 6,914 passed,
+one existing opt-in live-provider case skipped, zero failed/cancelled; six
+ordered controls passed separately. Each text pool ran 5,848 tests: 5,575
+passed and 273 expected mode skips, with six ordered controls separately.
+Type and browser jobs passed. The 20 new schema/transaction cases and the
+existing upgrade case have explicit non-skipped pass lines. All 14 booking
+verification requirements map to 50 current, non-skipped witness references.
+These are overlapping references, not 50 extra tests or a real-clinic pass.
+The resulting main checks remain a separate delivery observation.
+
+The [current speech checkpoint](../eval/SPEECH_QUALITY_GATE.md#source-matched-speech-checkpoint-23-october-2026)
+records completed recognition evidence rather than a promotion: clean passes,
+noise/safety fail, and a repeated committed/context alternative improves but
+still fails. The old 68/12/11/9 local cohorts and October 1 synthesis evidence
+retain their original source graphs, dates and overlaps. All thirteen gaps and
+actual clinic/provider/source/retention/restore/acoustic acceptance remain open.
+No new deployment, patient admission or default configuration follows.
+
+
+## Listener readiness and immediate shutdown, 23 October 2026
+
+PR590's original `6557dca` push PostgreSQL job passed, but its pull-request
+PostgreSQL job failed one healthy-child shutdown assertion before schema drift
+was introduced. The other six jobs passed. That head was not merged and its
+failed raw evidence remains preserved; a passing companion run cannot erase it.
+
+The runner published `listenerReady` before registering SIGINT/SIGTERM handlers.
+Two deterministic process cases now signal the actual child at that publication
+boundary. Both fail against the unchanged old 741-file serving build with a
+signal exit instead of clean exit zero; both original schema-refusal cases pass.
+No sleep, retry, timeout or exit assertion is weakened.
+
+The correction arms shutdown handlers before publishing readiness and removes
+both owned handlers on exit. It retains the consumer, listener, retention and
+database cleanup sequence and existing readiness/clinical authority. Whole strict
+TypeScript and the serving build pass. Only the compiled runner changes; the other
+740 outputs remain exact. The two new signal cases, both original schema-refusal
+cases and six financial lifecycle controls pass together on that exact build:
+ten total, none skipped. Final metadata, exact-head review and refreshed cloud
+qualification/delivery remain separate gates.
+The earlier speech baseline and alternative still fail quality; this lifecycle
+correction supplies no acoustic pass, deployment or patient-traffic activation.
+
+
 ## Optional Deepgram experiment, 23 October 2026
 
 The owner selected the optional [Deepgram transcription experiment](../phase-1/DEEPGRAM_TRANSCRIPTION.md).
@@ -6478,3 +6526,22 @@ all three failed acoustic profiles are unchanged. Whole strict/serving of this
 test extension and the actual corrective parent, final review and ordinary
 publication/delivery remain required; synthetic quality evidence is no release
 approval or live clinic authority.
+
+
+## Actual shutdown-parent integration for optional transcription, 23 October 2026
+
+PR590 corrected head5e210817 passed all eight own jobs and complete raw logs/counts
+before normal merge as327d0c32. Its prior failure remains archived, and its
+resulting main checks remain independently pending. This optional transcription
+branch imports that actual normal tree, preserves the exact corrected CLI and
+signal cases, and reconciles both component histories/facts and all thirteen
+requirements. The original63 source controls retain their unchanged adapter/test
+inputs; fresh combined whole strict/serving, metadata and final exact-parent
+review precede this branch’s publication and own CI. All three actual Deepgram
+profiles remain quality failures and no runtime selection is added.
+
+The existing sanctioned demo also passes current read-only metadata access and
+eight-GET guarded catalogue/named-fixture preflight: eligible30minute type, no
+active matching lifecycle patient/type, original online flagfalse and unchanged
+Asia/Jakarta timezone. No native write, recording, clinical execution, patient
+traffic, sender/payment activation or full clinic acceptance is inferred.

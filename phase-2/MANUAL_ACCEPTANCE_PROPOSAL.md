@@ -28,8 +28,13 @@ new clinic does not need to be identified. Its owner-only configuration remains
 at `/home/gust/code/abby/.env`. On23October, the named API-key/contact settings
 were present and nonempty with file mode0600. A separate read-only metadata
 check returned HTTP200 for businesses, practitioners and appointment types.
-It read no patient endpoints and made no writes. Current fixture cleanliness
-and acceptance of the newer workflows remain unverified.
+It read no patient endpoints and made no writes. A later guarded eight-GET
+preflight validated the existing demo catalogue and found no active patient or
+recall-type fixture belonging to the named lifecycle rehearsal; its two patient
+queries used that fixture's exact email/name filters. The eligible service is
+30minutes and the account timezone remains Asia/Jakarta. No setting was changed.
+Archived history, other fixture families and acceptance of newer workflows
+remain unverified.
 
 The [C-LIVE-59 lifecycle](../phase-0/CLINIKO_EVIDENCE.md#c-live-59--complete-admitted-demo-lifecycle-with-independent-readbacks-and-cleanup)
 passed on5October: real provider intake, two bookings, one reschedule, one
@@ -66,8 +71,9 @@ neither a memo nor a closed staff task clears contact or supplies clinical
 authority. Read their [current scope](INCOMING_MISSED_CALL_CONTEXT.md) and the
 [staff-review contract](OUTBOUND_STAFF_REVIEW.md) before selecting a rehearsal.
 
-PR590's corrected listener shutdown is separately qualified locally, with its
-own refreshed cloud/delivery still pending. The optional Deepgram experiment's
+PR590's corrected listener shutdown normally merged as `327d0c3` after all eight
+own-head jobs and raw results passed. Its resulting main checks remain
+independently pending. The optional Deepgram experiment's
 original graph passed strict/serving and its later host-boundary source cohort
 passes63 controls; fresh combined-parent strict/serving and its final delivery
 remain required. All three actual Deepgram noisy profiles and current OpenAI
