@@ -107,7 +107,9 @@ quality evidence refuses binding, and closing one call cannot contaminate anothe
 call's socket or transcript. Completed text remains `needsClarification`.
 
 The tests use synthetic quality evidence only. They do not approve the failed
-acoustic profiles or provide production provisioning. This test-only extension
-passes all 63 source controls; whole strict/serving qualification of the next
-combined parent is still required. All three actual recognition comparisons
+acoustic profiles or provide production provisioning. The current combined graph on actual normal parent `327d0c3` passes all 63
+source controls without skips (1792733073928), whole-project strict TypeScript
+and the serving build (1792733012707). All 741 emitted default serving artifacts
+match that corrected shutdown parent exactly; the optional adapter remains
+unselected. These checks include the extended test dependency graph. All three actual recognition comparisons
 continue to fail their original acoustic quality gates.

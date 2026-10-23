@@ -1,7 +1,7 @@
 {
   "verifiedDate": "2026-10-23",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "9cd900417d5334042b0520fe4eee41b7e1b26638d89cd78efd2bfae1ffab8b92",
+  "factsSha256": "b3a1a1f5e15b9b04f539dbbf31931839e5d5714f212ecb054e1abd4d68464a55",
   "sources": {
     ".github/workflows/text-contract.yml": "20f47909d711b7a7d2b3916a8ef0756345b414dff225184989cd8056b5b6179b",
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
@@ -11,11 +11,11 @@
     "eval/baselines/deepgram-nova3-noise-20261023-v1.json": "1947f0104bf9d00c10757b7b5b8878d82c1ce665936614c5418418eaff07258e",
     "eval/baselines/deepgram-phonecall-noise-20261023-v1.json": "d45c89ba174917c07d893c6ce17ccdf7aab1d890746c725ceada8838d74b3d3c",
     "eval/baselines/synthetic-speech-current-20261023-v1.json": "580a8a0ce39ec937a490a495022ba88fd2d7f3a4def0250c761d1f491dd71140",
-    "phase-1/DEEPGRAM_TRANSCRIPTION.md": "50fc8887984a1925907ff2f768eef41cc53eace6fe4c1b295fdeb02503cb6437",
+    "phase-1/DEEPGRAM_TRANSCRIPTION.md": "76956ff1bfc95575994621f1c6981df78b56baf1411e2b345261e19b87184199",
     "phase-1/OPENAI_REALTIME_TRANSCRIPTION.md": "49651d21fa207fb842c36b54ebd7d9d82052ef197c1105a3e280f67b000bde59",
     "phase-2/COMMUNICATION_MEMOS.md": "4dac489b3c4bf4694a0823a10177ed95b2ec9acffd4cb6f26720a94025eada40",
     "phase-2/EXECUTION_ORDER.md": "45b1c4399e693c33f509daea248a5dc55a8f880919495af219e8ba8061d06a3d",
-    "phase-2/EXECUTION_PROGRESS.md": "296dabe3dc63ef1985d1666550864177c2b44df9f05836db0601033d310b9484",
+    "phase-2/EXECUTION_PROGRESS.md": "1eaaee0c010fe5cdbaf10e6b7a1970303faf917869d758930d2ab45776de1c46",
     "phase-2/INCOMING_MISSED_CALL_CONTEXT.md": "ddb16adc7208a97c1e2711fc823e50ac825be0e74e45459beda31b275cbe1ab7",
     "phase-2/KAREN_TO_ABBY_REUSE_AUDIT.md": "ce4fca87bc5d33ad5c94ffcbd77a926b2f24f84fffae1ee85ddc713cce2a68ca",
     "phase-2/OUTBOUND_CALL_ADMISSION.md": "93edc93d8868e17133055771c98176af0d6fa13385adbf4f3700069f5d22df2f",

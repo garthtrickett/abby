@@ -6545,3 +6545,26 @@ eight-GET guarded catalogue/named-fixture preflight: eligible30minute type, no
 active matching lifecycle patient/type, original online flagfalse and unchanged
 Asia/Jakarta timezone. No native write, recording, clinical execution, patient
 traffic, sender/payment activation or full clinic acceptance is inferred.
+
+
+## Current combined optional transcription qualification, 23 October 2026
+
+The actual normal shutdown parent 327d0c3 and extended Deepgram test graph now
+pass fresh whole strict TypeScript and the serving build (1792733012707),
+peak 1805381632 B under the existing 2 GiB cap, heap 1536 MiB, CPU 100%
+and Swap 0. All 741 default serving artifacts match the qualified corrected
+parent exactly; the optional adapter remains unselected. The independent current
+source cohort passes 63/63 without skips or cancellations (1792733073928), peak
+158556160 B under 512 MiB, CPU 100% and Swap 0. No provider request is
+made by these checks. The earlier 63 result's unchanged adapter/test roots did
+not prove its entire import graph unchanged after the shutdown merge; this fresh
+run qualifies that graph.
+
+The original 57 graph and prior 63 results retain their own inputs rather than
+being relabelled current. All 54 actual recognitions across the three predeclared
+noisy profiles completed, but all three profile gates failed; no acoustic pass,
+clean/safety follow-on, production selector or default activation follows.
+Current metadata/final review, own cloud, normal merge and independently
+resulting-main checks remain separate delivery gates. The full thirteen-gap
+roadmap and real clinic/provider/source/retention/restore/representative/carrier
+acceptance remain open.

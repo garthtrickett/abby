@@ -40,9 +40,11 @@ correction and own-head results do not substitute for that qualification.
 | Gap 13 | Selected confidential communication memos derive verified administrative facts across supported individual/class/pass/representative outcomes and recovery. [Memo contract](COMMUNICATION_MEMOS.md). | Exact clinic-approved subjects, content, creator/viewers, retention, operation grants and real restore/provider acceptance. Attachments and other note types remain separate, unselected work. |
 
 The optional Deepgram implementation is currently a local experiment. Its original
-57-control graph passed whole strict/serving; a later 63-control source cohort also
-qualifies the existing host's profile checks and separate call adapters. Fresh
-combined-parent strict/serving remains required after that test-only extension.
+57-control graph retains its scoped evidence. The current combined graph on
+actual normal parent 327d0c3 passes 63 source controls with no skips, whole strict
+TypeScript and the serving build. All 741 default outputs match that corrected
+parent exactly. Host tests use synthetic quality evidence and do not exercise
+serving ingress or call admission.
 All three 18-run noisy profiles fail the original quality gates. Its metadata,
 review, publication and delivery are distinct from the corrected PR590 lifecycle
 work. No profile or voice default is promoted.
@@ -53,7 +55,7 @@ operator observations. Keep the original full thirteen-gap scope, real-mail and
 carrier deferrals, source preservation, acceptance and activation requirements.
 
 
-**Current delivery checkpoint, 23 October 2026:** PR590 normally merged at `327d0c3` after all eight corrected-head jobs and their raw logs/counts passed, along with the qualified actual parent-main evidence. Its resulting main checks remain independently pending. PR589 at `78158d9` has separately qualified all four actual-main jobs/raw logs. This optional Deepgram branch incorporates the actual shutdown parent; fresh combined whole strict/serving and final qualification remain required. Original component counts retain their inputs and overlaps. All three Deepgram noisy profiles and current OpenAI noisy/safety profiles fail the original acoustic gates. The full thirteen-gap roadmap and real clinic/provider/source/retention/restore/acoustic acceptance remain open; no deployment or default activation follows.
+**Current delivery checkpoint, 23 October 2026:** PR590 normally merged at `327d0c3` after all eight corrected-head jobs and their raw logs/counts passed, along with the qualified actual parent-main evidence. Its resulting main checks remain independently pending. PR589 at `78158d9` has separately qualified all four actual-main jobs/raw logs. This optional Deepgram branch incorporates the actual shutdown parent and passes fresh combined 63 source controls, whole strict TypeScript and the serving build; all 741 default serving artifacts match that parent exactly. Final review, own cloud and ordinary delivery remain required. Original component counts retain their inputs and overlaps. All three Deepgram noisy profiles and current OpenAI noisy/safety profiles fail the original acoustic gates. The full thirteen-gap roadmap and real clinic/provider/source/retention/restore/acoustic acceptance remain open; no deployment or default activation follows.
 
 **Earlier local gap3 storage-guard checkpoint, 22 October 2026:** The shared native budget schema is now checked read-only before standalone startup, new signed webhook admission and later stream ownership. Local68 final checks (including nested tests, preserved operational failures and metadata) and strict/727 serving pass on delivered337; no quota/row/native operation or current active result is changed. The original337-based proof remains scoped to that component. Actual normal callback parentc3af48c is integrated with fresh68/68, strict and741 serving outputs; final current-parent review and ordinary delivery remain required, with parent actual-main checks separate. Known session/aggregate/native queue/root observations do not establish independent all-carrier completeness; R01 retains that coverage limit. See [the exact storage/readiness scope](SHARED_BUDGET_STORAGE_READINESS.md). The full thirteen-gap objective and real acceptance remain open.
 

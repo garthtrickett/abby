@@ -73,10 +73,10 @@ authority. Read their [current scope](INCOMING_MISSED_CALL_CONTEXT.md) and the
 
 PR590's corrected listener shutdown normally merged as `327d0c3` after all eight
 own-head jobs and raw results passed. Its resulting main checks remain
-independently pending. The optional Deepgram experiment's
-original graph passed strict/serving and its later host-boundary source cohort
-passes63 controls; fresh combined-parent strict/serving and its final delivery
-remain required. All three actual Deepgram noisy profiles and current OpenAI
+independently pending. The optional Deepgram experiment passes current combined 63 source controls
+without skips, whole strict TypeScript and the serving build on actual parent
+327d0c3; all 741 default serving artifacts match that parent exactly. Final
+review, own cloud and ordinary delivery remain required. All three actual Deepgram noisy profiles and current OpenAI
 noisy/safety recognition fail the original quality gates. Synthetic profile
 evidence, fast responses or valid transport cannot approve relevant voice
 activation. See [the speech gate](../eval/SPEECH_QUALITY_GATE.md) and
