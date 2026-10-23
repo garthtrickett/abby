@@ -113,3 +113,60 @@ and the serving build (1792733012707). All 741 emitted default serving artifacts
 match that corrected shutdown parent exactly; the optional adapter remains
 unselected. These checks include the extended test dependency graph. All three actual recognition comparisons
 continue to fail their original acoustic quality gates.
+
+## Delivered optional-adapter engineering, 23 October 2026
+
+PR591's exact reviewed head `8c0a2c54` passed all eight own-head jobs before normal
+merge as `9c49a6f`. Its four independently resulting-main jobs and raw results
+also passed. All sixteen parent/own/main logs and expected counts are verified;
+the 24 adapter test titles pass in each own/main text and PostgreSQL result.
+The local 63-control, strict/serving and 741-output comparisons retain their
+original inputs. No additional build or default selection follows this record.
+The private request-mode diagnostics below remain unshipped experiments, and
+clinic/provider/acoustic/activation acceptance remains separate.
+
+## Complete-utterance diagnostics, 23 October 2026
+
+The [Nova-3 aggregate](../eval/baselines/deepgram-complete-turn-nova3-noise-20261023-v1.json) and [Whisper aggregate](../eval/baselines/deepgram-complete-turn-whisper-noise-20261023-v1.json) bind these results to their private source snapshots and exact reports.
+
+Two later private comparisons used the same six original noisy clips, three
+repeats, concurrency two and unchanged recognition gates. They sent the entire
+unchanged mono PCM16/16 kHz utterance in a lossless WAV container after Abby's own
+flush. No extra silence, resampling, expected-answer terms or filtering was added.
+The existing two-second finality budget was preserved. These callers and their
+prototype are private experiments; the shipped optional adapter remains streaming
+Nova-3 and the default voice runtime remains unchanged.
+
+| Private complete-utterance profile | Attempts | Completed recognitions | Critical results | WER of completed recognitions | Final p95 of completed recognitions | Unavailable results | Outcome |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Nova-3 HTTP | 18 | 18 | 6 | 18.18% | 1,045 ms | 0 | Fails critical-word and WER gates |
+| Requested `whisper-large` HTTP | 18 | 6 | 0 among the six returned transcripts | 0% among those six only | 850 ms among those six only | 12 | Fails availability; no full-corpus accuracy pass |
+
+Nova-3 still loses the booking verb and chest-pain terms in the same two cases
+across all three repeats. Completing a whole-utterance response does not resolve
+that critical accuracy problem. This comparison does not establish the exact
+cause of the earlier streaming errors.
+
+Whisper returns three matches each for NS-001 and NS-002; all attempts for
+NS-003 through NS-006 are unavailable. Successful-only accuracy and latency must
+not hide those twelve failures. The original failed attempts did not retain
+HTTP response status, so their exact causes are unknown. Two separate single-case
+diagnostics, NS-006 and NS-004, independently abort after 2,002 and 2,024 ms before
+response headers. These observations show those two requests miss the existing
+budget; they do not prove rate limiting or explain every earlier unavailable
+result. The two probes are not recognition qualification and do not change the
+budget.
+
+The private complete-turn protocol passes 23 local controls and scoped strict
+TypeScript, including its live evaluator import graph. These results do not
+qualify the actual host, serving ingress or call admission for that prototype.
+No clean/safety follow-on, runtime selection or promotion follows either failure.
+Representative clinic, acoustic, carrier and activation gates remain open.
+
+Across the three earlier streaming comparisons and these two private cohorts,
+there are 90 cohort attempts and 78 completed recognitions. Four complete profiles
+account for 72 of those recognitions and all four fail their quality gates. The
+Whisper cohort supplies six additional recognitions and twelve failures. Including
+the two nonqualifying single-request probes gives 92 total requests, not 92
+successful recognitions. No further unchanged model sweep or failure probe is
+planned.

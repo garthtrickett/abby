@@ -1,6 +1,6 @@
 # Execution progress and evidence
 
-**Current delivery checkpoint, 23 October 2026:** PR590 normally merged at `327d0c3` after all eight corrected-head jobs and their raw logs/counts passed, along with the qualified actual parent-main evidence. Its resulting main checks remain independently pending. PR589 at `78158d9` has separately qualified all four actual-main jobs/raw logs. This optional Deepgram branch incorporates the actual shutdown parent and passes fresh combined 63 source controls, whole strict TypeScript and the serving build; all 741 default serving artifacts match that parent exactly. Final review, own cloud and ordinary delivery remain required. Original component counts retain their inputs and overlaps. All three Deepgram noisy profiles and current OpenAI noisy/safety profiles fail the original acoustic gates. The full thirteen-gap roadmap and real clinic/provider/source/retention/restore/acoustic acceptance remain open; no deployment or default activation follows.
+**Current delivery checkpoint, 23 October 2026:** PR591 normally merged as `9c49a6f` after all eight exact-head jobs passed on qualified parent `327d0c3`. All four independently resulting-main checks also passed; all sixteen raw logs and expected counts are verified. Its combined local graph retains 63 source controls, whole strict TypeScript and 741 default serving outputs identical to that parent. The three streaming Deepgram profiles and private whole-utterance Nova-3 comparison fail acoustic quality; private Whisper fails availability with six completed recognitions from eighteen attempts. None is selected for the runtime. The rehearsal backup role is the clinic practice manager; a named distinct approved person, verified destination and human acceptance remain required. The full thirteen-gap scope and clinic/provider/source/retention/restore/acoustic acceptance remain open. No deployment, live traffic or default activation follows.
 
 **Updated:** 23 October 2026. **Objective:** Work through [EXECUTION_ORDER.md](EXECUTION_ORDER.md), preserving its full thirteen-gap scope. This ledger records partial delivery; the integration is not complete or activated.
 
@@ -6568,3 +6568,64 @@ Current metadata/final review, own cloud, normal merge and independently
 resulting-main checks remain separate delivery gates. The full thirteen-gap
 roadmap and real clinic/provider/source/retention/restore/representative/carrier
 acceptance remain open.
+
+## Normal optional-adapter merge and complete-utterance diagnostics, 23 October 2026
+
+PR591 at `8c0a2c54` passed all eight push/PR jobs, including identical mode
+counts and non-skipped adapter witnesses. Each PostgreSQL run has 6,940 passes,
+zero failures/cancellations and one existing skip, followed by six passing ordered
+controls. Each text run has 5,599 passes, zero failures/cancellations and 275
+existing mode skips, followed by six passing ordered controls. Browser and strict
+checks also passed. All eight raw logs were hashed and independently rechecked.
+Actual parent `327d0c3`'s four main jobs and raw logs were already qualified.
+Normal merge at 07:27:17 UTC produced `9c49a6f` with the exact reviewed tree;
+its four main jobs were then running and unqualified. Their later independent
+completion is recorded below. No deploy or activation was inferred at that checkpoint.
+
+Two later private whole-utterance diagnostics retain the original six noisy clips,
+three repeats, concurrency two, unchanged audio and thresholds, and the existing
+two-second finality budget. Nova-3 completes all 18 recognitions with six critical
+results, 18.18% WER and 1,045 ms final p95. Whisper completes six matches but has
+twelve unavailable results; its successful-only 0% WER/850 ms p95 is not a
+full-corpus pass. Independent single NS-006/NS-004 probes abort at 2,002/2,024 ms
+before headers. Their exact observation cannot establish HTTP throttling or every
+original failure's cause. They are not qualification runs. Private protocol23
+and scoped strict pass, without actual host/serving qualification or shipped
+request-mode changes. No clean/safety follow-on or default promotion occurs.
+See [the exact evidence and limits](../phase-1/DEEPGRAM_TRANSCRIPTION.md#complete-utterance-diagnostics-23-october-2026).
+
+The user delegated the rehearsal backup role choice: clinic practice manager,
+or senior receptionist where the clinic has no practice manager. A named distinct
+approved actor and verified destination remain required; no human receipt or
+duty acceptance is claimed. All thirteen gaps and the external clinic/provider,
+source/retention/restore, acoustic, public-route and carrier requirements remain.
+
+## Completed independent optional-adapter main qualification, 23 October 2026
+
+All four actual `9c49a6f` main jobs subsequently passed. Their complete raw logs,
+expected counts, all 24 named adapter passes in text/PostgreSQL, and preserved
+financial/schema controls are verified together with parent `327d0c3` main4 and
+PR591 own8: sixteen raw logs total. Actual-main PostgreSQL has 6,940 passes,
+zero failures/cancellations and one existing skip, then six passing ordered
+controls. Text has 5,599 passes and 275 existing mode skips, then six passing
+ordered controls. Browser and strict checks passed independently.
+
+The original fourteen-row booking matrix maps to 50 overlapping references and
+45 distinct named tests, all passing without skips in both own-head PostgreSQL
+logs and the actual resulting-main log. All 21 schema/transaction cases also pass
+without skips. Those are selected engineering witnesses, not fourteen live clinic
+acceptances or proof of every possible composition. Original plan/test hashes,
+all eleven execution stages, thirteen requirements and twenty-eight reuse
+placements remain intact.
+
+Supervisor `1792734097938` exited with code 1 after all main jobs passed but before the raw-log
+archiver started: its fresh host guard refused sustained memory pressure. That
+local refusal and original exit are preserved; it is not a product-test failure.
+After fresh admission, the unmodified archiver ran once under separately tracked
+successor `1792745734782`, which completed with code 0 in 20 seconds. It peaked at
+72,953,856 bytes under a 256 MiB cap, 50% CPU and no swap, with no OOM events.
+No test, build, observer or CI job was replayed.
+The local-only documentation successor records the two private failed request-mode
+diagnostics and selected rehearsal backup role. Its own review/publication/CI and
+all clinic/provider/source/retention/restore/acoustic/activation gates remain
+separate; no runtime default or serving artifact changed.

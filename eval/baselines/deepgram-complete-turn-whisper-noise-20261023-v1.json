@@ -1,0 +1,153 @@
+{
+  "schema": "abby.deepgram-noise.aggregate.v2",
+  "date": "2026-10-23",
+  "patientFree": true,
+  "profile": {
+    "provider": "deepgram-complete-turn",
+    "model": "whisper-large",
+    "language": "en",
+    "transport": "http-whole-utterance",
+    "audioFormat": "mono-pcm16le-16000",
+    "wireContainer": "lossless-wave-pcm16",
+    "originalAudioUnchanged": true,
+    "extraPadding": false,
+    "prompt": null,
+    "keyterms": [],
+    "numerals": false,
+    "smartFormat": false,
+    "mipOptOutRequested": true,
+    "flushDeadlineMs": 2000,
+    "corpusVersion": "transcription-noise-v1",
+    "corpusSha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+    "repeats": 3,
+    "concurrency": 2,
+    "nodeVersion": "v22.23.0"
+  },
+  "corpus": {
+    "version": "transcription-noise-v1",
+    "sha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+    "cases": 6,
+    "attempts": 18,
+    "completedRecognitions": 6
+  },
+  "counts": {
+    "match": 6,
+    "mismatch": 0,
+    "critical": 0,
+    "providerFailure": 12
+  },
+  "metrics": {
+    "cases": 6,
+    "runs": 18,
+    "critical": 0,
+    "providerFailures": 12,
+    "empty": 0,
+    "truncated": 0,
+    "delayed": 0,
+    "wordErrorRate": 0,
+    "finalP95Ms": 850,
+    "missingRepeats": []
+  },
+  "metricPopulation": {
+    "wordErrorRate": "successful recognitions only",
+    "finalP95Ms": "successful recognitions only",
+    "failedAttemptsMustNotBeExcludedFromAvailabilityGate": true
+  },
+  "gate": {
+    "status": "fail",
+    "failures": [
+      "providerFailure"
+    ],
+    "thresholds": {
+      "version": "transcription-synthetic-gate-v1",
+      "minRepeatsPerCase": 3,
+      "maxCritical": 0,
+      "maxProviderFailures": 0,
+      "maxEmpty": 0,
+      "maxTruncated": 0,
+      "maxWordErrorRate": 0.1,
+      "maxFinalP95Ms": 2500,
+      "maxIndividualFinalMs": 5000
+    }
+  },
+  "perCaseCounts": {
+    "NS-001": {
+      "match": 3,
+      "mismatch": 0,
+      "critical": 0,
+      "providerFailure": 0
+    },
+    "NS-002": {
+      "match": 3,
+      "mismatch": 0,
+      "critical": 0,
+      "providerFailure": 0
+    },
+    "NS-003": {
+      "match": 0,
+      "mismatch": 0,
+      "critical": 0,
+      "providerFailure": 3
+    },
+    "NS-004": {
+      "match": 0,
+      "mismatch": 0,
+      "critical": 0,
+      "providerFailure": 3
+    },
+    "NS-005": {
+      "match": 0,
+      "mismatch": 0,
+      "critical": 0,
+      "providerFailure": 3
+    },
+    "NS-006": {
+      "match": 0,
+      "mismatch": 0,
+      "critical": 0,
+      "providerFailure": 3
+    }
+  },
+  "privateReport": "/home/gust/.local/state/abby-deepgram-complete-turn/whisper-noise-v4.json",
+  "privateReportSha256": "e0b46e6408c2318d71c7a6757e73af56385e89e37b5cbead4db6dc9095c7a858",
+  "privateSourceSnapshot": "/home/gust/.local/state/abby-deepgram-complete-turn/whisper-inputs-v4.json",
+  "privateSourceSnapshotSha256": "218c11795164d8077b17ff92560aac52f757d0f890c440bf0bc7194f0bee6b5c",
+  "privateTerminal": "/home/gust/.local/state/abby-deepgram-complete-turn/whisper-terminal-v4.json",
+  "privateTerminalSha256": "9dcf6d91f4712ac723dff5c5d9482e7ffac84317db87591042550850ca6d8bd2",
+  "selectedForRuntime": false,
+  "cleanSafetyAndRepresentativeQualification": "notRun",
+  "productionDefaultsChanged": false,
+  "releaseGate": "unverified",
+  "wholeGoalComplete": false,
+  "scope": "Private experimental request mode; not a shipped adapter or actual host/serving admission",
+  "runAt": "2026-10-23T06:16:42.576Z",
+  "availabilityFailureInterpretation": "Six successful matches and twelve unavailable results are not a full-corpus accuracy pass. Original per-attempt HTTP causes were not captured.",
+  "independentFailureDiagnostics": [
+    {
+      "caseId": "NS-006",
+      "observedAt": "2026-10-23T06:22:22.707Z",
+      "requests": 1,
+      "observedKind": "requestAborted",
+      "elapsedBeforeHeadersMs": 2002,
+      "httpStatusObserved": false,
+      "notQualityQualification": true,
+      "excludedFromCohortMetrics": true,
+      "doesNotExplainAllOriginalFailures": true,
+      "privateReport": "/home/gust/.local/state/abby-deepgram-complete-turn/whisper-failure-probe-v5.json",
+      "privateReportSha256": "69041987ff4685080976a2181aaa78e1d3d43698892efab71a2f0cb988a2b5f6"
+    },
+    {
+      "caseId": "NS-004",
+      "observedAt": "2026-10-23T06:32:31.238Z",
+      "requests": 1,
+      "observedKind": "requestAborted",
+      "elapsedBeforeHeadersMs": 2024,
+      "httpStatusObserved": false,
+      "notQualityQualification": true,
+      "excludedFromCohortMetrics": true,
+      "doesNotExplainAllOriginalFailures": true,
+      "privateReport": "/home/gust/.local/state/abby-deepgram-complete-turn/whisper-failure-probe-v7.json",
+      "privateReportSha256": "b353b54bcb35fcb8b2ce9a7d02f4696ef1ba3e34826b773f032d20aa1f65d03c"
+    }
+  ]
+}

@@ -56,6 +56,17 @@ is `unverified`. Any other provider remains an unselected experiment requiring
 its own exact configuration and qualification. Synthetic results do not close
 the representative acoustic or clinic/provider acceptance gates below.
 
+## Optional Deepgram diagnostics, 23 October 2026
+
+The [optional adapter and private comparisons](../phase-1/DEEPGRAM_TRANSCRIPTION.md)
+retain the original noisy corpus and gates. Three streaming profiles and a
+whole-utterance Nova-3 profile all fail recognition quality. A whole-utterance
+Whisper comparison has six completed matches and twelve unavailable results,
+so successful-only accuracy/latency cannot pass availability. No clean/safety
+follow-on, runtime selection or replacement of this four-input assessor follows.
+Private request-mode controls do not establish actual host, serving, representative
+or clinic acceptance. The original thresholds above remain unchanged.
+
 ## Representative call gate
 
 Before any patient call or natural-language availability is enabled, record a consented, patient-free evaluation over the intended carrier and clinic acoustic route. Predeclare at least **100 complete calls** from at least **10 speakers**, covering each intended locale and varied accents, quiet and noisy rooms, interruptions, numbers, dates, email, currency, clinic names, urgent language, and long turns. Keep source audio and review notes in a restricted evaluation store outside Abby's patient database. Compare final transcripts with human-labeled words and review all critical errors plus a predeclared sample of other calls.
