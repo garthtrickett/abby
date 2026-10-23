@@ -1,0 +1,96 @@
+{
+  "schema": "abby.deepgram-noise.aggregate.v1",
+  "date": "2026-10-23",
+  "patientFree": true,
+  "profile": {
+    "provider": "deepgram-streaming",
+    "model": "nova-2-phonecall",
+    "language": "en",
+    "audioFormat": "mono-pcm16le-16000",
+    "turnClosure": "per-turn-close-stream-summary-normal-close",
+    "endpointing": false,
+    "mipOptOut": true,
+    "smartFormat": false,
+    "numerals": false,
+    "repeats": 3,
+    "concurrency": 2,
+    "punctuate": true
+  },
+  "corpus": {
+    "version": "transcription-noise-v1",
+    "sha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+    "cases": 6,
+    "runs": 18
+  },
+  "counts": {
+    "match": 3,
+    "mismatch": 3,
+    "critical": 12,
+    "providerFailure": 0
+  },
+  "metrics": {
+    "wordErrorRate": 0.4318181818181818,
+    "finalP95Ms": 313,
+    "empty": 0,
+    "truncated": 0,
+    "delayed": 0,
+    "missingRepeats": []
+  },
+  "gate": {
+    "status": "fail",
+    "failures": [
+      "critical",
+      "wordErrorRate"
+    ],
+    "thresholds": {
+      "version": "transcription-synthetic-gate-v1",
+      "minRepeatsPerCase": 3,
+      "maxCritical": 0,
+      "maxProviderFailures": 0,
+      "maxEmpty": 0,
+      "maxTruncated": 0,
+      "maxWordErrorRate": 0.1,
+      "maxFinalP95Ms": 2500,
+      "maxIndividualFinalMs": 5000
+    }
+  },
+  "privateReport": "/home/gust/.local/state/abby-deepgram-transcription/phonecall-noise-v14.json",
+  "privateReportSha256": "a4d79f5066d979c52f40c2fdb871388ab086d275d906668934ae1876dd00b1c7",
+  "privateSourceSnapshot": "/home/gust/.local/state/abby-deepgram-transcription/phonecall-source-snapshot-v14.json",
+  "selectedForRuntime": false,
+  "cleanSafetyAndRepresentativeQualification": "notRun",
+  "productionDefaultsChanged": false,
+  "releaseGate": "unverified",
+  "wholeGoalComplete": false,
+  "runAt": "2026-10-23T02:54:43.547Z",
+  "sourceFiles": [
+    {
+      "path": "src/voice/deepgram-streaming-transcription.ts",
+      "sha256": "31dfd9d26bb9e710bb784dd72799ceb16f277b58530e5d9e8130ddfdcfb10dc2"
+    },
+    {
+      "path": "src/voice/transcription-evaluation.ts",
+      "sha256": "3ea30413b80cd28ecf337aaf9ad156dc6d5fd946ee74f81678654f9f2a41943d"
+    },
+    {
+      "path": "src/voice/transcription-evaluation-gate.ts",
+      "sha256": "44f7973d65f8de8261db8030bfbb14ce827a0c14b9b35756c2640133c956357c"
+    },
+    {
+      "path": "scripts/evaluate-deepgram-transcription.ts",
+      "sha256": "3a341cdd05ff28d524fa49129d7b1c5570b5e6b0a2150626d06e292bdec17cb7"
+    },
+    {
+      "path": "/home/gust/.local/state/abby-deepgram-transcription/phonecall-profile-v14.mts",
+      "sha256": "3ec84bc636dd6fc9469f1da1b2a5f9eb95d3d5bcd48d5778405e8d32e83bb9bb"
+    }
+  ],
+  "adapterSha256": "ea7992fa4b12ab0bd105a1249961ab3d9aa7c82772ef90854474014a15f48dd5",
+  "privateDiagnostic": {
+    "predeclaration": "/home/gust/.local/state/abby-deepgram-transcription/phonecall-predeclared-v14.json",
+    "sha256": "c41cabeac5f203c7276b6b39189d2771a6a82468e792755adc924df7bb4d6674",
+    "modelOnlySocketFactoryOverride": true,
+    "publicEvaluatorStillRequestsNova3": true,
+    "productionSelectionAdded": false
+  }
+}

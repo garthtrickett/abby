@@ -6434,3 +6434,27 @@ current metadata contracts and final exact-normal-parent review before its own
 narrow publication/CI and ordinary delivery. Parent848's main4 remains an
 independent later-merge gate. The thirteen-gap roadmap and real acceptance
 remain open, without new live calls, money, deployment or default activation.
+
+
+## Optional Deepgram experiment, 23 October 2026
+
+The owner selected the optional [Deepgram transcription experiment](../phase-1/DEEPGRAM_TRANSCRIPTION.md).
+It implements the existing `TranscriptionPort`; Twilio remains the carrier and
+Abby retains turn detection and clinic workflows. Local engineering passes 57
+source controls (22 new adapter cases and 35 preserved controls), whole-project
+strict TypeScript and the serving build. All 741 default serving artifacts match
+the qualified parent exactly; the default runtime does not select this adapter.
+
+Actual unchanged-corpus, three-repeat noisy speech results both fail the original
+zero-critical and at-most-10% WER gates. Nova-3 completes 18 runs with 6 critical,
+20.45% WER and 396 ms final p95. A predeclared private model-only Nova-2 phonecall
+comparison completes 18 with 12 critical, 43.18% WER and 313 ms final p95. Both have
+zero provider failures. Neither receives clean/safety follow-on or promotion.
+The aggregates preserve exact source/report hashes; no audio, expected text,
+threshold, existing OpenAI evaluator or default profile is changed.
+
+This component's final metadata, exact-parent review, publication/cloud and
+ordinary delivery remain independent gates. Gap 4 remains open, alongside the
+full thirteen-gap scope and real clinic/provider/source/retention/restore,
+representative-call, public-route and carrier acceptance. No deployment, live
+patient traffic or default activation follows from the optional experiment.

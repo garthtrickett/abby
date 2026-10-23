@@ -55,3 +55,22 @@ promoted. The four-input release assessor still supports its existing declared
 profiles; a Deepgram report is not an OpenAI profile or a replacement default set.
 Representative-call, real clinic/provider/carrier and activation acceptance remain
 separate. The remaining speech requirement stays open.
+
+A predeclared [phone-call model comparison](../eval/baselines/deepgram-phonecall-noise-20261023-v1.json)
+changed only the model to `nova-2-phonecall` through a private diagnostic socket
+factory. Deepgram documents that model for [low-bandwidth phone calls](https://developers.deepgram.com/docs/model).
+The original six clips, three repeats, concurrency two, streaming protocol and
+quality thresholds stayed fixed. All 18 recognitions completed with zero provider
+failures, but 12 were critical, WER was 43.18% and final p95 was 313 ms. That profile
+also fails and receives no clean/safety follow-on or production selection. The
+public evaluator continues to request Nova-3; the private caller and exact source
+snapshot are identified in the aggregate for audit.
+
+## Local engineering qualification
+
+The current implementation passes 57 source tests: 22 adapter cases and 35
+preserved transcription, controller and evaluation controls. Whole-project strict
+TypeScript and the serving build pass. All 741 emitted default serving artifacts
+match the qualified parent exactly because this optional adapter is not selected
+by the default runner. These checks establish local implementation compatibility;
+both actual recognition comparisons still fail their acoustic quality gates.
