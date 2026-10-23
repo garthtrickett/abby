@@ -121,6 +121,7 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
   let financialConsumer: ClinikoFinancialConsumer | undefined;
   let retentionTimer: NodeJS.Timeout | undefined;
   let retentionRun: Promise<void> | undefined;
+  let stopSignal: (() => void) | undefined;
   try {
     const healthy = boundedHealthCheck(() => sql`select 1`.execute(db));
     const rateBudget = new PostgresClinikoRequestBudget(db, { apiKey,
@@ -235,16 +236,22 @@ export async function serveClinikoVoice(ports: VoiceRunnerPorts = {}): Promise<v
     });
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("voice listener unavailable");
-    process.send?.({ kind: "listenerReady", port: address.port });
-    process.stdout.write(`Abby voice local listener ready on 127.0.0.1:${address.port}; ${testCaller ? "allowlisted test calls only" : "calls disabled"}\n`);
-    await new Promise<void>(resolve => {
+    const stopped = new Promise<void>(resolve => {
+      stopSignal = resolve;
       process.once("SIGINT", resolve);
       process.once("SIGTERM", resolve);
     });
+    process.send?.({ kind: "listenerReady", port: address.port });
+    process.stdout.write(`Abby voice local listener ready on 127.0.0.1:${address.port}; ${testCaller ? "allowlisted test calls only" : "calls disabled"}\n`);
+    await stopped;
     service.abort();
     try { await financialConsumer?.close(); }
     finally { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
   } finally {
+    if (stopSignal) {
+      process.off("SIGINT", stopSignal);
+      process.off("SIGTERM", stopSignal);
+    }
     service.abort();
     try { await financialConsumer?.close(); }
     finally {

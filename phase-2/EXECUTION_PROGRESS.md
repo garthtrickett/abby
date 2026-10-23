@@ -6457,3 +6457,28 @@ still fails. The old 68/12/11/9 local cohorts and October 1 synthesis evidence
 retain their original source graphs, dates and overlaps. All thirteen gaps and
 actual clinic/provider/source/retention/restore/acoustic acceptance remain open.
 No new deployment, patient admission or default configuration follows.
+
+
+## Listener readiness and immediate shutdown, 23 October 2026
+
+PR590's original `6557dca` push PostgreSQL job passed, but its pull-request
+PostgreSQL job failed one healthy-child shutdown assertion before schema drift
+was introduced. The other six jobs passed. That head was not merged and its
+failed raw evidence remains preserved; a passing companion run cannot erase it.
+
+The runner published `listenerReady` before registering SIGINT/SIGTERM handlers.
+Two deterministic process cases now signal the actual child at that publication
+boundary. Both fail against the unchanged old 741-file serving build with a
+signal exit instead of clean exit zero; both original schema-refusal cases pass.
+No sleep, retry, timeout or exit assertion is weakened.
+
+The correction arms shutdown handlers before publishing readiness and removes
+both owned handlers on exit. It retains the consumer, listener, retention and
+database cleanup sequence and existing readiness/clinical authority. Whole strict
+TypeScript and the serving build pass. Only the compiled runner changes; the other
+740 outputs remain exact. The two new signal cases, both original schema-refusal
+cases and six financial lifecycle controls pass together on that exact build:
+ten total, none skipped. Final metadata, exact-head review and refreshed cloud
+qualification/delivery remain separate gates.
+The earlier speech baseline and alternative still fail quality; this lifecycle
+correction supplies no acoustic pass, deployment or patient-traffic activation.
