@@ -19,6 +19,7 @@ import type Database from "../storage/generated/Database.ts";
 import { PostgresActiveCallClaims } from "../storage/postgres-active-call-claims.ts";
 import { PostgresClinikoRequestBudget } from "../storage/postgres-cliniko-request-budget.ts";
 import { checkStandaloneTextDatabase } from "../storage/standalone-privacy-preflight.ts";
+import { boundedHealthCheck } from "./bounded-health-check.ts";
 import type { StandalonePrivacyPreflightFailure } from "../storage/standalone-privacy-preflight.ts";
 import type { MediaTurnOptions, TranscriptionPort } from "../voice/media-turn-controller.ts";
 import type { OpenAIRealtimeTranscriptionConfig } from "../voice/openai-realtime-transcription.ts";
@@ -173,6 +174,10 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     }
   }
   const allRoutes = [...routes.values()].flat();
+  const checkBudgetSchema = allRoutes[0]!.rateBudget.schemaCompatible.bind(allRoutes[0]!.rateBudget);
+  const budgetSchemaReady = boundedHealthCheck(async () => {
+    if (!await checkBudgetSchema()) throw new Error("shared budget storage unavailable");
+  });
   const operationalRead = config.operationalRead ? { tokenHex: config.operationalRead.tokenHex,
     scope: structuredClone(config.operationalRead.scope) } : undefined;
   if (operationalRead && !allRoutes.some(route =>
@@ -266,6 +271,7 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     ...(config.openai.speechSocketFactory ? { speechSocketFactory: config.openai.speechSocketFactory } : {}),
     ...(config.speechQuality ? { quality: config.speechQuality } : {}),
   });
+  if (!await budgetSchemaReady()) return err({ kind: "storageFailure" });
   const privacy = await checkStandaloneTextDatabase(config.db);
   if (!privacy.ok) return err(privacy.error);
   if (!await config.activeCallClaims.matchesDatabase(config.db)) {
@@ -287,6 +293,10 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
         count(route.scope, "admissionDenied");
         return false;
       }
+      if (!await budgetSchemaReady()) {
+        count(route.scope, "admissionDenied");
+        return false;
+      }
       const approved = (await Promise.all(group.map(approvedRoute))).every(Boolean);
       if (!approved) count(route.scope, "admissionDenied");
       return approved;
@@ -295,6 +305,10 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     const group = routes.get(stream.event.dialedNumber);
     const route = group?.[0];
     if (!route || !group || stream.event.key.accountRef !== twilio.accountSid) throw new Error("clinic route unavailable");
+    if (!await budgetSchemaReady()) {
+      count(route.scope, "admissionDenied");
+      throw new Error("shared budget storage unavailable");
+    }
     const approvals = await Promise.all(group.map(approvedRoute));
     const approved = approvals[0];
     if (!approved || approvals.some(value => !value)) {

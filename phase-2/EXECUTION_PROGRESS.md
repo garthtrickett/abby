@@ -1,14 +1,16 @@
 # Execution progress and evidence
 
+**Current delivery checkpoint, 22 October 2026:** Foundations through PR588 are normally merged at848b8c5. Its eight own checks and actual parentc3af48c main4/raw logs passed before merge; its new actual-main qualification remains independent. This schema component imports that real parent and passes current composed callback-memo SQL9/9 and whole strict TypeScript, with all741 serving outputs unchanged. Earlier schema68, transaction12 and allocation11 retain their original separately qualified inputs and overlapping counts. Refreshed facts/scenario contracts accompany this component; final exact-parent review, its own publication/cloud and ordinary delivery remain required. The full thirteen-gap engineering and real clinic/provider/source/retention/restore/acoustic acceptance remain open; no patient traffic, deployment or default activation follows. Earlier dated entries retain their original scopes.
+
 **Updated:** 22 October 2026. **Objective:** Work through [EXECUTION_ORDER.md](EXECUTION_ORDER.md), preserving its full thirteen-gap scope. This ledger records partial delivery; the integration is not complete or activated.
 
-**Current incoming callback engineering, 22 October 2026:** Explicit incoming-only provisioning now explains an unambiguous clinic-native prior call only after independent patient verification, then constrains separately verified moves/cancellations to the original appointment. Unverified/shared/wrong-patient/stale/withdrawn context stays unknown. The complete current correction passes438 source controls; fresh whole strict/740 serving and four actual signed PostgreSQL cases qualify the current fixture graph, including a fresh incoming owner needing its own code and full SQL/raw-backup privacy. The complete source move uses173 native HTTP requests plus one setup under unchanged180, with no denied claim. These are local synthetic results, not this change's review/publication/cloud, clinic/provider/acoustic/full-call acceptance or activation. All thirteen gaps remain in scope. See [contract, exact behavior and limits](INCOMING_MISSED_CALL_CONTEXT.md).
+**Historical incoming callback engineering checkpoint, 22 October 2026:** Explicit incoming-only provisioning now explains an unambiguous clinic-native prior call only after independent patient verification, then constrains separately verified moves/cancellations to the original appointment. Unverified/shared/wrong-patient/stale/withdrawn context stays unknown. The complete current correction passes438 source controls; fresh whole strict/740 serving and four actual signed PostgreSQL cases qualify the current fixture graph, including a fresh incoming owner needing its own code and full SQL/raw-backup privacy. The complete source move uses173 native HTTP requests plus one setup under unchanged180, with no denied claim. These are local synthetic results, not this change's review/publication/cloud, clinic/provider/acoustic/full-call acceptance or activation. All thirteen gaps remain in scope. See [contract, exact behavior and limits](INCOMING_MISSED_CALL_CONTEXT.md).
 
 **Delivered parent, PR586:** The ACK correction normally merged as337957a11a731b615b89b6d5bd6cc2c2f884a448 after its own eight jobs passed. All four actual-main jobs independently passed and their raw logs were verified. Its36 source/726-output component evidence retains that exact scope; it is not relabelled as this callback feature or a full-roadmap pass.
 
 **Historical ACK engineering checkpoint before PR586 delivery, 22 October 2026:** The Realtime transcription adapter now rejects explicitly acknowledged delay or noise-reduction settings that contradict the requested settings, including a later contradiction while a turn is pending. Missing optional echoes remain tolerated and do not prove an effective setting; finals remain `needsClarification`. The unchanged owning reproduction failed before this correction. All 36 affected source checks now pass: nine new cases and 27 preserved controls. Whole strict TypeScript and the serving build pass, with 726 outputs; only the transcription adapter differs from reviewed scheduler PR585/f9112b9, and the other 725 outputs remain exact. This is offline protocol evidence, not a provider negotiation observation or an acoustic-quality pass. Historical noisy/safety failures and fixed thresholds remain; no model, default, audio transform, caller-action quality or activation is changed. Corrected actual normal PR585 at 235f6528c6f45571c067af21334301b94a5a4218 is integrated, including its reviewed SQL assertion correction. Final exact-parent review, this correction's own publication/cloud/delivery and real acceptance remain gates. The scheduler component below retains its original input scope.
 
-**Corrected scheduler parent, 22 October 2026:** The finite outbound scheduler now supports explicitly configured exact-appointment sick-day requests through the existing one-shot launch owner. Current local engineering passes66 source controls, whole strict TypeScript/726 serving outputs and28 emitted PostgreSQL cases: ten new sick-day scheduler cases, seven preserved finite-scheduler cases and eleven preserved targeted-launch cases. Only the scheduler production output changes; all other725 runtime files match reviewed published memo parentPR584/8371b81. Existing appointment, scheduling, contact/DNC, native180, one-use and capacity grants remain independent. Unknown dispatch stays consumed; known acceptance survives cancellation. The scheduler uses already approved native pending requests, without inferring a sick practitioner/date audience or clinical authority. Parent memo 145/726/31 and staff265/726/28 evidence keep their original graphs and are not summed into this cohort. PR583 independently passed all four actual-main jobs with raw logs verified. PR584 normally merged at ca8892b after its own eight CI jobs and raw logs passed; its exact normal tree is integrated without changing the qualified scheduler source or serving artifacts. All four actual-main jobs for parent PR584 and their raw logs passed. Original PR585 at f9112b9 push CI failed ten new SQL assertions because they inspected every credential budget in the shared database; its production-result and privacy assertions passed before that check. The corrected tests select the scheduler credential’s exact hashed row, keep its 180 limit and preserve a separately seeded unrelated limit-1 row. The original all-row assertion reproduced locally before correction; all 28 SQL cases and fresh whole strict TypeScript now pass, with all 726 existing serving bytes unchanged. PR585 normally merged at 235f6528c6f45571c067af21334301b94a5a4218 after all eight corrected own jobs and raw logs passed. Its actual-main jobs remain independently tracked. The ACK child retains its separate review, own CI, ordinary delivery and real acceptance gates. The full thirteen-gap scope continues. Future unresolved outbound contact stays blocked; no live call, recording, contact release, deployment or default activation follows.
+**Historical corrected scheduler-parent checkpoint, 22 October 2026:** The finite outbound scheduler now supports explicitly configured exact-appointment sick-day requests through the existing one-shot launch owner. Current local engineering passes66 source controls, whole strict TypeScript/726 serving outputs and28 emitted PostgreSQL cases: ten new sick-day scheduler cases, seven preserved finite-scheduler cases and eleven preserved targeted-launch cases. Only the scheduler production output changes; all other725 runtime files match reviewed published memo parentPR584/8371b81. Existing appointment, scheduling, contact/DNC, native180, one-use and capacity grants remain independent. Unknown dispatch stays consumed; known acceptance survives cancellation. The scheduler uses already approved native pending requests, without inferring a sick practitioner/date audience or clinical authority. Parent memo 145/726/31 and staff265/726/28 evidence keep their original graphs and are not summed into this cohort. PR583 independently passed all four actual-main jobs with raw logs verified. PR584 normally merged at ca8892b after its own eight CI jobs and raw logs passed; its exact normal tree is integrated without changing the qualified scheduler source or serving artifacts. All four actual-main jobs for parent PR584 and their raw logs passed. Original PR585 at f9112b9 push CI failed ten new SQL assertions because they inspected every credential budget in the shared database; its production-result and privacy assertions passed before that check. The corrected tests select the scheduler credential’s exact hashed row, keep its 180 limit and preserve a separately seeded unrelated limit-1 row. The original all-row assertion reproduced locally before correction; all 28 SQL cases and fresh whole strict TypeScript now pass, with all 726 existing serving bytes unchanged. PR585 normally merged at 235f6528c6f45571c067af21334301b94a5a4218 after all eight corrected own jobs and raw logs passed. Its actual-main jobs remain independently tracked. The ACK child retains its separate review, own CI, ordinary delivery and real acceptance gates. The full thirteen-gap scope continues. Future unresolved outbound contact stays blocked; no live call, recording, contact release, deployment or default activation follows.
 
 **Historical scheduler checkpoint at f9112b9, 22 October 2026:** At reviewed published PR585/f9112b9, the finite outbound scheduler supports explicitly configured exact-appointment sick-day requests through the existing one-shot launch owner. That exact component locally passed66 source controls, whole strict TypeScript/726 serving outputs and28 emitted PostgreSQL cases: ten new sick-day scheduler cases, seven preserved finite-scheduler cases and eleven preserved targeted-launch cases. In that component comparison, only the scheduler production output changes; all other725 runtime files match reviewed published memo parentPR584/8371b81. Existing appointment, scheduling, contact/DNC, native180, one-use and capacity grants remain independent. Unknown dispatch stays consumed; known acceptance survives cancellation. The scheduler uses already approved native pending requests, without inferring a sick practitioner/date audience or clinical authority. Parent memo 145/726/31 and staff265/726/28 evidence keep their original graphs and are not summed into this cohort. PR583 independently passed all four actual-main jobs with raw logs verified. PR584 normally merged at ca8892b after its own eight CI jobs and raw logs passed; its exact normal tree is integrated without changing the qualified scheduler source or serving artifacts. Parent584 actual-main CI is independently tracked. PR585 is reviewed and published; its cloud/ordinary delivery and clinic/provider/source/retention/restore/acoustic acceptance remain gates. The full thirteen-gap scope continues. Future unresolved outbound contact stays blocked; no live call, recording, contact release, deployment or default activation follows.
 
@@ -26,7 +28,7 @@ The optional signed callback composes existing positive DNC recovery before comp
 
 PR #576 normally merged as 1c138468b19372197c5929f6fa2ece5d1c645b25. This branch integrates that normal parent; prior notification-capacity inputs and all production output bytes remain preserved. Current full strict/build work 1792546181995 passes 693 artifacts (4m 39s, peak 1,651,761,152 B/2 GiB). Only the generic verification-code fixture output changes from the earlier candidate. Current outbound/source/facts/scenario work 1792547213135 passes 580/580 (9m 16s, peak 253,063,168 B/512 MiB), combined actual emitted SQL/process work 1792547138510 passes 42/42 (9m 26s, peak 188,354,560 B/1 GiB) and full logical restore 1792547748602 passes 1/1 (19s, peak 134,090,752 B/1 GiB), all zero skips/cancellations/OOM. Disposable databases are separately bounded 512 MiB and cleaned; every-column and complete raw-backup privacy remain enabled. Remote native/carrier and approval grants are synthetic. Exact new-head eight cloud checks and normal review remain required; actual parent main 1c13846 independently passed all four cloud jobs (39525901371), with complete raw logs archived. No default wiring, clinical permission, live traffic or complete-no-stop claim. Earlier checkpoints below remain historical.
 
-## Current position
+## Earlier position checkpoint (retained history)
 
 | Execution stage | Current evidence and next action |
 | --- | --- |
@@ -6267,3 +6269,168 @@ narrow publication/CI. No duplicate rebuild or new438-source pass is claimed.
 Parent actual-main4 remains a required separate delivery gate. Wider thirteen-gap
 engineering, full-call and clinic/provider/source/retention/restore/acoustic
 acceptance remain open; no default activation or live traffic is authorized.
+
+
+## Required shared-budget schema at voice admission, 22 October 2026
+
+This local component starts from actual delivered337/PR586, independently green
+on its four main jobs. Pending incoming callback PR587 is a separate candidate;
+its eventual normal source is not silently included here. Source audit R01 pins
+seven files unchanged from337: known-call expiry, aggregate/day counters, native
+queue health and exact-original outbound closure do not establish independently
+complete never-admitted carrier inventory. That limit is reported rather than
+introducing a private call ledger or provider query.
+
+Actual R23 owning probe1792699387564 passed0/2 on unchanged production: both
+renamed-budget table/column cases still returnedConnect and a binding after a
+healthy voice baseline and SELECT1. Its first correction1792699830450 refused
+with503, but the initial witness incorrectly expected200/Dial; that distinct
+failure remains preserved. The corrected503 witness runs with identical test
+and helper bytes against an independently pinned337 source snapshot and the
+new code: original1792700044963 is0/2, corrected1792700046132 is2/2; both waits
+reaped and owned databases stopped. No old failed result is called green.
+
+The read-only budget schema owner checks declared migration020/048 table,
+column/type/default/constraint and enabled hold-trigger properties with the
+selected function body hash. It claims no quota, row change, full database
+integrity, clinic permission or carrier completeness. The existing1500ms
+bounded-health owner coalesces pending checks. Startup, new authenticated
+webhook and later stream construction recheck; schema failure cannot terminate
+an existing call or change a known clinical result. Other operational failures
+retain their normal contracts.
+
+Expanded source/signedSQL13 passed1792700357160 (46s, Node208658432B plus
+DB160628736B, each512MiB). Complete strict/serving1792700358410 passed4m12s,
+peak1772240896B/2GiB:727 outputs, only server/budget change and one new checker,
+other724 parent outputs exact. After adding the nonemitted compiled startup
+driver, fresh strict1792700852438 passed2m31s, peak1684750336B/2GiB, all727
+bytes unchanged. Current combined27 passed1792700851255 in1m41s with zero
+skips/cancellations:13 new signed/source schema controls,2 new actual compiled
+startup cases and12 preserved budget/profile/service/bounded-health checks.
+Node205758464B/512MiB plus owned PostgreSQL132153344B/512MiB; CPU100% each,
+Swap0 and allOOM-high-max0. Sources/dependencies/artifacts stayed pinned; both
+paired waits and all owned database resources were reaped/cleaned. Source13
+is included in27, never summed again.
+
+This is source plus actual compiled exported-runner engineering with synthetic
+remote services. Existing E2E-176 admission/lease infrastructure gains these
+storage-failure variants while full-call remains planned. Final current cohort
+1792701566438 passed68/68 including nested tests, with zero skips/cancellations,
+in4m20s: Node357400576B plus owned PostgreSQL253968384B, each512MiB/CPU100%/
+Swap0, allOOM-high-max0 and owned container stopped. It includes the27 above,
+preserved original176 operational-failure cases and current facts/scenario
+contracts; these overlapping counts are not summed. Final whole strict
+1792701567712 passed2m41s at1686994944B/2GiB, all727 artifacts exact, no new
+emission. Both paired waits reaped. Real clinic/provider/source,
+retention/restore/acoustic acceptance, full thirteen-gap engineering and actual
+current-parent review/publication/cloud/delivery remain open. No patient calls,
+money, recording, automatic migration or default activation follows. See [the
+precise contract](SHARED_BUDGET_STORAGE_READINESS.md).
+
+
+## Schema component actual callback-parent integration, 22 October 2026
+
+PR587 normally merged asc3af48c3348f73e9bc8fc6d68debce42995e981a after all
+eight own-head checks and complete raw logs passed; its actual-main checks
+remain separately running. This schema component imports that actual parent.
+Only four documentation/metadata files conflicted. Both engineering histories
+and facts are retained; no production-code conflict or source change to the
+six schema owning source/test paths occurs. All425 parent scenario IDs remain;
+only176 receives the already qualified storage extension, while424/425 stay
+exact. Combined manifest1.248 distinguishes this graph from the two original
+1.247 components. The merged product-facts reference binds604 distinct directly cited files.
+
+Before importing, all727 prior serving outputs were copied and SHA256-verified
+under private retained evidence, without rewriting their original manifests.
+The original68/strict727 evidence remains scoped to delivered337. Fresh current
+combined qualification and exact-normal review remain required before this
+component’s publication; callback-memo PR588 is separately published and not
+integrated here. This is no full regression, clinic acceptance or activation.
+
+
+## Schema current actual-parent terminal qualification, 22 October 2026
+
+Actual normalc3/50f0157 whole strict and serving1792704451137 passed4m13s,
+peak1785651200B/2GiB. The741 outputs add only the schema checker and change
+server/budget relative to740; the other738 outputs stay exact. Those three
+owner outputs also match the preserved originally qualified727 candidate.
+Current604-source/425-scenario contracts passed2/2 in1792704488809/6s. The
+actual741 source/compiled/preserved SQL/metadata cohort1792704804999 passed
+68/68 including nested tests, zero failures/skips/cancellations in4m42s.
+Node383729664B/512MiB plus PostgreSQL254881792B/512MiB, CPU100% each/Swap0,
+allOOM-high-max0; source/dependencies/artifacts pinned, database cleanup and
+paired waits reaped. Current metadata is separately refreshed after these
+terminal-only documentation changes. No new full regression or entire gap is
+claimed; actual memo-parent integration/final review/publication/cloud and all
+real acceptance retain their separate gates.
+
+
+### 22 October 2026 — concrete budget transaction ownership (R24)
+
+The existing Kysely budget owner now has five explicit real-PostgreSQL failure
+contracts: early denial, application throw after cleanup, statement failure,
+deferred commit failure and nested caller-owned work. A one-slot pool and an
+independent observer prove that a later acknowledged autocommit write survives
+a stale rollback. Failed work cannot commit its caller's unrelated changes or
+report a granted claim, and diagnostics retain fixed classifications.
+
+The targeted12/12 run includes five new cases and seven preserved controls;
+the seven overlap the earlier68 and are not counted twice. Whole strict passes
+with all741 serving artifacts unchanged. No production transaction change or
+raw-pg monkeypatch was needed. The original11/12 fixture failure remains
+preserved; correcting its invalid setup value exercises the actual application
+guard rather than PostgreSQL's earlier bigint cast. These are storage contracts,
+not new voice/full-call scenario IDs or a completed gap. The broader current
+component still awaits actual-parent integration, review and its own delivery.
+
+
+### 22 October 2026 — budget readiness across a real upgrade (R25)
+
+The existing allocation migration case now refuses the incompatible047 schema,
+accepts its supported upgrade and compares every original budget-row value
+without resetting spent requests. All11 allocation controls pass, retaining
+legacy/current process isolation, owner-death/expiry, live-owner rollback denial
+and physical-account limits. Whole strict passes with741 unchanged runtime
+artifacts. No production source, migration, case count or scenario ID changes.
+This separate source-loaded evidence does not rerun or add the earlier68 or
+transaction12. Actual deployment target/consumer retirement and clinic restore
+acceptance remain unexecuted; no activation follows.
+
+
+## Actual memo-parent import for schema qualification, 22 October 2026
+
+PR588 normally merged at848b8c516e103e9a32423977cade55ff5dec3743 after its exact-head
+eight checks/raw logs and actual parentc3 main4/raw logs passed. Its merged
+tree equals reviewed5c29d06 and its new actual-main checks are independent.
+This schema branch imports that actual parent. Three documentation/metadata
+conflicts retain both memo and schema histories and every current fact; no
+production, owning-test or scenario conflict occurred. All741 serving outputs
+remain exact, including the schema checker/server/budget owner bytes.
+
+The imported callback-memo SQL driver has nine cases. Current composed SQL9,
+whole strict, final facts/scenarios and exact-normal review remain required.
+The prior schema68, transaction12 and allocation11 retain their separately
+qualified source graphs and overlapping counts, without a new combined pass
+or automatic serving rebuild. Clinic/provider/source/retention/restore/acoustic
+acceptance and the full thirteen-gap goal remain open.
+
+
+## Current actual-memo schema composition qualified, 22 October 2026
+
+Actual normal848/7d5884b3 passes its composed signed callback/memo SQL9/9
+(1792710914252), zero skips/cancellations, using unchanged741 serving outputs.
+This current graph includes the new schema admission guard. It preserves
+native180, independent subject/current memo grants, uncertain clinical or memo
+acknowledgement, permanent one-use purposes and complete unfiltered privacy
+scans. Node256757760B/512MiB plus owned PostgreSQL124502016B/512MiB, CPU100%
+each/Swap0/allOOM-high-max0; source/artifacts pinned and database stopped.
+Whole strict1792711033724 passes at1781350400B/2GiB, heap1536MiB/CPU100%/
+Swap0/allOOM-high-max0. Both paired waits are reaped; no runtime rebuild.
+
+Only the actual parent's nonemitted SQL driver changed code. Prior schema68,
+transaction12 and allocation11 keep their original source graphs, with their
+counts and overlaps unchanged. This terminal-only documentation refresh has
+current metadata contracts and final exact-normal-parent review before its own
+narrow publication/CI and ordinary delivery. Parent848's main4 remains an
+independent later-merge gate. The thirteen-gap roadmap and real acceptance
+remain open, without new live calls, money, deployment or default activation.

@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.247
+# Scenario manifest, version 1.248
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -1049,3 +1049,7 @@ The optional combined signed status receiver adds lower-level recovery evidence 
 ## Verified incoming native callback context, 22 October 2026
 
 E2E-424 adds fixed reason wording only after independent incoming read verification and uniquely correlated native original evidence. E2E-425 keeps a separately verified move constrained to that exact appointment through played choices/consent and one reviewed native send. Current source correction, full strict/740-output serving build and four actual signed PostgreSQL cases cover known success, original withdrawal, competing native quota and a fresh incoming owner needing its own code. Source shared-phone/wrong-patient/stale and physical173-plus-one-under180 controls remain distinct. Native, carrier, mail, clear-final speech and clinic grants are synthetic; full-call and real activation evidence stay planned. Earlier entries retain their historical counts and versions. See [scope and evidence](../phase-2/INCOMING_MISSED_CALL_CONTEXT.md).
+
+## Shared-budget storage admission, 22 October 2026
+
+E2E-176 additionally qualifies the declared shared-budget storage gate at standalone startup, signed webhook admission and fresh stream construction. Thirteen new source-loaded signed/SQL controls and two actual compiled startup cases retain the distinction between database ping, supported storage and clinic readiness. Missing/changed schema, a disabled/changed hold guard, late attachment and a stalled shared probe refuse without spending quota; repair permits a fresh call and the schema gate does not terminate an active one. The current combined27 and strict/727-output evidence retains synthetic/partial scope. Prior active-database-loss and pooled-client assertions remain; full-call and actual clinic/provider acceptance stay planned. See [the precise contract and coverage limits](../phase-2/SHARED_BUDGET_STORAGE_READINESS.md).

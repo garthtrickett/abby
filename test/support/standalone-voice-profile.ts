@@ -105,12 +105,16 @@ async function fixture(db: ReturnType<typeof connectPostgres>, connectionString:
   const address = server.value.address(); assert.ok(address && typeof address !== "string");
   const port = address.port;
   const observations: Array<Array<{ event: string; mark?: { name: string } }>> = [];
-  async function openCall(acknowledgeGreeting = true): Promise<ProfileCaller> {
-    const callSid = `CA${randomUUID().replaceAll("-", "")}`, streamSid = `MZ${randomUUID().replaceAll("-", "")}`;
+  async function requestCall() {
+    const callSid = `CA${randomUUID().replaceAll("-", "")}`;
     const form = { AccountSid: accountSid, CallSid: callSid, To: number, From: callerPhone };
     const response = await fetch(`http://127.0.0.1:${port}/twilio/inbound`, { method: "POST", headers: {
       "content-type": "application/x-www-form-urlencoded", "x-twilio-signature": twilio.getExpectedTwilioSignature(authToken, webhookUrl, form),
     }, body: new URLSearchParams(form).toString() });
+    return { response, callSid };
+  }
+  async function attachCall({ response, callSid }: Awaited<ReturnType<typeof requestCall>>, acknowledgeGreeting = true): Promise<ProfileCaller> {
+    const streamSid = `MZ${randomUUID().replaceAll("-", "")}`;
     assert.equal(response.status, 200); const xml = await response.text();
     assert.match(xml, /<Dial>\+6125550188<\/Dial>/);
     const binding = xml.match(/<Parameter name="abbyBinding" value="([^"]+)"\/>/)?.[1]; assert.ok(binding);
@@ -140,7 +144,8 @@ async function fixture(db: ReturnType<typeof connectPostgres>, connectionString:
       const mark = messages.filter(message => message.event === "mark").at(-1)?.mark; assert.ok(mark); await acknowledge(mark);
     }, async close() { if (socket.readyState !== WebSocket.CLOSED) { socket.close(); await once(socket, "close"); } callers.delete(socket); } };
   }
-  return { scope, policy, db, requests, providers, openCall, observations, reads: () => reads, withdraw: () => { qualityApproved = false; } };
+  const openCall = async (acknowledgeGreeting = true) => attachCall(await requestCall(), acknowledgeGreeting);
+  return { scope, policy, db, requests, providers, requestCall, attachCall, openCall, observations, reads: () => reads, withdraw: () => { qualityApproved = false; } };
 }
 export async function withStandaloneVoiceProfile(run: (app: StandaloneProfileFixture) => Promise<void>,
   realtime?: ReturnType<typeof syntheticRealtimeSpeech>, firstChunkDeadlineMs?: number): Promise<void> {

@@ -165,3 +165,27 @@ owners; a reason, clinical success, memo, completed notification or closed staff
 task establishes no complete whole-call no-stop truth or contact release.
 No recording, deferred carrier traffic, payment, deployment or default
 activation is authorized by this proposal.
+
+
+
+## Shared native budget storage and completion coverage, 22 October 2026
+
+The new local [budget storage guard](SHARED_BUDGET_STORAGE_READINESS.md) does
+not execute clinic acceptance. In a separately approved disposable environment,
+confirm the deployed PostgreSQL version/role exposes the supported budget
+catalog properties and that a compatible exported runner starts. Keep normal
+clinic admission, speech quality and all patient/provider grants independent.
+With only the owned test database, remove a required table/column or disable its
+hold guard: startup must refuse before listening, and an existing listener must
+return503 for a fresh signed webhook or reject a later stream without provider
+creation. A successful SELECT1/health ping is insufficient. Observe a repair
+through a new call; never replay a denied or uncertain clinical action or claim
+that an old active result was undone. No automatic migration/repair is supplied.
+
+Known application-session expiry, aggregate counts, native review queue health
+and one captured outbound root do not cover a carrier call never admitted by
+Abby. Record that explicit limitation. Any independent completion inventory
+needs separate current source/coverage/grant qualification under R01; a native
+queueKnown result or absent local event cannot prove that an uncertain booking
+was never sent. These observations remain proposed and unexecuted. No private
+call ledger, live carrier/clinic request, deployment or activation is authorized.
