@@ -22,7 +22,8 @@ compiled runner changes; the other 740 outputs remain exact. All eight corrected
 own-head checks and complete raw results subsequently passed before normal merge
 as `327d0c3`. All four resulting main checks and their raw logs subsequently
 passed independently. PR591 then passed its eight own-head jobs/raw results and
-normally merged as `9c49a6f`; that new main has four independent checks running.
+normally merged as `9c49a6f`. All four independently resulting-main checks and
+raw results subsequently passed, with the prior parent4 and own8 logs also verified.
 
 | Gap | Selected engineering and evidence route | Still open |
 | --- | --- | --- |
@@ -41,7 +42,8 @@ normally merged as `9c49a6f`; that new main has four independent checks running.
 | Gap 13 | Selected confidential communication memos derive verified administrative facts across supported individual/class/pass/representative outcomes and recovery. [Memo contract](COMMUNICATION_MEMOS.md). | Exact clinic-approved subjects, content, creator/viewers, retention, operation grants and real restore/provider acceptance. Attachments and other note types remain separate, unselected work. |
 
 The optional Deepgram implementation normally merged in PR591 after its own
-engineering/CI qualification; the independently resulting main remains pending.
+engineering/CI qualification. All four independently resulting-main checks and
+raw results have also passed; clinic and acoustic acceptance remain separate.
 Its original 57-control graph keeps its scope. Current combined 63 controls,
 whole strict TypeScript and 741 unchanged default outputs are qualified on the
 actual `327d0c3` parent. Host tests use synthetic quality evidence and do not
@@ -61,7 +63,7 @@ operator observations. Keep the original full thirteen-gap scope, real-mail and
 carrier deferrals, source preservation, acceptance and activation requirements.
 
 
-**Current delivery checkpoint, 23 October 2026:** PR591 normally merged as `9c49a6f` after all eight exact-head jobs and their raw results passed, with the actual parent `327d0c3` independently qualified. Its four resulting main checks are running and remain a separate gate. The optional adapter retains 63 local source controls, whole strict TypeScript and 741 unchanged default serving outputs on that parent. The three streaming Deepgram profiles and a later private whole-utterance Nova-3 comparison fail acoustic quality; a private Whisper comparison fails availability with only six completed recognitions from eighteen attempts. None is selected for the runtime. The full thirteen-gap roadmap and clinic/provider/source/retention/restore/acoustic acceptance remain open. The rehearsal backup role is the clinic practice manager; a named approved person and verified destination still need provisioning. No deployment, live traffic or default activation follows.
+**Current delivery checkpoint, 23 October 2026:** PR591 normally merged as `9c49a6f` after all eight exact-head jobs passed on qualified parent `327d0c3`. All four independently resulting-main checks also passed; all sixteen raw logs and expected counts are verified. Its combined local graph retains 63 source controls, whole strict TypeScript and 741 default serving outputs identical to that parent. The three streaming Deepgram profiles and private whole-utterance Nova-3 comparison fail acoustic quality; private Whisper fails availability with six completed recognitions from eighteen attempts. None is selected for the runtime. The rehearsal backup role is the clinic practice manager; a named distinct approved person, verified destination and human acceptance remain required. The full thirteen-gap scope and clinic/provider/source/retention/restore/acoustic acceptance remain open. No deployment, live traffic or default activation follows.
 
 **Earlier local gap3 storage-guard checkpoint, 22 October 2026:** The shared native budget schema is now checked read-only before standalone startup, new signed webhook admission and later stream ownership. Local68 final checks (including nested tests, preserved operational failures and metadata) and strict/727 serving pass on delivered337; no quota/row/native operation or current active result is changed. The original337-based proof remains scoped to that component. Actual normal callback parentc3af48c is integrated with fresh68/68, strict and741 serving outputs; final current-parent review and ordinary delivery remain required, with parent actual-main checks separate. Known session/aggregate/native queue/root observations do not establish independent all-carrier completeness; R01 retains that coverage limit. See [the exact storage/readiness scope](SHARED_BUDGET_STORAGE_READINESS.md). The full thirteen-gap objective and real acceptance remain open.
 

@@ -1,7 +1,7 @@
 {
   "verifiedDate": "2026-10-23",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "54f18bf9edb49f580d53a12f6eb4762e85b3e616cf8771aa9327c2eeab3cb992",
+  "factsSha256": "f804d35f8e45f103d76d8cf67aec4f99bab8fa39c25d79feabbaa17e924a4a1f",
   "sources": {
     ".github/workflows/text-contract.yml": "20f47909d711b7a7d2b3916a8ef0756345b414dff225184989cd8056b5b6179b",
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
@@ -13,11 +13,11 @@
     "eval/baselines/deepgram-nova3-noise-20261023-v1.json": "1947f0104bf9d00c10757b7b5b8878d82c1ce665936614c5418418eaff07258e",
     "eval/baselines/deepgram-phonecall-noise-20261023-v1.json": "d45c89ba174917c07d893c6ce17ccdf7aab1d890746c725ceada8838d74b3d3c",
     "eval/baselines/synthetic-speech-current-20261023-v1.json": "580a8a0ce39ec937a490a495022ba88fd2d7f3a4def0250c761d1f491dd71140",
-    "phase-1/DEEPGRAM_TRANSCRIPTION.md": "c873a3e6ea505d63363740379806ac47e7e8a01d5dd4bc153557dbc6b607f5e3",
+    "phase-1/DEEPGRAM_TRANSCRIPTION.md": "555e42989aa7c07da6517da4b52a5a2001851c5a73d9da91ea8b7bc3950a7323",
     "phase-1/OPENAI_REALTIME_TRANSCRIPTION.md": "49651d21fa207fb842c36b54ebd7d9d82052ef197c1105a3e280f67b000bde59",
     "phase-2/COMMUNICATION_MEMOS.md": "4dac489b3c4bf4694a0823a10177ed95b2ec9acffd4cb6f26720a94025eada40",
-    "phase-2/EXECUTION_ORDER.md": "5c895bc0e913211ac05ac4a37bd353f2cd88facffd12ff6636b0f2b17a89ef67",
-    "phase-2/EXECUTION_PROGRESS.md": "6759d491656890ac0a1c94c8979e6814ca1c5e331925ad8c74b343ae13f270cf",
+    "phase-2/EXECUTION_ORDER.md": "f13d69633b2ec49423690398efdede83c732b05625a2b549854b05c9c924a805",
+    "phase-2/EXECUTION_PROGRESS.md": "8b72e8fb40066fae6dd8bbce6e4d78a6c2d4171d8494be0e67f535bad44930da",
     "phase-2/INCOMING_MISSED_CALL_CONTEXT.md": "ddb16adc7208a97c1e2711fc823e50ac825be0e74e45459beda31b275cbe1ab7",
     "phase-2/KAREN_TO_ABBY_REUSE_AUDIT.md": "ce4fca87bc5d33ad5c94ffcbd77a926b2f24f84fffae1ee85ddc713cce2a68ca",
     "phase-2/OUTBOUND_CALL_ADMISSION.md": "93edc93d8868e17133055771c98176af0d6fa13385adbf4f3700069f5d22df2f",

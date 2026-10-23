@@ -114,6 +114,17 @@ match that corrected shutdown parent exactly; the optional adapter remains
 unselected. These checks include the extended test dependency graph. All three actual recognition comparisons
 continue to fail their original acoustic quality gates.
 
+## Delivered optional-adapter engineering, 23 October 2026
+
+PR591's exact reviewed head `8c0a2c54` passed all eight own-head jobs before normal
+merge as `9c49a6f`. Its four independently resulting-main jobs and raw results
+also passed. All sixteen parent/own/main logs and expected counts are verified;
+the 24 adapter test titles pass in each own/main text and PostgreSQL result.
+The local 63-control, strict/serving and 741-output comparisons retain their
+original inputs. No additional build or default selection follows this record.
+The private request-mode diagnostics below remain unshipped experiments, and
+clinic/provider/acoustic/activation acceptance remains separate.
+
 ## Complete-utterance diagnostics, 23 October 2026
 
 The [Nova-3 aggregate](../eval/baselines/deepgram-complete-turn-nova3-noise-20261023-v1.json) and [Whisper aggregate](../eval/baselines/deepgram-complete-turn-whisper-noise-20261023-v1.json) bind these results to their private source snapshots and exact reports.

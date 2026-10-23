@@ -87,8 +87,9 @@ authority. Read their [current scope](INCOMING_MISSED_CALL_CONTEXT.md) and the
 PR590's corrected listener shutdown normally merged as `327d0c3`; all eight
 own-head and four independently resulting-main checks and raw results passed.
 The optional Deepgram experiment subsequently passed its eight own-head jobs
-and raw counts before normal merge as `9c49a6f`. Its four resulting main checks
-are still running. The combined local graph retains 63 source controls, whole
+and raw counts before normal merge as `9c49a6f`. All four independently resulting
+main checks and raw results have also passed, with all sixteen parent/own/main
+logs and expected counts verified. The combined local graph retains 63 source controls, whole
 strict TypeScript and 741 default artifacts identical to parent `327d0c3`.
 
 The three streaming noise profiles and the private whole-utterance Nova-3
