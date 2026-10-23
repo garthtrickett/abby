@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { sql } from "kysely";
 import { connectPostgres } from "../../src/storage/connect.ts";
@@ -58,6 +59,38 @@ test(`actual compiled standalone runner refuses required budget schema before li
       const [code, signal] = await once(child, "exit", { signal: AbortSignal.timeout(10_000) });
       assert.equal(code, 1); assert.equal(signal, null); assert.deepEqual(messages, []);
       assert.equal(stdout, ""); assert.equal(stderr, "voice service unavailable\n");
+    } finally {
+      try { await stop(child); } finally {
+        await db?.destroy(); try { if (created) await sql.raw(`drop database "${name}" with (force)`).execute(admin); }
+        finally { await admin.destroy(); }
+      }
+    }
+  });
+
+for (const signal of ["SIGINT", "SIGTERM"] as const)
+test(`actual compiled standalone runner owns shutdown before publishing listener readiness: ${signal}`,
+  { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 90_000 }, async () => {
+    assert.ok(process.env.DATABASE_URL);
+    const admin = connectPostgres(process.env.DATABASE_URL), name = `abby_schema_shutdown_${randomUUID().replaceAll("-", "")}`;
+    const target = new URL(process.env.DATABASE_URL); target.pathname = `/${name}`;
+    let created = false, db: ReturnType<typeof connectPostgres> | undefined, child: ChildProcess | undefined;
+    try {
+      await sql.raw(`create database "${name}"`).execute(admin); created = true;
+      db = connectPostgres(target.toString()); await migrate(db);
+      const hook = fileURLToPath(new URL("../support/shutdown-at-listener-ready.mjs", import.meta.url));
+      child = spawn(process.execPath, ["--import", hook, compiledRuntimeEntrypoint("scripts/serve-cliniko-voice.ts")], {
+        cwd: new URL("../../", import.meta.url),
+        env: { ...environment(target.toString()), ABBY_SCHEMA_RUNNER_SHUTDOWN_SIGNAL: signal },
+        stdio: ["ignore", "pipe", "pipe", "ipc"],
+      });
+      const messages: unknown[] = []; let stderr = "";
+      child.on("message", message => messages.push(message));
+      child.stdout!.resume(); child.stderr!.on("data", chunk => { stderr += String(chunk); });
+      const [code, terminatedBy] = await once(child, "close", { signal: AbortSignal.timeout(10_000) });
+      assert.equal(code, 0); assert.equal(terminatedBy, null); assert.equal(stderr, "");
+      assert.equal(messages.length, 1);
+      assert.ok(typeof messages[0] === "object" && messages[0] !== null &&
+        "kind" in messages[0] && messages[0].kind === "listenerReady");
     } finally {
       try { await stop(child); } finally {
         await db?.destroy(); try { if (created) await sql.raw(`drop database "${name}" with (force)`).execute(admin); }
