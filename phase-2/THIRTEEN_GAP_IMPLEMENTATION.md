@@ -38,10 +38,13 @@ correction is not a new combined-main qualification.
 | Gap 12 | Finite campaign/sick-day scheduling, exact original targets, authenticated positive opt-outs, incoming callback context and pending staff review compose conditionally. [Staff-review-first choice](OUTBOUND_STAFF_REVIEW.md), [current facts](PRODUCT_FACTS.md). | Actual consent/contact/provider/source acceptance and relevant voice gates. Unresolved private/unclear coverage keeps future calls blocked; automatic whole-call negative clearance and recording remain unselected. |
 | Gap 13 | Selected confidential communication memos derive verified administrative facts across supported individual/class/pass/representative outcomes and recovery. [Memo contract](COMMUNICATION_MEMOS.md). | Exact clinic-approved subjects, content, creator/viewers, retention, operation grants and real restore/provider acceptance. Attachments and other note types remain separate, unselected work. |
 
-The optional Deepgram implementation is currently a local experiment: its 57
-source controls and whole strict/serving pass, while all three 18-run noisy
-profiles fail the original quality gates. Its metadata/review/publication/delivery are distinct
-from the corrected PR590 lifecycle work. No profile or voice default is promoted.
+The optional Deepgram implementation is currently a local experiment. Its original
+57-control graph passed whole strict/serving; a later 63-control source cohort also
+qualifies the existing host's profile checks and separate call adapters. Fresh
+combined-parent strict/serving remains required after that test-only extension.
+All three 18-run noisy profiles fail the original quality gates. Its metadata,
+review, publication and delivery are distinct from the corrected PR590 lifecycle
+work. No profile or voice default is promoted.
 
 Use [execution progress](EXECUTION_PROGRESS.md) for subsequent exact-candidate
 results and [manual acceptance](MANUAL_ACCEPTANCE_PROPOSAL.md) for the still-open

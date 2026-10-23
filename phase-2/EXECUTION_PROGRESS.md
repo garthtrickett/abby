@@ -6462,3 +6462,18 @@ ordinary delivery remain independent gates. Gap 4 remains open, alongside the
 full thirteen-gap scope and real clinic/provider/source/retention/restore,
 representative-call, public-route and carrier acceptance. No deployment, live
 patient traffic or default activation follows from the optional experiment.
+
+## Optional transcription host-boundary qualification, 23 October 2026
+
+The Deepgram source cohort now passes63/63 without skips (1792729670762): the
+original57 controls, two new cases using the actual qualified host and adapter,
+and four preserved voice-profile controls. The new cases reject changed runtime
+or provider profiles and absent, mismatched or withdrawn quality evidence before
+factory construction. Two admitted synthetic calls retain separate real adapter
+instances; closing one and delivering its stale events cannot affect the other
+call's final transcript or clarification quality. No provider request is made.
+This extends source-level integration evidence only. Production adapter code and
+all three failed acoustic profiles are unchanged. Whole strict/serving of this
+test extension and the actual corrective parent, final review and ordinary
+publication/delivery remain required; synthetic quality evidence is no release
+approval or live clinic authority.

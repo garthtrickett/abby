@@ -92,9 +92,22 @@ failed recognition profiles, not release candidates selected by latency.
 
 ## Local engineering qualification
 
-The current implementation passes 57 source tests: 22 adapter cases and 35
+The original adapter graph passed 57 source tests: 22 adapter cases and 35
 preserved transcription, controller and evaluation controls. Whole-project strict
-TypeScript and the serving build pass. All 741 emitted default serving artifacts
-match the qualified parent exactly because this optional adapter is not selected
-by the default runner. These checks establish local implementation compatibility;
-all three actual recognition comparisons still fail their acoustic quality gates.
+TypeScript and the serving build passed on that graph. All 741 emitted default
+serving artifacts matched the qualified parent exactly because this optional
+adapter is not selected by the default runner.
+
+The subsequent 63-case source cohort adds two actual host-boundary cases and four
+preserved voice-profile controls. The existing `OpenAIVoiceProfileHost` accepts an
+explicitly versioned `customTranscription` factory under its qualified profile
+contract. The tests exercise that factory with real Deepgram adapter instances:
+mismatched provider/runtime profiles cannot construct them, absent or withdrawn
+quality evidence refuses binding, and closing one call cannot contaminate another
+call's socket or transcript. Completed text remains `needsClarification`.
+
+The tests use synthetic quality evidence only. They do not approve the failed
+acoustic profiles or provide production provisioning. This test-only extension
+passes all 63 source controls; whole strict/serving qualification of the next
+combined parent is still required. All three actual recognition comparisons
+continue to fail their original acoustic quality gates.

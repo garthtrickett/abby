@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
 import WebSocket from "ws";
-import { ok } from "../../src/core/model.ts";
+import { err, ok } from "../../src/core/model.ts";
+import { captureVoiceProfile } from "../../src/core/voice-profile-registry.ts";
 import { DeepgramStreamingTranscription } from "../../src/voice/deepgram-streaming-transcription.ts";
 import { MediaTurnController } from "../../src/voice/media-turn-controller.ts";
 import type { MediaFrame } from "../../src/voice/media-turn-controller.ts";
+import { OpenAIVoiceProfileHost } from "../../src/voice/openai-voice-profile.ts";
 import { TurnAssembler } from "../../src/voice/turn-assembler.ts";
 
 class FakeSocket extends EventEmitter {
@@ -27,9 +29,9 @@ const result = (text = "Book an appointment", start = 0, duration = 0.02, is_fin
   type: "Results", channel_index: [0, 1], start, duration, is_final, speech_final: true,
   channel: { alternatives: [{ transcript: text, confidence: 1 }] },
 });
-function fixture() {
+function fixture(sessionId = "session") {
   const sockets: FakeSocket[] = [];
-  const port = new DeepgramStreamingTranscription({ apiKey: "synthetic-key", sessionId: "session",
+  const port = new DeepgramStreamingTranscription({ apiKey: "synthetic-key", sessionId,
     socketFactory: (raw, headers) => {
       const url = new URL(raw);
       assert.equal(url.origin, "wss://api.deepgram.com"); assert.equal(url.pathname, "/v1/listen");
@@ -46,6 +48,67 @@ function fixture() {
   return { port, sockets };
 }
 const tick = () => new Promise<void>(resolve => setImmediate(resolve));
+
+test("Deepgram binds through the qualified host and keeps separate calls on their selected ports", async () => {
+  const calls = new Map<string, ReturnType<typeof fixture>>();
+  const scope = { tenantId: "synthetic", clinicId: "main" };
+  const settings = { version: "2", locale: "en-AU", voiceId: "coral" };
+  const quality: NonNullable<ConstructorParameters<typeof OpenAIVoiceProfileHost>[0]["quality"]> =
+    (_scope, configurationHash) => ok({ configurationHash, qualityVersion: "synthetic-only.v1" });
+  const host = new OpenAIVoiceProfileHost({ apiKey: "synthetic-profile-key", mode: "conversation", quality,
+    customTranscription: { version: "deepgram-nova3.synthetic.v1", create(sessionId) {
+      assert.equal(calls.has(sessionId), false);
+      const call = fixture(sessionId); calls.set(sessionId, call); return call.port;
+    } } });
+  const selected = await captureVoiceProfile(host, scope, settings); assert.ok(selected.ok);
+  if (!selected.ok) return;
+  const ordinary = new OpenAIVoiceProfileHost({ apiKey: "synthetic-profile-key", mode: "conversation", quality });
+  assert.equal(ordinary.create(selected.value, "other-provider", {}).ok, false);
+  assert.equal(host.create(selected.value, "changed-runtime", { mediaOptions: { silenceMs: 200 } }).ok, false);
+  assert.equal(calls.size, 0, "mismatched profiles cannot construct an alternate adapter");
+  const first = host.create(selected.value, "first-call", {}), second = host.create(selected.value, "second-call", {});
+  assert.ok(first.ok && second.ok); if (!first.ok || !second.ok) return;
+  assert.equal(first.value.transcription, calls.get("first-call")!.port);
+  assert.equal(second.value.transcription, calls.get("second-call")!.port);
+  assert.notEqual(first.value.transcription, second.value.transcription);
+  try {
+    assert.ok((await first.value.transcription.accept({ ...frame(), sessionId: "first-call" }, 1, signal())).ok);
+    assert.ok((await second.value.transcription.accept({ ...frame(), sessionId: "second-call" }, 1, signal())).ok);
+    await first.value.transcription.close?.();
+    const secondSocket = calls.get("second-call")!.sockets[0]!;
+    assert.equal(secondSocket.terminated, 0);
+    const pending = second.value.transcription.flush(1, signal()); await tick();
+    const stale = calls.get("first-call")!.sockets[0]!;
+    stale.receive(result("stale first call")); stale.emit("error", new Error("retired call"));
+    secondSocket.receive(result()); secondSocket.receive({ type: "Metadata", channels: 1, duration: 0.02 }); secondSocket.end();
+    const final = await pending; assert.ok(final.ok);
+    if (final.ok) assert.deepEqual(final.value.map(event => ({ sessionId: event.sessionId, text: event.text,
+      quality: event.kind === "segmentFinal" ? event.quality : undefined })),
+      [{ sessionId: "second-call", text: "Book an appointment", quality: "needsClarification" }]);
+  } finally {
+    await first.value.transcription.close?.(); await second.value.transcription.close?.();
+  }
+});
+
+test("Deepgram factory cannot bypass missing, mismatched or withdrawn profile quality evidence", async () => {
+  let constructions = 0, approved = true;
+  const scope = { tenantId: "synthetic", clinicId: "main" };
+  const settings = { version: "2", locale: "en-AU", voiceId: "coral" };
+  const customTranscription = { version: "deepgram-nova3.synthetic.v1", create(sessionId: string) {
+    constructions++; return fixture(sessionId).port;
+  } };
+  const config = { apiKey: "synthetic-profile-key", mode: "conversation" as const, customTranscription };
+  assert.equal((await captureVoiceProfile(new OpenAIVoiceProfileHost(config), scope, settings)).ok, false);
+  const mismatched = new OpenAIVoiceProfileHost({ ...config, quality: () =>
+    ok({ configurationHash: "0".repeat(64), qualityVersion: "synthetic-only.v1" }) });
+  assert.equal((await captureVoiceProfile(mismatched, scope, settings)).ok, false);
+  const host = new OpenAIVoiceProfileHost({ ...config, quality: (_scope, configurationHash) => approved
+    ? ok({ configurationHash, qualityVersion: "synthetic-only.v1" }) : err({ kind: "readinessFailed", missing: ["voiceProfile"] }) });
+  const selected = await captureVoiceProfile(host, scope, settings); assert.ok(selected.ok);
+  approved = false;
+  if (selected.ok) assert.equal(host.create(selected.value, "withdrawn", {}).ok, false);
+  assert.equal(constructions, 0);
+});
 
 test("Deepgram concurrent flush or late audio cannot overwrite the pending owner", async () => {
   const { port, sockets } = fixture(); assert.ok((await port.accept(frame(), 1, signal())).ok);
