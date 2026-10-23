@@ -6445,13 +6445,17 @@ source controls (22 new adapter cases and 35 preserved controls), whole-project
 strict TypeScript and the serving build. All 741 default serving artifacts match
 the qualified parent exactly; the default runtime does not select this adapter.
 
-Actual unchanged-corpus, three-repeat noisy speech results both fail the original
+Actual unchanged-corpus, three-repeat noisy speech results fail the original
 zero-critical and at-most-10% WER gates. Nova-3 completes 18 runs with 6 critical,
 20.45% WER and 396 ms final p95. A predeclared private model-only Nova-2 phonecall
 comparison completes 18 with 12 critical, 43.18% WER and 313 ms final p95. Both have
-zero provider failures. Neither receives clean/safety follow-on or promotion.
-The aggregates preserve exact source/report hashes; no audio, expected text,
-threshold, existing OpenAI evaluator or default profile is changed.
+zero provider failures. A subsequent Nova-3 native 8 kHz diagnostic removes only
+identical repeated samples, with exact reconstruction of the original fixtures
+proved offline. It completes 18 runs with six critical, 15.91% WER, 203 ms final
+p95 and zero provider failures; it also fails. No profile receives clean/safety
+follow-on or promotion. The aggregates preserve exact source/report hashes and
+label the private wire-rate conversion explicitly; original corpus bytes,
+expected text, thresholds, the OpenAI evaluator and production defaults stay fixed.
 
 This component's final metadata, exact-parent review, publication/cloud and
 ordinary delivery remain independent gates. Gap 4 remains open, alongside the

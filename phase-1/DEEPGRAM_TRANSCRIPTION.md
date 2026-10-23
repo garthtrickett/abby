@@ -66,6 +66,30 @@ also fails and receives no clean/safety follow-on or production selection. The
 public evaluator continues to request Nova-3; the private caller and exact source
 snapshot are identified in the aggregate for audit.
 
+
+A second representation hypothesis used Nova-3 with [native 8 kHz PCM](../eval/baselines/deepgram-native8-noise-20261023-v1.json).
+The telephone fixtures repeat each decoded sample to make canonical 16 kHz input.
+An offline audit of all 17 noisy, telephone and safety clips proves that removing
+one identical sample from each pair and repeating it again restores the original
+bytes exactly. The private diagnostic validates every pair, sends the recovered
+8 kHz samples and declares their actual rate, which the
+[provider accepts](https://developers.deepgram.com/docs/sample-rate). It adds no
+noise filtering, interpolation, prompt or expected-answer terms. Only the original
+six noisy clips were submitted, three times each. All 18 completed with zero
+provider failures, but six remain critical; WER is 15.91% and final p95 is 203 ms.
+The original gates still fail, so no clean/safety follow-on or runtime selection
+follows. This is a distinct private wire profile; the public adapter and evaluator
+still request unchanged 16 kHz PCM.
+
+Each comparison below has 18 runs on the same six original noisy clips. These are
+failed recognition profiles, not release candidates selected by latency.
+
+| Requested profile | Wire sample rate | Critical runs | WER | Final p95 | Provider failures |
+| --- | --- | --- | --- | --- | --- |
+| Nova-3 initial | 16 kHz | 6 | 20.45% | 396 ms | 0 |
+| Nova-2 phonecall diagnostic | 16 kHz | 12 | 43.18% | 313 ms | 0 |
+| Nova-3 exact-duplicate removal diagnostic | 8 kHz | 6 | 15.91% | 203 ms | 0 |
+
 ## Local engineering qualification
 
 The current implementation passes 57 source tests: 22 adapter cases and 35
@@ -73,4 +97,4 @@ preserved transcription, controller and evaluation controls. Whole-project stric
 TypeScript and the serving build pass. All 741 emitted default serving artifacts
 match the qualified parent exactly because this optional adapter is not selected
 by the default runner. These checks establish local implementation compatibility;
-both actual recognition comparisons still fail their acoustic quality gates.
+all three actual recognition comparisons still fail their acoustic quality gates.
