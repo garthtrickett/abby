@@ -121,7 +121,7 @@ were independently hash-copied before import. Fresh combined source/types/
 serving/SQL/metadata qualification, review and this component’s own delivery
 remain required; pending callback-memo PR588 is not silently included.
 
-## Current actual-parent qualification
+## Earlier actual-parent qualification
 
 On local50f0157 with actual normal parentc3af48c, whole strict TypeScript and
 serving emission pass1792704451137 in4m13s at1785651200B/2GiB. The741 outputs
@@ -198,7 +198,7 @@ refreshed metadata before final actual-parent review and this component's own
 publication. Prior68/transaction12/allocation11 evidence keeps its earlier
 inputs; those runs are not summed or relabelled as a fresh combined cohort.
 
-## Current qualification on actual memo main848
+## Earlier qualification on actual memo main848
 
 On the real normal PR588 parent848b8c5, the composed signed incoming callback
 and separately authorized memo cohort passes9/9 with zero failure, skip or
@@ -218,3 +218,17 @@ fresh combined68. Current metadata and final exact-parent review/publication/
 cloud/ordinary delivery remain separate checks. No entire gap, full regression,
 real clinic/provider/source/retention/restore/acoustic acceptance or activation
 is established by these local results.
+
+
+## Normal source delivery, 23 October 2026
+
+PR589 normally merged at `78158d9` after all eight own-head jobs/raw logs and
+the four actual-parent `848b8c5` main jobs/raw logs passed. The normal tree
+equals the reviewed candidate; all 741 serving files remain exact. The current
+PR PostgreSQL evidence includes all 15 schema/compiled-startup controls and
+five R24 transaction cases, plus the existing persisted-budget upgrade case,
+without skips. Whole-pool counts and the independently tracked resulting main
+are recorded in the [execution ledger](EXECUTION_PROGRESS.md#delivered-schema-foundation-and-current-speech-result-23-october-2026).
+The earlier separately qualified cohorts keep their own inputs and overlaps.
+This storage delivery establishes no complete carrier inventory, actual
+operator process, voice accuracy, clinic acceptance, deployment or activation.

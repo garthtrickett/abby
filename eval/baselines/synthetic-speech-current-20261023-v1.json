@@ -1,0 +1,352 @@
+{
+  "schema": "abby.synthetic-speech-current.aggregate.v1",
+  "date": "2026-10-23",
+  "patientFree": true,
+  "sourceHead": "e2656de8b180f6f07979557778b09a9e9b57801b",
+  "normalMainWithSameTree": "78158d9d7138ca5d0334b8b99fa364da7fef9030",
+  "sourceFiles": [
+    {
+      "path": "src/voice/openai-realtime-transcription.ts",
+      "sha256": "716883cd1ee873010cb39f60102d2a575c9943d25fcb344b75a96835f80cea0e"
+    },
+    {
+      "path": "src/voice/transcription-evaluation.ts",
+      "sha256": "3ea30413b80cd28ecf337aaf9ad156dc6d5fd946ee74f81678654f9f2a41943d"
+    },
+    {
+      "path": "src/voice/transcription-evaluation-gate.ts",
+      "sha256": "44f7973d65f8de8261db8030bfbb14ce827a0c14b9b35756c2640133c956357c"
+    },
+    {
+      "path": "scripts/evaluate-transcription.ts",
+      "sha256": "0ccffb2847436140c6da8403f96b39b77b561dd76d905e827ede85c5c36413b4"
+    }
+  ],
+  "combinedTranscriptionSourceSha256": "1a4de592578345a393cf144e67cd2bdc32f4e6a22f57c3609dded08081924d47",
+  "defaultCandidate": {
+    "model": "gpt-live-transcribe",
+    "repeats": 3,
+    "concurrency": 2,
+    "reports": [
+      {
+        "artifact": "telephony.json",
+        "sha256": "2bef39ece7e4fa10df8d74ea17c095670d0d4f1d0ed0593a0a212b5b9df8073a",
+        "runAt": "2026-10-23T00:17:20.891Z",
+        "configuration": {
+          "provider": "openai-realtime",
+          "model": "gpt-live-transcribe",
+          "corpusVersion": "transcription-telephony-v1",
+          "corpusSha256": "65645afaeeaca6c91342b8e690c184affd58e004f3438cfa0cccfdd18e3f8e1a",
+          "adapterSha256": "1a4de592578345a393cf144e67cd2bdc32f4e6a22f57c3609dded08081924d47",
+          "nodeVersion": "v22.23.0",
+          "repeats": 3,
+          "concurrency": 2,
+          "audioFormat": "mono-pcm16le-16000"
+        },
+        "counts": {
+          "match": 9,
+          "mismatch": 0,
+          "critical": 0,
+          "providerFailure": 0
+        },
+        "assessment": {
+          "status": "pass",
+          "failures": [],
+          "metrics": {
+            "cases": 3,
+            "runs": 9,
+            "critical": 0,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 0,
+            "wordErrorRate": 0,
+            "finalP95Ms": 712,
+            "missingRepeats": []
+          },
+          "thresholds": {
+            "version": "transcription-synthetic-gate-v1",
+            "minRepeatsPerCase": 3,
+            "maxCritical": 0,
+            "maxProviderFailures": 0,
+            "maxEmpty": 0,
+            "maxTruncated": 0,
+            "maxWordErrorRate": 0.1,
+            "maxFinalP95Ms": 2500,
+            "maxIndividualFinalMs": 5000
+          }
+        }
+      },
+      {
+        "artifact": "noise.json",
+        "sha256": "049b150209a5257032ff22ac7d9426c75c04c7c8e31d6f6462fd9b59a51b18c4",
+        "runAt": "2026-10-23T00:18:14.625Z",
+        "configuration": {
+          "provider": "openai-realtime",
+          "model": "gpt-live-transcribe",
+          "corpusVersion": "transcription-noise-v1",
+          "corpusSha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+          "adapterSha256": "1a4de592578345a393cf144e67cd2bdc32f4e6a22f57c3609dded08081924d47",
+          "nodeVersion": "v22.23.0",
+          "repeats": 3,
+          "concurrency": 2,
+          "audioFormat": "mono-pcm16le-16000"
+        },
+        "counts": {
+          "match": 3,
+          "mismatch": 3,
+          "critical": 12,
+          "providerFailure": 0
+        },
+        "assessment": {
+          "status": "fail",
+          "failures": [
+            "critical",
+            "wordErrorRate"
+          ],
+          "metrics": {
+            "cases": 6,
+            "runs": 18,
+            "critical": 12,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 0,
+            "wordErrorRate": 0.4090909090909091,
+            "finalP95Ms": 1252,
+            "missingRepeats": []
+          },
+          "thresholds": {
+            "version": "transcription-synthetic-gate-v1",
+            "minRepeatsPerCase": 3,
+            "maxCritical": 0,
+            "maxProviderFailures": 0,
+            "maxEmpty": 0,
+            "maxTruncated": 0,
+            "maxWordErrorRate": 0.1,
+            "maxFinalP95Ms": 2500,
+            "maxIndividualFinalMs": 5000
+          }
+        }
+      },
+      {
+        "artifact": "safety.json",
+        "sha256": "6ba8addd0d45e3e8acbcd9f72fbc8ddb01802408c198f4bdc510e106c496449c",
+        "runAt": "2026-10-23T00:19:17.119Z",
+        "configuration": {
+          "provider": "openai-realtime",
+          "model": "gpt-live-transcribe",
+          "corpusVersion": "transcription-safety-v1",
+          "corpusSha256": "fb261dfa87cfd036307346874b439b63596a7b9390109cc3d22965f5fda795da",
+          "adapterSha256": "1a4de592578345a393cf144e67cd2bdc32f4e6a22f57c3609dded08081924d47",
+          "nodeVersion": "v22.23.0",
+          "repeats": 3,
+          "concurrency": 2,
+          "audioFormat": "mono-pcm16le-16000"
+        },
+        "counts": {
+          "match": 10,
+          "mismatch": 3,
+          "critical": 11,
+          "providerFailure": 0
+        },
+        "assessment": {
+          "status": "fail",
+          "failures": [
+            "critical",
+            "wordErrorRate"
+          ],
+          "metrics": {
+            "cases": 8,
+            "runs": 24,
+            "critical": 11,
+            "providerFailures": 0,
+            "empty": 0,
+            "truncated": 0,
+            "delayed": 0,
+            "wordErrorRate": 0.2611111111111111,
+            "finalP95Ms": 871,
+            "missingRepeats": []
+          },
+          "thresholds": {
+            "version": "transcription-synthetic-gate-v1",
+            "minRepeatsPerCase": 3,
+            "maxCritical": 0,
+            "maxProviderFailures": 0,
+            "maxEmpty": 0,
+            "maxTruncated": 0,
+            "maxWordErrorRate": 0.1,
+            "maxFinalP95Ms": 2500,
+            "maxIndividualFinalMs": 5000
+          }
+        }
+      }
+    ],
+    "all51Completed": true,
+    "qualityGate": "fail"
+  },
+  "alternativeCandidate": {
+    "artifact": "committed-context-noise-v1/noise.json",
+    "sha256": "1ec67e0f5988c14157ab35c678e7890ef283d54dd3259dedfa102e068858b817",
+    "runAt": "2026-10-23T00:27:49.323Z",
+    "configuration": {
+      "provider": "openai-realtime",
+      "model": "gpt-transcribe",
+      "contextVersion": "clinic-v1",
+      "context": {
+        "prompt": "English physiotherapy clinic calls about appointments, booking, and urgent symptoms.",
+        "languages": [
+          "en"
+        ]
+      },
+      "corpusVersion": "transcription-noise-v1",
+      "corpusSha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+      "adapterSha256": "1a4de592578345a393cf144e67cd2bdc32f4e6a22f57c3609dded08081924d47",
+      "nodeVersion": "v22.23.0",
+      "repeats": 3,
+      "concurrency": 2,
+      "audioFormat": "mono-pcm16le-16000"
+    },
+    "counts": {
+      "match": 11,
+      "mismatch": 3,
+      "critical": 4,
+      "providerFailure": 0
+    },
+    "assessment": {
+      "status": "fail",
+      "failures": [
+        "critical",
+        "wordErrorRate"
+      ],
+      "metrics": {
+        "cases": 6,
+        "runs": 18,
+        "critical": 4,
+        "providerFailures": 0,
+        "empty": 0,
+        "truncated": 0,
+        "delayed": 0,
+        "wordErrorRate": 0.13636363636363635,
+        "finalP95Ms": 1142,
+        "missingRepeats": []
+      },
+      "thresholds": {
+        "version": "transcription-synthetic-gate-v1",
+        "minRepeatsPerCase": 3,
+        "maxCritical": 0,
+        "maxProviderFailures": 0,
+        "maxEmpty": 0,
+        "maxTruncated": 0,
+        "maxWordErrorRate": 0.1,
+        "maxFinalP95Ms": 2500,
+        "maxIndividualFinalMs": 5000
+      }
+    },
+    "all18Completed": true,
+    "selectedForRuntime": false,
+    "telephonySafetyAndRepresentativeQualification": "notRun"
+  },
+  "retainedSynthesis": {
+    "artifact": "20261001-d3-current-speech.json",
+    "privateArtifactPath": "/home/gust/code/abby/eval/results/20261001-d3-current-speech.json",
+    "sha256": "0fd121d363f5e43d09156b7b4c7afdb8118b62ef52d79b444c7c0f514f9c734d",
+    "runAt": "2026-10-01T21:30:38.562Z",
+    "sourceFiles": [
+      {
+        "path": "src/voice/openai-speech-synthesis.ts",
+        "sha256": "5def9b75402043cedf5eeb9ad3e6cf8a86976cffe515df6ac365756e3ebaf194"
+      },
+      {
+        "path": "src/voice/first-chunk-fallback-speech.ts",
+        "sha256": "b6a89110baa33ad6b0c32cd668a4b829e3c3eb3786d1e8a23b30ca52d8532729"
+      },
+      {
+        "path": "src/voice/streamed-playback-port.ts",
+        "sha256": "083bc84aea1ade0af7407ce4593d344f3275070c9208fc4c457ab950f218c5e9"
+      },
+      {
+        "path": "src/voice/speech-latency-gate.ts",
+        "sha256": "f9d757f09bc17198cca7ae31254982619e317c4e7b6a84f53edb244deabc4839"
+      },
+      {
+        "path": "scripts/evaluate-first-chunk-fallback.ts",
+        "sha256": "81c8c5d80cec0b26dac09740cd711c2baede9a366a14ba55e4de5095639c9a1f"
+      }
+    ],
+    "configuration": {
+      "primaryModel": "gpt-4o-mini-tts",
+      "fallbackModel": "tts-1",
+      "voice": "coral",
+      "primaryFirstChunkMs": 1500,
+      "combinedFirstChunkMs": 5000,
+      "laterStepMs": 2000,
+      "maxUtteranceMs": 20000,
+      "corpusVersion": "speech-loop-v1",
+      "corpusSha256": "b02fc915affa082502d417bf3eaaecb4435c14c00947c40ecda3e57ee7578857",
+      "sourceSha256": "37d8cbd77d2f1819e8d960f04f336bed04d9af1b69636aee89e8ca2a4b1c1b16",
+      "repeats": 20,
+      "concurrency": 4,
+      "nodeVersion": "v22.23.2"
+    },
+    "assessment": {
+      "status": "pass",
+      "failures": [],
+      "metrics": {
+        "jobs": 40,
+        "failedJobs": 0,
+        "lateJobs": 0,
+        "firstChunkP95Ms": 3121,
+        "utteranceP95Ms": 3872
+      },
+      "thresholds": {
+        "version": "speech-synthetic-latency-v1",
+        "minJobs": 40,
+        "repeatsPerCase": 20,
+        "maxP95FirstChunkMs": 3500,
+        "maxIndividualFirstChunkMs": 5000,
+        "maxP95UtteranceMs": 6000,
+        "maxFailedJobs": 0
+      }
+    },
+    "scope": "Forty original October 1 synthesis observations; unchanged source matches. Not a fresh synthesis run or current backend latency guarantee."
+  },
+  "currentAssessment": {
+    "speechProfile": "default",
+    "allFourInputContractsValidated": true,
+    "syntheticCandidateGate": "fail",
+    "assessorExit": 1,
+    "ownerStatusExit": 2,
+    "representativeCallGate": "notRun",
+    "releaseGate": "unverified"
+  },
+  "privateArtifactDirectory": "/home/gust/.local/state/abby-synthetic-speech-current-20261023",
+  "privateReceipts": [
+    {
+      "artifact": "terminal-receipt.json",
+      "sha256": "f4abd0695c88645246d1e30b0c9bb4ae3c9f20c32ba7a413ad5efa9024d6ad2a"
+    },
+    {
+      "artifact": "assessment-terminal-receipt.json",
+      "sha256": "815f6372905eabec20bc1c2e345d5ad679e989068c5023d3e3cf37969ae9566e"
+    },
+    {
+      "artifact": "four-gate-assessment.json",
+      "sha256": "da253bb12b6857767771f893c25b29e5dad35d3b88ba942473a3fadb135a5670"
+    },
+    {
+      "artifact": "committed-context-noise-v1/terminal-receipt.json",
+      "sha256": "978ad5f8f82072a992bf3747bb883dce3fca23921846eaf375eb66a7ca09d0f0"
+    }
+  ],
+  "interpretation": [
+    "Noise and safety fail the original critical-term and word-error thresholds.",
+    "The alternative improves aggregate accuracy but still loses booking intent and urgent terms.",
+    "No normalization, removed case, threshold weakening, model promotion or patient-call authority follows.",
+    "Current recognitions and dated synthesis evidence are separately scoped, not summed into a whole-call pass."
+  ],
+  "productionDefaultsChanged": false,
+  "historicalReportsAndDefaultSetChanged": false,
+  "clinicProviderCarrierAcceptance": "notEstablished",
+  "wholeGoalComplete": false
+}
