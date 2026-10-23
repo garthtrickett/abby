@@ -1,0 +1,85 @@
+{
+  "schema": "abby.deepgram-noise.aggregate.v1",
+  "date": "2026-10-23",
+  "patientFree": true,
+  "profile": {
+    "provider": "deepgram-streaming",
+    "model": "nova-3",
+    "language": "en",
+    "audioFormat": "mono-pcm16le-16000",
+    "turnClosure": "per-turn-close-stream-summary-normal-close",
+    "endpointing": false,
+    "mipOptOut": true,
+    "smartFormat": false,
+    "numerals": false,
+    "repeats": 3,
+    "concurrency": 2,
+    "punctuate": true
+  },
+  "corpus": {
+    "version": "transcription-noise-v1",
+    "sha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+    "cases": 6,
+    "runs": 18
+  },
+  "counts": {
+    "match": 9,
+    "mismatch": 3,
+    "critical": 6,
+    "providerFailure": 0
+  },
+  "metrics": {
+    "wordErrorRate": 0.20454545454545456,
+    "finalP95Ms": 396,
+    "empty": 0,
+    "truncated": 0,
+    "delayed": 0,
+    "missingRepeats": []
+  },
+  "gate": {
+    "status": "fail",
+    "failures": [
+      "critical",
+      "wordErrorRate"
+    ],
+    "thresholds": {
+      "version": "transcription-synthetic-gate-v1",
+      "minRepeatsPerCase": 3,
+      "maxCritical": 0,
+      "maxProviderFailures": 0,
+      "maxEmpty": 0,
+      "maxTruncated": 0,
+      "maxWordErrorRate": 0.1,
+      "maxFinalP95Ms": 2500,
+      "maxIndividualFinalMs": 5000
+    }
+  },
+  "privateReport": "/home/gust/.local/state/abby-deepgram-transcription/noise-v8.json",
+  "privateReportSha256": "3251a1053ae8a761c8e36df6192e8ae64176e9aca8ee1218846fa5ca66584437",
+  "privateSourceSnapshot": "/home/gust/.local/state/abby-deepgram-transcription/bench-source-snapshot-v8.json",
+  "selectedForRuntime": false,
+  "cleanSafetyAndRepresentativeQualification": "notRun",
+  "productionDefaultsChanged": false,
+  "releaseGate": "unverified",
+  "wholeGoalComplete": false,
+  "runAt": "2026-10-23T02:25:14.502Z",
+  "sourceFiles": [
+    {
+      "path": "src/voice/deepgram-streaming-transcription.ts",
+      "sha256": "31dfd9d26bb9e710bb784dd72799ceb16f277b58530e5d9e8130ddfdcfb10dc2"
+    },
+    {
+      "path": "src/voice/transcription-evaluation.ts",
+      "sha256": "3ea30413b80cd28ecf337aaf9ad156dc6d5fd946ee74f81678654f9f2a41943d"
+    },
+    {
+      "path": "src/voice/transcription-evaluation-gate.ts",
+      "sha256": "44f7973d65f8de8261db8030bfbb14ce827a0c14b9b35756c2640133c956357c"
+    },
+    {
+      "path": "scripts/evaluate-deepgram-transcription.ts",
+      "sha256": "3a341cdd05ff28d524fa49129d7b1c5570b5e6b0a2150626d06e292bdec17cb7"
+    }
+  ],
+  "adapterSha256": "6f17ddd9226ed8f6264800402569548469579890aa9badd5c85d1dccdb209021"
+}

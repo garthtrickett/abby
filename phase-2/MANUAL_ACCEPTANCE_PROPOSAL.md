@@ -1,6 +1,7 @@
 # Proposed operator acceptance
 
-Status: proposal only, updated21October2026. No manual acceptance has been executed.
+Status: proposal only, updated23October2026. Full current-candidate acceptance
+has not been executed. Earlier scoped demo rehearsals are recorded below.
 This supplies the manual-test proposal required by [execution stage11](EXECUTION_ORDER.md).
 It does not activate a clinic or authorize provider mutations, real mail,
 payments, deployment or the deferred carrier work.
@@ -19,6 +20,69 @@ unresolved review. Use owned patient-free fixtures and a dedicated approved
 environment. Keep native identities and any protected observations in the
 clinic-approved private evidence destination; the repository receives only
 scenario labels, source hashes, fixed outcomes and pass/fail reasons.
+
+### Existing authorized Cliniko demo account
+
+An existing real Cliniko demo account is available as the rehearsal target; a
+new clinic does not need to be identified. Its owner-only configuration remains
+at `/home/gust/code/abby/.env`. On23October, the named API-key/contact settings
+were present and nonempty with file mode0600. A separate read-only metadata
+check returned HTTP200 for businesses, practitioners and appointment types.
+It read no patient endpoints and made no writes. A later guarded eight-GET
+preflight validated the existing demo catalogue and found no active patient or
+recall-type fixture belonging to the named lifecycle rehearsal; its two patient
+queries used that fixture's exact email/name filters. The eligible service is
+30minutes and the account timezone remains Asia/Jakarta. No setting was changed.
+Archived history, other fixture families and acceptance of newer workflows
+remain unverified.
+
+The [C-LIVE-59 lifecycle](../phase-0/CLINIKO_EVIDENCE.md#c-live-59--complete-admitted-demo-lifecycle-with-independent-readbacks-and-cleanup)
+passed on5October: real provider intake, two bookings, one reschedule, one
+cancellation and four review recalls, followed by independently verified cleanup
+and restoration of the original online-booking flag. Its caller admission,
+permissions, mailbox and playback were synthetic. The separately authorized
+[C-LIVE-58 UI rehearsal](../phase-0/CLINIKO_EVIDENCE.md#c-live-58--authorized-cliniko-reportnotes-ui-rehearsal-and-verified-cleanup)
+observed the dedicated review and persisted acknowledgment, then verified cleanup;
+it was agent-operated, not human staff acceptance.
+
+Use these actual historical results and the existing demo target when planning
+the current observations. First verify current account access, fixture state and
+the exact source/configuration required by the selected exercise. The older
+rehearsals do not qualify later class/pass, Stripe, outbound, communication-memo
+or acoustic behavior on the current candidate. Their existing authority and
+scope remain explicit in the [lifecycle runbook](CLINIKO_LIVE_LIFECYCLE.md) and
+[staff-review runbook](CLINIKO_REVIEW_REHEARSAL.md).
+
+### Current engineering boundary, 23 October 2026
+
+PR589 normally merged as `78158d9`; its eight own-head jobs, actual parent-main
+checks and all four resulting main checks passed with raw results independently
+verified. This is selected engineering evidence, not execution of the observations
+below. The full thirteen-gap scope and clinic/provider/source/retention/restore,
+sender/mailbox, acoustic and activation requirements remain open.
+
+The selected outbound path is Twilio with Abby's runtime and clinic workflows,
+with versioned runtime/transcription seams for a separately qualified adapter.
+Positive authenticated opt-outs can retain restrictive Cliniko DNC under the
+approved policy. Private or unclear whole-call evidence targets clinic staff
+review while future calls remain blocked. Incoming original-target context and
+separate confidential communication memos have scoped engineering evidence;
+neither a memo nor a closed staff task clears contact or supplies clinical
+authority. Read their [current scope](INCOMING_MISSED_CALL_CONTEXT.md) and the
+[staff-review contract](OUTBOUND_STAFF_REVIEW.md) before selecting a rehearsal.
+
+PR590's corrected listener shutdown normally merged as `327d0c3` after all eight
+own-head jobs and raw results passed. Its resulting main checks remain
+independently pending. The optional Deepgram experiment passes current combined 63 source controls
+without skips, whole strict TypeScript and the serving build on actual parent
+327d0c3; all 741 default serving artifacts match that parent exactly. Final
+review, own cloud and ordinary delivery remain required. All three actual Deepgram noisy profiles and current OpenAI
+noisy/safety recognition fail the original quality gates. Synthetic profile
+evidence, fast responses or valid transport cannot approve relevant voice
+activation. See [the speech gate](../eval/SPEECH_QUALITY_GATE.md) and
+[optional experiment](../phase-1/DEEPGRAM_TRANSCRIPTION.md).
+
+### Historical engineering checkpoints
 
 The 17 October engineering checkpoint is combined candidate `ff795012`
 (draft485), with the clinical fixes and inactive Stripe protocol/discovery/stream
@@ -61,7 +125,7 @@ without replaying the original action.
 | 11e | Current native quota, process interruption and backup/restore recovery | Price the actual complete clinic authority/native read profile under the physical180 budget; six/eight synthetic authority totals are not clinic defaults. Independent complete native history, producer/quiescence and restore grants prevent replay after local row loss. Optional serving provision stays disabled until separately accepted. |
 | 12a | General follow-up, changed/expired consent, each independently withdrawn grant, cancellation/quiet boundary and competing launch | Independently provision the actual native source/contact/campaign/producer/restore/provider grants. One optional adapter launch follows exact possible-attempt retention and current final checks. Acceptance is distinct from delivery, terminal or clinical success. No unchanged automatic retry. |
 | 12b | Interrupted or ambiguous launch; backup/remap while capacity remains held | Inspect native possible history and permanent exclusions jointly. Timeout, dead process or a lease never proves a remote call ended. Preserve held capacity until a selected authenticated provider reader proves every matching call terminal under current native/mapping/provider/release grants. The conditional owner exists; a real provider source still needs independent qualification. Legacy/untagged/unknown calls remain held. |
-| 12c | Opt-out, changed sick-day target and protected callback | A finite explicitly invoked scheduler has focused qualification; a blocked-only DNC retention foundation is qualified, while end-to-end opt-out handling and exact clinical callback integration remain pending. Authenticated provider opt-outs may automatically record dedicated Cliniko DNC under approved clinic policy. Qualify shared-number blocking, uncertain acknowledgement and independently approved reconsent. Fresh native target and separate patient/operation authority are required; a shared number, request or campaign grants none. |
+| 12c | Opt-out, changed sick-day target and protected callback | Finite exact-appointment scheduling, authenticated positive opt-out retention, unclear-contact staff review and protected original-target callback paths have scoped synthetic engineering evidence. Real clinic/provider acceptance of their composition remains unexecuted. Authenticated provider opt-outs may automatically record dedicated Cliniko DNC under approved clinic policy. Qualify shared-number blocking, uncertain acknowledgement and independently approved reconsent. Fresh native target and separate patient/operation authority are required; a shared number, request or campaign grants none. Unclear/private whole-call evidence keeps future calls blocked, and completing staff work is not reconsent or hold release. |
 | 13 | Selected confidential communication memo, exact verified subject and independent retention | Individual booking, observed cancellation/rescheduling, ordinary/pass class booking/cancellation and partial/completed movement reports now have local engineering evidence. This human/native acceptance row remains proposed and unexecuted. Verify approved content, author, confidentiality/viewers and retention separately from financial/contact reviews. A delayed or failed memo must not delay or repeat a known clinical result. Class memos identify the exact patient attendee and occurrence without claiming physical attendance, payment, remaining pass balance or a whole move. Exercise actual quota waits, response loss, wrong subjects and unavailable grants. Thirty-six synthetic booking/change/class killed-sender/full-restore cases now pass locally in the documented ordinary/approved-profile/same-case scope, including closed archived original reviews. Active clinical reads must continue refusing archived originals. Independently approve the exact native appointment source and its decoded marker; its review cannot substitute for that marker. Historical disclosure grants must remain current across final source waits. Withdraw the original-record grant during an account-budget wait and verify that no protected read starts; concurrent recovery of another permitted selection must retain its independent grant. Rehearse adult-representative individual booking with separate caller/patient codes and played consent; the memo must identify the selected patient, and another patient grant, withdrawal or lost memo ACK must preserve the known clinical result. Four emitted synthetic signed cases now have local engineering evidence, without making this real-clinic exercise complete. Rehearse adult-representative individual cancellation and rescheduling with separate caller/patient proof, exact native target and independently approved confidential memo binding. Synthetic signed coverage does not execute this clinic exercise; clinical ACK loss remains uncertain with no memo even when a separate native inspection matches. Rehearse guardian booking and individual cancellation/rescheduling for a native minor: actual birth date, separate clinic guardian authority and fresh caller/patient registered-channel proof must agree. A spoken relationship supplies no authority; inspect the confidential memo on the child, never the caller or another patient. Both adult and guardian synthetic cancellation cases retain accelerated received-media coverage using the authenticated decoder epoch; no real carrier timing acceptance follows. Synthetic signed guardian coverage does not execute this clinic exercise. Rehearse two independently approved patient booking tasks with separate registered channels and memo grants; verify each confidential memo is on its actual patient and that a pending prior memo cannot follow the new workflow. A lost first clinical response must block the next task without retaining a memo. Synthetic two-subject fixtures do not approve another operation, recording or real clinic workflow. For an approved self class booking, verify its confidential patient memo binds the actual occurrence, attendee and original attendance action without editing shared class notes or treating a pass as payment. Native capacity waiting requires actual waiting and fresh confirmation; memo uncertainty must not replay the clinical action. Synthetic cases do not execute clinic or financial acceptance. Broader source/subject/voice recovery and this real-clinic exercise remain pending. A partial or uncertain movement report must preserve separate original/replacement/association facts and never claim an atomic move, money or released credit. Other note types/attachments stay unselected; no shared-class disclosure or blind replay.  Include an outgoing original-patient booking, cancellation and rescheduling: independently observe the outbound confidential memo, patient/source binding and separate grants, and show denied or lost memo retention cannot undo known clinical success or release contact/capacity holds. When the clinical response is lost, inspect the native record independently and verify that Abby still speaks uncertainty, creates no memo and sends no replacement clinical mutation. |
 
 For each completed row retain the trigger, expected versus observed fixed caller
@@ -75,8 +139,8 @@ remaining provider races and recovery ownership separately from test results.
 Reconcile the eventual full local result, exact-head CI, independent review,
 all relevant operator rows and the still-open clinic/sender/speech/public-route
 requirements in [the progress ledger](EXECUTION_PROGRESS.md). A green local
-regression closes neither those acceptance gates nor the unimplemented later
-gaps. Keep the selected Cliniko financial-work ownership, real-mail and carrier deferrals,
+regression closes neither those acceptance gates nor the remaining thirteen-gap
+scope. Keep the selected Cliniko financial-work ownership, real-mail and carrier deferrals,
 provider activation and deployment decisions explicit.
 ## Optional signed outbound callback: acceptance still unexecuted
 

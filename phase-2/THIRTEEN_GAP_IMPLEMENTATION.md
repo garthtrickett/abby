@@ -1,6 +1,61 @@
 # Cliniko integration: thirteen-gap implementation order
 
-**Current delivery checkpoint, 23 October 2026:** PRs through #589 are normally merged at `78158d9`. PR589's eight own-head checks and raw logs and parent `848b8c5`'s four main checks/raw logs passed. Its resulting main-branch checks are tracked independently. The schema component retains 741 qualified serving files. Fresh source-matched speech tests pass clean audio but fail noisy and safety audio; a repeated alternative improves accuracy but still fails. The full thirteen-gap roadmap and real clinic/provider/source/retention/restore/acoustic acceptance remain open. Patient traffic, deployment and default activation retain their separate gates. Earlier dated entries retain their original inputs and scope.
+## Current roadmap reconciliation, 23 October 2026
+
+The thirteen original requirements below remain in scope. This summary separates
+selected engineering from acceptance; it does not declare a gap complete merely
+because its source or fixtures exist. Dated checkpoints later in this document
+retain their original candidates, overlaps and unresolved results.
+
+PR589 normally merged as `78158d9` after its eight own-head jobs and actual
+parent-main checks passed. All four resulting main jobs and their raw counts
+subsequently passed independently. That qualifies its combined selected graph,
+with 741 serving artifacts. The earlier paid/pass failure remains historical red
+evidence; current source-matched paid/unpaid and resend witnesses have explicit
+non-skipped passes. Their historical exact failure cause is not relabelled.
+
+PR590's original documentation head had seven green jobs and one PostgreSQL
+shutdown failure. A separate deterministic reproduction identifies a readiness
+publication race. The corrected `5e210817` passes whole strict/serving, ten focused
+PostgreSQL cases and both metadata contracts, with Standards0/Spec0. Only its
+compiled runner changes; the other 740 outputs remain exact. All eight corrected
+own-head checks and complete raw results subsequently passed before normal merge
+as `327d0c3`. The resulting main checks are independently pending; the local
+correction and own-head results do not substitute for that qualification.
+
+| Gap | Selected engineering and evidence route | Still open |
+| --- | --- | --- |
+| Gap 1 | The conditional compiled receptionist composes booking, protected enquiry, cancellation, rescheduling and separate registration. [Runner](../phase-1/VOICE_SERVICE_RUNNER.md), [booking receipts](PROVIDER_ACKNOWLEDGED_BOOKING_PLAN.md). | Current clinic/admission provisioning and real voice acceptance; registration does not itself book. |
+| Gap 2 | Independent patient verification and exact subject/operation permissions remain on each protected path. [Verification and permission requirements](MANUAL_ACCEPTANCE_PROPOSAL.md#operator-observations). | Real clinic verification/delivery and current grants; a caller number, prior proof or related-person task grants no general authority. |
+| Gap 3 | Native recovery/operator routes, message outcomes, known-session completion coverage and shared-budget readiness/transaction guards have scoped evidence. The current shutdown correction is separately tracked above. [Operator facts](PRODUCT_FACTS.md). | Real staff/receiver/duty ownership and deployment/restore acceptance. Independent never-admitted carrier coverage remains limited; no private call ledger is introduced. |
+| Gap 4 | Current default clean recognition passes; noisy and safety recognition fail. Three optional Deepgram noise profiles also fail, including native 8 kHz. [Speech checkpoint](../eval/SPEECH_QUALITY_GATE.md), [optional experiment](../phase-1/DEEPGRAM_TRANSCRIPTION.md). | The original acoustic gates, representative calls, usable public route and eventual authorized carrier acceptance. Fast finals and transport success do not satisfy recognition quality. |
+| Gap 5 | Approved service, location, practitioner/duration and initial/follow-up choices use the scoped catalogue and preserve approvals on incomplete refresh. [Catalogue](CLINIKO_SERVICE_CATALOGUE.md), [setup evidence](CLINIKO_CATALOGUE_EVIDENCE.md). | The actual clinic catalogue, grants and acceptance; saved choices alone cannot activate a clinic. |
+| Gap 6 | Bounded longer online searches and explicitly approved native offline/dated recurring calendars preserve completeness and final availability checks. [Original gap 6 evidence](#gap6-independently-approved-offline-calendar-progress). | Actual permitted sources, bounds and native-provider acceptance; incomplete reads cannot support a complete answer or inferred recurrence. |
+| Gap 7 | Approved practitioner changes retain the original choice and independently bind the exact alternative and reschedule operation. [Practitioner contract](APPROVED_PRACTITIONER_RESCHEDULING.md). | Real source/clinic acceptance; individual rescheduling does not establish class movement or an atomic provider guarantee. |
+| Gap 8 | Private corrections, required registration fields and independently approved confirmation resends retain separate purposes and recovery evidence. Current financial/resend witnesses pass; the earlier failed run remains preserved. [Original requirements](#requirements-and-evidence-needed), [operator facts](PRODUCT_FACTS.md). | Actual field adapters, recipient/sender policy and delivery/retention acceptance. A resend or successful registration grants no booking or financial authority. |
+| Gap 9 | Approved self/related-person tasks keep each subject, proof, permission and action result separate, including selected memo compositions. [Operator observations](MANUAL_ACCEPTANCE_PROPOSAL.md#operator-observations), [memo scope](COMMUNICATION_MEMOS.md). | Broader cohort/operation combinations and alternative guardian channels retain their declared limits; selected cases do not establish general representative authority. |
+| Gap 10 | Selected ordinary/pass class creation, cancellation and staged movement cover quota waits, renewed proof/consent, corrections, concurrency and cold observation. [Booking contract](PROVIDER_ACKNOWLEDGED_BOOKING_PLAN.md), [scoped class facts](PRODUCT_FACTS.md). | Actual class/pass configuration and operator/provider acceptance, plus independent financial provisioning. Partial movement is not completion, restored entitlement or settlement. |
+| Gap 11 | Stripe money/receipts, Cliniko pending reviews, recorded manual payments/approved waivers and guarded expiry/resend have selected caller, concurrency and recovery evidence. [Financial contract](STRIPE_FINANCIAL_CONTRACT.md), [current facts](PRODUCT_FACTS.md). | Exact clinic fee/source/recipient, financial/producer/restore grants and real provider/sender/payment acceptance; no live money or default finance activation follows. |
+| Gap 12 | Finite campaign/sick-day scheduling, exact original targets, authenticated positive opt-outs, incoming callback context and pending staff review compose conditionally. [Staff-review-first choice](OUTBOUND_STAFF_REVIEW.md), [current facts](PRODUCT_FACTS.md). | Actual consent/contact/provider/source acceptance and relevant voice gates. Unresolved private/unclear coverage keeps future calls blocked; automatic whole-call negative clearance and recording remain unselected. |
+| Gap 13 | Selected confidential communication memos derive verified administrative facts across supported individual/class/pass/representative outcomes and recovery. [Memo contract](COMMUNICATION_MEMOS.md). | Exact clinic-approved subjects, content, creator/viewers, retention, operation grants and real restore/provider acceptance. Attachments and other note types remain separate, unselected work. |
+
+The optional Deepgram implementation is currently a local experiment. Its original
+57-control graph retains its scoped evidence. The current combined graph on
+actual normal parent 327d0c3 passes 63 source controls with no skips, whole strict
+TypeScript and the serving build. All 741 default outputs match that corrected
+parent exactly. Host tests use synthetic quality evidence and do not exercise
+serving ingress or call admission.
+All three 18-run noisy profiles fail the original quality gates. Its metadata,
+review, publication and delivery are distinct from the corrected PR590 lifecycle
+work. No profile or voice default is promoted.
+
+Use [execution progress](EXECUTION_PROGRESS.md) for subsequent exact-candidate
+results and [manual acceptance](MANUAL_ACCEPTANCE_PROPOSAL.md) for the still-open
+operator observations. Keep the original full thirteen-gap scope, real-mail and
+carrier deferrals, source preservation, acceptance and activation requirements.
+
+
+**Current delivery checkpoint, 23 October 2026:** PR590 normally merged at `327d0c3` after all eight corrected-head jobs and their raw logs/counts passed, along with the qualified actual parent-main evidence. Its resulting main checks remain independently pending. PR589 at `78158d9` has separately qualified all four actual-main jobs/raw logs. This optional Deepgram branch incorporates the actual shutdown parent and passes fresh combined 63 source controls, whole strict TypeScript and the serving build; all 741 default serving artifacts match that parent exactly. Final review, own cloud and ordinary delivery remain required. Original component counts retain their inputs and overlaps. All three Deepgram noisy profiles and current OpenAI noisy/safety profiles fail the original acoustic gates. The full thirteen-gap roadmap and real clinic/provider/source/retention/restore/acoustic acceptance remain open; no deployment or default activation follows.
 
 **Earlier local gap3 storage-guard checkpoint, 22 October 2026:** The shared native budget schema is now checked read-only before standalone startup, new signed webhook admission and later stream ownership. Local68 final checks (including nested tests, preserved operational failures and metadata) and strict/727 serving pass on delivered337; no quota/row/native operation or current active result is changed. The original337-based proof remains scoped to that component. Actual normal callback parentc3af48c is integrated with fresh68/68, strict and741 serving outputs; final current-parent review and ordinary delivery remain required, with parent actual-main checks separate. Known session/aggregate/native queue/root observations do not establish independent all-carrier completeness; R01 retains that coverage limit. See [the exact storage/readiness scope](SHARED_BUDGET_STORAGE_READINESS.md). The full thirteen-gap objective and real acceptance remain open.
 

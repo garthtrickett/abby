@@ -1,6 +1,6 @@
 # Execution progress and evidence
 
-**Current delivery checkpoint, 23 October 2026:** PRs through #589 are normally merged at `78158d9`. PR589's eight own-head checks and raw logs and parent `848b8c5`'s four main checks/raw logs passed. Its resulting main-branch checks are tracked independently. The schema component retains 741 qualified serving files. Fresh source-matched speech tests pass clean audio but fail noisy and safety audio; a repeated alternative improves accuracy but still fails. The full thirteen-gap roadmap and real clinic/provider/source/retention/restore/acoustic acceptance remain open. Patient traffic, deployment and default activation retain their separate gates. Earlier dated entries retain their original inputs and scope.
+**Current delivery checkpoint, 23 October 2026:** PR590 normally merged at `327d0c3` after all eight corrected-head jobs and their raw logs/counts passed, along with the qualified actual parent-main evidence. Its resulting main checks remain independently pending. PR589 at `78158d9` has separately qualified all four actual-main jobs/raw logs. This optional Deepgram branch incorporates the actual shutdown parent and passes fresh combined 63 source controls, whole strict TypeScript and the serving build; all 741 default serving artifacts match that parent exactly. Final review, own cloud and ordinary delivery remain required. Original component counts retain their inputs and overlaps. All three Deepgram noisy profiles and current OpenAI noisy/safety profiles fail the original acoustic gates. The full thirteen-gap roadmap and real clinic/provider/source/retention/restore/acoustic acceptance remain open; no deployment or default activation follows.
 
 **Updated:** 23 October 2026. **Objective:** Work through [EXECUTION_ORDER.md](EXECUTION_ORDER.md), preserving its full thirteen-gap scope. This ledger records partial delivery; the integration is not complete or activated.
 
@@ -6482,3 +6482,89 @@ ten total, none skipped. Final metadata, exact-head review and refreshed cloud
 qualification/delivery remain separate gates.
 The earlier speech baseline and alternative still fail quality; this lifecycle
 correction supplies no acoustic pass, deployment or patient-traffic activation.
+
+
+## Optional Deepgram experiment, 23 October 2026
+
+The owner selected the optional [Deepgram transcription experiment](../phase-1/DEEPGRAM_TRANSCRIPTION.md).
+It implements the existing `TranscriptionPort`; Twilio remains the carrier and
+Abby retains turn detection and clinic workflows. Local engineering passes 57
+source controls (22 new adapter cases and 35 preserved controls), whole-project
+strict TypeScript and the serving build. All 741 default serving artifacts match
+the qualified parent exactly; the default runtime does not select this adapter.
+
+Actual unchanged-corpus, three-repeat noisy speech results fail the original
+zero-critical and at-most-10% WER gates. Nova-3 completes 18 runs with 6 critical,
+20.45% WER and 396 ms final p95. A predeclared private model-only Nova-2 phonecall
+comparison completes 18 with 12 critical, 43.18% WER and 313 ms final p95. Both have
+zero provider failures. A subsequent Nova-3 native 8 kHz diagnostic removes only
+identical repeated samples, with exact reconstruction of the original fixtures
+proved offline. It completes 18 runs with six critical, 15.91% WER, 203 ms final
+p95 and zero provider failures; it also fails. No profile receives clean/safety
+follow-on or promotion. The aggregates preserve exact source/report hashes and
+label the private wire-rate conversion explicitly; original corpus bytes,
+expected text, thresholds, the OpenAI evaluator and production defaults stay fixed.
+
+This component's final metadata, exact-parent review, publication/cloud and
+ordinary delivery remain independent gates. Gap 4 remains open, alongside the
+full thirteen-gap scope and real clinic/provider/source/retention/restore,
+representative-call, public-route and carrier acceptance. No deployment, live
+patient traffic or default activation follows from the optional experiment.
+
+## Optional transcription host-boundary qualification, 23 October 2026
+
+The Deepgram source cohort now passes63/63 without skips (1792729670762): the
+original57 controls, two new cases using the actual qualified host and adapter,
+and four preserved voice-profile controls. The new cases reject changed runtime
+or provider profiles and absent, mismatched or withdrawn quality evidence before
+factory construction. Two synthetic host-bound adapter instances retain separate
+sockets; closing one and delivering its stale events cannot affect the other's
+final transcript or clarification quality. No provider request is made. This
+does not exercise serving ingress or call admission.
+This extends source-level integration evidence only. Production adapter code and
+all three failed acoustic profiles are unchanged. Whole strict/serving of this
+test extension and the actual corrective parent, final review and ordinary
+publication/delivery remain required; synthetic quality evidence is no release
+approval or live clinic authority.
+
+
+## Actual shutdown-parent integration for optional transcription, 23 October 2026
+
+PR590 corrected head5e210817 passed all eight own jobs and complete raw logs/counts
+before normal merge as327d0c32. Its prior failure remains archived, and its
+resulting main checks remain independently pending. This optional transcription
+branch imports that actual normal tree, preserves the exact corrected CLI and
+signal cases, and reconciles both component histories/facts and all thirteen
+requirements. The original63 source controls retain their unchanged adapter/test
+inputs; fresh combined whole strict/serving, metadata and final exact-parent
+review precede this branch’s publication and own CI. All three actual Deepgram
+profiles remain quality failures and no runtime selection is added.
+
+The existing sanctioned demo also passes current read-only metadata access and
+eight-GET guarded catalogue/named-fixture preflight: eligible30minute type, no
+active matching lifecycle patient/type, original online flagfalse and unchanged
+Asia/Jakarta timezone. No native write, recording, clinical execution, patient
+traffic, sender/payment activation or full clinic acceptance is inferred.
+
+
+## Current combined optional transcription qualification, 23 October 2026
+
+The actual normal shutdown parent 327d0c3 and extended Deepgram test graph now
+pass fresh whole strict TypeScript and the serving build (1792733012707),
+peak 1805381632 B under the existing 2 GiB cap, heap 1536 MiB, CPU 100%
+and Swap 0. All 741 default serving artifacts match the qualified corrected
+parent exactly; the optional adapter remains unselected. The independent current
+source cohort passes 63/63 without skips or cancellations (1792733073928), peak
+158556160 B under 512 MiB, CPU 100% and Swap 0. No provider request is
+made by these checks. The earlier 63 result's unchanged adapter/test roots did
+not prove its entire import graph unchanged after the shutdown merge; this fresh
+run qualifies that graph.
+
+The original 57 graph and prior 63 results retain their own inputs rather than
+being relabelled current. All 54 actual recognitions across the three predeclared
+noisy profiles completed, but all three profile gates failed; no acoustic pass,
+clean/safety follow-on, production selector or default activation follows.
+Current metadata/final review, own cloud, normal merge and independently
+resulting-main checks remain separate delivery gates. The full thirteen-gap
+roadmap and real clinic/provider/source/retention/restore/representative/carrier
+acceptance remain open.
