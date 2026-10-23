@@ -6629,3 +6629,24 @@ The local-only documentation successor records the two private failed request-mo
 diagnostics and selected rehearsal backup role. Its own review/publication/CI and
 all clinic/provider/source/retention/restore/acoustic/activation gates remain
 separate; no runtime default or serving artifact changed.
+
+
+## Local selected queue-work freshness, 23 October 2026
+
+R23/gap3 adds an optional read-only selected systemd oneshot/timer diagnostic. Stable actual completion is distinct from boot defaults, new pending/running work, misses, disabled schedules and unavailable metadata. It retains no timestamp ledger, invokes no Cliniko read, sends no alert and changes no clinical result.
+
+- Initial source37/37, no skips: work1792751873354,11s,116,678,656B/256MiB. Final E2E-220 names/metadata retain those assertions and need current qualification.
+- Whole strict and runtime-only compilation passed in work1792752123897,6m49s. The supervisor then failed its wrong492-versus743 inventory comparison. All490 older outputs actually built were exact; this was no product-test/compiler failure. Its original guard omitted16 auxiliary probe/config files, separately reconciled against qualified parent during that run and after terminal. Frozen history was not rewritten.
+- Corrected fixture-inclusive build1792752773109 passed in2m28s. Expanded1811-input guards qualify743 outputs, all741 prior outputs exact plus two optional checker outputs. The build target was corrected without repeating unchanged whole strict.
+- Actual compiled checker/real systemd source1792753047651 passed seven cases in38s, no skips: never-run calendar; calendar completion; stopped schedule; held new work over old success; owned SIGKILL; reset-failed; nonzero exit. Every temporary unit and fixture file was verified removed. Owner-scope peak21,045,248B/256MiB; separate command/anchor caps64MiB/8MiB, peaks not captured. No provider/DB request, production installation or alert send.
+- Fast-forward9c49a6f to actually normally merged docs parent3213032 preserved all1811 sources and743 artifacts. PR592 own8/raw logs/counts passed; actual-main4 remain tracked. New R23 final metadata/review, own exact-head CI and ordinary delivery remain required.
+
+See [contract and remaining acceptance](QUEUE_WORK_FRESHNESS.md). These separate cohorts are not a full-call or roadmap pass. Real units/source/cadence/receiver, independent host coverage, approved primary/backup responsibility and human acceptance remain open. No default/patient-traffic activation follows.
+
+### Corrected current queue-work qualification
+
+The first latest-activation refinement passed source39 plus metadata2 and fresh whole strict/build743, but actual native recheck1792756609297 failed after its first never-run observation: a successful calendar command returned unavailable. All owned fixtures were cleaned. Owning diagnostic1792756964048 then confirmed process start145 microseconds before the unit activation notification and exit afterward. Systemd255 source confirms spawn precedes that notification. This is a mistaken lifecycle-order assumption, not a reason to add a time tolerance or discard the older-success boundary.
+
+Completion now follows the latest activation, while running requires matching current/main-execution PIDs. Corrected source41 plus metadata2 pass43/43, no skips (1792757315723,18s). Fresh whole strict and fixture-inclusive build1792757368192 pass in5m46s, peak1,705,680,896B/2GiB, OOM/high/max0; all741 prior outputs remain exact in743. Actual compiled-reader1792757840764 passes all seven OS/process cases in46s on those exact bytes, no skips; owner-scope peak71,573,504B/256MiB, separate64MiB/8MiB fixture caps, all owned units/files removed. Native observations use a user manager with synthetic commands, not real system-manager/clinic/backlog or human acceptance. Frozen failed13 and successful owning14 evidence are preserved.
+
+Documentation parent PR592/3213032 is now fully delivered: own8, actual parent4 and resulting-main4 all passed, with complete raw logs/counts independently rehashed. Current main also retains all45 distinct original booking and21 schema/transaction passes in their selected engineering scope. New diagnostic review, own exact-head CI/ordinary delivery and real acceptance remain separate. Final documentation-only fingerprint/metadata qualification follows these current source/build/native cohorts.

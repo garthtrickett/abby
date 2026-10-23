@@ -137,6 +137,8 @@ Establish clinic-owned content, storage, exact subject/target and permission sep
 
 **Exit:** Approved writeback types have actual host evidence, exact receipts and safe failure/recovery cases. No transcript-based clinical inference, cross-patient disclosure, unsafe shared-class note or local private queue is introduced. Requalify any receipt attachment brought forward in stage 8.
 
+**Local gap3/R23 freshness, 23 October 2026:** The optional [read-only selected queue-work probe](QUEUE_WORK_FRESHNESS.md) has 41 source controls plus both metadata checks, whole strict TypeScript, a corrected 743-output fixture-inclusive build preserving all 741 prior outputs, and seven actual user-manager OS-reader/process observations with synthetic commands. The earlier inventory and activation-ordering failures are preserved and corrected. Final metadata/review, its own delivery and real monitoring/duty/human acceptance remain open. No timestamp ledger, sender or default deployment is added.
+
 ### 11 Complete combined qualification and activation acceptance
 
 Every capability stage needs focused checks before publication and the required review/CI before landing, following the repository process. After the core sequence, run the appropriate full regression against the actual combined source/build candidate, including real PostgreSQL/process/backup privacy evidence where required. Record exact commands, completed results, skipped/killed work, unresolved failures and the manual-test proposal. Historical passes cannot satisfy this gate.

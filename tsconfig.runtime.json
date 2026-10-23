@@ -7,6 +7,6 @@
     "noEmitOnError": true,
     "rewriteRelativeImportExtensions": true
   },
-  "files": ["scripts/serve-cliniko-voice.ts", "scripts/set-voice-test-automation.ts", "scripts/serve-voice-operational-alert-receiver.ts", "scripts/read-voice-operational-alert-inbox.ts", "scripts/monitor-cliniko-queue.ts", "src/standalone/operator-alert-magic-link.ts"],
+  "files": ["scripts/serve-cliniko-voice.ts", "scripts/set-voice-test-automation.ts", "scripts/serve-voice-operational-alert-receiver.ts", "scripts/read-voice-operational-alert-inbox.ts", "scripts/monitor-cliniko-queue.ts", "src/standalone/operator-alert-magic-link.ts", "scripts/check-cliniko-queue-work.ts"],
   "include": []
 }

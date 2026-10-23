@@ -67,7 +67,8 @@
     "test/support/representative-call-owner.ts",
     "test/support/representative-change-call.ts",
     "test/support/incoming-clinical-call-flow.ts",
-    "test/support/twilio-outbound-unanswered-producer.ts"
+    "test/support/twilio-outbound-unanswered-producer.ts",
+    "scripts/check-cliniko-queue-work.ts"
   ],
   "include": []
 }

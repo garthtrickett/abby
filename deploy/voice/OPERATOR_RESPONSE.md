@@ -80,6 +80,8 @@ each read or action; the page refreshes every 30 seconds. This is an in-app
 notification workflow. It does not deliver external paging when nobody opens
 the page, or detect that both applications have stopped.
 
+The optional [selected queue-work diagnostic](../../phase-2/QUEUE_WORK_FRESHNESS.md) reads the accepted local systemd queue profile without loading its environment file or retaining timestamps. It distinguishes actual recent completion from defaults, new pending/running work, misses and failures. Its local source/OS fixtures do not install a monitor or qualify a real clinic. Bind the actual release, local manager, profile and cadence separately. Keep the external sender/receiver/host and human-responsibility checks above.
+
 ## Responsibility and recovery
 
 The first approved workflow observation starts the escalation clock. It is an

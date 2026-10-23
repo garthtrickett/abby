@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.248
+# Scenario manifest, version 1.249
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -344,6 +344,8 @@ E2E-220 also covers independently approved Cliniko full-type queue monitoring th
 
 
 E2E-220 also qualifies optional authenticated operator responsibility: approved owner/backup identity, first observation, explicit acknowledgment, concurrent one-winner storage, restart reconstruction, expiry and current authority. Actual TLS and PostgreSQL sign-in browser actions reject forged identity, wrong hosts and cross-origin writes. Incomplete or oversized HTTP bodies cannot acknowledge. Transport acceptance remains distinct from a real operator action and patient completion; external paging and clinic recipient acceptance remain open. The full-call gate remains planned.
+
+E2E-220 also covers the optional read-only selected systemd queue-work diagnostic. Stable command/timer observations must show actual recent completion; defaults, new pending/running work, misses, disabled schedules and unavailable metadata cannot supply it. Source fault/cancellation/deadline controls and seven actual compiled-reader OS observations use synthetic commands, not a real Cliniko queue or staff acceptance. No new timestamp ledger, page or automatic deployment follows.
 
 E2E-354 qualifies the compiled clinical runner with current service/intake variants and actual loopback TLS SMTP. Two separate confirmations govern new-patient registration and exact member/type booking; independently approved existing workflows and operator monitoring remain separate authority. Current source includes the evidence unions from drafts453–456. This does not establish carrier, real recipient, clinic acceptance or acoustic quality. Shared-number service discovery is qualified in the transient composition; provisioning multiple clinical locations through the production CLI remains open.
 
