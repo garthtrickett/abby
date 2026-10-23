@@ -55,7 +55,8 @@
     "build:sign-in": "esbuild src/standalone/dashboard/sign-in-main.ts --bundle --format=esm --platform=browser --outfile=dist/dashboard/sign-in.js",
     "eval:conversations": "node scripts/evaluate-clinic-conversations.ts",
     "build:runtime": "tsc --project tsconfig.runtime.json",
-    "build:voice-tests": "tsc --project tsconfig.voice-test.json"
+    "build:voice-tests": "tsc --project tsconfig.voice-test.json",
+    "voice:ops:queue-work": "node dist/runtime/scripts/check-cliniko-queue-work.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
