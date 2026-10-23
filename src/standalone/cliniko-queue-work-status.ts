@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { resolve } from "node:path";
+import { openSync, readSync, closeSync } from "node:fs";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 
 export type QueueWorkSelection = Readonly<{ name: string; manager: "user" | "system"; appRoot: string;
@@ -11,6 +12,7 @@ export type QueueWorkSource = Readonly<{ properties: string; timerTrigger: strin
 export type QueueWorkPorts = Readonly<{
   read(selection: QueueWorkSelection, signal: AbortSignal): Promise<QueueWorkSource>;
   nowMicros(): bigint;
+  elapsedUpperMicros(): bigint;
 }>;
 
 const properties = ["Id", "LoadState", "ActiveState", "SubState", "Type", "RemainAfterExit", "SuccessExitStatus",
@@ -26,6 +28,18 @@ const runtimeMicros = 210_000_000n;
 const failures = new Set(["resources", "timeout", "exit-code", "signal", "core-dump", "watchdog",
   "start-limit-hit", "protocol", "oom-kill"]);
 const command = promisify(execFile);
+
+function nativeElapsedUpperMicros(): bigint {
+  const fd = openSync("/proc/uptime", "r");
+  try {
+    const buffer = Buffer.alloc(65), size = readSync(fd, buffer, 0, buffer.length, 0);
+    if (size === buffer.length) throw Error();
+    const match = /^(0|[1-9][0-9]{0,19})\.([0-9]{2}) (?:0|[1-9][0-9]{0,19})\.[0-9]{2}\n$/.exec(buffer.toString("ascii", 0, size));
+    if (!match) throw Error();
+    // BOOTTIME includes suspend. Round the kernel's truncated centiseconds upward; never substitute it for MONOTONIC ordering.
+    return (BigInt(match[1]!) * 100n + BigInt(match[2]!) + 1n) * 10_000n;
+  } finally { closeSync(fd); }
+}
 
 async function readNative(c: QueueWorkSelection, signal: AbortSignal): Promise<QueueWorkSource> {
   const service = c.name + ".service", timer = c.name + ".timer";
@@ -98,7 +112,8 @@ export async function inspectClinikoQueueWork(input: QueueWorkSelection, externa
         !["user", "system"].includes(c.manager) || ![c.appRoot, c.nodeBin, c.envFile].every(path) ||
         !Number.isSafeInteger(c.pollEveryMinutes) || c.pollEveryMinutes < 1 || c.pollEveryMinutes > 60) throw Error();
     if (!injected && (process.platform !== "linux" || process.version !== "v22.23.0" || process.versions.uv !== "1.51.0")) throw Error();
-    const ports = injected ?? { read: readNative, nowMicros: () => process.hrtime.bigint() / 1000n };
+    const ports = injected ?? { read: readNative, nowMicros: () => process.hrtime.bigint() / 1000n,
+      elapsedUpperMicros: nativeElapsedUpperMicros };
     const read = ports.read.bind(ports), nowMicros = ports.nowMicros.bind(ports);
     let last = -1n;
     const now = () => {
@@ -106,7 +121,8 @@ export async function inspectClinikoQueueWork(input: QueueWorkSelection, externa
       if (signal.aborted || performance.now() - began > 5000 || typeof value !== "bigint" || value < 0n || value < last) throw Error();
       last = value; return value;
     };
-    now();
+    const beganAt = now(), elapsedBegan = ports.elapsedUpperMicros();
+    if (typeof elapsedBegan !== "bigint" || elapsedBegan < beganAt) throw Error();
     const first = await awaitUntilAbort(Promise.resolve().then(() => read(c, signal)), signal);
     if (!first) throw Error();
     const a = decode({ properties: first.properties, timerTrigger: first.timerTrigger }, c); now();
@@ -114,7 +130,13 @@ export async function inspectClinikoQueueWork(input: QueueWorkSelection, externa
     if (!second) throw Error();
     const b = decode({ properties: second.properties, timerTrigger: second.timerTrigger }, c), at = now();
     if (a.stable !== b.stable || b.start > at || b.end > at || b.activation > at || b.trigger > at) throw Error();
+    const elapsedUpper = ports.elapsedUpperMicros(); now();
+    if (typeof elapsedUpper !== "bigint" || elapsedUpper < at || elapsedUpper < elapsedBegan ||
+        elapsedUpper > 18446744073709551615n || elapsedUpper - elapsedBegan + 10_000n > 5_000_000n) throw Error();
+    const ageStatus = (since: bigint, limit: bigint, within: QueueWorkStatus, expired: QueueWorkStatus): QueueWorkStatus =>
+      at - since > limit ? expired : elapsedUpper - since > limit ? "unavailable" : within;
     const { service: s, timer: t, start, end, activation, currentPid, lastMainPid, trigger } = b;
+    const pending = () => trigger === 0n ? "pending" as const : ageStatus(trigger, runtimeMicros, "pending", "missed");
     if (!["active", "inactive", "failed", "activating", "deactivating"].includes(t.ActiveState ?? "") ||
         !["active", "inactive", "failed", "activating", "deactivating"].includes(s.ActiveState ?? "")) throw Error();
     if (![s.Job!, t.Job!].every(value => /^(?:|[1-9][0-9]{0,19})$/.test(value)) ||
@@ -123,14 +145,14 @@ export async function inspectClinikoQueueWork(input: QueueWorkSelection, externa
     if (!["waiting", "running"].includes(t.SubState!)) throw Error();
     if (s.Result !== "success" || s.ActiveState === "failed") return { status: "failed" };
     if (s.ActiveState === "activating" || s.ActiveState === "active") {
-      if (start === 0n || currentPid === 0n) return { status: trigger > 0n && at - trigger > runtimeMicros ? "missed" : "pending" };
+      if (start === 0n || currentPid === 0n) return { status: pending() };
       if (activation === 0n || currentPid !== lastMainPid) throw Error();
       if (!/^[a-f0-9]{32}$/.test(s.InvocationID!)) throw Error();
-      return { status: at - start > runtimeMicros ? "stalled" : "running" };
+      return { status: ageStatus(start, runtimeMicros, "running", "stalled") };
     }
-    if (t.Job !== "" || s.Job !== "") return { status: trigger > 0n && at - trigger > runtimeMicros ? "missed" : "pending" };
+    if (t.Job !== "" || s.Job !== "") return { status: pending() };
     if (t.SubState !== "waiting" || s.ActiveState !== "inactive" || s.SubState !== "dead") throw Error();
-    if (start === 0n && end === 0n) return { status: trigger === 0n ? "neverCompleted" : at - trigger > runtimeMicros ? "missed" : "pending" };
+    if (start === 0n && end === 0n) return { status: trigger === 0n ? "neverCompleted" : pending() };
     const inactive = uint(s.InactiveEnterTimestampMonotonic);
     // systemd spawns a oneshot main before publishing activation. Completion, not fork start, follows that notification.
     if (activation === 0n || end < activation || currentPid !== 0n || lastMainPid === 0n || start === 0n ||
@@ -139,7 +161,7 @@ export async function inspectClinikoQueueWork(input: QueueWorkSelection, externa
     if (s.ExecMainCode !== "1" || s.ExecMainStatus !== "0") return { status: "failed" };
     if (trigger === 0n || trigger > start || start - trigger > runtimeMicros || end - start > runtimeMicros)
       return { status: "missed" };
-    return { status: at - end <= BigInt(c.pollEveryMinutes) * 60_000_000n + runtimeMicros ? "recentCompletion" : "missed" };
+    return { status: ageStatus(end, BigInt(c.pollEveryMinutes) * 60_000_000n + runtimeMicros, "recentCompletion", "missed") };
   } catch { return { status: "unavailable" }; }
   finally { clearTimeout(deadline); controller.abort(); }
 }

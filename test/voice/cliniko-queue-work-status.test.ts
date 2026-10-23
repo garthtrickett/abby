@@ -18,11 +18,11 @@ function source(service: Record<string, string> = {}, timer: Record<string, stri
   const block = (row: Record<string, string>) => Object.entries(row).map(([key, value]) => key + "=" + value).join("\n");
   return { properties: block(s) + "\n\n" + block(t) + "\n", timerTrigger: trigger };
 }
-async function inspect(value = source(), at = 103000000n, changes?: QueueWorkSource) {
+async function inspect(value = source(), at = 103000000n, changes?: QueueWorkSource, elapsedUpper = at) {
   let calls = 0;
   const ports: QueueWorkPorts = { read: async selection => {
     assert.deepEqual(selection, selected); calls++; return calls === 2 && changes ? changes : value;
-  }, nowMicros: () => at };
+  }, nowMicros: () => at, elapsedUpperMicros: () => elapsedUpper };
   const result = await inspectClinikoQueueWork(selected, new AbortController().signal, ports);
   return { result, calls };
 }
@@ -112,12 +112,12 @@ test("E2E-220 R23 changed second observation and a backward monotonic clock cann
   assert.deepEqual((await inspect(source(), 103000000n, source({ Job: "12" }))).result, { status: "unavailable" });
   let tick = 103000000n;
   assert.deepEqual(await inspectClinikoQueueWork(selected, new AbortController().signal,
-    { read: async () => source(), nowMicros: () => tick-- }), { status: "unavailable" });
+    { read: async () => source(), nowMicros: () => tick--, elapsedUpperMicros: () => 103000000n }), { status: "unavailable" });
 });
 
 test("E2E-220 R23 invalid selection and already-cancelled checks never start a source read", async () => {
   let calls = 0;
-  const ports = { read: async () => { calls++; return source(); }, nowMicros: () => 103000000n };
+  const ports = { read: async () => { calls++; return source(); }, nowMicros: () => 103000000n, elapsedUpperMicros: () => 103000000n };
   for (const patch of [{ name: "../other" }, { pollEveryMinutes: 0 }, { pollEveryMinutes: 61 }, { appRoot: "/srv/../abby" },
     { envFile: "/etc/a\nprivate" }, { nodeBin: "node" }]) {
     assert.deepEqual(await inspectClinikoQueueWork({ ...selected, ...patch }, new AbortController().signal, ports), { status: "unavailable" });
@@ -132,14 +132,14 @@ test("E2E-220 R23 held read ignores cancellation but cannot delay the caller or 
   const began = new Promise<void>(resolve => { entered = resolve; }), stop = new AbortController();
   const waiting = inspectClinikoQueueWork(selected, stop.signal, { read: async () => {
     calls++; entered(); return new Promise(resolve => { finish = resolve; });
-  }, nowMicros: () => 103000000n });
+  }, nowMicros: () => 103000000n, elapsedUpperMicros: () => 103000000n });
   await began; stop.abort();
   assert.deepEqual(await waiting, { status: "unavailable" }); finish(source()); await Promise.resolve(); assert.equal(calls, 1);
 });
 
 test("E2E-220 R23 source failures and invalid CLI input emit only fixed status, never private errors or paths", async () => {
   const result = await inspectClinikoQueueWork(selected, new AbortController().signal, {
-    read: async () => { throw Error("private-error-patient-canary"); }, nowMicros: () => 103000000n });
+    read: async () => { throw Error("private-error-patient-canary"); }, nowMicros: () => 103000000n, elapsedUpperMicros: () => 103000000n });
   assert.deepEqual(result, { status: "unavailable" }); assert.equal(JSON.stringify(result).includes("private"), false);
   assert.deepEqual(await checkClinikoQueueWork(["--name", "private-argument-canary"]), { status: "unavailable" });
 });
@@ -147,7 +147,37 @@ test("E2E-220 R23 source failures and invalid CLI input emit only fixed status, 
 test("E2E-220 R23 ignored source signal is bounded by the independent five-second observation deadline", { timeout: 8000 }, async () => {
   const began = performance.now();
   const result = await inspectClinikoQueueWork(selected, new AbortController().signal, {
-    read: async () => new Promise<QueueWorkSource>(() => {}), nowMicros: () => 103000000n });
+    read: async () => new Promise<QueueWorkSource>(() => {}), nowMicros: () => 103000000n, elapsedUpperMicros: () => 103000000n });
   assert.deepEqual(result, { status: "unavailable" });
   assert.ok(performance.now() - began >= 4500); assert.ok(performance.now() - began < 7500);
+});
+
+test("E2E-220 R23 suspend-inclusive upper age refuses a falsely fresh completed command", async () => {
+  assert.deepEqual((await inspect(source(), 103000000n, undefined, 3_703000000n)).result, { status: "unavailable" });
+  assert.deepEqual((await inspect(source(), 103000000n, undefined, 1212000000n)).result, { status: "recentCompletion" });
+  assert.deepEqual((await inspect(source(), 103000000n, undefined, 1212000001n)).result, { status: "unavailable" });
+  assert.deepEqual((await inspect(source(), 1212000001n, undefined, 4_812000001n)).result, { status: "missed" });
+});
+
+test("E2E-220 R23 suspension cannot certify pending or running work within its age bound", async () => {
+  assert.deepEqual((await inspect(source({ Job: "12" }), 103000000n, undefined, 3_703000000n)).result, { status: "unavailable" });
+  const running = source({ ActiveState: "activating", SubState: "start", MainPID: "11", ExecMainPID: "11" }, { SubState: "running" });
+  assert.deepEqual((await inspect(running, 103000000n, undefined, 3_703000000n)).result, { status: "unavailable" });
+});
+
+test("E2E-220 R23 missing or contradictory elapsed-clock bounds stay unavailable", async () => {
+  for (const elapsed of [-1n, 102999999n, 18446744073709551616n])
+    assert.deepEqual((await inspect(source(), 103000000n, undefined, elapsed)).result, { status: "unavailable" });
+  assert.deepEqual(await inspectClinikoQueueWork(selected, new AbortController().signal, {
+    read: async () => source(), nowMicros: () => 103000000n,
+    elapsedUpperMicros: () => { throw Error("private-clock-source-canary"); } }), { status: "unavailable" });
+});
+
+test("E2E-220 R23 a suspended or backward elapsed observation cannot outlive the whole-check bound", async () => {
+  for (const [first, second] of [[103000000n, 109000000n], [104000000n, 103000000n]]) {
+    let clocks = 0;
+    assert.deepEqual(await inspectClinikoQueueWork(selected, new AbortController().signal, {
+      read: async () => source(), nowMicros: () => 103000000n,
+      elapsedUpperMicros: () => ++clocks === 1 ? first! : second! }), { status: "unavailable" });
+  }
 });
