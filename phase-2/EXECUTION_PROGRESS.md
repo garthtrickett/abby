@@ -1,6 +1,6 @@
 # Execution progress and evidence
 
-**Current delivery checkpoint, 23 October 2026:** PR590 normally merged at `327d0c3` after all eight corrected-head jobs and their raw logs/counts passed, along with the qualified actual parent-main evidence. Its resulting main checks remain independently pending. PR589 at `78158d9` has separately qualified all four actual-main jobs/raw logs. This optional Deepgram branch incorporates the actual shutdown parent and passes fresh combined 63 source controls, whole strict TypeScript and the serving build; all 741 default serving artifacts match that parent exactly. Final review, own cloud and ordinary delivery remain required. Original component counts retain their inputs and overlaps. All three Deepgram noisy profiles and current OpenAI noisy/safety profiles fail the original acoustic gates. The full thirteen-gap roadmap and real clinic/provider/source/retention/restore/acoustic acceptance remain open; no deployment or default activation follows.
+**Current delivery checkpoint, 23 October 2026:** PR591 normally merged as `9c49a6f` after all eight exact-head jobs and their raw results passed, with the actual parent `327d0c3` independently qualified. Its four resulting main checks are running and remain a separate gate. The optional adapter retains 63 local source controls, whole strict TypeScript and 741 unchanged default serving outputs on that parent. The three streaming Deepgram profiles and a later private whole-utterance Nova-3 comparison fail acoustic quality; a private Whisper comparison fails availability with only six completed recognitions from eighteen attempts. None is selected for the runtime. The full thirteen-gap roadmap and clinic/provider/source/retention/restore/acoustic acceptance remain open. The rehearsal backup role is the clinic practice manager; a named approved person and verified destination still need provisioning. No deployment, live traffic or default activation follows.
 
 **Updated:** 23 October 2026. **Objective:** Work through [EXECUTION_ORDER.md](EXECUTION_ORDER.md), preserving its full thirteen-gap scope. This ledger records partial delivery; the integration is not complete or activated.
 
@@ -6568,3 +6568,33 @@ Current metadata/final review, own cloud, normal merge and independently
 resulting-main checks remain separate delivery gates. The full thirteen-gap
 roadmap and real clinic/provider/source/retention/restore/representative/carrier
 acceptance remain open.
+
+## Normal optional-adapter merge and complete-utterance diagnostics, 23 October 2026
+
+PR591 at `8c0a2c54` passed all eight push/PR jobs, including identical mode
+counts and non-skipped adapter witnesses. Each PostgreSQL run has 6,940 passes,
+zero failures/cancellations and one existing skip, followed by six passing ordered
+controls. Each text run has 5,599 passes, zero failures/cancellations and 275
+existing mode skips, followed by six passing ordered controls. Browser and strict
+checks also passed. All eight raw logs were hashed and independently rechecked.
+Actual parent `327d0c3`'s four main jobs and raw logs were already qualified.
+Normal merge at 07:27:17 UTC produced `9c49a6f` with the exact reviewed tree;
+its own four main jobs are running, not yet qualified. No deploy or activation.
+
+Two later private whole-utterance diagnostics retain the original six noisy clips,
+three repeats, concurrency two, unchanged audio and thresholds, and the existing
+two-second finality budget. Nova-3 completes all 18 recognitions with six critical
+results, 18.18% WER and 1,045 ms final p95. Whisper completes six matches but has
+twelve unavailable results; its successful-only 0% WER/850 ms p95 is not a
+full-corpus pass. Independent single NS-006/NS-004 probes abort at 2,002/2,024 ms
+before headers. Their exact observation cannot establish HTTP throttling or every
+original failure's cause. They are not qualification runs. Private protocol23
+and scoped strict pass, without actual host/serving qualification or shipped
+request-mode changes. No clean/safety follow-on or default promotion occurs.
+See [the exact evidence and limits](../phase-1/DEEPGRAM_TRANSCRIPTION.md#complete-utterance-diagnostics-23-october-2026).
+
+The user delegated the rehearsal backup role choice: clinic practice manager,
+or senior receptionist where the clinic has no practice manager. A named distinct
+approved actor and verified destination remain required; no human receipt or
+duty acceptance is claimed. All thirteen gaps and the external clinic/provider,
+source/retention/restore, acoustic, public-route and carrier requirements remain.

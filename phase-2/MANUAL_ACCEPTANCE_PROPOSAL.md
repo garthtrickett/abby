@@ -21,6 +21,19 @@ environment. Keep native identities and any protected observations in the
 clinic-approved private evidence destination; the repository receives only
 scenario labels, source hashes, fixed outcomes and pass/fail reasons.
 
+### Selected rehearsal backup role, 23 October 2026
+
+The user remains the primary owner and delegated the backup role choice to the
+implementation agent. The selected backup is the clinic practice manager. Where
+that role does not exist, the clinic's senior receptionist can fulfil it when a
+real staff member is nominated during setup. This resolves the role choice only.
+Before the rehearsal, identify that person and verified alert destination
+privately, bind a distinct clinic-approved backup actor in the same scope, and
+observe independent sign-in and explicit acknowledgment after primary
+non-acknowledgment. A saved inbox item or notification receipt does not prove
+human responsibility. No account grant, paging or alert send has occurred from
+recording this choice. See the [operator response contract](../deploy/voice/OPERATOR_RESPONSE.md).
+
 ### Existing authorized Cliniko demo account
 
 An existing real Cliniko demo account is available as the rehearsal target; a
@@ -71,16 +84,21 @@ neither a memo nor a closed staff task clears contact or supplies clinical
 authority. Read their [current scope](INCOMING_MISSED_CALL_CONTEXT.md) and the
 [staff-review contract](OUTBOUND_STAFF_REVIEW.md) before selecting a rehearsal.
 
-PR590's corrected listener shutdown normally merged as `327d0c3` after all eight
-own-head jobs and raw results passed. Its resulting main checks remain
-independently pending. The optional Deepgram experiment passes current combined 63 source controls
-without skips, whole strict TypeScript and the serving build on actual parent
-327d0c3; all 741 default serving artifacts match that parent exactly. Final
-review, own cloud and ordinary delivery remain required. All three actual Deepgram noisy profiles and current OpenAI
-noisy/safety recognition fail the original quality gates. Synthetic profile
-evidence, fast responses or valid transport cannot approve relevant voice
-activation. See [the speech gate](../eval/SPEECH_QUALITY_GATE.md) and
-[optional experiment](../phase-1/DEEPGRAM_TRANSCRIPTION.md).
+PR590's corrected listener shutdown normally merged as `327d0c3`; all eight
+own-head and four independently resulting-main checks and raw results passed.
+The optional Deepgram experiment subsequently passed its eight own-head jobs
+and raw counts before normal merge as `9c49a6f`. Its four resulting main checks
+are still running. The combined local graph retains 63 source controls, whole
+strict TypeScript and 741 default artifacts identical to parent `327d0c3`.
+
+The three streaming noise profiles and the private whole-utterance Nova-3
+comparison all fail their acoustic gates. Private Whisper returns six matches
+and twelve unavailable results, so successful-only metrics cannot approve that
+profile. Its separate 23-control protocol/scoped-types evidence does not qualify
+host or serving admission. No clean/safety follow-on or runtime selection follows
+these failures. Current OpenAI noisy/safety failures and all representative,
+public-route and carrier gates remain. See [the speech gate](../eval/SPEECH_QUALITY_GATE.md)
+and [optional experiment](../phase-1/DEEPGRAM_TRANSCRIPTION.md).
 
 ### Historical engineering checkpoints
 
