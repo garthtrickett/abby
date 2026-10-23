@@ -6,6 +6,22 @@ The owner selected an optional Deepgram experiment on 23 October 2026. The
 turn detection, clarification and clinic workflow ownership; Twilio retains
 carrier transport. This experiment adds no Vapi runtime or production selector.
 
+The owner subsequently selected a [denoising plus fixed clinic vocabulary
+comparison](../eval/NOVA3_CLINIC_PROFILE.md) before changing providers. Its
+`clinic-v1` vocabulary-only component and `krisp-clinic-v1` two-layer profile
+are explicitly optional evaluator settings. Omitting `--profile` keeps the
+initial baseline. The Krisp wrapper is evaluation-only; its synthetic protocol
+tests do not establish live denoising or acoustic quality. The full two-layer
+test needs a separate Abby Krisp project key. Historical failures below retain
+their original inputs and meaning.
+
+The vocabulary-only noisy cohort has now completed all 18 recognitions, but
+still fails: six critical results, 18.18% WER, 208 ms final p95 and zero provider
+failures. The [new aggregate](../eval/baselines/deepgram-clinic-vocabulary-noise-20261023-v1.json)
+records its distinct source and profile. This is not a denoising result. The
+two-layer run remains unperformed; no clean/safety follow-on or default change
+follows the vocabulary component's failure.
+
 ## Protocol and ownership
 
 The initial profile requests Nova-3, English, mono PCM16 at 16 kHz, with provider

@@ -49,6 +49,32 @@ function fixture(sessionId = "session") {
 }
 const tick = () => new Promise<void>(resolve => setImmediate(resolve));
 
+test("Deepgram snapshots optional vocabulary as repeated encoded keyterms without changing defaults", async () => {
+  const keyterms = ["women's health", "dry needling", "A&B physio"];
+  let captured: URL | undefined;
+  const port = new DeepgramStreamingTranscription({ apiKey: "synthetic-key", sessionId: "session", keyterms,
+    socketFactory(raw) { captured = new URL(raw); const socket = new FakeSocket();
+      queueMicrotask(() => socket.open()); return socket as unknown as WebSocket; } });
+  keyterms[0] = "mutated"; keyterms.push("later");
+  try {
+    assert.ok((await port.accept(frame(), 1, signal())).ok);
+    assert.deepEqual(captured!.searchParams.getAll("keyterm"), ["women's health", "dry needling", "A&B physio"]);
+    assert.equal(captured!.searchParams.has("keywords"), false);
+    assert.equal(captured!.searchParams.has("B physio"), false);
+  } finally { await port.close(); }
+});
+
+test("Deepgram refuses malformed or excessive vocabulary before any provider connection", () => {
+  let calls = 0;
+  for (const keyterms of [[""], [" bad"], ["bad\nterm"], ["physio:2"], ["one,two"], ["one;two"],
+    ["physio", "PHYSIO"], ["x".repeat(81)], Array.from({ length: 51 }, (_, i) => `term${i}`),
+    Array.from({ length: 30 }, (_, i) => `${i}${"x".repeat(50)}`), new Array<string>(1)]) {
+    assert.throws(() => new DeepgramStreamingTranscription({ apiKey: "synthetic-key", sessionId: "session", keyterms,
+      socketFactory() { calls++; return new FakeSocket() as unknown as WebSocket; } }), /configuration unavailable/);
+  }
+  assert.equal(calls, 0);
+});
+
 test("Deepgram binds through the qualified host and keeps separate calls on their selected ports", async () => {
   const calls = new Map<string, ReturnType<typeof fixture>>();
   const scope = { tenantId: "synthetic", clinicId: "main" };
