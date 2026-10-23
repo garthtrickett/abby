@@ -6469,9 +6469,10 @@ The Deepgram source cohort now passes63/63 without skips (1792729670762): the
 original57 controls, two new cases using the actual qualified host and adapter,
 and four preserved voice-profile controls. The new cases reject changed runtime
 or provider profiles and absent, mismatched or withdrawn quality evidence before
-factory construction. Two admitted synthetic calls retain separate real adapter
-instances; closing one and delivering its stale events cannot affect the other
-call's final transcript or clarification quality. No provider request is made.
+factory construction. Two synthetic host-bound adapter instances retain separate
+sockets; closing one and delivering its stale events cannot affect the other's
+final transcript or clarification quality. No provider request is made. This
+does not exercise serving ingress or call admission.
 This extends source-level integration evidence only. Production adapter code and
 all three failed acoustic profiles are unchanged. Whole strict/serving of this
 test extension and the actual corrective parent, final review and ordinary

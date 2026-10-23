@@ -1,6 +1,7 @@
 # Proposed operator acceptance
 
-Status: proposal only, updated23October2026. No manual acceptance has been executed.
+Status: proposal only, updated23October2026. Full current-candidate acceptance
+has not been executed. Earlier scoped demo rehearsals are recorded below.
 This supplies the manual-test proposal required by [execution stage11](EXECUTION_ORDER.md).
 It does not activate a clinic or authorize provider mutations, real mail,
 payments, deployment or the deferred carrier work.
@@ -19,6 +20,33 @@ unresolved review. Use owned patient-free fixtures and a dedicated approved
 environment. Keep native identities and any protected observations in the
 clinic-approved private evidence destination; the repository receives only
 scenario labels, source hashes, fixed outcomes and pass/fail reasons.
+
+### Existing authorized Cliniko demo account
+
+An existing real Cliniko demo account is available as the rehearsal target; a
+new clinic does not need to be identified. Its owner-only configuration remains
+at `/home/gust/code/abby/.env`. On23October, the named API-key/contact settings
+were present and nonempty with file mode0600. A separate read-only metadata
+check returned HTTP200 for businesses, practitioners and appointment types.
+It read no patient endpoints and made no writes. Current fixture cleanliness
+and acceptance of the newer workflows remain unverified.
+
+The [C-LIVE-59 lifecycle](../phase-0/CLINIKO_EVIDENCE.md#c-live-59--complete-admitted-demo-lifecycle-with-independent-readbacks-and-cleanup)
+passed on5October: real provider intake, two bookings, one reschedule, one
+cancellation and four review recalls, followed by independently verified cleanup
+and restoration of the original online-booking flag. Its caller admission,
+permissions, mailbox and playback were synthetic. The separately authorized
+[C-LIVE-58 UI rehearsal](../phase-0/CLINIKO_EVIDENCE.md#c-live-58--authorized-cliniko-reportnotes-ui-rehearsal-and-verified-cleanup)
+observed the dedicated review and persisted acknowledgment, then verified cleanup;
+it was agent-operated, not human staff acceptance.
+
+Use these actual historical results and the existing demo target when planning
+the current observations. First verify current account access, fixture state and
+the exact source/configuration required by the selected exercise. The older
+rehearsals do not qualify later class/pass, Stripe, outbound, communication-memo
+or acoustic behavior on the current candidate. Their existing authority and
+scope remain explicit in the [lifecycle runbook](CLINIKO_LIVE_LIFECYCLE.md) and
+[staff-review runbook](CLINIKO_REVIEW_REHEARSAL.md).
 
 ### Current engineering boundary, 23 October 2026
 
