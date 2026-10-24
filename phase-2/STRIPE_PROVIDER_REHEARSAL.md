@@ -44,6 +44,7 @@ producer/restore admission, staff acceptance or acoustic quality.
 | Native booking and unpaid Checkout | Separate financial and clinical confirmations preceded an acknowledged Cliniko booking and signed native financial observation. The actual owner retained its native Checkout attempt, created one sandbox Session and refused duplicate creation. Fixture-only expiry was followed by a fresh closed-unpaid read. | 114 native requests plus four fresh read-only cleanup requests; twelve direct Stripe requests. Immediate fixture expiry does not qualify the business deadline or clinical cancellation. |
 | Native signed HTTP handoff | One authentic raw Endive CLI event and its identical duplicate reached the emitted handler and actual native pending-work handoff. Tampered bytes returned 400; withdrawn current permission returned 503. The handoff introduced no native mutation or SQL effect claim. | 121 native requests plus four fresh cleanup reads; twenty direct Stripe requests, with CLI-internal traffic unmeasured. The original harness exited unsuccessfully after it treated CLI runtime metadata as immutable and could not verify database cleanup. Independent checks reconciled cleanup; the original failed result remains failed. This is scoped behavior evidence, not a fully green harness or public-ingress qualification. |
 | Native paid consumer and receipt | A fresh admitted demo call produced one acknowledged booking, signed financial context and one sandbox Checkout. One hosted test-card submission was independently observed as a completed Session, succeeded PaymentIntent and captured charge with a receipt reference. Finite actual polling consumers sent one link and one receipt through the actual TLS SMTP adapter. A fresh consumer refused a duplicate receipt. | 159 native requests plus four fresh cleanup reads; 44 direct Stripe requests, with browser form traffic unmeasured. Twelve private preparation controls included seven isolated SQL/TLS cases and observer-restoration checks. Guarded SQL privacy canaries passed. Mail went only to an isolated loopback server with a synthetic recipient. No external inbox, receipt-content inspection or real-money claim follows. |
+| Real-clock unpaid deadline | One new admitted demo booking and sandbox Checkout used a 32-minute quoted deadline. The original expiry owner refused early expiry with zero effect claims. After 1,903,185 ms of actual wall/monotonic waiting, Stripe was already expired/unpaid; the original and fresh expiry owners observed it closed without another write. | 118 native requests plus four fresh read-only cleanup requests; fourteen direct Stripe requests. Zero Stripe expiry POSTs, zero native expiry-attempt POSTs and no clinical cancellation. Twenty-six preparation controls included five isolated SQL cases. The public booking setting was restored before the long wait. This qualifies observation of automatic expiry at the actual deadline, not dispatch of an explicit expiry POST or independent clinical expiry. |
 
 The first composed paid run observed received payment but failed before observed
 receipt SMTP acceptance. Its native receipt attempt exists; its broad failure
@@ -63,11 +64,16 @@ browser contexts, local mail servers and escaped scopes were closed. Sandbox
 payment objects remain for audit. These observations concern completed fixtures;
 they are not authority to remove other records or rerun uncertain effects.
 
-Business-clock expiry has not yet been qualified. A real-time rehearsal must
-wait for the captured deadline without changing the clock; an immediate cleanup
-POST or a synthetic time advance cannot establish that result. Clinical expiry,
-manual-payment/waiver checks and every real clinic approval retain their
-independent requirements.
+The separate real-clock rehearsal used actual UTC and monotonic elapsed time,
+without advancing a clock, a provider Test Clock or immediate fixture expiry.
+Its owner observed the automatically expired unpaid Checkout after the captured
+deadline; a fresh owner also observed it closed without writing. SQL privacy checks passed,
+and independent cleanup checks found all six owned preparation/provider databases
+and socket directories absent. All 744 serving outputs and source pins remained
+unchanged. The early refusal and automatic closed-state observation do not qualify
+the real-provider path that explicitly dispatches an expiry POST after the deadline.
+That path, independently authorized clinical expiry, manual-payment/waiver checks
+and every real clinic approval retain their separate requirements.
 
 ## Snapshot and request versions
 
@@ -97,9 +103,10 @@ in [the financial contract](STRIPE_FINANCIAL_CONTRACT.md#raw-webhook-handoff-to-
 The initial component checks simulated native records and exclusion; the
 subsequent declared demo rehearsals used actual Cliniko records and PostgreSQL.
 Current real clinic grants, producer/restore admission, fee/recipient and
-manual-payment/waiver policy, composed process-loss/restore, business and clinical
-expiry, external sender/inbox delivery and clinic-observed acceptance remain
-unqualified. Actual demo record retention and loopback receipt delivery cannot
+manual-payment/waiver policy, composed process-loss/restore, explicit deadline
+expiry dispatch and clinical expiry, external sender/inbox delivery and
+clinic-observed acceptance remain unqualified. The real-clock automatic-expiry
+observation above does not close those separate paths. Actual demo record retention and loopback receipt delivery cannot
 close those separate requirements. The first signed
 event exercise establishes reference verification and a version incompatibility.
 The compatibility candidate passes 56 source controls, both metadata guards,
