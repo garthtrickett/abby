@@ -59,7 +59,7 @@ export function assessClinicAcceptance(value: unknown, current: ClinicTrialBindi
   if (at === undefined || preparedAt === undefined || preparedAt > at ||
       !Array.from(value.observations).every(v => observation(v, preparedAt, at)) ||
       new Set(value.observations.map(v => v.scenario)).size !== clinicTrialScenarios.length) return unavailable;
-  // Normalize key/row ordering, while binding every configured area's exact bytes.
+  // Normalize binding key ordering; digests retain each area's decoded content.
   const normalize = (b: ClinicTrialBinding) => [b.sourceCommit, b.scope.tenantId, b.scope.clinicId, b.scope.locationId, b.country,
     ...clinicSetupAreas.map(area => b.configuration[area])];
   const stale = digest(normalize(value.binding)) !== digest(normalize(current));

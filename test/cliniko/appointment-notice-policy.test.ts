@@ -51,8 +51,13 @@ test("individual cancellation authority enforces staff-only windows before produ
   try {
     const proof = await f.verify(), selected = await f.select(proof);
     assert.equal((await f.source.resolve(f.query(proof, selected))).ok, false);
-    assert.equal((await f.propose(proof, selected)).ok, false);
-    assert.equal(Object.keys((await f.state()).actions).length, 0);
+    // The command can successfully publish the existing unavailable response;
+    // that is not acceptance of a clinical proposal or a saved staff request.
+    assert.equal((await f.propose(proof, selected)).ok, true);
+    const state = await f.state();
+    assert.equal(Object.keys(state.actions).length, 0);
+    assert.equal(state.callerMessages.at(-1), "I can't check that appointment right now.");
+    assert.ok(Object.values(state.staffItems).every(item => !item.hostTaskRef));
     assert.equal(f.recalls.length, 0);
     assert.equal(f.patches, 0);
     assert.equal(f.traffic.some(line => line.includes("POST /v1/recalls")), false);

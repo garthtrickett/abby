@@ -68,6 +68,8 @@ A `staffReview` range produces no automatic clinical terms: the existing
 unavailable/direct-contact path applies. It does **not** save a staff request,
 send an alert, promise a callback or claim that the appointment was cancelled.
 Saving a review still requires the existing independent review workflow.
+The existing core fallback may stage independently enabled follow-up; a pending
+outbox item still proves neither a saved native request nor human receipt.
 No reason-based fee waiver or free-reschedule-day rule is inferred. Those
 require a separately represented current clinic decision; existing financial
 waiver records remain the authority for money.
