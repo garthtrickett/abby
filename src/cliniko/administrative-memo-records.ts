@@ -161,7 +161,12 @@ export class ClinikoAdministrativeMemos {
       const init: RequestInit = { method: input.method, redirect: "error", signal, headers: { Accept: "application/json", "Content-Type": "application/json",
         Authorization: `Basic ${Buffer.from(`${c.apiKey}:`).toString("base64")}`, "User-Agent": `Abby (${c.contactEmail})` },
         ...(input.method === "POST" ? { body: JSON.stringify({ category_code: 12, confidential: true, content: input.content,
-          direction_code: input.memo.direction === "outbound" ? 1 : 2, patient_id: input.memo.patientId, type_code: 3 }) } : {}) };
+          direction_code: input.memo.direction === "outbound" ? 1 : 2,
+          // Native memo metadata requires both parties. Role labels disclose
+          // no contact details or claimed identity; signed direction owns them.
+          from: input.memo.direction === "outbound" ? "Abby" : "Call participant",
+          to: input.memo.direction === "outbound" ? "Call participant" : "Abby",
+          patient_id: input.memo.patientId, type_code: 3 }) } : {}) };
       current(); dispatched = input.method === "POST";
       response = await wait(this.#fetch(url, init).then(r => { response = r; if (signal.aborted) { try { void r.body?.cancel().catch(() => {}); } catch {} } return r; }));
       if (response.status === 429) { await wait(observeCliniko429(c.rateBudget, response.headers.get("X-RateLimit-Reset"))); return dispatched ? ok({ kind: "uncertain" }) : err({ kind: "rateLimited" }); }
