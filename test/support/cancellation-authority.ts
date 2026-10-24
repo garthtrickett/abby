@@ -15,6 +15,7 @@ import type { LocationScope } from "../../src/core/model.ts";
 
 export async function concreteCancellationFixture(options: { scope?: LocationScope; scenario?: CancellationScenario;
   budget?: PatientVerificationBudget; folder?: string; timeoutMs?: number; multiple?: boolean; startsAt?: string;
+  noticeRanges?: CancellationApproval["noticeRanges"];
   onHeldTarget?: (signal: AbortSignal | undefined) => void } = {}) {
   const scope = options.scope ?? { tenantId: `authority-${crypto.randomUUID()}`, clinicId: "clinic", locationId: "main" };
   const folder = options.folder ?? await mkdtemp(join(tmpdir(), "abby-cancellation-policy-"));
@@ -73,7 +74,8 @@ export async function concreteCancellationFixture(options: { scope?: LocationSco
           recallTypeId: "7", timeZone: "Australia/Sydney", writeContract: "bestEffort", notificationOwner: "cliniko", cancellationReason: 50,
           lateNoticeHours: 24, maxAdvanceDays: 90,
           standardTerms: { version: "standard-1", approvedText: "A cancellation fee of $20 applies." },
-          lateTerms: { version: "late-1", approvedText: "A late cancellation fee of $40 applies." } };
+          lateTerms: { version: "late-1", approvedText: "A late cancellation fee of $40 applies." },
+          ...(options.noticeRanges ? { noticeRanges: options.noticeRanges } : {}) };
         await replace(path, record);
         policy = resultValue(await OwnerFileCancellationPolicy.capture({ path, ...config, credentialFingerprint: record.credentialFingerprint,
           recallTypeId: "7", timeZone: "Australia/Sydney", directory, clock: () => sourceTime }));
