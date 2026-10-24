@@ -1,5 +1,7 @@
 # Cliniko integration: thirteen-gap implementation order
 
+**Stripe component evidence, 24 October 2026:** Real sandbox account/unpaid expiry and hosted paid/charge/receipt-reference checks passed. An authentic Endive CLI event exposed the original Basil snapshot incompatibility. Explicit Endive snapshot configuration now keeps Basil REST and all independent native permission and pending-work checks. Local qualification passes 56 source checks, two metadata checks, whole strict and 744 serving outputs, with 743 unchanged. The actual compiled HTTP handoff passes one real Stripe event with simulated native intent/observation/attempt, grants and exclusion; it does not establish real native durability or clinic acceptance, restore recovery or public ingress. Review, exact-head and independent resulting-main CI retain their separate requirements. No deployment or default activation follows. See [provider evidence and limits](STRIPE_PROVIDER_REHEARSAL.md).
+
 ## Current roadmap reconciliation, 23 October 2026
 
 The thirteen original requirements below remain in scope. This summary separates

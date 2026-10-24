@@ -100,3 +100,90 @@ test("held raw bodies and late caller abort are bounded by the shared handoff li
   const abort = new AbortController(), result = held.accept({}, abort.signal); await pending; abort.abort();
   assert.deepEqual(await result, { ok: false, error: { kind: "unavailable" } });
 });
+
+const endiveSnapshotVersion = "2026-09-30.endive";
+async function endiveFixture(options: Parameters<typeof handoffFixture>[0] = {}) {
+  const f = await handoffFixture(options);
+  const configured = f.make({ webhook: { ...f.config.webhook, apiVersion: endiveSnapshotVersion } });
+  assert.ok(configured.ok, "An explicitly supported snapshot version must not require changing REST requests");
+  return { ...f, configured: configured.value, acceptConfigured: (patch: Record<string, unknown> = {}) => {
+    const signed = f.signed({ api_version: endiveSnapshotVersion, ...patch });
+    return configured.value.accept(webBody(signed.raw), signed.signature, stop());
+  } };
+}
+
+test("explicit Endive snapshots keep Basil REST reads and require unchanged independently owned pending work", async () => {
+  const f = await endiveFixture(), rows = structuredClone([...f.rows]), burned = [...f.burned];
+  assert.equal(f.config.stripe.apiVersion, "2025-06-30.basil");
+  for (const type of ["checkout.session.completed", "checkout.session.expired", "checkout.session.async_payment_succeeded",
+    "checkout.session.async_payment_failed", "checkout.session.expired"]) {
+    assert.deepEqual(value(await f.acceptConfigured({ type })), { kind: "acceptedExistingPending" });
+  }
+  assert.equal(f.grants.length, 5);
+  assert.ok(f.grants.every(q => q.notification.apiVersion === endiveSnapshotVersion));
+  assert.ok(f.stripeReads.every(u => u.pathname === "/v1/account" || u.pathname === "/v1/checkout/sessions/cs_test_owner"));
+  assert.deepEqual([...f.rows], rows); assert.deepEqual([...f.burned], burned);
+  assert.equal(f.requests.filter(r => r.method === "POST").length, 1);
+});
+
+test("configured snapshot versions remain exact and are never learned from event bodies", async () => {
+  const f = await endiveFixture();
+  for (const api_version of ["2025-06-30.basil", "2026-10-28.endive", "2024-01-01"]) {
+    assert.deepEqual(await f.acceptConfigured({ api_version }), { ok: false, error: { kind: "unsupportedVersion" } });
+  }
+  assert.equal(f.nativeReads.length, 0); assert.equal(f.stripeReads.length, 0); assert.equal(f.grants.length, 0);
+  const defaultProfile = await handoffFixture();
+  assert.deepEqual(await defaultProfile.accept({ api_version: endiveSnapshotVersion }), { ok: false, error: { kind: "unsupportedVersion" } });
+  assert.equal(defaultProfile.nativeReads.length, 0); assert.equal(defaultProfile.stripeReads.length, 0);
+});
+
+test("support for a second snapshot profile does not permit another REST version or an unreviewed snapshot profile", async () => {
+  const f = await handoffFixture();
+  for (const apiVersion of ["2026-10-28.endive", "2025-05-28.basil", "2024-01-01", ""]) {
+    assert.deepEqual(f.make({ webhook: { ...f.config.webhook, apiVersion } }), { ok: false, error: { kind: "invalidConfig" } });
+  }
+  assert.deepEqual(f.make({ stripe: { ...f.config.stripe, apiVersion: endiveSnapshotVersion },
+    webhook: { ...f.config.webhook, apiVersion: endiveSnapshotVersion } }), { ok: false, error: { kind: "invalidConfig" } });
+});
+
+test("Endive snapshot signature account mode and independent current grants retain their existing refusal boundaries", async () => {
+  for (const denial of ["denyReference", "denyAccept", "denyPending", "denyRecord", "expire"] as const) {
+    const f = await endiveFixture(); f[denial](); assert.equal((await f.acceptConfigured()).ok, false);
+    if (denial === "denyReference" || denial === "expire") assert.equal(f.stripeReads.length, 0);
+  }
+  const f = await endiveFixture(), signed = f.signed({ api_version: endiveSnapshotVersion });
+  assert.deepEqual(await f.configured.accept(webBody(signed.raw + " "), signed.signature, stop()),
+    { ok: false, error: { kind: "invalidWebhook" } });
+  for (const patch of [{ account: "acct_foreign" }, { livemode: true }]) {
+    assert.deepEqual(await f.acceptConfigured(patch), { ok: false, error: { kind: "foreignEndpoint" } });
+  }
+  assert.equal(f.nativeReads.length, 0); assert.equal(f.stripeReads.length, 0);
+});
+
+test("Endive snapshot acceptance still rereads both providers and cannot acknowledge changed native work", async () => {
+  let mutate = () => {};
+  const f = await endiveFixture({ authority: { acceptsExistingPending: async () => { mutate(); return true; } } });
+  mutate = () => { f.rows.get("31")!.archived_at = now; };
+  assert.equal((await f.acceptConfigured()).ok, false);
+  assert.equal(f.requests.filter(r => r.method === "POST").length, 1);
+});
+
+test("explicit Endive direct-account snapshots preserve direct REST routing and current native handoff grants", async () => {
+  const f = await handoffFixture(), reads: string[] = [];
+  const direct: typeof fetch = async (input, init) => {
+    const url = new URL(String(input)), headers = new Headers(init?.headers);
+    assert.equal(init?.method, "GET"); assert.equal(init?.redirect, "error");
+    assert.equal(headers.get("Stripe-Version"), "2025-06-30.basil"); assert.equal(headers.has("Stripe-Account"), false);
+    assert.ok(url.pathname === "/v1/account" || url.pathname === "/v1/checkout/sessions/cs_test_owner");
+    reads.push(url.pathname);
+    return Response.json(url.pathname === "/v1/account" ? { object: "account", id: f.config.stripe.accountRef } : f.sessions[0]);
+  };
+  const configured = ClinikoStripeWebhookHandoff.create({ ...f.config, stripe: { ...f.config.stripe, connected: false },
+    webhook: { ...f.config.webhook, accountRef: null, apiVersion: endiveSnapshotVersion } },
+    f.authority, f.pendingAuthority, f.nativePort, direct);
+  assert.ok(configured.ok);
+  const signed = f.signed({ account: undefined, api_version: endiveSnapshotVersion });
+  assert.deepEqual(value(await configured.value.accept(webBody(signed.raw), signed.signature, stop())), { kind: "acceptedExistingPending" });
+  assert.deepEqual(reads, ["/v1/account", "/v1/checkout/sessions/cs_test_owner", "/v1/account", "/v1/checkout/sessions/cs_test_owner"]);
+  assert.equal(f.grants.length, 1); assert.equal(f.requests.filter(r => r.method === "POST").length, 1);
+});

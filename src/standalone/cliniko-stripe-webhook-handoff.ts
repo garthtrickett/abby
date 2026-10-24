@@ -19,6 +19,9 @@ import { financialIntentDigest } from "../cliniko/financial-booking-observation.
 
 type Pair = Extract<FinancialDiscoveredWork, { kind: "pairedContext" }>;
 type Match = Readonly<{ pair: Pair; attempt: FinancialDiscoveredAttempt }>;
+// Snapshot versions are selected independently at the Stripe event endpoint.
+// Only verified references enter this handoff; REST financial reads stay Basil.
+const supportedSnapshotVersions = ["2025-06-30.basil", "2026-09-30.endive"] as const;
 export type FinancialWebhookReferenceQuery = ClinikoFinancialReviewSelection & Readonly<{
   purpose: "financialWebhookPendingHandoff"; ownerBinding: string; notification: StripeCheckoutNotification;
 }>;
@@ -76,7 +79,7 @@ export class ClinikoStripeWebhookHandoff {
     try {
       const owner = financialRecordOwnerBinding(config?.cliniko);
       if (!owner.ok || config.stripe.accountRef !== config.cliniko.stripe.accountRef || config.stripe.livemode !== config.cliniko.stripe.livemode ||
-          config.stripe.apiVersion !== "2025-06-30.basil" || config.webhook.apiVersion !== config.stripe.apiVersion ||
+          config.stripe.apiVersion !== "2025-06-30.basil" || !supportedSnapshotVersions.some(version => version === config.webhook.apiVersion) ||
           config.webhook.livemode !== config.stripe.livemode || config.webhook.accountRef !== (config.stripe.connected ? config.stripe.accountRef : null) ||
           config.deadlineMs !== undefined && (!Number.isSafeInteger(config.deadlineMs) || config.deadlineMs < 1 || config.deadlineMs > 10_000) ||
           typeof authority?.allowsReferenceRead !== "function" || typeof authority.acceptsExistingPending !== "function" || typeof authority.current !== "function") return err({ kind: "invalidConfig" });

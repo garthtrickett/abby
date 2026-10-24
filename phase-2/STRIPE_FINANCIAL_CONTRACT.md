@@ -640,10 +640,28 @@ Provider references checked on 17 October 2026: [recall filters and schema](http
 
 The raw HTTP route candidate authenticates the original bounded transport bytes;
 it does not reconstruct JSON before verifying Stripe's signature. It accepts
-only its explicit account/mode and pinned2025-06-30.basil Checkout notifications.
+only its explicit account/mode and exact configured snapshot version:
+`2025-06-30.basil` or `2026-09-30.endive`. Stripe selects snapshot payload
+versions independently from the version of an API request. Fresh financial
+REST reads remain pinned to `2025-06-30.basil`; selecting Endive notifications
+does not upgrade those reads, Checkout creation or the Stripe account default.
+The verifier still compares every event against the one configured version;
+support for two profiles does not let one endpoint accept either interchangeably
+or learn its configuration from an incoming event. Other snapshot and REST
+versions refuse at construction. Existing callers selecting Basil keep Basil.
 The event supplies a reference, never paid state, recipient, amount or effect
 permission. The exact fresh Stripe Session is reread privately under the
 configured account, and only its bounded correlation fields survive.
+
+The existing test project's CLI actually emits `2026-09-30.endive`. Its signed
+expired-Session notification verifies with the explicitly configured reference
+verifier, while the original Basil financial profile correctly refuses it.
+The compatibility change lets an independently provisioned handoff explicitly
+select that reviewed snapshot version. It does not establish native permissions,
+durable work or a financial HTTP acknowledgment merely from that observation.
+See [the real-provider rehearsal and its limits](STRIPE_PROVIDER_REHEARSAL.md).
+Stripe documents [snapshot versioning](https://docs.stripe.com/webhooks/versioning)
+and the [immutable event API version](https://docs.stripe.com/api/events/object).
 
 A relevant event can return200 only when independent financial reference-read
 and pending-handoff grants remain current, the actual native pending discovery
