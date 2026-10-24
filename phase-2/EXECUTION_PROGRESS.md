@@ -6679,3 +6679,32 @@ Corrected 45 behavioral controls plus two metadata checks pass 47/47 without ski
 Native work1792760153295 passed eight observations, including actual recovery, then stopped because the completion timestamp changed during the intended missed-age wait. The changed fields were not captured. Relative-trigger rearming is an inference from the fixture, not proved lifecycle evidence. Cleanup passed; the incomplete cohort is not nine passes. The successor uses one annual calendar occurrence and preserves the original cadence and deadlines.
 
 Native work1792760323438 passes all nine actual compiled-reader/process observations, including a genuine new success after failures and the same completion aging to271s against the selected60s cadence plus210s allowance. No age limit was shortened. All owned units/files were removed; owner-scope peak21,987,328B/256MiB, with separate64MiB/8MiB command/anchor caps whose peaks were not measured. There were no OOM/high/max events, provider/DB requests, production installations or alert sends. These user-manager/synthetic-command controls remain separate from actual clinic, system-manager, receiver and human acceptance. Final docs-only metadata, fixed-head reviews, own exact-head CI and normal resulting-main delivery remain gates.
+# Native memo participant-field correction, 24 October 2026
+
+A separately isolated demo attempt preserved the earlier uncertain subject and
+used a persistent MAC credential plus a bounded, independently granted response
+observer. Its booking and financial observation succeeded, but the one memo
+response was HTTP422 and identified `from`/`to` validation fields. It remains a
+failed rehearsal: wrapper1/child2, 75 native requests, one Stripe account GET,
+one possible memo and zero archives. Public settings were restored and the
+owned database removed; private synthetic records remain for review. No money,
+mail, clinical cancellation, replay or real staff acceptance is claimed.
+
+The prospective native adapter correction supplies fixed `Call participant` and
+`Abby` role labels selected from the signed direction. It adds no contact data
+or claimed human author. The stricter provider-boundary reproduction failed
+the incoming and outgoing creation cases on unchanged production source. A
+third new negative test also had an incorrect claim-attempt counter assertion;
+that assertion was corrected to distinguish two exclusion checks from one
+consumed purpose and one HTTP invocation. Original failed logs are retained.
+Focused adapter/fact qualification passes 34/34, zero skips, with actual owned
+Node exit0. Complete strict types and the 744-output runtime build pass; only
+`administrative-memo-records.js` differs from the qualified parent. The broader
+22-file sweep hit its 900-second outer wrapper limit while its existing Node
+worker continued under the original bounded scope. A separately tracked
+read-only observer followed that same worker to termination without restarting
+tests. It eventually emitted 368 passes, zero failures/cancellations/skips in
+about 28m36s. Its Node exit code is unavailable, so the original wrapper failure
+and unqualified whole-run status remain. Exact-head cloud delivery and corrected
+native acceptance remain pending. The original 11 stages, 13 gaps and 28 reuse
+selections retain their original completion requirements.

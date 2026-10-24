@@ -31,11 +31,32 @@ live write, signed voice acceptance or completed gap 13 is claimed.
 
 The adapter creates a memo through `POST /communications`, using category 12,
 confidential storage and phone-call type 3. Direction 1 means sent and 2 means
-received; it must come from the actual authorized conversation. It omits
-sender/recipient guesses and unsupported author fields. Numeric codes are
+received; it must come from the actual authorized conversation. Native requests
+include `from` and `to` role labels: inbound is `Call participant` to `Abby`,
+and outbound reverses them. These fixed labels add no phone number, patient
+name or claimed staff identity. They establish neither caller verification nor
+clinic author approval. Unsupported author fields remain omitted. Numeric codes are
 matched independently of illustrative response labels. Creating this record
 does not send a communication. The API user and separate clinic author policy
 still need approval. [Official communication reference](https://docs.api.cliniko.com/openapi/communication).
+
+An independently isolated demo diagnostic on 24 October returned HTTP422 with
+validation fields `from` and `to` for the previous six-field request. Only field
+names were retained; response values and private bodies were not saved. The
+booking and financial observation were acknowledged, while the memo stayed
+uncertain: 75 native requests, one memo invocation/response, one Stripe account
+GET and zero archives, payables, money, messages or clinical cancellation.
+The public booking configuration was restored and the isolated database was
+removed. Its synthetic private family remains for review, with its separate
+MAC credential retained. This does not reconstruct the earlier attempt's lost
+response or authorize replay or guessed cleanup of either consumed purpose.
+The correction passes 34 focused adapter/fact controls, complete strict types
+and a 744-output runtime build with only the native memo writer changed. A
+broader source sweep emitted 368 passes and zero failures/skips, but its outer
+wrapper timed out before the worker finished; the worker exit code was not
+recoverable. That sweep remains unqualified. Own exact-head cloud checks and a
+corrected native rehearsal remain pending. The diagnostic above is a failed
+memo rehearsal, not clinic acceptance.
 
 Archived reads explicitly request `archived_at:*`, which includes archived
 records rather than silently treating their absence from a default view as

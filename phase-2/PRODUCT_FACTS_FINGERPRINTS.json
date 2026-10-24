@@ -1,7 +1,7 @@
 {
   "verifiedDate": "2026-10-24",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "3f53678db3942753f87d67fbf37c05ebf6054bbc905cb6d560459f289669faf2",
+  "factsSha256": "c8169730a221e773636f91a7c1647a2504d2ba930bb915b3b4e7ba2d7de52862",
   "sources": {
     ".github/workflows/text-contract.yml": "20f47909d711b7a7d2b3916a8ef0756345b414dff225184989cd8056b5b6179b",
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
@@ -18,9 +18,9 @@
     "phase-1/DEEPGRAM_TRANSCRIPTION.md": "412156102fd03217736bc06b72a58bfbd6bcbd34ea5ecf34aa3bd103363d9170",
     "phase-1/OPENAI_REALTIME_TRANSCRIPTION.md": "49651d21fa207fb842c36b54ebd7d9d82052ef197c1105a3e280f67b000bde59",
     "phase-2/CLINIC_SETUP_AND_REHEARSAL.md": "295df507f0d91fb800a3e3f9ee41d0720cb7a8d6d86629e4cf3fa5608d3158e5",
-    "phase-2/COMMUNICATION_MEMOS.md": "398d52c93abe67b1b4e2b68d783cfcc08c756e2ca956ca4bac3e6a7de89c22ba",
+    "phase-2/COMMUNICATION_MEMOS.md": "a30d6e06d224530fd90fc6227d5e8e681624251c34c3591c15afdcc1c6099573",
     "phase-2/EXECUTION_ORDER.md": "80766c7e6bc79490eb4fb5031f3e9e8c6cdc5ae377d8015e9c58b82b57b0f833",
-    "phase-2/EXECUTION_PROGRESS.md": "4453cbff53f05652ecce9293df254fb9af1fbd4315131c7ba9377126f328653a",
+    "phase-2/EXECUTION_PROGRESS.md": "03eb700be673416fc5546bbeb832db980840d200ebdb83725526bd4e3d8c53fe",
     "phase-2/INCOMING_MISSED_CALL_CONTEXT.md": "ddb16adc7208a97c1e2711fc823e50ac825be0e74e45459beda31b275cbe1ab7",
     "phase-2/KAREN_TO_ABBY_REUSE_AUDIT.md": "ce4fca87bc5d33ad5c94ffcbd77a926b2f24f84fffae1ee85ddc713cce2a68ca",
     "phase-2/OUTBOUND_CALL_ADMISSION.md": "93edc93d8868e17133055771c98176af0d6fa13385adbf4f3700069f5d22df2f",
@@ -57,7 +57,7 @@
     "scripts/lib/krisp-evaluation-transcription.ts": "ed552d86f33300a385e673eb45056e36c735d5b8b8d061bcc7c3b0fa832fb25f",
     "scripts/serve-cliniko-voice.ts": "084db1a4c8bccacff6e801f77e69343cc6907ed478287ed04aad30170435e9fe",
     "src/cliniko/administrative-memo-history.ts": "758a03f9a9897354d95668224931708bb8cd325ffa19f205f3efeb3183138848",
-    "src/cliniko/administrative-memo-records.ts": "4943e7c9532753c02fac1cd866c47f03b218acb3b891d2e4900a9df59a14992c",
+    "src/cliniko/administrative-memo-records.ts": "c6548faf93fd142dbb48ebdfada2154c8dc5b386895f9cbbcc410bfc4c540aca",
     "src/cliniko/appointment-write.ts": "bf3595de5d92a68e40e7b425815a0cbb27caa441a9ba0794e5a921c1074a6406",
     "src/cliniko/booking-write.ts": "1ee63c7456105a9e70525933c3588b498c7707451a7c3e8ea49bd1f7fc104358",
     "src/cliniko/class-attendance-read.ts": "fbf5522d1eff396fed18cceac0c5459ef130095dbc65b4312a6555c6e14026ea",
@@ -638,6 +638,7 @@
     "test/voice/twilio-outbound-runtime.test.ts": "d91cb7bd94a2fafd2258c3bae080cb8b11c2e127d5401bd0b4360fe2e5ff3787",
     "test/voice/twilio-outbound-stop-receiver.test.ts": "8c36bed64ad31a312fa678754b7368ef703f3e5dca011c698d4df7670d98bd16",
     "test/voice/twilio-outbound-stop-speech.test.ts": "d0cb417f573f625abf1598f1ac9555fca03f7f04fcca0b75a54e51e3420a846d",
-    "test/voice/verification-code-canary.test.ts": "122794ea4e56372a97d7cb219855a6d9ddeeae243f06ed9e53cb9626b44d375b"
+    "test/voice/verification-code-canary.test.ts": "122794ea4e56372a97d7cb219855a6d9ddeeae243f06ed9e53cb9626b44d375b",
+    "test/cliniko/administrative-memo-records.test.ts": "6b7542edf121a0214073e7c7e9b5626c90f5dab08210dbec8fe4879d6de166c2"
   }
 }

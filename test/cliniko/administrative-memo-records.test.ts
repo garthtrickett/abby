@@ -37,7 +37,11 @@ function fixture(deadlineMs = 500) {
     const u = new URL(String(url)); assert.equal(u.origin, "https://api.au5.cliniko.com");
     if (init!.method === "POST") {
       assert.equal(u.pathname, "/v1/communications"); const body = JSON.parse(String(init!.body)); requests.push({ url: u.href, method: "POST", body });
-      assert.deepEqual(Object.keys(body).sort(), ["category_code", "confidential", "content", "direction_code", "patient_id", "type_code"]);
+      // The demo API rejected the six-field request with validation errors for
+      // from/to. Model that boundary before accepting any synthetic receipt.
+      if (typeof body.from !== "string" || !body.from.trim() || typeof body.to !== "string" || !body.to.trim())
+        return Response.json({ errors: { from: ["is required"], to: ["is required"] } }, { status: 422 });
+      assert.deepEqual(Object.keys(body).sort(), ["category_code", "confidential", "content", "direction_code", "from", "patient_id", "to", "type_code"]);
       const row = { ...body, id: "701", created_at: state.now, updated_at: state.now, archived_at: null,
         category: "Memo", type: "Email", direction_description: "Sent", // Numeric request/receipt codes are authoritative, not illustrative labels.
         links: { self: "https://api.au5.cliniko.com/v1/communications/701" }, patient: { links: { self: `https://api.au5.cliniko.com/v1/patients/${body.patient_id}` } } };
@@ -58,6 +62,7 @@ const signal = () => new AbortController().signal;
 test("create confidential memo through exact documented native fields, and read only under independent decoded grants", async () => {
   const f = fixture(); assert.deepEqual(value(await f.client.retainOnce(f.memo, signal())), { kind: "accepted", communicationRef: f.binding.communicationRef, actionRef: f.memo.actionRef });
   assert.equal(f.requests.length, 1); assert.equal(f.requests[0]!.body!.direction_code, 2);
+  assert.equal(f.requests[0]!.body!.from, "Call participant"); assert.equal(f.requests[0]!.body!.to, "Abby");
   const found = value(await f.client.readMemo(f.binding, signal())); assert.deepEqual(found.memo, f.memo);
   assert.equal(f.permissions.filter(q => q.operation === "readAdministrativeMemo").length, 2);
   assert.ok(f.permissions.some(q => q.operation === "readAdministrativeMemo" && q.includeArchived && q.memoDigest));
@@ -67,6 +72,15 @@ test("create confidential memo through exact documented native fields, and read 
 test("outbound call direction uses the protected original direction, not request labels or a guessed recipient", async () => {
   const f = fixture(), memo = value(f.auth.sign({ ...f.input, direction: "outbound" }));
   assert.equal(value(await f.client.retainOnce(memo, signal())).kind, "accepted"); assert.equal(f.requests[0]!.body!.direction_code, 1);
+  assert.equal(f.requests[0]!.body!.from, "Abby"); assert.equal(f.requests[0]!.body!.to, "Call participant");
+});
+
+test("native validation422 remains uncertain and cannot retry the same memo purpose", async () => {
+  const f = fixture();
+  f.state.response = () => Response.json({ errors: { from: ["rejected"], to: ["rejected"] } }, { status: 422 });
+  assert.deepEqual(value(await f.client.retainOnce(f.memo, signal())), { kind: "uncertain" });
+  assert.equal((await f.client.retainOnce(f.memo, signal())).ok, false);
+  assert.equal(f.requests.length, 1); assert.equal(f.claims.effects, 2); assert.equal(f.consumed.size, 1);
 });
 
 for (const denied of ["permission", "current", "producer"] as const)
