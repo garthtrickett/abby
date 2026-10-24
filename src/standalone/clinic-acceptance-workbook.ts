@@ -64,7 +64,8 @@ export function assessClinicAcceptance(value: unknown, current: ClinicTrialBindi
     ...clinicSetupAreas.map(area => b.configuration[area])];
   const stale = digest(normalize(value.binding)) !== digest(normalize(current));
   const missingConfiguration = clinicSetupAreas.filter(area => current.configuration[area] === null);
-  const count = (status: Observation["status"]) => value.observations.filter(v => v.status === status).length;
+  const observations = value.observations as readonly Observation[];
+  const count = (status: Observation["status"]) => observations.filter(v => v.status === status).length;
   const failed = count("failed"), notRun = count("notRun");
   return { kind: "clinicAcceptance" as const,
     status: stale ? "stale" as const : missingConfiguration.length ? "configurationIncomplete" as const : failed ? "failed" as const

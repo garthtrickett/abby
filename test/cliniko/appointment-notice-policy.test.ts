@@ -51,18 +51,33 @@ test("individual cancellation authority enforces staff-only windows before produ
   try {
     const proof = await f.verify(), selected = await f.select(proof);
     assert.equal((await f.source.resolve(f.query(proof, selected))).ok, false);
+    assert.equal((await f.propose(proof, selected)).ok, false);
+    assert.equal(Object.keys((await f.state()).actions).length, 0);
+    assert.equal(f.recalls.length, 0);
     assert.equal(f.patches, 0);
     assert.equal(f.traffic.some(line => line.includes("POST /v1/recalls")), false);
   } finally { await f.close(); }
 });
 
 test("individual cancellation authority presents the same range terms used by class cancellation", async () => {
-  const f = await concreteCancellationFixture({ noticeRanges: ranges, startsAt: "2026-10-05T03:00:00.000Z" });
+  const callRange = { withinHours: 168, handling: "automatic" as const, terms: { version: "call-window-1", approvedText: "The clinic's approved change terms apply." } };
+  const f = await concreteCancellationFixture({ noticeRanges: [callRange] });
   try {
     const proof = await f.verify(), selected = await f.select(proof), result = await f.source.resolve(f.query(proof, selected));
     assert.ok(result.ok);
-    assert.deepEqual(result.value.terms, OwnerFileCancellationPolicy.termsFor(f.record, "2026-10-05T03:00:00.000Z", cancellationNow));
-    assert.equal(result.value.terms.version, "under24");
+    assert.deepEqual(result.value.terms, OwnerFileCancellationPolicy.termsFor(f.record, "2026-10-08T04:00:00.000Z", cancellationNow));
+    assert.equal(result.value.terms.version, "call-window-1");
+    assert.equal((await f.propose(proof, selected)).ok, true);
+    const action = Object.values((await f.state()).actions)[0]!;
+    assert.equal(action.mutation.request.kind, "cancel");
+    if (action.mutation.request.kind === "cancel") assert.equal(action.mutation.request.terms.approvedText, callRange.terms.approvedText);
+    const presentation = (await f.state()).presentations[action.presentationId]!;
+    assert.equal(presentation.kind, "speech");
+    if (presentation.kind === "speech") assert.ok(presentation.approvedText.includes(callRange.terms.approvedText));
+    assert.equal(f.patches, 0);
+    await f.confirm(); await f.drain();
+    assert.equal(f.patches, 1); assert.equal(f.recalls.length, 1);
+    assert.equal(Object.values((await f.state()).actions)[0]!.status, "committed");
   } finally { await f.close(); }
 });
 
