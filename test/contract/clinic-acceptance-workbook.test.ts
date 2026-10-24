@@ -9,7 +9,7 @@ import { readClinicTrialBinding, runClinicAcceptance } from "../../scripts/clini
 
 const now = "2026-10-24T10:00:00.000Z", later = "2026-10-24T11:00:00.000Z";
 const binding: ClinicTrialBinding = { sourceCommit: "a".repeat(40), scope: { tenantId: "tenant", clinicId: "clinic", locationId: "main" }, country: "AU",
-  configuration: { catalogue: "b".repeat(64), cancellation: "c".repeat(64), payments: "d".repeat(64), staff: "e".repeat(64), memos: "f".repeat(64) } };
+  configuration: { catalogue: "b".repeat(64), cancellation: "c".repeat(64), rescheduling: "a".repeat(64), payments: "d".repeat(64), staff: "e".repeat(64), memos: "f".repeat(64) } };
 const completed = () => {
   const workbook = prepareClinicAcceptance(binding, now);
   return { ...workbook, observations: workbook.observations.map(o => ({ ...o, status: "passed" as const,
@@ -51,6 +51,7 @@ test("failed trials, duplicate/omitted cases, future observations and private fr
   assert.equal(assessClinicAcceptance({ ...workbook, observations: [{ ...first, status: "failed" }, ...workbook.observations.slice(1)] }, binding, later).status, "failed");
   for (const changed of [
     { ...workbook, observations: workbook.observations.slice(1) },
+    { ...workbook, observations: [...workbook.observations.slice(0, -1), ,] },
     { ...workbook, observations: [workbook.observations[1], ...workbook.observations.slice(1)] },
     { ...workbook, observations: [{ ...first, status: "skipped" }, ...workbook.observations.slice(1)] },
     { ...workbook, observations: [{ ...first, observedAt: "2026-10-24T11:00:00.001Z" }, ...workbook.observations.slice(1)] },
@@ -73,7 +74,7 @@ test("worksheet CLI rejects unsafe configuration and malformed commands without 
   try {
     const path = join(folder, "config.json"), out = join(folder, "out.json");
     await writeFile(path, JSON.stringify({ schemaVersion: 1, scope: binding.scope, country: "AU", files:
-      { catalogue: null, cancellation: null, payments: null, staff: null, memos: null } }), { mode: 0o600 });
+      { catalogue: null, cancellation: null, rescheduling: null, payments: null, staff: null, memos: null } }), { mode: 0o600 });
     await chmod(path, 0o644); await assert.rejects(readClinicTrialBinding(path));
     await chmod(path, 0o600); await symlink(path, `${path}.link`); await assert.rejects(readClinicTrialBinding(`${path}.link`));
     for (const args of [[], ["prepare", `--config=${path}`, `--out=${out}`, "--enable"], ["check", `--config=${path}`, "--report=relative.json"]])
@@ -98,6 +99,9 @@ test("worksheet CLI prepares owner-only evidence without overwrite and detects c
     assert.deepEqual(await readFile(out), bytes);
     assert.equal((await runClinicAcceptance(["check", `--config=${config}`, `--report=${out}`])).status, "incomplete");
     await writeFile(files.staff!, JSON.stringify({ revision: "test-config-2" }));
+    assert.equal((await runClinicAcceptance(["check", `--config=${config}`, `--report=${out}`])).status, "stale");
+    await writeFile(files.staff!, JSON.stringify({ revision: "test-config-1" }));
+    await writeFile(files.rescheduling!, JSON.stringify({ revision: "test-move-config-2" }));
     assert.equal((await runClinicAcceptance(["check", `--config=${config}`, `--report=${out}`])).status, "stale");
     await chmod(out, 0o644);
     await assert.rejects(runClinicAcceptance(["check", `--config=${config}`, `--report=${out}`]));

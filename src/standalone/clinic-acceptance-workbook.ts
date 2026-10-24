@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { LocationScope } from "../core/model.ts";
 import { approvalInstant, approvalRef } from "./owner-file-clinic-approval.ts";
 
-export const clinicSetupAreas = ["catalogue", "cancellation", "payments", "staff", "memos"] as const;
+export const clinicSetupAreas = ["catalogue", "cancellation", "rescheduling", "payments", "staff", "memos"] as const;
 export const clinicTrialScenarios = ["catalogue", "booking", "cancellation", "rescheduling", "deposit", "payment-uncertainty",
   "staff-handoff", "backup-handoff", "unresolved-request", "memo-content", "memo-access-retention", "cleanup"] as const;
 export type ClinicSetupArea = typeof clinicSetupAreas[number];
@@ -57,7 +57,7 @@ export function assessClinicAcceptance(value: unknown, current: ClinicTrialBindi
       !validClinicTrialBinding(value.binding) || !Array.isArray(value.observations) || value.observations.length !== clinicTrialScenarios.length) return unavailable;
   const at = approvalInstant(now), preparedAt = approvalInstant(value.preparedAt);
   if (at === undefined || preparedAt === undefined || preparedAt > at ||
-      !value.observations.every(v => observation(v, preparedAt, at)) ||
+      !Array.from(value.observations).every(v => observation(v, preparedAt, at)) ||
       new Set(value.observations.map(v => v.scenario)).size !== clinicTrialScenarios.length) return unavailable;
   // Normalize key/row ordering, while binding every configured area's exact bytes.
   const normalize = (b: ClinicTrialBinding) => [b.sourceCommit, b.scope.tenantId, b.scope.clinicId, b.scope.locationId, b.country,

@@ -11,7 +11,7 @@ const exact = (v: unknown, keys: readonly string[]): v is Record<string, unknown
   Object.keys(v).sort().join(",") === [...keys].sort().join(",");
 const hash = (v: unknown) => createHash("sha256").update(JSON.stringify(v)).digest("hex");
 
-/** Reads only the five explicitly named owner configuration files. It does not
+/** Reads only the six explicitly named owner configuration files. It does not
  * read .env, contact Cliniko, submit payments, send alerts or grant authority. */
 export async function readClinicTrialBinding(configPath: string): Promise<ClinicTrialBinding> {
   const config = await readOwnerJson(configPath, 8192);

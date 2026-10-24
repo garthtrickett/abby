@@ -1,6 +1,6 @@
 # Proposed operator acceptance
 
-The [clinic setup and rehearsal command](CLINIC_SETUP_AND_REHEARSAL.md) supplies a twelve-scenario local worksheet pinned to the current committed source and five owner configuration areas. It records self-reported staff observations only; missing configuration, failed/unrun scenarios and source drift remain visible. It neither replaces the observations below nor supplies activation authority.
+The [clinic setup and rehearsal command](CLINIC_SETUP_AND_REHEARSAL.md) supplies a twelve-scenario local worksheet pinned to the current committed source and six owner configuration areas. It records self-reported staff observations only; missing configuration, failed/unrun scenarios and source drift remain visible. It neither replaces the observations below nor supplies activation authority.
 
 Status: proposal only, updated23October2026. Full current-candidate acceptance
 has not been executed. Earlier scoped demo rehearsals are recorded below.

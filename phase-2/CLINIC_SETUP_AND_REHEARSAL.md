@@ -76,7 +76,7 @@ waiver records remain the authority for money.
 
 Create an owner-only JSON file outside Git, for example
 `/absolute/private/clinic-setup.json`, mode 0600. Use the actual deployment's
-five public-policy/configuration files; use `null` for any area not configured.
+six public-policy/configuration files; use `null` for any area not configured.
 These paths are inputs only, not copied into the worksheet or command summary.
 Do not point at `.env`, patient records, recordings or financial work records.
 The files are bounded owner-only JSON, not evidence of valid runtime approval.
@@ -90,6 +90,7 @@ Existing owners must still validate their schema, current grants and lifetime.
   "files": {
     "catalogue": "/absolute/private/services.json",
     "cancellation": "/absolute/private/cancellation.json",
+    "rescheduling": "/absolute/private/rescheduling.json",
     "payments": null,
     "staff": "/absolute/private/staff.json",
     "memos": null
@@ -110,7 +111,7 @@ Prepare never overwrites an existing report. It creates twelve `notRun` rows:
 catalogue, booking, cancellation, rescheduling, deposit, payment uncertainty,
 staff handoff, backup handoff, unresolved request, memo content, memo access and
 retention, and cleanup. The source commit, clinic/location, country and hashes
-of the five decoded configuration files are bound to the worksheet. Capture
+of the six decoded configuration files are bound to the worksheet. Capture
 rereads configuration and source to reject changes while preparing it.
 
 After an actually observed exercise, staff may edit its row to `passed` or
@@ -122,7 +123,7 @@ Unrun rows keep all three observation fields null. A failed, omitted, skipped,
 duplicate, future-dated or malformed row cannot count as a complete worksheet.
 
 Check prints only fixed statuses, aggregate counts and missing area names.
-It returns `stale` if source, scope, country or any configuration changes;
+It returns `stale` if source, scope, country or any declared configuration changes;
 start a new worksheet and repeat the affected acceptance exercise rather than
 copying old passes. A missing area remains `configurationIncomplete`, never
 an assumed no-deposit or approved memo policy. Prepare exits 0 after creating
@@ -135,6 +136,9 @@ Every summary has `activationAuthorized: false`. The worksheet cannot enable
 voice, release contact, send payments/mail, create a memo or change any native
 appointment. It complements the existing [operator acceptance proposal](MANUAL_ACCEPTANCE_PROPOSAL.md)
 and [operator acknowledgment workflow](../deploy/voice/OPERATOR_RESPONSE.md).
+Only the declared files are fingerprinted; this is not discovery or validation
+of every deployment input, external grant, provider credential or native record.
+Those continue to require their existing current runtime checks and acceptance.
 
 ## Observations to retain
 
