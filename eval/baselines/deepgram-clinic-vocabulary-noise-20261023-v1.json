@@ -1,0 +1,141 @@
+{
+  "schema": "abby.deepgram-noise.aggregate.v1",
+  "date": "2026-10-23",
+  "patientFree": true,
+  "profile": {
+    "provider": "deepgram-streaming",
+    "model": "nova-3",
+    "language": "en",
+    "profile": "clinic-v1",
+    "keyterms": [
+      "reschedule",
+      "physiotherapy",
+      "physio",
+      "pain",
+      "back",
+      "neck",
+      "pilates",
+      "pelvic",
+      "shockwave",
+      "rehab",
+      "dry needling",
+      "sciatica",
+      "women's health",
+      "rotator cuff",
+      "frozen shoulder",
+      "tennis elbow",
+      "tendonitis",
+      "vertigo",
+      "vestibular",
+      "ACL",
+      "meniscus",
+      "disc bulge",
+      "hamstring",
+      "reformer",
+      "hydrotherapy"
+    ],
+    "denoising": null,
+    "turnClosure": "per-turn-close-stream-summary-normal-close",
+    "endpointing": false,
+    "mipOptOut": true,
+    "smartFormat": false,
+    "numerals": false,
+    "corpusVersion": "transcription-noise-v1",
+    "corpusSha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+    "adapterSha256": "bdbc6a151c5f481cb4747832f24eb9236b00eed0bf6a175866b90d450b7c0462",
+    "nodeVersion": "v22.23.0",
+    "repeats": 3,
+    "concurrency": 2,
+    "audioFormat": "mono-pcm16le-16000"
+  },
+  "corpus": {
+    "version": "transcription-noise-v1",
+    "sha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+    "cases": 6,
+    "runs": 18
+  },
+  "counts": {
+    "match": 9,
+    "mismatch": 3,
+    "critical": 6,
+    "providerFailure": 0
+  },
+  "metrics": {
+    "cases": 6,
+    "runs": 18,
+    "critical": 6,
+    "providerFailures": 0,
+    "empty": 0,
+    "truncated": 0,
+    "delayed": 0,
+    "wordErrorRate": 0.18181818181818182,
+    "finalP95Ms": 208,
+    "missingRepeats": []
+  },
+  "gate": {
+    "status": "fail",
+    "failures": [
+      "critical",
+      "wordErrorRate"
+    ],
+    "thresholds": {
+      "version": "transcription-synthetic-gate-v1",
+      "minRepeatsPerCase": 3,
+      "maxCritical": 0,
+      "maxProviderFailures": 0,
+      "maxEmpty": 0,
+      "maxTruncated": 0,
+      "maxWordErrorRate": 0.1,
+      "maxFinalP95Ms": 2500,
+      "maxIndividualFinalMs": 5000
+    }
+  },
+  "privateReport": "/home/gust/.local/state/abby-deepgram-clinic-profile/vocabulary-noise-v1.json",
+  "privateReportSha256": "41d5b9e3d4c1c4cb47b5fda8e085c54586d49524e018fbf0143ad37d4d2c8b58",
+  "privateSourceSnapshot": "/home/gust/.local/state/abby-deepgram-clinic-profile/source-v1.json",
+  "sourceFiles": [
+    {
+      "path": "src/voice/deepgram-streaming-transcription.ts",
+      "sha256": "1e96324d241c7fbd99079fe298561fd05e8d914e0e7c666282bd8529dd6b82df"
+    },
+    {
+      "path": "scripts/lib/krisp-evaluation-transcription.ts",
+      "sha256": "ed552d86f33300a385e673eb45056e36c735d5b8b8d061bcc7c3b0fa832fb25f"
+    },
+    {
+      "path": "scripts/lib/deepgram-clinic-vocabulary.ts",
+      "sha256": "4e1407969f853faee6c59d028804f0ecffa7d3cfef5720034d3b73873f69528d"
+    },
+    {
+      "path": "scripts/evaluate-deepgram-transcription.ts",
+      "sha256": "341f4b9a3d37799e70c53376e4f1d83e7d94025f385282a974dd29b2cfdcc467"
+    },
+    {
+      "path": "test/voice/krisp-evaluation-transcription.test.ts",
+      "sha256": "1341fae871a4f510a198e24d78611f5f731a3c3a84a9ee7622fa462cfe6585fc"
+    },
+    {
+      "path": "test/voice/deepgram-streaming-transcription.test.ts",
+      "sha256": "848911cafb022da09b974ba7301cbbdf02c4e9b2c95da3ce1b5179febe249ae6"
+    },
+    {
+      "path": "src/voice/transcription-evaluation.ts",
+      "sha256": "3ea30413b80cd28ecf337aaf9ad156dc6d5fd946ee74f81678654f9f2a41943d"
+    },
+    {
+      "path": "src/voice/transcription-evaluation-gate.ts",
+      "sha256": "44f7973d65f8de8261db8030bfbb14ce827a0c14b9b35756c2640133c956357c"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "c4355bbdaf199f444ae58c5631923ecfc2f7b88dba1f0d1a7912427ccd533883"
+    }
+  ],
+  "selectedForRuntime": false,
+  "cleanSafetyAndRepresentativeQualification": "notRun",
+  "productionDefaultsChanged": false,
+  "releaseGate": "unverified",
+  "wholeGoalComplete": false,
+  "runAt": "2026-10-23T22:24:30.863Z",
+  "twoLayerKrispComparison": "notRun; missing project key"
+}

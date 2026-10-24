@@ -10,6 +10,8 @@ type Final = Result<readonly TranscriptEvent[], TranscriptionFailure>;
 export type DeepgramStreamingTranscriptionConfig = Readonly<{
   apiKey: string;
   sessionId: string;
+  /** Optional fixed, patient-free evaluation vocabulary. No dynamic updates or weights. */
+  keyterms?: readonly string[];
   socketFactory?: (url: string, headers: Readonly<Record<string, string>>) => Socket;
 }>;
 
@@ -58,6 +60,7 @@ function nonnegative(value: unknown): value is number {
  */
 export class DeepgramStreamingTranscription implements TranscriptionPort {
   private readonly config: DeepgramStreamingTranscriptionConfig;
+  private readonly endpoint: string;
   private turn: Turn | undefined;
   private lastGeneration = 0;
   private closed = false;
@@ -69,7 +72,20 @@ export class DeepgramStreamingTranscription implements TranscriptionPort {
         (config.socketFactory !== undefined && typeof config.socketFactory !== "function")) {
       throw new Error("Deepgram transcription configuration unavailable");
     }
-    this.config = Object.freeze({ ...config });
+    const terms = config.keyterms === undefined ? undefined :
+      Array.isArray(config.keyterms) ? Array.from(config.keyterms) : config.keyterms;
+    if (terms !== undefined && (!Array.isArray(terms) || terms.length > 50 ||
+        terms.some(term => typeof term !== "string" || !term.trim() || term !== term.trim() ||
+          term.length > 80 || /[\u0000-\u001f\u007f,:;]/.test(term)) ||
+        Buffer.byteLength(terms.join(" "), "utf8") > 1_000 ||
+        new Set(terms.map(term => term.toLowerCase())).size !== terms.length)) {
+      throw new Error("Deepgram transcription configuration unavailable");
+    }
+    const keyterms = terms === undefined ? undefined : Object.freeze([...terms]);
+    this.config = Object.freeze({ ...config, ...(keyterms === undefined ? {} : { keyterms }) });
+    const url = new URL(endpoint);
+    for (const term of keyterms ?? []) url.searchParams.append("keyterm", term);
+    this.endpoint = url.toString();
   }
 
   private retire(turn: Turn, result: Final, terminate: boolean): void {
@@ -95,8 +111,8 @@ export class DeepgramStreamingTranscription implements TranscriptionPort {
       let resolveReady!: (ready: boolean) => void;
       const ready = new Promise<boolean>(resolve => { resolveReady = resolve; });
       const headers = { Authorization: `Token ${this.config.apiKey}` };
-      const socket = this.config.socketFactory?.(endpoint, headers) ??
-        new WebSocket(endpoint, { headers, maxPayload: maxEventBytes, handshakeTimeout: deadlineMs });
+      const socket = this.config.socketFactory?.(this.endpoint, headers) ??
+        new WebSocket(this.endpoint, { headers, maxPayload: maxEventBytes, handshakeTimeout: deadlineMs });
       const turn: Turn = { generation, utteranceId: randomUUID(), socket, ready, resolveReady,
         retired: false, flushing: false, summary: false, bytes: 0, sequence: -1,
         finalThrough: 0, interimThrough: 0, finalCount: 0, text: "", pending: undefined };
