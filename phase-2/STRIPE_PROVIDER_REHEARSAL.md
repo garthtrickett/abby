@@ -103,7 +103,7 @@ in [the financial contract](STRIPE_FINANCIAL_CONTRACT.md#raw-webhook-handoff-to-
 The initial component checks simulated native records and exclusion; the
 subsequent declared demo rehearsals used actual Cliniko records and PostgreSQL.
 Current real clinic grants, producer/restore admission, fee/recipient and
-manual-payment/waiver policy, composed process-loss/restore, explicit deadline
+manual-payment/waiver policy, real-provider configured-serving process-loss/restore, explicit deadline
 expiry dispatch and clinical expiry, external sender/inbox delivery and
 clinic-observed acceptance remain unqualified. The real-clock automatic-expiry
 observation above does not close those separate paths. Actual demo record retention and loopback receipt delivery cannot
@@ -125,3 +125,9 @@ not in source or shell arguments. An exclusive started or uncertain rehearsal
 report must be reconciled before any new attempt; missing output grants no
 second payable creation. Ordinary engineering continues independently of
 real-clinic activation and human acceptance.
+
+## Subsequent Checkout process loss and restored state
+
+One fresh real Cliniko-demo/Stripe-sandbox rehearsal killed the original source Checkout worker after the parent received its response but before the owner received an acknowledgement. An earlier full SQL snapshot was restored into a distinct owned target. The target creation claim was absent before and after recovery; actual native possible-attempt history refused a second Checkout or native attempt. The original physical native180 budget stayed live and was never restored. Full SQL snapshots and provider context stayed in memory. Independent inspection and fixture-only expiry closed the known unpaid test Session without fabricating the killed owner's acknowledgement. The run used 109 native requests plus four fresh cleanup GETs and eleven direct Stripe requests. All seventeen owned preparation/provider databases, public booking restoration, zero active test patients and two retained public review types were independently verified. No card, message, clinical cancellation or business-deadline expiry was exercised. This source qualification worker uses synthetic grants/setup time; it does not prove configured-serving or clinic restoration approval.
+
+Two separate synthetic-provider cases now exercise the existing emitted configured voice-serving entry and its actual financial consumer. The original listener/consumer is SIGKILLed before creation acknowledgement, a full preclaim SQL snapshot is restored into a distinct host database, and the cold configured host observes native history without another Checkout or a replacement local claim. In the complementary case, deliberate loss of the in-memory fake's native attempt plus the missing restored claim still cannot authorize creation: fresh producer admission is withdrawn and actually checked. No cold native attempt, claim, Checkout, money or mail work follows. A third physical-account budget database remains live and is never restored; each host also retains its own actual SQL limiter. Full SQL and worker-output privacy and preservation of unrelated legitimate opaque claims pass. Twelve owned databases across both original failed fixtures and both passing cases were independently removed. The two initial fixture results remain failed; only the second failure was traced to cold startup before prospective read bindings were corrected. These two synthetic configured-host cases cannot be combined with the separate real-provider source-worker result to claim a real-provider configured-serving journey or clinic-approved quiescence/restore admission.
