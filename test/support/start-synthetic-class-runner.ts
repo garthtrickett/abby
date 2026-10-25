@@ -111,6 +111,7 @@ f.native.business.business_name = "Demo Clinic"; f.native.business.show_in_onlin
 f.native.type.name = "Mat Pilates"; f.native.type.show_in_online_bookings = true;
 
 let denied = false, classDenied = false, mailLost = false, lostWrite = false, policyChanged = false;
+let classReadMode: "shown" | "unavailable" | "empty" = "shown";
 let sharedBudget: ClinikoRequestBudget | undefined;
 let holdReplacement = false, releaseReplacement: (() => void) | undefined;
 const inputs: string[] = [];
@@ -119,6 +120,11 @@ let providerProxy: Awaited<ReturnType<typeof classProviderProxy>> | undefined, c
 const occupyClass = () => { for (let index = 0; index < 3; index++) f.native.attendees.push(classAttendee(String(851 + index), "94", String(951 + index))); };
 process.on("message", message => {
   if (!message || typeof message !== "object" || !("kind" in message)) return;
+  if (operation === "cancel" && message.kind === "classReadMode" && "mode" in message &&
+      (message.mode === "shown" || message.mode === "unavailable" || message.mode === "empty")) {
+    classReadMode = message.mode;
+    process.send?.({ kind: "classReadModeChanged" });
+  }
   if (coldRecovery && "movePath" in f && message.kind === "coldProviderContext") void (async () => {
     if (!providerProxy || f.recalls.length !== 1) throw new Error("synthetic review unavailable");
     const source = JSON.parse(await readFile(f.sourcePath, "utf8")), destination = JSON.parse(await readFile(f.destinationPath, "utf8"));
@@ -243,6 +249,10 @@ process.on("message", message => {
 const provider: typeof fetch = async (value, init) => {
   const url = new URL(String(value)), method = init?.method ?? "GET";
   process.send?.({ kind: "providerRequest", method, path: url.pathname, elapsedMs: Math.round(performance.now()) });
+  if (operation === "cancel" && method === "GET" && url.pathname === "/v1/group_appointments") {
+    if (classReadMode === "unavailable") return new Response(null, { status: 503 });
+    if (classReadMode === "empty") return Response.json({ total_entries: 0, group_appointments: [] });
+  }
   if (holdReplacement && method === "POST" && url.pathname === "/v1/attendees") {
     holdReplacement = false;
     let aborted = () => {};

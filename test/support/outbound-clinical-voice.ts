@@ -68,6 +68,7 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
     if ("replaceDestination" in f) await f.replaceDestination({ credentialFingerprint: clinikoCredentialFingerprint(c.apiKey) });
   }
   let mediaElapsedMs = 0, nowOffset = 0, notes = "", requestVersion = verificationNow, moved = false, patches = 0, bookings = 0, cancellations = 0;
+  let appointmentReadMode: "shown" | "unavailable" | "empty" = "shown";
   let booked: Record<string, unknown> | undefined;
   const bookingRequests: Readonly<Record<string, unknown>>[] = [];
   let targetVersion = "2026-10-02T00:00:00.000Z", contactNumber = options.recipientNumber ?? "+61481927364", lastTarget: Record<string, unknown> | undefined;
@@ -83,6 +84,10 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
   const state = { originalLive: true, targetLive: true, nativeLive: true, profileLive: true };
   const native: typeof fetch = async (input, init) => {
     const url = new URL(String(input)), method = init?.method ?? "GET"; nativeCalls.push({ method, path: url.pathname });
+    if (url.pathname === "/v1/individual_appointments" && method === "GET") {
+      if (appointmentReadMode === "unavailable") return new Response(null, { status: 503 });
+      if (appointmentReadMode === "empty") return Response.json({ total_entries: 0, individual_appointments: [] });
+    }
     if (url.pathname === `/v1/recalls/${requestId}` && method === "GET") return Response.json({ id: requestId, links: { self: `${base}/recalls/${requestId}` },
       patient: { links: { self: `${base}/patients/${verificationCanaries[2]}` } }, recall_type: { links: { self: `${base}/recall_types/61` } },
       notes, recall_at: "2026-10-05", recalled: false, recalled_at: null, archived_at: null, created_at: verificationNow, updated_at: requestVersion });
@@ -225,6 +230,7 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
   };
   return { ...f, transport, server, spoken, transcripts, modelTurns, nativeCalls, sent, state, request, requestNotes: notes, recipientNumber: request.recipient.number,
     currentTime: now, retainedNative: { fetchPort: native }, bookingRequests, closeCall,
+    setAppointmentReadMode(mode: "shown" | "unavailable" | "empty") { appointmentReadMode = mode; },
     setCallTime(instant: string) {
       const target = Date.parse(instant); assert.ok(Number.isFinite(target) && new Date(target).toISOString() === instant && target >= Date.parse(now()));
       nowOffset = target - Date.parse(verificationNow) - mediaElapsedMs;

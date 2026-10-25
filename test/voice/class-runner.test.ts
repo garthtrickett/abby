@@ -12,7 +12,25 @@ const attendances = (call: Call) => call.mutations.filter(row => row.path?.start
 const prepare = async (call: Call, operation: "book" | "cancel") => {
   await call.say("Start"); assert.match(call.spoken.at(-1)!, /six-digit code.*keypad/); await call.mark(); await call.verify();
   if (operation === "book") { await call.say("Times"); await call.mark(); await call.say("The first time please."); }
-  else { await call.say("Appointments"); await call.mark(); await call.say("Cancel that appointment."); }
+  else {
+    for (const mode of ["unavailable", "empty", "shown"] as const) {
+      const before = call.messages.filter(message => message.kind === "classReadModeChanged").length;
+      call.child.send({ kind: "classReadMode", mode });
+      await voiceUntil(() => call.messages.filter(message => message.kind === "classReadModeChanged").length > before, "synthetic class read mode");
+      await call.say("Appointments");
+      if (mode === "unavailable") {
+        assert.match(call.spoken.at(-1)!, /can't check appointments right now/);
+        assert.doesNotMatch(call.spoken.at(-1)!, /couldn't find an appointment|new patient|booking is confirmed/i);
+      }
+      if (mode === "empty") {
+        assert.match(call.spoken.at(-1)!, /couldn't find an appointment in that time range/);
+        assert.doesNotMatch(call.spoken.at(-1)!, /can't check appointments|new patient|booking is confirmed/i);
+      }
+      assert.equal(call.mutations.length, 0);
+      await call.mark();
+    }
+    await call.say("Cancel that appointment.");
+  }
   assert.match(call.spoken.at(-1)!, /Mat Pilates/);
   assert.match(call.spoken.at(-1)!, operation === "book" ? /12 pounds/ : /No cancellation fee/);
   assert.equal(call.mutations.length, 0, "a prepared class action cannot write before played terms and affirmative consent");
