@@ -81,7 +81,7 @@ export async function withIsolatedVerificationSql(adminUrl: string, run: (fixtur
   let retained: (() => Promise<void>) | undefined, originalFailure: unknown, failed = false;
   try {
     retained = await preserveUnrelatedRows(owned.db);
-    canary = await captureScopedSqlVerificationCanaryWindow(owned.db);
+    canary = await captureScopedSqlVerificationCanaryWindow(owned.db, owned.connectionString);
     await run({ db: owned.db, peer: owned.peer, connectionString: owned.connectionString, canaryWindow: canary.window,
       defer: close => { assert.equal(typeof close, "function"); deferred.push(close); } });
   } catch (error) { failed = true; originalFailure = error; throw error; }

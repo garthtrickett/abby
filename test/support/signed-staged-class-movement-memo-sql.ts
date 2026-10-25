@@ -83,7 +83,7 @@ for (const scenario of scenarios) test(`actual emitted signed staged class movem
   try {
     await sql.raw(`create database "${databaseName}"`).execute(admin); created = true;
     db = connectPostgres(target.toString()); await migrate(db);
-    canaryScope = await captureScopedSqlVerificationCanaryWindow(db);
+    canaryScope = await captureScopedSqlVerificationCanaryWindow(db, target.toString());
     const unrelatedScope = { tenantId: `unrelated-${randomUUID()}`, clinicId: "clinic", locationId: "other" }, unrelatedRef = randomUUID();
     assert.ok((await new PostgresOutboundEffectBarrier(db, unrelatedScope, "e".repeat(64)).claimOnce(unrelatedRef)).ok);
     const links = [{ normalizedPhone: "+61400111222", patientId: "101" }], fingerprint = "e".repeat(64);

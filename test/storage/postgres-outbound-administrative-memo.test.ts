@@ -12,7 +12,7 @@ import { resultValue } from "../support/agent-appointment-proposals.ts";
 if (!process.env.DATABASE_URL) throw Error("DATABASE_URL required");
 const adminUrl = process.env.DATABASE_URL, baseline = connectPostgres(adminUrl);
 after(() => baseline.destroy());
-const canaryWindow = await captureSqlVerificationCanaryWindow(baseline);
+const canaryWindow = await captureSqlVerificationCanaryWindow(baseline, adminUrl);
 const emitted = new URL("../../dist/runtime/", import.meta.url);
 const { outboundMemoFixture } = await import(new URL("test/support/outbound-memo.js", emitted).href) as typeof import("../support/outbound-memo.ts");
 const { decodeAdministrativeMemo } = await import(new URL("src/cliniko/administrative-memo.js", emitted).href) as typeof import("../../src/cliniko/administrative-memo.ts");

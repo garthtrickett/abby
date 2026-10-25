@@ -13,7 +13,7 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 if (!process.env.DATABASE_URL) throw Error("DATABASE_URL required");
 const adminUrl = process.env.DATABASE_URL, baseline = connectPostgres(adminUrl);
 after(() => baseline.destroy());
-const canaryWindow = await captureSqlVerificationCanaryWindow(baseline);
+const canaryWindow = await captureSqlVerificationCanaryWindow(baseline, adminUrl);
 const emitted = new URL("../../dist/runtime/", import.meta.url);
 const { representativeCallOwnerFixture, representativeInputOptions } = await import(new URL("test/support/representative-call-owner.js", emitted).href) as typeof import("./representative-call-owner.ts");
 const { subjectMemoFixture } = await import(new URL("test/support/subject-memo.js", emitted).href) as typeof import("./subject-memo.ts");
