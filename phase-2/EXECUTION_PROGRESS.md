@@ -5,8 +5,8 @@
 The R06 cross-reader regression exposed a receipt-selection defect: after
 starting another task, a confirmation-delivery query could describe the prior
 task's cancellation and notification. Both new-task assertions reproduced the
-defect before the correction. Notification queries now use the same task boundary
-as ordinary action-outcome queries. A new task with no action is explicitly
+defect before the correction. Notification and ordinary action-outcome queries
+now share receipt selection and wording in the action-outcome module. A new task with no action is explicitly
 uncompleted; the prior cancellation and its separate notification remain stored.
 
 Two reference-host cases exercise a played cancellation confirmation followed
@@ -16,8 +16,10 @@ review and aggregate committed/unresolved counts retain their distinct truths;
 replayed writes and sends are refused. All 33 notification checks pass with
 memory and PostgreSQL ledgers, including the 31 original controls. Whole strict
 TypeScript, serving emission and both metadata contracts pass. Of 744 emitted
-runtime files, only `src/core/notification-outcome.js` changes from the qualified
-runtime inherited by main `7538862f`; the other 743 match exactly.
+runtime files, only the action-outcome, notification-outcome and transition
+modules change from the qualified runtime inherited by main `7538862f`; the
+other 741 match exactly. The shared rule addresses a maintainability finding
+from the first review; earlier build and review evidence remain retained.
 
 This is local engineering evidence. Final review, this correction's own CI and
 delivery remain pending, as does main `7538862f`'s independent PostgreSQL CI/raw
