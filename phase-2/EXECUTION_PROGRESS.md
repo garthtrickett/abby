@@ -6731,8 +6731,9 @@ completed: 6 match, 6 mismatch, 6 critical, 0 provider failures; WER 38.64%, fin
 p95 388 ms, empty/truncated/delayed 0. The unchanged gate fails critical terms
 and WER. NS-001 and NS-006 are critical in all repeats; NS-005 is an ordinary
 mismatch. The untouched vocabulary-only baseline retains its own 18.18% WER,
-208 ms p95 and six different critical attempts. Separate cohorts establish no
-statistical significance or Krisp/Vapi equivalence.
+208 ms p95 and six critical attempts on NS-005 and NS-006; the three NS-006
+attempts overlap with this comparison. Separate cohorts establish no statistical
+significance or Krisp/Vapi equivalence.
 
 The original 8/11 offline failure is retained. A transport-only successor fixes
 Node socket/file-handle I/O while preserving the model, frame calculation,
