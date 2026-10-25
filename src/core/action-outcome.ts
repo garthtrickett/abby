@@ -1,4 +1,4 @@
-import type { ActionRequest, ActionState } from "./model.ts";
+import type { ActionRequest, ActionState, CallState } from "./model.ts";
 import { classMovementOutcomeText } from "./class-movement-continuation.ts";
 
 export function confirmedActionText(kind: ActionRequest["kind"]): string {
@@ -23,4 +23,11 @@ export function actionOutcomeText(action: ActionState | undefined): string {
       : "I can't confirm that action yet. It is pending review. Please contact the clinic before trying again. I won't send that action again from this call.";
   return action.status === "awaitingConfirmation" || action.status === "ready"
     ? "That action is not confirmed yet. I still need your separate confirmation." : "That action was not completed.";
+}
+
+/** Keep the selected receipt and its wording inside the same call-task boundary. */
+export function currentTaskOutcome(state: Pick<CallState, "actions" | "previousTaskActionKeys">): Readonly<{ action: ActionState | undefined; text: string }> {
+  const action = Object.values(state.actions).filter(item => !state.previousTaskActionKeys?.includes(item.key)).at(-1);
+  return { action, text: !action && state.previousTaskActionKeys?.length
+    ? "I haven't completed an action for this new task." : actionOutcomeText(action) };
 }

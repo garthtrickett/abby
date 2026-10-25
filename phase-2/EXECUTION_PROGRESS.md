@@ -1,5 +1,33 @@
 # Execution progress and evidence
 
+## Current-task receipts and mixed action outcomes, 25 October 2026
+
+The R06 cross-reader regression exposed a receipt-selection defect: after
+starting another task, a confirmation-delivery query could describe the prior
+task's cancellation and notification. Both new-task assertions reproduced the
+defect before the correction. Notification and ordinary action-outcome queries
+now share receipt selection and wording in the action-outcome module. A new task with no action is explicitly
+uncompleted; the prior cancellation and its separate notification remain stored.
+
+Two reference-host cases exercise a played cancellation confirmation followed
+by a rejected or uncertain booking, failed notification send/observation, a
+failed report read and reconstructed readers. Caller wording, scoped staff
+review and aggregate committed/unresolved counts retain their distinct truths;
+replayed writes and sends are refused. All 33 notification checks pass with
+memory and PostgreSQL ledgers, including the 31 original controls. Whole strict
+TypeScript, serving emission and both metadata contracts pass. Of 744 emitted
+runtime files, only the action-outcome, notification-outcome and transition
+modules change from the qualified runtime inherited by main `7538862f`; the
+other 741 match exactly. The shared rule addresses a maintainability finding
+from the first review; earlier build and review evidence remain retained.
+
+This is local engineering evidence. Final review, this correction's own CI and
+delivery remain pending, as does main `7538862f`'s independent PostgreSQL CI/raw
+qualification. Real-provider, carrier and supervised-clinic acceptance remain
+separate. All eleven stages, thirteen gaps and twenty-eight reuse placements
+remain in scope. See [R06](KAREN_TO_ABBY_REUSE_AUDIT.md#r06-keep-per-action-outcomes-and-notification-results-independent)
+and [the regression cases](../test/text/notification-effects.test.ts).
+
 ## Agent-operated demo backup handoff, 25 October 2026
 
 The owner directed another agent to act as the demo backup through browser

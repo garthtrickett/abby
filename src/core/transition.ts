@@ -9,7 +9,7 @@ import { supportedVoiceLocale } from "./voice-presentation.ts";
 import { createHash } from "node:crypto";
 import { digestActionRequest } from "./digest.ts";
 import { clearAffirmation } from "./caller-affirmation.ts";
-import { actionOutcomeText, confirmedActionText } from "./action-outcome.ts";
+import { actionOutcomeText, confirmedActionText, currentTaskOutcome } from "./action-outcome.ts";
 import { classMovementOutcomeText, readClassMovementReceipt, stopClassMovement, uncertainClassMovement } from "./class-movement-continuation.ts";
 import { classMovementConsentText, readClassMovementConsent } from "./class-movement-consent.ts";
 import { patientCorrectionEvidenceFailure } from "./patient-correction.ts";
@@ -429,8 +429,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       break;
     }
     case "outcomeQuery": {
-      const current = Object.values(state.actions).filter(action => !state.previousTaskActionKeys?.includes(action.key)).at(-1);
-      state.callerMessages.push(!current && state.previousTaskActionKeys?.length ? "I haven't completed an action for this new task." : actionOutcomeText(current));
+      state.callerMessages.push(currentTaskOutcome(state).text);
       break;
     }
     case "notificationOutcomeQuery":
