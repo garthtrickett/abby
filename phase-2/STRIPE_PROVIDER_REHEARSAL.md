@@ -5,8 +5,10 @@ key. Initial component checks used normally merged PR595 and the subsequent
 snapshot-compatibility candidate. [PR596](https://github.com/garthtrickett/abby/pull/596)
 then normally merged as `1961e824`; its eight exact-head jobs, four independent
 resulting-main jobs and all sixteen raw logs were verified. Subsequent native
-rehearsals below used that exact runtime tree and its unchanged 744 serving
-outputs. These are scoped observations, not activation or a complete
+rehearsals initially used that exact runtime tree and its unchanged 744 serving
+outputs. The later configured-server checkpoint uses PR599/main08325d8b and
+its 744 outputs; only the native memo writer differs from the earlier runtime.
+These are scoped observations, not activation or a complete
 payment-lifecycle or clinic-acceptance pass.
 No key, account/Session/charge ID, checkout/receipt URL, webhook secret, event
 body, patient details or real clinic record is included here.
@@ -103,9 +105,11 @@ in [the financial contract](STRIPE_FINANCIAL_CONTRACT.md#raw-webhook-handoff-to-
 The initial component checks simulated native records and exclusion; the
 subsequent declared demo rehearsals used actual Cliniko records and PostgreSQL.
 Current real clinic grants, producer/restore admission, fee/recipient and
-manual-payment/waiver policy, real-provider configured-serving process-loss/restore, explicit deadline
-expiry dispatch and clinical expiry, external sender/inbox delivery and
-clinic-observed acceptance remain unqualified. The real-clock automatic-expiry
+manual-payment/waiver policy, explicit deadline expiry dispatch and clinical
+expiry, external sender/inbox delivery and
+clinic-observed acceptance remain unqualified. The separately completed
+configured-provider demo restore below retains synthetic grants and a private
+demo controller; it supplies no clinic-approved restoration authority. The real-clock automatic-expiry
 observation above does not close those separate paths. Actual demo record retention and loopback receipt delivery cannot
 close those separate requirements. The first signed
 event exercise establishes reference verification and a version incompatibility.
@@ -131,3 +135,16 @@ real-clinic activation and human acceptance.
 One fresh real Cliniko-demo/Stripe-sandbox rehearsal killed the original source Checkout worker after the parent received its response but before the owner received an acknowledgement. An earlier full SQL snapshot was restored into a distinct owned target. The target creation claim was absent before and after recovery; actual native possible-attempt history refused a second Checkout or native attempt. The original physical native180 budget stayed live and was never restored. Full SQL snapshots and provider context stayed in memory. Independent inspection and fixture-only expiry closed the known unpaid test Session without fabricating the killed owner's acknowledgement. The run used 109 native requests plus four fresh cleanup GETs and eleven direct Stripe requests. All seventeen owned preparation/provider databases, public booking restoration, zero active test patients and two retained public review types were independently verified. No card, message, clinical cancellation or business-deadline expiry was exercised. This source qualification worker uses synthetic grants/setup time; it does not prove configured-serving or clinic restoration approval.
 
 Two separate synthetic-provider cases now exercise the existing emitted configured voice-serving entry and its actual financial consumer. The original listener/consumer is SIGKILLed before creation acknowledgement, a full preclaim SQL snapshot is restored into a distinct host database, and the cold configured host observes native history without another Checkout or a replacement local claim. In the complementary case, deliberate loss of the in-memory fake's native attempt plus the missing restored claim still cannot authorize creation: fresh producer admission is withdrawn and actually checked. No cold native attempt, claim, Checkout, money or mail work follows. A third physical-account budget database remains live and is never restored; each host also retains its own actual SQL limiter. Full SQL and worker-output privacy and preservation of unrelated legitimate opaque claims pass. Twelve owned databases across both original failed fixtures and both passing cases were independently removed. The two initial fixture results remain failed; only the second failure was traced to cold startup before prospective read bindings were corrected. These two synthetic configured-host cases cannot be combined with the separate real-provider source-worker result to claim a real-provider configured-serving journey or clinic-approved quiescence/restore admission.
+
+
+## Configured-serving recovery with actual demo providers, 24 October 2026
+
+A new exclusive family exercised the actual emitted `serveClinikoVoice` entry and financial consumer against Cliniko demo and Stripe sandbox. It used the normally qualified PR599/main `08325d8b` 744-output graph through a pinned private demo controller. The controller permits only this demo namespace, sandbox mode and loopback serving; caller verification, playback, policy/producer and recovery-read grants remain explicit synthetic substitutions. Production serving artifacts were unchanged.
+
+The original configured server reached one real Checkout response, held only in the parent before owner acknowledgement. Its process was actually SIGKILLed and its loopback listener disappeared. A full preclaim SQL snapshot was restored into a distinct owned target. The cold configured server opened its own listener, rediscovered native attempt history and independently read provider money under the separately declared recovery grant. It created no second Checkout or native attempt, and the target creation claim stayed absent before and after recovery. An unrelated legitimate opaque claim survived. The original third physical native-180-budget database was never restored, while each host retained its own actual SQL limiter. The original creation acknowledgement remains unknown.
+
+The run used 113 native and 18 Stripe requests: one Checkout, one native Checkout attempt and one independently verified fixture-only expiry of the known unpaid Session. Full unfiltered SQL and worker-output privacy passed, with no private retry files. Owned native cleanup and public booking restoration passed. An independent root audit found all three database IDs/names/socket folders absent and rehashed all 1,148 source/proof inputs plus the current 744-output graph. Node was capped at 512 MiB with no swap; the three external databases each retained 512 MiB/no-extra-swap, one CPU and no network. Database peaks were not measured. This expiry is fixture cleanup, not business-deadline or clinical expiry dispatch.
+
+The exact composed setup separately passes 7 offline controls and 11 entry controls, including consumed state before credential reads and refusal to retry an uncertain executor. Initial fake-native metadata and positive producer-check expectation failures remain preserved. The corrected positive uses the original history-based no-replay invariants; the distinct missing-histories negative actually checks fresh producer refusal and permits no cold money/delivery continuation. No quota, deadline, snapshot or privacy assertion was widened. These controls are separate from the single actual provider attempt.
+
+Private aggregate provenance is `abby-native-serving-restore-v4/root-provider-audit-v1.json`, report SHA256 `4895796358e36652336d7fd6911b644f1c7660c0055b5d6dcba0f4010498a1d7`, under the existing private state home. This new observation directly qualifies the stated configured-provider demo journey; the older source-worker and simulated-provider proofs retain their own scopes. Real clinic producer/quiescence/restore approval, manual-payment/waiver authority, external delivery, staff, carrier/acoustic and activation acceptance remain open.

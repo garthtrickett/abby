@@ -28,12 +28,12 @@ test(`actual emitted confidential memo native primitive retains one SQL purpose 
   const budget = new PostgresClinikoRequestBudget(db, { apiKey, maxPerMinute: 180 });
   const config: AdministrativeMemoConfig = { scope, apiKey, contactEmail: "ops@example.invalid", businessId: memo.businessId, authorRef: memo.authorRef,
     policy: memo.policy, rateBudget: budget, clock: () => memo.recordedAt, deadlineMs: 5000 };
-  let posts = 0; const rows = new Map<string, Record<string, unknown>>();
+  let posts = 0, nativeWire = ""; const rows = new Map<string, Record<string, unknown>>();
   const native: typeof fetch = async (url, init) => {
     const u = new URL(String(url)); assert.equal(u.origin, "https://api.au5.cliniko.com"); assert.equal(init?.redirect, "error");
     assert.equal(new Headers(init!.headers).get("authorization"), `Basic ${Buffer.from(`${apiKey}:`).toString("base64")}`);
     if (init!.method === "POST") {
-      assert.equal(u.pathname, "/v1/communications"); posts++; const body = JSON.parse(String(init!.body));
+      assert.equal(u.pathname, "/v1/communications"); posts++; nativeWire = String(init!.body); const body = JSON.parse(nativeWire);
       assert.equal(body.patient_id, patientId); assert.equal(body.confidential, true); assert.equal(body.category_code, 12); assert.equal(body.type_code, 3);
       const row = { ...body, id: "701", created_at: memo.recordedAt, updated_at: memo.recordedAt, archived_at: null,
         links: { self: "https://api.au5.cliniko.com/v1/communications/701" }, patient: { links: { self: `https://api.au5.cliniko.com/v1/patients/${patientId}` } } };
@@ -70,8 +70,8 @@ test(`actual emitted confidential memo native primitive retains one SQL purpose 
   const reader = value(ClinikoAdministrativeMemos.createReadOnly(config, auth, grants, native));
   const read = await reader.readMemo({ communicationRef: "cliniko:communication:701", actionRef: memo.actionRef, patientId }, new AbortController().signal);
   assert.equal(read.ok, ["accepted", "lostStored", "parallel"].includes(scenario));
-  const content = value(encodeAdministrativeMemo(memo)), wire = JSON.stringify({ category_code: 12, confidential: true, content, patient_id: patientId, direction_code: 2, type_code: 3 });
-  const canaries = [apiKey, patientId, content, wire, key.toString("hex"), memo.authentication, Buffer.from(`${apiKey}:`).toString("base64")];
+  const content = value(encodeAdministrativeMemo(memo)); assert.notEqual(nativeWire, "");
+  const canaries = [apiKey, patientId, content, nativeWire, key.toString("hex"), memo.authentication, Buffer.from(`${apiKey}:`).toString("base64")];
   const chunks = canaries.flatMap((text, i) => Array.from({ length: Math.ceil(text.length / 256) }, (_, j) => ({ label: `memo_${i}_${j}`,
     value: text.slice(j * 256, (j + 1) * 256).length < 4 ? text.slice(-4) : text.slice(j * 256, (j + 1) * 256) })));
   for (let i = 0; i < chunks.length; i += 12) assert.deepEqual(await scanPatientDataCanaries(db, chunks.slice(i, i + 12)), { ok: true, value: [] });

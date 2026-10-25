@@ -1,0 +1,184 @@
+{
+  "schema": "abby.deepgram-noise.aggregate.v1",
+  "date": "2026-10-24",
+  "patientFree": true,
+  "profile": {
+    "provider": "deepgram-streaming",
+    "model": "nova-3",
+    "language": "en",
+    "keyterms": [
+      "reschedule",
+      "physiotherapy",
+      "physio",
+      "pain",
+      "back",
+      "neck",
+      "pilates",
+      "pelvic",
+      "shockwave",
+      "rehab",
+      "dry needling",
+      "sciatica",
+      "women's health",
+      "rotator cuff",
+      "frozen shoulder",
+      "tennis elbow",
+      "tendonitis",
+      "vertigo",
+      "vestibular",
+      "ACL",
+      "meniscus",
+      "disc bulge",
+      "hamstring",
+      "reformer",
+      "hydrotherapy"
+    ],
+    "denoising": {
+      "provider": "local-rnnoise",
+      "upstreamTag": "v0.2",
+      "model": "release-default",
+      "sourceCommit": "904a876dce1f9ab8860c0a5000ed151f9f6eef58",
+      "transportAmendment": "PROTOCOL_TRANSPORT_AMENDMENT_v2.json",
+      "resampler": "installed ffmpeg swresample filter_size32 phase_shift10 exact_rational1 both directions",
+      "exactOriginalFrameCount": true,
+      "modelOnlyTailSamples48k": 480,
+      "sharedFlushDeadlineMs": 2000,
+      "streamedDuringMeasuredPlayback": true,
+      "equivalenceToKrispOrVapi": "notEstablished",
+      "harness": "separate external evaluation artifact; not an available serving or evaluate-deepgram-transcription.ts profile"
+    },
+    "corpusVersion": "transcription-noise-v1",
+    "corpusSha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+    "repeats": 3,
+    "concurrency": 2,
+    "paceMs": 20,
+    "turnClosure": "per-turn-close-stream-summary-normal-close",
+    "endpointing": false,
+    "mipOptOut": true,
+    "smartFormat": false,
+    "numerals": false,
+    "audioFormat": "mono-pcm16le-16000",
+    "nodeVersion": "v22.23.0"
+  },
+  "corpus": {
+    "version": "transcription-noise-v1",
+    "sha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+    "cases": 6,
+    "runs": 18
+  },
+  "counts": {
+    "match": 6,
+    "mismatch": 6,
+    "critical": 6,
+    "providerFailure": 0
+  },
+  "metrics": {
+    "cases": 6,
+    "runs": 18,
+    "critical": 6,
+    "providerFailures": 0,
+    "empty": 0,
+    "truncated": 0,
+    "delayed": 0,
+    "wordErrorRate": 0.38636363636363635,
+    "finalP95Ms": 388,
+    "missingRepeats": []
+  },
+  "gate": {
+    "status": "fail",
+    "failures": [
+      "critical",
+      "wordErrorRate"
+    ],
+    "thresholds": {
+      "version": "transcription-synthetic-gate-v1",
+      "minRepeatsPerCase": 3,
+      "maxCritical": 0,
+      "maxProviderFailures": 0,
+      "maxEmpty": 0,
+      "maxTruncated": 0,
+      "maxWordErrorRate": 0.1,
+      "maxFinalP95Ms": 2500,
+      "maxIndividualFinalMs": 5000
+    }
+  },
+  "privateReport": "/home/gust/.local/state/abby-rnnoise-clinic-comparison/provider-result-v1.json",
+  "privateReportSha256": "151e6bd96b55ae7d7cc3890e382fe7f79f9c2696f1e3a2b444d5b1bdc5c67868",
+  "privateInputs": "/home/gust/.local/state/abby-rnnoise-clinic-comparison/provider-inputs-v1.json",
+  "privateInputsSha256": "dc0625f03cc2bcea84ec52f1c84df7436f70a410b8e37b27378533383f0a14b8",
+  "privateRootAudit": "/home/gust/.local/state/abby-rnnoise-clinic-comparison/root-provider-assessment-v1.json",
+  "privateRootAuditSha256": "8fd0d08e7f2a0d970944b7275079bed5ecf76993492d0cc385f0c7c5316c08cb",
+  "sourceFiles": [
+    {
+      "path": "eval/transcription-noise-v1.json",
+      "sha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2"
+    },
+    {
+      "path": "src/voice/transcription-evaluation.ts",
+      "sha256": "3ea30413b80cd28ecf337aaf9ad156dc6d5fd946ee74f81678654f9f2a41943d"
+    },
+    {
+      "path": "src/voice/transcription-evaluation-gate.ts",
+      "sha256": "44f7973d65f8de8261db8030bfbb14ce827a0c14b9b35756c2640133c956357c"
+    },
+    {
+      "path": "src/voice/deepgram-streaming-transcription.ts",
+      "sha256": "1e96324d241c7fbd99079fe298561fd05e8d914e0e7c666282bd8529dd6b82df"
+    },
+    {
+      "path": "scripts/lib/deepgram-clinic-vocabulary.ts",
+      "sha256": "4e1407969f853faee6c59d028804f0ecffa7d3cfef5720034d3b73873f69528d"
+    }
+  ],
+  "upstream": {
+    "repository": "https://github.com/xiph/rnnoise",
+    "tag": "v0.2",
+    "tagObject": "c9137adac37fe21ede831f8a0aa31c17560c01e7",
+    "commit": "904a876dce1f9ab8860c0a5000ed151f9f6eef58",
+    "releaseAsset": "https://github.com/xiph/rnnoise/releases/download/v0.2/rnnoise-0.2.tar.gz",
+    "releaseAssetBytes": 2294308,
+    "upstreamPublishedArchiveDigest": null,
+    "tagSourcePins": {
+      "COPYING": "45d37ca1cdb278c088e1aa85e0e65ca3a534ed86a28dcc96ca16810248a61d35",
+      "examples/rnnoise_demo.c": "644064fcf3c1762e4d2e6341d59dc2db2e0cea4ba5d42e62767411e387014c98",
+      "include/rnnoise.h": "424d75212a781147f40666f511309d1c054d946eca44af2de4cd1b3346f09276",
+      "src/denoise.c": "a7759a51af88381d135ed90f6e73919a6f9540845e437749758f6f0dc608e4c4"
+    },
+    "model": "release-default; no training, model selection or parameter tuning"
+  },
+  "originalTransportFailure": {
+    "work": 1792864704270,
+    "tests": 11,
+    "pass": 8,
+    "fail": 3,
+    "status": "preserved failed",
+    "correction": "PROTOCOL_TRANSPORT_AMENDMENT_v2.json; use C standard FILE handles for Node socket stdin, preserve default model and frame/tail accounting",
+    "correctedOffline": {
+      "tests": 11,
+      "pass": 11,
+      "fail": 0
+    },
+    "directActualAdapterFakeProvider": {
+      "tests": 3,
+      "pass": 3,
+      "fail": 0
+    }
+  },
+  "selectedForRuntime": false,
+  "cleanSafetyAndRepresentativeQualification": "notRun; noisy gate failed",
+  "productionDefaultsChanged": false,
+  "releaseGate": "unverified",
+  "wholeGoalComplete": false,
+  "runAt": "2026-10-24T18:13:04.281Z",
+  "selectedKrispComparison": "notRun; known absent project developer key, no polling",
+  "equivalenceToKrispOrVapi": "notEstablished",
+  "comparisonToVocabularyBaseline": "Separate cohorts, not statistical significance; same four relevant adapter/vocabulary/evaluator/assessor sources and same corpus/keyterms verified",
+  "scope": {
+    "memoryMax": 536870912,
+    "peakBytes": 236888064,
+    "swapMax": 0,
+    "cpuQuota": "100%",
+    "allOwnedChildrenReaped": true,
+    "oomEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0"
+  }
+}

@@ -1,6 +1,18 @@
 # Execution progress and evidence
 
-## Native recovery and unresolved memo rehearsal, 24 October 2026
+## Native memo acceptance and configured recovery, 24 October 2026
+
+[PR599](https://github.com/garthtrickett/abby/pull/599) normally merged as `08325d8b`. All eight feature push/PR jobs and four actual resulting-main jobs passed. Independent root work `1792884866196` parsed all sixteen parent/own/main raw logs, preserving exact mode-skip identities, 45 original booking and 21 schema witnesses and the three new memo-participant controls. The main text suite has 5,966 tests (5,691 passed, 275 expected skips), and PostgreSQL has 7,033 (7,032 passed, one expected skip). Each job also preserves its separate six ordered controls. Only the native memo writer differs from the older PR596 runtime; the corrected parent still has 744 serving outputs.
+
+One separately consumed new-family native memo work `1792885025425` passed in 39 seconds. Cliniko returned 201 and the original receipt owner reported accepted. Fresh readback matched the original acknowledged booking, patient, inbound direction and exact interval. Denied read authority caused no native I/O, and the permanent opaque SQL purpose refused another POST. Full SQL privacy, one known memo archive, owned clinical-fixture cleanup and public-setting restoration passed. It used 102 native requests, one memo POST/archive and one Stripe account GET, with no Checkout or payment. A separate 32-byte MAC key stored with mode 0600 was persisted before possible native writing and remains retained; its value is not in evidence or source. Independent root `1792885186814` verified the aggregate/source/main16 evidence and exact database ID/name/socket-folder absence. Neither earlier uncertain family was retried or cleaned. Their original failures and the unqualified timed-out broader source sweep remain unchanged. See [the exact memo checkpoint](COMMUNICATION_MEMOS.md#corrected-native-memo-trial-24-october-2026).
+
+A separate configured-server native recovery work `1792885679694` passed in 67 seconds with113 native and 18 Stripe requests. The actual emitted serving entry and financial consumer ran against Cliniko demo and Stripe sandbox through a pinned private demo controller. The original server was SIGKILLed after the parent held the real Checkout response and before owner acknowledgement. A full preclaim SQL snapshot was restored into a distinct target. The cold configured server opened its listener, rediscovered native attempt history and independently inspected provider money under a separate synthetic recovery grant; it made no second Checkout, native attempt or replacement creation claim. The unrelated opaque claim survived; the third physical native-180-budget database was never restored. Full SQL and worker-output privacy passed, with no private retry files. Independent fixture cleanup closed the known unpaid Session once and removed only the owned native fixture. Root `1792885951222` independently verified all three database IDs/names/socket folders absent, the 1,148 frozen inputs and current 744 source/artifact graph. The killed owner's original creation acknowledgement remains unknown. See [declared configured-provider scope](STRIPE_PROVIDER_REHEARSAL.md#configured-serving-recovery-with-actual-demo-providers-24-october-2026).
+
+That new composed harness separately passed7 local controls and 11 entry controls, with independent raw-log/source/15-database cleanup and entry audits. Initial incomplete fake-native rows and an unsupported added positive producer-check expectation failed and remain failed. The corrected positive keeps the original native-history invariants; a distinct both-histories-missing negative requires fresh producer refusal and no money/delivery continuation. All original quota, snapshot, deadline and privacy assertions remain. These local controls are not additional actual provider attempts.
+
+Private aggregate evidence is `abby-native-memo-participant-rehearsal-v2/root-provider-audit-v1.json` (report SHA256 `84f635044a8d34c185c0b6c685ac4f5c81de510421c7d271b1441cbd2fb0a0f2`) and `abby-native-serving-restore-v4/root-provider-audit-v1.json` (report SHA256 `4895796358e36652336d7fd6911b644f1c7660c0055b5d6dcba0f4010498a1d7`) under the existing private state home. All actual/provider/root waits are reaped. Caller verification, playback and policy/producer grants remain synthetic. These are demo engineering observations, not real clinic author/viewer/retention, producer/quiescence/restore approval, external inbox, carrier/acoustic or activation acceptance. Explicit deadline/clinical expiry and manual-payment/waiver qualification remain separate; the full eleven-stage, thirteen-gap and twenty-eight-item reuse scope is unchanged.
+
+## Earlier recovery and unresolved memo rehearsals, 24 October 2026
 
 The unchanged 744-output PR596/main196 runtime has two separately scoped recovery observations. Actual Cliniko-demo/Stripe-sandbox source-worker work 1792855012120 passed its process-loss/full-preclaim-SQL-restore/no-replay assertions, followed by fresh read-only cleanup. It used 109 native requests plus four fresh GETs and eleven direct Stripe requests, with one Checkout, one native attempt and one fixture-only expiry. The original owner's creation acknowledgement remains unknown. All seventeen preparation/provider database IDs, names and socket folders were independently absent. The original physical native180 budget remained live and was not restored. This source qualification worker uses explicitly synthetic grants/setup time and does not represent the configured serving process.
 
@@ -6708,3 +6720,70 @@ about 28m36s. Its Node exit code is unavailable, so the original wrapper failure
 and unqualified whole-run status remain. Exact-head cloud delivery and corrected
 native acceptance remain pending. The original 11 stages, 13 gaps and 28 reuse
 selections retain their original completion requirements.
+
+
+## Separate RNNoise denoising comparison evidence, 24 October 2026
+
+A separately declared external evaluation streamed the original six noisy
+fixtures, three repeats each, through RNNoise v0.2's unchanged default model,
+then the existing Nova-3/public-vocabulary port. All eighteen recognitions
+completed: 6 match, 6 mismatch, 6 critical, 0 provider failures; WER 38.64%, final
+p95 388 ms, empty/truncated/delayed 0. The unchanged gate fails critical terms
+and WER. NS-001 and NS-006 are critical in all repeats; NS-005 is an ordinary
+mismatch. The untouched vocabulary-only baseline retains its own 18.18% WER,
+208 ms p95 and six different critical attempts. Separate cohorts establish no
+statistical significance or Krisp/Vapi equivalence.
+
+The original 8/11 offline failure is retained. A transport-only successor fixes
+Node socket/file-handle I/O while preserving the model, frame calculation,
+original final padding and thresholds. The same eleven assertions and three
+actual-adapter/fake-provider finality cases pass. The physical pipeline forwards
+all 2,679 original evaluation frames, including original padding, and measures
+resampling, the declared 10 ms model-only zero tail, closure and child reaping.
+Independent original-assessor recomputation verifies all eighteen results and
+92 frozen inputs. Provider work `1792865542545` ended with its quality-fail
+verdict; paired wait `96011` was reaped. Peak memory was 236,888,064 bytes under
+512 MiB/Swap0/CPU100%, with no OOM events and all owned children reaped.
+
+The [patient-free aggregate](../eval/baselines/deepgram-rnnoise-clinic-noise-20261024-v1.json)
+and [protocol](../eval/NOVA3_CLINIC_PROFILE.md#separate-rnnoise-comparison-24-october-2026)
+record this negative result. The raw report and hashes remain separately
+preserved in the external evaluation state. No model replay, tuning, clean or
+safety follow-on, new runtime profile or default activation follows. The
+selected Krisp test remains unrun for its known absent developer key. Existing
+memo uncertainty and every clinic/provider/author/viewer/retention/restore gate
+retain their own evidence; this speech observation resolves none of them.
+All eleven execution stages, thirteen gaps and twenty-eight reuse placements
+remain in scope. This documentation draft has no publication or CI claim.
+
+
+## Native memo request privacy canary follows the actual wire, 24 October 2026
+
+A source inspection found that the five existing emitted-adapter SQL primitive
+cases reconstructed the former six-field memo request as one privacy canary.
+The separate patient, content, key, authentication and authorization canaries
+were still present, and the synthetic native transport already retained the
+added participant fields. The full-request canary now captures the body sent
+by the actual emitted adapter, so it cannot silently drift when serialization
+changes. All seven canaries, every-column chunk scans, full SQL dump and raw,
+COPY-escaped, JSON-escaped and combined variants remain. No production adapter,
+permission, database schema, deadline, assertion or test case is removed.
+
+The same five cases pass: accepted, stored response loss, unstored response
+loss, parallel callers, and changed policy/key after uncertainty. Facts/grants
+and the native transport are synthetic; PostgreSQL and the 744 emitted parent
+artifacts are actual. SQL work `1792878232000` and its paired wait `56548`
+completed with exit0, five passes and no skips/cancellations. The one owned
+512 MiB socket-only database closed, and its actual ID, name and socket folder
+are absent. Node scope peak was 162,996,224 bytes under 512 MiB/Swap0,
+with the external database independently capped at 512 MiB/one CPU.
+
+Whole strict TypeScript work `1792877924223` and paired wait `39718` completed
+with exit0; scope peak was 1,876,836,352 bytes under 2 GiB/Swap0/CPU100%.
+The initial local attempt was refused by fresh host admission before compiler
+startup; its unchanged-cap refusal is preserved and is not a product failure.
+The changed test is outside the serving build, so no rebuild was needed; all
+744 parent outputs remain exact. These five local cases are not added to the
+separate speech-control or native-rehearsal counts and imply no Cliniko API,
+clinic-author/viewer/retention or full-call acceptance. Final source/facts
+metadata, review, publication and own/main qualification remain separate.
