@@ -1,5 +1,37 @@
 # Execution progress and evidence
 
+## Delivered waiver SDK and verified demo, 25 October 2026
+
+[PR600](https://github.com/garthtrickett/abby/pull/600) normally delivered as
+`cdef6262`; [PR601](https://github.com/garthtrickett/abby/pull/601) final source
+`e77828c1` then normally delivered as `dbe130b8`. Both have independently qualified
+own-head and actual-main checks with complete raw-log evidence. The original
+PR600 failed head and PR601 delivery-follower log-framing failure remain failed;
+the latter was repaired by requalifying the same CI logs, without a CI rerun.
+Current text is 5,978 tests/5,703 passed/275 expected skips; PostgreSQL is
+7,047/7,046/one expected skip. Each text/PostgreSQL job also passes its six
+separate ordered controls.
+Current 744 artifacts retain only the waiver-reader difference from PR600's
+normal parent. Source79 plus private causal3 retain their scoped qualification.
+
+One separate native demo work `1792918287646` passed on that exact runtime:
+103 native requests, one booking, one waiver draft POST/seal PATCH, six owned
+archives and one Stripe test-account GET. Original seal acknowledgement, exact
+current signed-waiver read, denied/withdrawn grant refusal, duplicate refusal,
+full-column/unfiltered-backup privacy, public restoration and cleanup passed.
+Independent root `1792918421494` passed and verified the database ID/name/socket
+folder absent. A local pre-entry permission refusal remains preserved; its
+corrected private unchanged-byte evidence selection passed17 before consumption.
+All waits are reaped; the new family/key remain consumed/retained, never replayed.
+The earlier uncertain waiver and memo families remain untouched.
+
+This closes the declared current native-waiver engineering exercise, not the
+clinic's approval of waivers, actual invoice/manual-payment mapping, external
+staff/mailbox receipt, memo access/retention, speech/carrier quality or activation.
+Caller/issuer grants and playback were synthetic; no money, message or clinical
+cancellation was sent. Full eleven-stage/thirteen-gap/twenty-eight-item scope is
+unchanged. See [provider evidence and limits](STRIPE_PROVIDER_REHEARSAL.md#delivered-waiver-sdk-and-native-demo-observation-25-october-2026).
+
 ## SQL backup canary correction, 25 October 2026
 
 The first PR600 head completed seven of eight checks. Its pull-request PostgreSQL job failed the ordinary class-cancellation `clinicalResponseLost` full-backup substring assertion after every data-column scan had passed; the same-head push PostgreSQL job passed. Both raw results remain retained. The failed log identifies neither the matching canary nor the backup location, so its exact historical cause is unproven and is not relabelled harmless.

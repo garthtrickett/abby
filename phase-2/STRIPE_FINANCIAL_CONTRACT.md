@@ -1151,3 +1151,13 @@ plus the same three private causal cases in one 82-case cohort. Fresh whole
 strict TypeScript and 744 outputs pass, with only the waiver reader different
 from PR600's actual normal parent. Provider and delivery acceptance remain
 separate; see the [new scoped evidence](STRIPE_PROVIDER_REHEARSAL.md#reader-clock-regression-and-revised-local-sdk-25-october-2026).
+
+### Delivered timing reader and scoped demo observation
+
+PR601 normally delivered final source `e77828c1` as main `dbe130b8`, with its own
+and independently resulting-main checks and raw logs qualified. A separate
+Cliniko-demo booking/draft/seal/current-read exercise then passed original ACK,
+exact binding, denied/withdrawn grants, duplicate refusal, full SQL privacy and
+owned cleanup. Synthetic issuer/admin approval does not approve clinic waivers,
+financial effects or invoice mappings. The earlier uncertain family stays
+retained; the new family is consumed. See [current evidence and limits](STRIPE_PROVIDER_REHEARSAL.md#delivered-waiver-sdk-and-native-demo-observation-25-october-2026).
