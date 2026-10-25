@@ -1,5 +1,34 @@
 # Cliniko integration: thirteen-gap implementation order
 
+## Readiness explanations and owner-designated demo backup, 25 October 2026
+
+The scoped R09 correction gives both existing automation setup screens shared
+reasons and next authorized actions from the current server readiness failure.
+The local panel's former generic-only refusal was reproduced before correction.
+Three source controls and both existing browser workflows pass, including the
+actual missing-media-test response, supervised next step and empty automation
+history after visiting or rejected enabling. Whole strict TypeScript and fresh
+serving emission pass; all 744 serving outputs match qualified parent main
+`1582b193`. This is local explanation evidence; final current-diff review,
+exact-head CI and normal delivery remain separate. It grants no readiness or
+admission and does not complete the R09 matrix. See
+[the scoped R09 record](KAREN_TO_ABBY_REUSE_AUDIT.md#r09-explain-readiness-using-one-current-read-model)
+and [execution evidence](EXECUTION_PROGRESS.md#current-readiness-reasons-on-both-setup-surfaces-25-october-2026).
+
+The owner subsequently chose another agent for the supervised demo's backup
+role. That browser-drive rehearsal is complete: primary non-acknowledgment,
+real-time escalation, backup acknowledgment and retries were observed and
+independently audited. The demo no longer awaits a human backup nominee.
+Its synthetic in-memory identity store and captured local inbox establish
+neither full process/session-database recovery nor external delivery or human
+clinic sign-off. The older practice-manager checkpoint below retains its
+then-current scope. See [the observed demo and limits](../deploy/voice/OPERATOR_RESPONSE.md#agent-operated-demo-backup-observation-25-october-2026).
+
+All thirteen gaps, eleven execution stages and twenty-eight reuse placements
+retain their applicable requirements. Actual clinic policy, staff/inbox,
+provider, acoustic/carrier, restore and activation acceptance remain separate;
+the cash/bank invoice rehearsal remains explicitly owner-deferred.
+
 **Stripe component evidence, 24 October 2026:** Real sandbox account/unpaid expiry and hosted paid/charge/receipt-reference checks passed. An authentic Endive CLI event exposed the original Basil snapshot incompatibility. Explicit Endive snapshot configuration now keeps Basil REST and all independent native permission and pending-work checks. Local qualification passes 56 source checks, two metadata checks, whole strict and 744 serving outputs, with 743 unchanged. The actual compiled HTTP handoff passes one real Stripe event with simulated native intent/observation/attempt, grants and exclusion; it does not establish real native durability or clinic acceptance, restore recovery or public ingress. Review, exact-head and independent resulting-main CI retain their separate requirements. No deployment or default activation follows. See [provider evidence and limits](STRIPE_PROVIDER_REHEARSAL.md).
 
 ## Current roadmap reconciliation, 23 October 2026
