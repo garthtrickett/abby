@@ -6679,7 +6679,7 @@ R23/gap3 adds an optional read-only selected systemd oneshot/timer diagnostic. S
 - Whole strict and runtime-only compilation passed in work1792752123897,6m49s. The supervisor then failed its wrong492-versus743 inventory comparison. All490 older outputs actually built were exact; this was no product-test/compiler failure. Its original guard omitted16 auxiliary probe/config files, separately reconciled against qualified parent during that run and after terminal. Frozen history was not rewritten.
 - Corrected fixture-inclusive build1792752773109 passed in2m28s. Expanded1811-input guards qualify743 outputs, all741 prior outputs exact plus two optional checker outputs. The build target was corrected without repeating unchanged whole strict.
 - Actual compiled checker/real systemd source1792753047651 passed seven cases in38s, no skips: never-run calendar; calendar completion; stopped schedule; held new work over old success; owned SIGKILL; reset-failed; nonzero exit. Every temporary unit and fixture file was verified removed. Owner-scope peak21,045,248B/256MiB; separate command/anchor caps64MiB/8MiB, peaks not captured. No provider/DB request, production installation or alert send.
-- Fast-forward9c49a6f to actually normally merged docs parent3213032 preserved all1811 sources and743 artifacts. PR592 own8/raw logs/counts passed; actual-main4 remain tracked. New R23 final metadata/review, own exact-head CI and ordinary delivery remain required.
+- Fast-forward9c49a6f to actually normally merged docs parent3213032 preserved all1811 sources and 743 artifacts. PR592 own8/raw logs/counts passed; actual-main4 remain tracked. New R23 final metadata/review, own exact-head CI and ordinary delivery remain required.
 
 See [contract and remaining acceptance](QUEUE_WORK_FRESHNESS.md). These separate cohorts are not a full-call or roadmap pass. Real units/source/cadence/receiver, independent host coverage, approved primary/backup responsibility and human acceptance remain open. No default/patient-traffic activation follows.
 
@@ -6798,3 +6798,79 @@ The changed test is outside the serving build, so no rebuild was needed; all
 separate speech-control or native-rehearsal counts and imply no Cliniko API,
 clinic-author/viewer/retention or full-call acceptance. Final source/facts
 metadata, review, publication and own/main qualification remain separate.
+
+
+## Native waiver precision finding and local correction, 25 October 2026
+
+A distinct real-demo waiver attempt failed its fixture's post-PATCH seal
+validation before the production waiver reader ran. Its one draft/one seal are
+uncertain and never replayed; 76 native requests and one Stripe account GET created
+no Checkout/payment, message or clinical cancellation. Public settings were
+restored and the owned database was independently absent; native test records
+and the separately persisted owner-only signing key remain retained for review.
+The original failed report remains failed.
+
+Three separately qualified current-state GETs verified the canonical signature
+and exact financial-intent/waiver-record binding. A no-fraction native timestamp
+precedes the signed approval by 5 ms. The decision was already expired at the
+actual inspection time and supplied no current approval or original PATCH ACK.
+The read-only inspector's database was independently absent. See the
+[provider scopes and hashes](STRIPE_PROVIDER_REHEARSAL.md#native-waiver-attempt-and-read-only-precision-diagnosis-25-october-2026).
+
+The production reader's analogous strict comparison was independently reproduced:
+30 reader cases yielded 27 passes and exactly three whole-second failures. The
+narrow correction treats an un-fractioned native timestamp as its recorded second
+while retaining exact signed/current/expiry times and fractional ordering. It
+passes 76 reader/signature/settlement controls across three source files, with
+nine new witnesses and no skips/cancellations. Whole strict and the serving
+build pass locally; 744 outputs include only the changed waiver reader, with 743
+matching qualified PR599 outputs. Independent recomputation verifies original
+RED snapshots, current pass titles and every output hash. New provider acceptance
+and normal-parent/own-head/resulting-main delivery remain unqualified here.
+All eleven stages, thirteen gaps and twenty-eight reuse placements remain in scope.
+
+
+## Waiver correction integrated on the normal PR600 parent, 25 October 2026
+
+PR600 normally merged as `cdef6262eef049fec736f8c0e73c0cceb36928f3`
+after all eight current-head checks and their raw logs passed. The resulting
+main tree exactly matches `749b9d2c`; its independent main checks and root audit
+remain pending at this checkpoint. Local integration can proceed while those
+checks run; publication still requires the verified parent delivery.
+
+The original nine-file waiver draft, clean index, patch and all 744 emitted
+outputs were separately preserved before fast-forwarding the same local branch
+and applying the combined documentation. The production reader and both changed
+test files match their earlier qualified 76-control component byte for byte.
+No component tests or actual provider attempt were replayed.
+
+Fresh whole strict TypeScript and the serving build pass on the combined source
+in tracked work 1792900515744, with its actual exit 0 and paired wait reaped.
+All 744 outputs were rehashed against PR600's graph: only the waiver reader
+changed; the other 743 are exact. The reader itself matches the separately
+qualified component. The bounded run took 5m27s and peaked at 1,792,933,888 bytes
+under its 2 GiB cap, with no OOM/high/max events. Current facts/scenario checks,
+final review, publication and independent own/main delivery remain separate.
+The full eleven stages, thirteen gaps and twenty-eight reuse placements remain.
+
+
+## Independent waiver reader clock, 25 October 2026
+
+Unpublished `491bc61f` was held after an offline independent-clock counterexample:
+valid approval at millisecond 5, issuer 6 and reader 4 wrongly passed the coarse
+native-update comparison. The private three-case RED preserved one exact
+failure and two positive controls without provider access. An explicit
+approval-versus-reader-observation comparison plus three permanent boundaries
+now passes 79 source controls and the same three private causal witnesses in
+one 82-case cohort. All original 76 title multiplicities remain, with zero
+skips, failures or cancellations. The old passing reviews/build remain
+historical and never authorized publication of this revised source.
+
+Fresh strict and serving work 1792903652708 exit0/reaped qualifies the new graph:
+744 outputs, only the reader changed against normal PR600 parent `cdef6262` and 743
+exact. The old `491bc61f` runtime is separately preserved. Timing semantics, grants,
+expiry and the original uncertain native family retain their own scopes.
+See the [complete source/clock trace and evidence](STRIPE_PROVIDER_REHEARSAL.md#reader-clock-regression-and-revised-local-sdk-25-october-2026).
+Current facts/scenario checks, new fixed-head review and normal publication/
+cloud/resulting-main/root qualification remain separate. The original eleven
+stages, thirteen gaps and twenty-eight reuse placements remain in scope.

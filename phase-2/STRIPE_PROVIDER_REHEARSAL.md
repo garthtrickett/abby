@@ -148,3 +148,118 @@ The run used 113 native and 18 Stripe requests: one Checkout, one native Checkou
 The exact composed setup separately passes 7 offline controls and 11 entry controls, including consumed state before credential reads and refusal to retry an uncertain executor. Initial fake-native metadata and positive producer-check expectation failures remain preserved. The corrected positive uses the original history-based no-replay invariants; the distinct missing-histories negative actually checks fresh producer refusal and permits no cold money/delivery continuation. No quota, deadline, snapshot or privacy assertion was widened. These controls are separate from the single actual provider attempt.
 
 Private aggregate provenance is `abby-native-serving-restore-v4/root-provider-audit-v1.json`, report SHA256 `4895796358e36652336d7fd6911b644f1c7660c0055b5d6dcba0f4010498a1d7`, under the existing private state home. This new observation directly qualifies the stated configured-provider demo journey; the older source-worker and simulated-provider proofs retain their own scopes. Real clinic producer/quiescence/restore approval, manual-payment/waiver authority, external delivery, staff, carrier/acoustic and activation acceptance remain open.
+
+
+## Native waiver attempt and read-only precision diagnosis, 25 October 2026
+
+One separate Cliniko-demo family acknowledged its booking and native financial
+observation, then made one unsigned waiver-draft POST and one signed seal PATCH.
+Its private fixture stopped at `waiverSealUncertain` before the production waiver
+reader ran. The attempt remains failed/uncertain: 76 native requests, one Stripe
+account GET, zero Checkout/payment/expiry operations and zero native archives.
+Its public booking configuration was restored, SQL privacy passed and the owned
+database ID/name/socket directory were independently absent. The test records
+remain retained for review. A separate 48-byte Ed25519 signing credential was
+persisted, synced and reloaded before possible writes and remains owner-only.
+No existing staff notes, external messages or clinical cancellations were changed.
+
+A separately qualified read-only inspector then made exactly three own-family
+GETs and no mutations or Stripe requests. The stored canonical signature and
+exact intent/waiver-record binding verified; the current list and fresh record
+agreed. This record's `updated_at` has no fractional seconds and falls 5 ms before
+the signed approval. The original acknowledgement is not recreated. At this
+later observation the decision was expired; its clock was not rewound and no
+current approval, replay or cleanup authority was granted. The inspector's
+separate database was independently absent after termination.
+
+Twenty-seven fixture/key/entry/composed-SQL controls preceded the failed attempt;
+five distinct diagnostic controls preceded the read-only inspection. These are
+separate scopes, not a green native waiver lifecycle. Source regression then
+reproduced three whole-second failures. The [narrow correction](STRIPE_FINANCIAL_CONTRACT.md#native-waiver-record-time-precision-25-october-2026)
+passes 76 source checks, whole strict and 744 emitted outputs locally;743 outputs
+match the qualified parent. Publication, actual corrected-provider qualification,
+clinic issuer/supersession authority, invoice/manual-payment mapping, staff and
+activation acceptance remain open. The earlier successful memo and configured
+restore rehearsals keep their original scopes.
+
+Private provenance remains under `abby-native-waiver-rehearsal-v1` in the existing
+state home: failed report SHA256 `a4249c8b71c957ca6f5f5c483f5ce84d52f435494335fdb64d4affac71ef82c5`; read-only report SHA256
+`6ea35299a57cd36272e6971c8ff1dabb9087df71ce90ac4ebc62718b2787b356`. Independent assessments are `root-provider-audit-v1.json` and
+`root-inspection-audit-v1.json`. The failed report and retained namespace are not
+rewritten by the later source correction.
+
+
+### Corrected private preparation and integrated SDK, 25 October 2026
+
+A new, separate rehearsal family is qualified only offline: fifteen fixture
+controls, six composed disposable-PostgreSQL cases, ten durable key/one-shot
+controls and ten source-selected entry controls pass in distinct scoped runs.
+An independent audit confirms a direct CLI invocation refuses to launch. The
+six databases and temporary synthetic key directories are independently absent;
+no actual new signing key was provisioned, project credentials read or provider
+called. These 41 controls and the separate CLI refusal do not establish a real
+native waiver lifecycle or delivery attestation. An initial missing-helper
+preparation and a later red-case wrapper assertion failure remain failed
+historical evidence; the paired green and narrow source delta retain their own
+scope. The original uncertain family's records and credential remain untouched.
+
+The same production reader and changed test bytes are now locally integrated
+on PR600's normal `cdef6262` parent. Fresh whole strict and 744 outputs pass,
+with only the waiver reader different from that parent and 743 exact. Parent
+independent main/root qualification, corrected SDK review/delivery and an
+explicitly rebound provider entry are still required before a new actual trial.
+Private preparation provenance is `abby-native-waiver-rehearsal-v2` under the
+existing state home; independent results are `root-offline-result-v1.json`,
+`root-sql-result-v1.json` and `root-entry-result-v1.json`. These do not change
+any original failed-provider verdict, expiry, cleanup or clinic authority.
+
+
+## Reader-clock regression and revised local SDK, 25 October 2026
+
+Further source inspection of unpublished `491bc61f` found that issuer matching
+binds account/source identity without coupling clock functions. The issuer
+validates signed approval at its own start/end times; the native reader captures
+its own observation separately. Exact native update ordering previously implied
+approval was no later than that observation. The coarse-second comparison needed
+an additional explicit reader-time check to preserve that property.
+
+A frozen offline reproduction used native update millisecond 0, valid signed
+approval 5, issuer observation 6 and reader observation 4. It wrongly published
+a positive decision despite the issuer and reader clocks differing by only two
+milliseconds. Work 1792903197075 records intentional reproduction: wrapper exit0,
+Node exit1, three cases with two passes and exactly the before-approval failure.
+Equal/after positive controls passed. No provider, database or project credential
+was involved. This is a separate code finding, not a new explanation or recovered
+acknowledgement for the earlier real-demo fixture failure.
+
+The narrow fix explicitly rejects approval later than the reader's unchanged
+canonical observation, alongside its existing update/expiry/current-grant
+checks. Work 1792903460383 passes all 82 cases: 79 source reader/signature/
+settlement controls, including three new permanent boundaries, plus the same
+three private causal witnesses. The original 76 title multiplicities are
+retained; none was removed or skipped. The source change remains one comparison
+in the native reader, with no added I/O, write, replay or effect authority.
+
+Fresh whole strict and serving build work 1792903652708 passed in 6m46s, peaking
+at 1,737,658,368 bytes under 2 GiB with no OOM/high/max events. All 744 outputs
+were rehashed against the normal PR600 `cdef6262` parent: only the waiver reader
+changes, with 743 exact. Earlier `491bc61f` output and review evidence are retained
+as historical; that candidate was never published. Refreshed facts/review,
+parent independent main/root qualification and corrected SDK own/main delivery
+remain separate. The twelve new permanent witnesses add twelve cases to each
+normal full profile; the private three are not part of those public totals.
+
+Earlier 41 offline controls and CLI refusal retain their original source bindings.
+Their old reader-hash entry cannot be used with this revised runtime. A successor
+source-bound entry and current grants, account/family exclusions and durable
+key preparation are required after actual SDK delivery before a new provider
+trial. The original uncertain records, expired citation, credential and failed
+provider report remain untouched; no cleanup or retry authority follows.
+
+Private provenance is `abby-waiver-reader-clock` in the existing state home:
+`red-result-v1.json`, `green-result-v1.json`, `build-result-v1.json` and their
+actual reaped terminal receipts. The same private test source is bound across
+RED and GREEN. Its RED log SHA256 is
+`5a5236e4c9d305c75b86e4a30c0d0b2a5ea54acca729c886e635e5a5a97af027`;
+GREEN log SHA256 is
+`fa0f3cc580aa8149afc1b54bbd5707fb1362ae7df3dd871d4357ae63ad4ce478`.

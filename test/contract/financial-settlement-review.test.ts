@@ -90,3 +90,15 @@ test("abort bounds a held independent record mapping without private native tran
   const stop = new AbortController(), pending = review.allows(f.context, "collect", stop.signal, async () => true, () => true);
   await ready; stop.abort(); assert.equal(await pending, false); assert.equal(f.state.gets, 0);
 });
+
+
+test("second-resolution native waiver remains a positive settlement observation with independent effect grants", async t => {
+  const f = await fixture(); t.after(f.close);
+  f.row.notes = f.format({ ...f.decision, approvedAt: "2026-11-01T09:30:00.005Z" });
+  f.row.updated_at = "2026-11-01T09:30:00Z"; f.state.withWaiver = true;
+  assert.equal(await f.check("expireCheckout"), true, "the current native waiver must be read successfully");
+  assert.ok(f.queries.length >= 3);
+  assert.equal(await f.check("collect"), false, "a positive waiver must not permit the original collection");
+  f.state.completeGrant = false; const before = f.state.gets;
+  assert.equal(await f.check("expireCheckout"), false); assert.equal(f.state.gets, before);
+});
