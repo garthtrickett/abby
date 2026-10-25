@@ -2,7 +2,7 @@
 
 The [clinic setup and rehearsal command](CLINIC_SETUP_AND_REHEARSAL.md) supplies a twelve-scenario local worksheet pinned to the current committed source and six owner configuration areas. It records self-reported staff observations only; missing configuration, failed/unrun scenarios and source drift remain visible. It neither replaces the observations below nor supplies activation authority.
 
-Status: proposal only, updated23October2026. Full current-candidate acceptance
+Status: proposal only, updated25October2026. Full current-candidate acceptance
 has not been executed. Earlier scoped demo rehearsals are recorded below.
 This supplies the manual-test proposal required by [execution stage11](EXECUTION_ORDER.md).
 It does not activate a clinic or authorize provider mutations, real mail,
@@ -29,12 +29,37 @@ The user remains the primary owner and delegated the backup role choice to the
 implementation agent. The selected backup is the clinic practice manager. Where
 that role does not exist, the clinic's senior receptionist can fulfil it when a
 real staff member is nominated during setup. This resolves the role choice only.
-Before the rehearsal, identify that person and verified alert destination
+Before a clinic-staff rehearsal, identify that person and verified alert destination
 privately, bind a distinct clinic-approved backup actor in the same scope, and
 observe independent sign-in and explicit acknowledgment after primary
 non-acknowledgment. A saved inbox item or notification receipt does not prove
 human responsibility. No account grant, paging or alert send has occurred from
 recording this choice. See the [operator response contract](../deploy/voice/OPERATOR_RESPONSE.md).
+
+### Owner-designated agent demo backup, 25 October 2026
+
+The owner subsequently directed another agent to perform the demo backup role
+through browser drive or the API. That owner-designated demo role is now
+exercised. Real clinic staffing, external delivery and human acceptance remain
+separate.
+
+The agent signed distinct synthetic primary and backup accounts into the
+actual TLS operator application through captured local sign-in messages. The
+primary never acknowledged. After 60.227 actual monotonic seconds, the backup
+explicitly acknowledged through the browser. A deliberately lost committed
+response, acknowledgment retry, receiver retry and application reconstruction
+preserved version 1 and the original two-minute responsibility deadline.
+Early backup, late primary, spoofed actor, foreign origin, removed membership
+and withdrawn approving-role actions were refused. The parent independently
+checked the raw steps, durable versions, screenshots, source/artifact hashes
+and cleanup. See [the scoped observation](../deploy/voice/OPERATOR_RESPONSE.md#agent-operated-demo-backup-observation-25-october-2026).
+
+The sign-in store was an in-memory fixture retained across application
+reconstruction; this run did not test full process/session-database recovery.
+No Cliniko or Stripe request, external message, patient action or deployment
+occurred. It does not execute the other clinic acceptance rows below. The
+cash/bank-payment rehearsal remains pending by the owner's explicit choice
+because no synthetic invoice with a recorded payment is available.
 
 ### Existing authorized Cliniko demo account
 

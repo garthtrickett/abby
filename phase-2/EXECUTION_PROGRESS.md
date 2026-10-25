@@ -1,5 +1,36 @@
 # Execution progress and evidence
 
+## Agent-operated demo backup handoff, 25 October 2026
+
+The owner directed another agent to act as the demo backup through browser
+drive or the API. The separate agent used browser-drive with fresh isolated
+primary/backup contexts and the actual emitted TLS, identity, receiver,
+responsibility workflow and HTTP/UI. Primary non-acknowledgment lasted
+60.227 actual monotonic seconds before backup assignment and an explicit UI
+acknowledgment. A lost committed reply, acknowledgment/receiver retries and
+application reconstruction retained one acknowledgment, version 1 and its
+original two-minute deadline. Early/late/wrong/removed/withdrawn actor and
+origin checks remained restrictive.
+
+Work `1792934942902` passed, its paired wait completed, and its owned scope,
+listeners and contexts closed. The parent independently inspected the actual
+exit, raw ten-step log, durable versions, all seventeen evidence-file hashes,
+three screenshots, unchanged 744 runtime artifacts and owned/frozen sources.
+No product source or provider record changed. This is a new observation on
+the qualified runtime used by PR601 and documentation main `f66a9f77`, whose
+own eight, actual-main four and sixteen raw parent/own/main logs are qualified.
+It is not new CI evidence for this documentation patch.
+
+The in-memory synthetic identity store and captured test inbox persist only
+within that rehearsal process; the reconstruction is not a full process or
+session-database restart. No external message, Cliniko/Stripe request, patient
+action, activation or human sign-off occurred. The owner-designated demo role
+has been exercised; real deployment and other clinic acceptance requirements
+remain separate. The cash/bank invoice rehearsal stays owner-deferred. All
+eleven stages, thirteen gaps and twenty-eight reuse placements remain.
+See [the scoped operator record](../deploy/voice/OPERATOR_RESPONSE.md#agent-operated-demo-backup-observation-25-october-2026)
+and [acceptance boundaries](MANUAL_ACCEPTANCE_PROPOSAL.md#owner-designated-agent-demo-backup-25-october-2026).
+
 ## Delivered waiver SDK and verified demo, 25 October 2026
 
 [PR600](https://github.com/garthtrickett/abby/pull/600) normally delivered as
