@@ -1,5 +1,34 @@
 # Execution progress and evidence
 
+## Appointment-read explanations when staff work is unavailable, 25 October 2026
+
+R05's positive inability-to-check requirement exposed a wording defect: an
+appointment-provider failure correctly remained a failed read, but the
+standalone caller heard only that staff work was unavailable. The revised
+expectation failed on the original transition at the first synthetic 503;
+the red result does not claim that the later timeout branch ran.
+
+Appointment-read failures and invalid read evidence now retain their public
+failure explanation before the existing staff-route suffix. Available staff
+wording is unchanged. Unavailable staff routes still create no staff work;
+unverified callers receive no appointment details, and a genuinely empty read
+keeps its distinct no-appointment wording. No effect, permission, deadline or
+booking rule changes.
+
+All 17 focused source controls pass, including both provider-failure variants,
+the existing protected voice reads and a ten-case staff-mode/read-outcome
+matrix. Seven separately selected SQL-ledger controls pass without rerunning
+their memory counterparts. Whole strict TypeScript and fresh serving emission
+pass: only `src/core/transition.js` changes among 744 runtime files; the other
+743 match reviewed local parent `6fe1524a` exactly.
+
+This is local engineering on an unpublished reviewed parent. Final metadata,
+review, actual-parent integration and this follow-up's CI/delivery remain gates.
+It does not qualify every R05 serving/budget/retirement/outbound requirement or
+real-provider, acoustic, carrier or supervised-clinic acceptance. All eleven
+stages, thirteen gaps and twenty-eight reuse placements remain in scope. See
+[R05](KAREN_TO_ABBY_REUSE_AUDIT.md#r05-keep-unknown-reads-distinct-from-successfully-empty-reads).
+
 ## Current-task receipts and mixed action outcomes, 25 October 2026
 
 The R06 cross-reader regression exposed a receipt-selection defect: after
