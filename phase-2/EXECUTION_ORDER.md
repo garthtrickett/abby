@@ -1,5 +1,19 @@
 # Abby execution order
 
+**Verified waiver demo and SDK delivery, 25 October 2026:** PR601 final `e77828c1`
+normally merged as `dbe130b8`; its own eight checks, actual-main four checks and
+sixteen raw parent/own/main logs are independently qualified. One separate
+Cliniko-demo workflow passed original booking/seal acknowledgement, exact signed
+waiver read, denied/withdrawn grants, duplicate refusal, full SQL privacy and
+owned cleanup: 103 native requests, one booking/draft/seal, six archives and one
+Stripe test-account GET, with no money or message. The prior entry-permission
+failure and original uncertain native family remain preserved. The consumed new
+family is not replayable. Synthetic caller/issuer authority does not satisfy
+real clinic/staff/invoice/mail/access/retention/speech/carrier or activation
+acceptance. All eleven stages, thirteen gaps and twenty-eight reuse placements
+remain. See [current evidence](STRIPE_PROVIDER_REHEARSAL.md#delivered-waiver-sdk-and-native-demo-observation-25-october-2026).
+
+
 **Current waiver timing correction, 25 October 2026:** A further offline check of unpublished `491bc61f` reproduced an independent-clock gap: a currently valid issuer could accept an approval later than the native reader's own observation. An explicit reader-time comparison now passes 79 source controls plus the same three private causal cases; all original 76 title multiplicities remain. Fresh whole strict and 744 serving outputs pass, with only the reader changed from the actual PR600 `cdef6262` parent and 743 exact. The earlier unpublished build/reviews remain historical. Refreshed metadata/review/delivery, parent independent main/root qualification, a corrected real-provider trial and clinic/staff acceptance remain separate. All eleven stages, thirteen gaps and twenty-eight reuse placements remain in scope. See [the clock finding](STRIPE_PROVIDER_REHEARSAL.md#reader-clock-regression-and-revised-local-sdk-25-october-2026).
 
 **Native waiver precision checkpoint, 25 October 2026:** One separate demo waiver attempt remains failed/uncertain at the fixture seal check; its records and signing credential are retained, its public setting restored and its database removed. Three later read-only GETs verified a stored signature and intent/record binding and exposed a whole-second timestamp 5 ms before approval; the expired citation supplies no current approval or recovered ACK. The analogous source comparison is corrected locally with 76 controls, strict TypeScript and 744 outputs (one waiver reader changed, 743 exact). Corrected real-provider, normal delivery and clinic/staff acceptance remain separate. All eleven stages, thirteen gaps and twenty-eight reuse selections remain in scope. See [the scoped evidence](STRIPE_PROVIDER_REHEARSAL.md#native-waiver-attempt-and-read-only-precision-diagnosis-25-october-2026).

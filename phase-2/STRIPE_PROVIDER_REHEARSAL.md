@@ -1,5 +1,77 @@
 # Stripe sandbox provider rehearsal
 
+## Delivered waiver SDK and native demo observation, 25 October 2026
+
+[PR601](https://github.com/garthtrickett/abby/pull/601), final source
+`e77828c13f10b5d1c7b77734c34473079187f844`, normally merged as
+`dbe130b8d5107d3d9b6678fd159be064ec632bc4`. All eight own-head and four actual-main
+jobs passed. Independent audit of sixteen parent/own/main raw logs verifies
+exact skip identities, the original booking/schema witnesses and twelve new
+public waiver cases. Each current text profile reports 5,978 tests: 5,703 passed
+and 275 expected skips. PostgreSQL reports 7,047: 7,046 passed and one expected
+skip. Each text/PostgreSQL job also passes its separate six ordered controls.
+The 79 source plus
+three private causal cases remain a separate cohort. All 744 serving artifacts
+are qualified; only the waiver reader differs from normal PR600 parent
+`cdef6262`, with 743 exact.
+
+The original delivery follower ended exit1 after green CI because its GitHub
+log parser omitted a skipped TAP record preceded by a transport byte-order mark.
+A successor parser passed twelve controls and requalified the same retained
+logs, without rerunning CI or changing source. The original exit1 remains
+preserved. The subsequent independent audit passed and verified the actual
+normal merge. Interim `491bc61f` was unpublished at the earlier inspection; it
+is now an ancestor included in final source `e77828c1`, never a separately
+published remote candidate.
+
+A local entry attempt, work `1792917836790`, then failed before importing the
+credential loader or consuming the rehearsal: strict file ownership checks
+refused group-writable delivery evidence. No new key, consumed marker, native
+report or database ownership file existed. The successor uses four private
+mode0600 copies with identical bytes, binding both copies and canonical
+originals by hash. Historical evidence and its permissions are untouched.
+Sixteen existing selection controls plus one actual persisted-evidence positive
+control passed in work `1792918220454`, without provider calls or consumption.
+
+One still-unused, separate Cliniko-demo family then completed the actual native
+workflow in work `1792918287646` (exit0, 1m51s). The original booking and financial
+observation were acknowledged. One waiver draft POST and one seal PATCH retained
+the original response receipt; the current production reader verified its exact
+signed intent, booking target, amount and currency. Denied read and withdrawn
+issuer grants caused no native I/O; a second draft/seal invocation was refused.
+Every application-column scan and the full unfiltered SQL backup passed.
+Known owned fixture cleanup, six archives and public-setting restoration passed.
+The run used 103 physical native requests under the unchanged 180 ceiling and
+one Stripe test-account GET. It created no Checkout, payment, expiry, message,
+carrier call or clinical cancellation.
+
+Independent work `1792918421494` passed after the provider wrapper and its paired
+wait completed. It rehashed 6,430 inputs and all 744 artifacts, checked the
+qualified SDK evidence, original receipt/bindings, privacy assertions and exact
+database ID/name/socket-folder absence. The separate persisted Ed25519 issuer
+credential remains retained with mode0600; that audit inspected metadata only.
+The provider Node scope peaked at 146,235,392 bytes under 512 MiB/CPU50%/Swap0,
+with no OOM/high/max events. External PostgreSQL had a separate 512 MiB cap;
+its peak was not measured. All actual/provider/audit waits are reaped.
+
+Private aggregate provenance is `abby-native-waiver-rehearsal-v2` under the
+existing state home: `provider-result-v1.json`, `provider-work-terminal-v5.json`,
+`root-provider-audit-v5.json` and `root-provider-terminal-v5.json`. Report SHA256
+is `2f774434eb4d4a28b0c6667aac04e7109babe54d4ee8229233376011aad46e70`;
+independent audit SHA256 is
+`d8946fb28a807e0eaf04c37de26f10b72c8199da6df1723ee477f9a58c2f7be4`.
+The family is consumed and must not be replayed. The original uncertain waiver
+family and earlier memo families remain untouched, with their failed verdicts
+and retained credentials/records.
+
+This is a demo engineering observation with synthetic caller verification,
+playback, issuer approval and clinic grants. It establishes neither actual
+clinic waiver approval/supersession nor cash/bank invoice mapping, staff or
+mailbox receipt, memo access/retention, speech/carrier quality or activation.
+It is not a real-money or clinical-expiry test. Those acceptance requirements
+and all eleven stages, thirteen gaps and twenty-eight reuse placements remain.
+
+
 Observed on 24 October 2026 using the owner's privately supplied test-project
 key. Initial component checks used normally merged PR595 and the subsequent
 snapshot-compatibility candidate. [PR596](https://github.com/garthtrickett/abby/pull/596)
@@ -244,7 +316,8 @@ Fresh whole strict and serving build work 1792903652708 passed in 6m46s, peaking
 at 1,737,658,368 bytes under 2 GiB with no OOM/high/max events. All 744 outputs
 were rehashed against the normal PR600 `cdef6262` parent: only the waiver reader
 changes, with 743 exact. Earlier `491bc61f` output and review evidence are retained
-as historical; that candidate was never published. Refreshed facts/review,
+as historical; it was not published as a standalone remote candidate. Its commit
+is included in the later delivered final head described above. Refreshed facts/review,
 parent independent main/root qualification and corrected SDK own/main delivery
 remain separate. The twelve new permanent witnesses add twelve cases to each
 normal full profile; the private three are not part of those public totals.

@@ -118,6 +118,22 @@ No single candidate currently qualifies all thirteen gaps. Pin the actual
 then-current source/build and its completed evidence before any separately
 authorized rehearsal; none of these hashes constitutes activation approval.
 
+### Signed-waiver demo engineering observation, 25 October 2026
+
+The existing demo account completed a separate current-runtime booking and
+signed-waiver exercise: exact original receipt and current read, independent
+grant refusal, no duplicate write, full SQL privacy and owned cleanup passed.
+The provider run used 103 native requests, one booking/draft/seal, six archives
+and one Stripe test-account GET, with no money or message. Its independent audit
+passed and all waits are reaped. The prior uncertain family's records/key and
+failed verdict remain retained; the successful new family is consumed.
+
+Caller verification, playback, issuer/admin approval and clinic grants were
+synthetic. This supplies engineering evidence for the selected gap11b waiver
+path, not actual staff approval, complete financial decisions, cash/bank invoice
+mapping or any other operator row. Keep the observations below open until their
+actual scoped evidence exists. See [the exact candidate, hashes and limits](STRIPE_PROVIDER_REHEARSAL.md#delivered-waiver-sdk-and-native-demo-observation-25-october-2026).
+
 ## Operator observations
 
 Run only the rows supported by that exact candidate and separately authorized
