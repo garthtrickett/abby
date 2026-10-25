@@ -113,6 +113,7 @@ const taskSource = taskSequence ? await syntheticTaskSequence({ ...c, cliniko: {
 const taskNative = taskSequence ? syntheticMultiTaskBookingProvider() : undefined;
 const publicInputs: string[] = [], privateInputs: string[] = [];
 let denied = false, lostWrite = false, mailLost = false, mutatePolicy = false, intakeFieldMismatch = false;
+let appointmentReadMode: "shown" | "unavailable" | "empty" = "shown";
 let readCorrectionStatus: (() => Promise<string | undefined>) | undefined;
 process.on("message", message => {
   if (!message || typeof message !== "object" || !("kind" in message)) return;
@@ -125,6 +126,11 @@ process.on("message", message => {
   }
   if (message.kind === "mismatchIntakeField") intakeFieldMismatch = true;
   if (message.kind === "denyPermission") denied = true;
+  if (operation === "appointments.read" && message.kind === "appointmentReadMode" && "mode" in message &&
+      (message.mode === "shown" || message.mode === "unavailable" || message.mode === "empty")) {
+    appointmentReadMode = message.mode;
+    process.send?.({ kind: "appointmentReadModeChanged" });
+  }
   if (message.kind === "loseWrite") lostWrite = true;
   if (message.kind === "loseMail") mailLost = true;
   if (message.kind === "changePolicy") mutatePolicy = true;
@@ -191,6 +197,10 @@ const taskPort = taskNative?.wrap(calendarPort);
 return async (value, init) => {
   const url = new URL(String(value)), method = init?.method ?? "GET";
   process.send?.({ kind: "providerRequest", method, path: url.pathname, scope: c.receipt.scope });
+  if (operation === "appointments.read" && method === "GET" && url.pathname === "/v1/individual_appointments") {
+    if (appointmentReadMode === "unavailable") return new Response(null, { status: 503 });
+    if (appointmentReadMode === "empty") return Response.json({ total_entries: 0, individual_appointments: [] });
+  }
   if (taskPort) {
     if (method !== "GET") process.send?.({ kind: "providerMutation", method, path: url.pathname, body: JSON.parse(String(init?.body)) });
     if (lostWrite && method === "POST" && url.pathname === "/v1/individual_appointments") taskNative!.loseResponse();

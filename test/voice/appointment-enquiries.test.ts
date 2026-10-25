@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ok } from "../../src/core/model.ts";
 import { createOpenAIClinicalIntentResolver } from "../../src/standalone/openai-clinical-intent.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
@@ -149,29 +150,77 @@ test("E2E-314 agent enquiry commands keep proof private, honor write stop and re
 
 test("E2E-314 a signed caller moves from enquiry to booking only with new operation verification and exact confirmation", { timeout: 60_000 }, async () => {
   await withDisposablePostgres(async db => {
-    const f = await enquiryThenBookingFixture(); f.flow.dispose();
+    for (const unavailable of [false, true]) {
+      const f = await enquiryThenBookingFixture(); f.flow.dispose();
+      let call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined;
+      try {
+        let failRead = unavailable;
+        const config = { ...f.flowConfig, fetchPort: async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+          const url = new URL(String(input));
+          if (failRead && (init?.method ?? "GET") === "GET" && url.pathname === "/v1/individual_appointments" &&
+              url.searchParams.getAll("q[]").some(filter => filter.startsWith("starts_at:>"))) return new Response(null, { status: 503 });
+          return f.flowConfig.fetchPort!(input, init);
+        } };
+        call = await clinikoWorkflowVoiceFixture(db, config, owner => createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-key", model: "synthetic-model",
+          clinicDate: () => "2026-10-04", fetch: async (_value, init) => {
+            const text = JSON.parse(JSON.parse(String(init?.body)).input[1].content).callerText;
+            const operation = text === begin ? "appointments.read" : text === "I need to book an appointment." ? "book" : null;
+            const menu = text === "What times are available on October 8?";
+            const decision = { kind: operation ? "workflow" : menu ? "menu" : "appointments", operation, stage: null,
+              from: menu ? "2026-10-08" : null, to: menu ? "2026-10-08" : null, choice: null };
+            return Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [{ type: "output_text", text: JSON.stringify(decision) }] }] });
+          } }));
+        await call.turn(begin); await call.mark(); await voiceUntil(() => f.mail.length === 1, "read email"); await call.verify(f.mail[0]!.code);
+        await call.turn(enquire); await call.mark(); assert.equal(call.flow.workflow, "appointments.read");
+        assert.match(call.spoken.at(-1)!, unavailable ? /can't check appointments right now/ : /I found an appointment/);
+        assert.equal((await call.state()).appointmentReads.at(-1)?.status, unavailable ? "failed" : "shown");
+        failRead = false;
+        await call.turn("I need to book an appointment."); await call.mark();
+        assert.equal(call.flow.workflow, "book"); assert.equal(call.flow.verificationRequired, true); assert.equal(call.writes.length, 0);
+        assert.equal(Object.keys((await call.state()).actions).length, 0);
+        await voiceUntil(() => f.mail.length === 2, "new independent booking email"); await call.verify(f.mail[1]!.code);
+        await call.turn("What times are available on October 8?"); await call.mark(); await call.turn("The first time, please.");
+        assert.equal(Object.values((await call.state()).actions).at(-1)?.status, "awaitingConfirmation"); assert.equal(call.writes.length, 0);
+        await call.mark(); await call.turn("Yes"); assert.equal(call.writes.length, 1);
+        assert.equal(Object.values((await call.state()).actions).at(-1)?.status, "committed");
+        assert.deepEqual(resultValue(await scanPatientDataCanaries(db, verificationCanaries.map((value, i) => ({ label: `enquiry_switch_${i}`, value })))), []);
+      } finally { await call?.close(); await f.close(); }
+    }
+  });
+});
+
+test("E2E-314 a retired signed enquiry cannot publish its late successful appointment read", { timeout: 30_000 }, async () => {
+  await withDisposablePostgres(async db => {
+    const f = await appointmentEnquiryFixture(); f.flow.dispose();
     let call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined;
+    let held = false, returned = false, release = () => {};
+    const waiting = new Promise<void>(resolve => { release = resolve; });
     try {
-      call = await clinikoWorkflowVoiceFixture(db, f.flowConfig, owner => createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-key", model: "synthetic-model",
-        clinicDate: () => "2026-10-04", fetch: async (_value, init) => {
-          const text = JSON.parse(JSON.parse(String(init?.body)).input[1].content).callerText;
-          const operation = text === begin ? "appointments.read" : text === "I need to book an appointment." ? "book" : null;
-          const menu = text === "What times are available on October 8?";
-          const decision = { kind: operation ? "workflow" : menu ? "menu" : "appointments", operation, stage: null,
-            from: menu ? "2026-10-08" : null, to: menu ? "2026-10-08" : null, choice: null };
-          return Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [{ type: "output_text", text: JSON.stringify(decision) }] }] });
-        } }));
-      await call.turn(begin); await call.mark(); await voiceUntil(() => f.mail.length === 1, "read email"); await call.verify(f.mail[0]!.code);
-      await call.turn(enquire); await call.mark(); assert.equal(call.flow.workflow, "appointments.read"); assert.match(call.spoken.at(-1)!, /I found an appointment/);
-      await call.turn("I need to book an appointment."); await call.mark();
-      assert.equal(call.flow.workflow, "book"); assert.equal(call.flow.verificationRequired, true); assert.equal(call.writes.length, 0);
-      assert.equal(Object.keys((await call.state()).actions).length, 0);
-      await voiceUntil(() => f.mail.length === 2, "new independent booking email"); await call.verify(f.mail[1]!.code);
-      await call.turn("What times are available on October 8?"); await call.mark(); await call.turn("The first time, please.");
-      assert.equal(Object.values((await call.state()).actions).at(-1)?.status, "awaitingConfirmation"); assert.equal(call.writes.length, 0);
-      await call.mark(); await call.turn("Yes"); assert.equal(call.writes.length, 1);
-      assert.equal(Object.values((await call.state()).actions).at(-1)?.status, "committed");
-      assert.deepEqual(resultValue(await scanPatientDataCanaries(db, verificationCanaries.map((value, i) => ({ label: `enquiry_switch_${i}`, value })))), []);
-    } finally { await call?.close(); await f.close(); }
+      const original = f.flowConfig.fetchPort!;
+      const config = { ...f.flowConfig, fetchPort: async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        const response = await original(input, init);
+        if (held && new URL(String(input)).pathname === "/v1/individual_appointments") returned = true;
+        return response;
+      } };
+      call = await clinikoWorkflowVoiceFixture(db, config, () => async turn => ok(turn.text === begin
+        ? { kind: "workflow", operation: "appointments.read" }
+        : { kind: "appointmentEnquiry", from: verificationNow, to: "2026-10-09T06:00:00.000Z" }));
+      await call.turn(begin); await call.mark();
+      await voiceUntil(() => f.mail.length === 1, "retired enquiry verification email"); await call.verify(f.mail[0]!.code);
+      f.setOnRead(async () => { held = true; await waiting; });
+      const pending = call.turn(enquire).then(() => undefined, error => error);
+      await voiceUntil(() => held, "held actual appointment fetch");
+      call.flow.dispose(); await pending;
+      const beforeLate = await call.state(), spokenBeforeLate = [...call.spoken];
+      assert.ok(beforeLate.appointmentReads.every(read => read.status === "failed"));
+      assert.deepEqual(beforeLate.actions, {}); assert.equal(call.writeRequests.length, 0);
+      release(); await voiceUntil(() => returned, "late successful native fixture response");
+      await new Promise<void>(resolve => setImmediate(resolve));
+      assert.deepEqual(await call.state(), beforeLate);
+      assert.deepEqual(call.spoken, spokenBeforeLate);
+      assert.doesNotMatch(call.spoken.join(" "), /I found an appointment|couldn't find an appointment|booking is confirmed/i);
+      assert.equal(call.writeRequests.length, 0);
+      assert.deepEqual(resultValue(await scanPatientDataCanaries(db, verificationCanaries.map((value, i) => ({ label: `retired_enquiry_${i}`, value })))), []);
+    } finally { release(); try { await call?.close(); } finally { await f.close(); } }
   });
 });

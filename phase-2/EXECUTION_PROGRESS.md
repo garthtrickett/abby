@@ -1,5 +1,56 @@
 # Execution progress and evidence
 
+## Appointment-read explanations when staff work is unavailable, 25 October 2026
+
+R05's positive inability-to-check requirement exposed a wording defect: an
+appointment-provider failure correctly remained a failed read, but the
+standalone caller heard only that staff work was unavailable. The revised
+expectation failed on the original transition at the first synthetic 503;
+the red result does not claim that the later timeout branch ran.
+
+Appointment-read failures and invalid read evidence now retain their public
+failure explanation before the existing staff-route suffix. Available staff
+wording is unchanged. Unavailable staff routes still create no staff work;
+unverified callers receive no appointment details, and a genuinely empty read
+keeps its distinct no-appointment wording. No effect, permission, deadline or
+booking rule changes.
+
+All 17 focused source controls pass, including both provider-failure variants,
+the existing protected voice reads and a ten-case staff-mode/read-outcome
+matrix. Seven separately selected SQL-ledger controls pass without rerunning
+their memory counterparts. Whole strict TypeScript and fresh serving emission
+pass: only `src/core/transition.js` changes among 744 runtime files; the other
+743 match reviewed local parent `6fe1524a` exactly.
+
+Additional signed serving checks retain that distinction after successful
+registered-channel caller verification. The emitted individual-read process
+moves from shown to synthetic 503 to complete empty without clinical writes.
+The emitted class-cancellation process rejects synthetic class retrieval,
+separately reports complete empty, then performs its original successful read,
+played terms and exact native cancellation. Nine signed outgoing cancellation
+controls pass, including native 503, actual shared-budget cooldown and empty
+reads; the cooldown sends no additional provider GET and none of those read
+outcomes creates a clinical action.
+
+Two further signed/SQL controls pass. The enquiry-to-booking case now covers
+both a shown and a failed read; either transition to booking still needs new
+operation verification and separately played exact confirmation before one
+write. The retired-enquiry case holds an actual fixture fetch, retires its
+owner, settles the turn and releases the late successful response: the ledger
+and spoken output remain unchanged. All owned SQL containers and volumes were
+independently verified absent. These are synthetic remote-provider fixtures.
+
+Whole strict TypeScript and the fresh 744-output serving graph pass. Against
+reviewed local parent `6fe1524a`, only the production transition and three
+synthetic runner/voice fixture modules change; 740 outputs remain exact. The
+previous graph and source patch are retained with explicit byte-identical path
+mapping. Facts/scenario checks and fixed-head review guard this evidence;
+actual-parent integration and this follow-up's CI/delivery remain separate.
+Real-provider, acoustic, carrier and supervised-clinic acceptance are not
+established. All eleven stages, thirteen gaps and twenty-eight reuse placements
+remain in scope. See
+[R05](KAREN_TO_ABBY_REUSE_AUDIT.md#r05-keep-unknown-reads-distinct-from-successfully-empty-reads).
+
 ## Current-task receipts and mixed action outcomes, 25 October 2026
 
 The R06 cross-reader regression exposed a receipt-selection defect: after
@@ -21,9 +72,10 @@ modules change from the qualified runtime inherited by main `7538862f`; the
 other 741 match exactly. The shared rule addresses a maintainability finding
 from the first review; earlier build and review evidence remain retained.
 
-This is local engineering evidence. Final review, this correction's own CI and
-delivery remain pending, as does main `7538862f`'s independent PostgreSQL CI/raw
-qualification. Real-provider, carrier and supervised-clinic acceptance remain
+The correction passed its fixed-head local review and is published as PR604;
+its own CI and normal delivery remain pending at this checkpoint. Parent main
+`7538862f` passed its independent four jobs, raw-log and final root audit.
+Real-provider, carrier and supervised-clinic acceptance remain
 separate. All eleven stages, thirteen gaps and twenty-eight reuse placements
 remain in scope. See [R06](KAREN_TO_ABBY_REUSE_AUDIT.md#r06-keep-per-action-outcomes-and-notification-results-independent)
 and [the regression cases](../test/text/notification-effects.test.ts).

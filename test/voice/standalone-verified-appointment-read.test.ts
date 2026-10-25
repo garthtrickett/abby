@@ -161,7 +161,7 @@ test("E2E-202 unverified, wrong-patient and revoked calls disclose nothing", asy
   const denied = await unverified.turn();
   assert.equal(denied.appointmentReads.at(-1)?.status, "failed");
   assert.equal(unverified.requests.length, 0);
-  assert.deepEqual(unverified.spoken, ["I can't send a staff request from this call. Please contact the clinic directly."]);
+  assert.deepEqual(unverified.spoken, ["I can't verify whose appointment to check. I can't send a staff request from this call. Please contact the clinic directly."]);
   await unverified.end();
 
   const wrong = await fixture({ authority: { async attest(request) { return ok({ scope: request.scope,
@@ -202,7 +202,7 @@ test("E2E-202 empty, multiple, cancelled and unavailable reads remain truthful",
     await unavailable.issue();
     const state = await unavailable.turn();
     assert.equal(state.appointmentReads.at(-1)?.status, "failed");
-    assert.deepEqual(unavailable.spoken, ["I can't send a staff request from this call. Please contact the clinic directly."]);
+    assert.deepEqual(unavailable.spoken, ["I can't check appointments right now. I can't send a staff request from this call. Please contact the clinic directly."]);
     await unavailable.end();
   }
   const crossed = await fixture({ appointments: [{ id: "55", patientId: "24",
@@ -210,7 +210,7 @@ test("E2E-202 empty, multiple, cancelled and unavailable reads remain truthful",
   await crossed.issue();
   const state = await crossed.turn();
   assert.equal(state.appointmentReads.at(-1)?.status, "failed");
-  assert.deepEqual(crossed.spoken, ["I can't send a staff request from this call. Please contact the clinic directly."]);
+  assert.deepEqual(crossed.spoken, ["I can't check appointments right now. I can't send a staff request from this call. Please contact the clinic directly."]);
   assert.equal(JSON.stringify(crossed.spoken).includes("PRIVATE"), false);
   await crossed.end();
 });
@@ -302,7 +302,7 @@ test("E2E-203 indistinguishable appointment times never become selectable option
   await app.issue();
   const state = await app.turn();
   assert.equal(state.appointmentReads.at(-1)?.status, "failed");
-  assert.deepEqual(app.spoken, ["I can't send a staff request from this call. Please contact the clinic directly."]);
+  assert.deepEqual(app.spoken, ["I can't check appointments right now. I can't send a staff request from this call. Please contact the clinic directly."]);
   assert.equal(app.requests.length, 2);
   await app.end();
 });

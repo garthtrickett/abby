@@ -65,6 +65,16 @@ describe("actual compiled clinical runner", { concurrency: 2 }, () => {
         if (operation === "appointments.read") {
           await call.say("Appointments"); assert.match(call.spoken.at(-1)!, /October|appointment|option/i);
           assert.equal(call.mutations.length, 0, "enquiry never creates an appointment or staff request");
+          await call.mark(); await call.appointmentReadMode("unavailable");
+          await call.say("Appointments");
+          assert.match(call.spoken.at(-1)!, /I can't check appointments right now/);
+          assert.doesNotMatch(call.spoken.at(-1)!, /couldn't find an appointment|new patient|booking is confirmed/i);
+          assert.equal(call.mutations.length, 0);
+          await call.mark(); await call.appointmentReadMode("empty");
+          await call.say("Appointments");
+          assert.match(call.spoken.at(-1)!, /couldn't find an appointment in that time range/);
+          assert.doesNotMatch(call.spoken.at(-1)!, /can't check appointments|new patient|booking is confirmed/i);
+          assert.equal(call.mutations.length, 0);
         } else {
           assert.match(call.spoken.at(-1)!, /Physiotherapy|cancel|move|reschedul/i);
           assert.equal(clinicalWrites(call).length, 0, "selecting an offer does not write before confirmation playback");
