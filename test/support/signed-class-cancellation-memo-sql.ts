@@ -42,7 +42,7 @@ test(`actual emitted signed ${profile ?? "ordinary"} class cancellation preserve
   try {
     await sql.raw(`create database "${databaseName}"`).execute(admin); created = true;
     db = connectPostgres(target.toString()); await migrate(db);
-    canaryScope = await captureScopedSqlVerificationCanaryWindow(db);
+    canaryScope = await captureScopedSqlVerificationCanaryWindow(db, target.toString());
     const unrelated = { tenantId: `unrelated-${randomUUID()}`, clinicId: "index", locationId: "main" }, fingerprint = "e".repeat(64);
     const links = [{ normalizedPhone: "+61400111222", patientId: "101" }];
     assert.ok((await new PostgresPatientPhoneIndex(db).publish(unrelated, links, "61", fingerprint)).ok);

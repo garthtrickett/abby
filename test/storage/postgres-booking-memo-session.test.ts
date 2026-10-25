@@ -30,7 +30,7 @@ test(`actual emitted verified booking session, independent memo and all-column/f
     await sql.raw(`create database "${databaseName}"`).execute(admin); created = true;
     db = connectPostgres(target.toString()); await migrate(db);
     assert.equal(crypto.randomInt, originalRandomInt);
-    canary = await captureScopedSqlVerificationCanaryWindow(db);
+    canary = await captureScopedSqlVerificationCanaryWindow(db, target.toString());
     // Retain legitimate unrelated phone aliases/staged scans and an opaque
     // effect while scanning every column and the whole unfiltered backup.
     const unrelated = { tenantId: `unrelated-${randomUUID()}`, clinicId: "index", locationId: "main" };

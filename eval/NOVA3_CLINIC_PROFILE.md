@@ -14,6 +14,7 @@ profiles, using the original noisy corpus and assessor:
 | `baseline` | Existing unprocessed PCM | None; historical result retained |
 | `clinic-v1` | Same unprocessed PCM | Fixed public physiotherapy pack |
 | `krisp-clinic-v1` | Krisp Voice Isolation, `VIVA-tel`, suppression 100 | Same fixed pack |
+| `rnnoise-v02-clinic-v1` | Separately declared local RNNoise v0.2/default model, external evaluation harness | Same fixed pack |
 
 The baseline's historical failure is not erased or rerun just to obtain a better
 sample. Run one bounded cohort for each new profile: six noisy fixtures, three
@@ -116,11 +117,53 @@ The current local graph passes 54 focused source checks without skips and the
 whole-project strict TypeScript check. These are offline engineering results.
 The Krisp-backed two-layer comparison has not run: no Abby Krisp project key
 has been supplied. The owner asked about proprietary versus self-hosted models;
-RNNoise and DeepFilterNet are separate possible comparisons, not silent
-substitutes for this declared Krisp profile. No provider default is changed.
+A separately declared RNNoise comparison is recorded below; DeepFilterNet
+remains untested. Neither substitutes for this declared Krisp profile. No
+provider default is changed.
 
 The follow-up direct composition cohort passes 57/57 focused tests, including
 actual Nova-3 adapter finality after denoising, short-summary refusal and bounded
 token acquisition. Its affected strict TypeScript check passes. The earlier
 whole-project strict check and 54-test graph retain their original input scope;
 no further provider requests were made for this follow-up.
+
+
+## Separate RNNoise comparison, 24 October 2026
+
+The [RNNoise v0.2/default-model aggregate](baselines/deepgram-rnnoise-clinic-noise-20261024-v1.json)
+records one separately declared external evaluation with unchanged Nova-3 and
+the same public vocabulary. All eighteen original noisy attempts completed:
+six matches, six ordinary mismatches, six critical failures and zero provider
+failures. WER was 38.64% and final p95 was 388 ms; empty, truncated and delayed
+results were zero. The unchanged gate fails critical terms and WER. No
+clean/safety follow-on or serving selection follows.
+
+All three NS-001 and all three NS-006 attempts were critical. NS-005 had ordinary
+mismatches. These are different failed cases from the vocabulary-only cohort,
+which had nine matches, three ordinary mismatches, six critical failures,
+18.18% WER and 208 ms final p95. These separate cohorts do not establish a
+statistically significant difference or equivalence to Krisp or Vapi.
+
+Pinned FFmpeg resampling streamed 16 kHz input to 48 kHz, the default RNNoise
+model processed 480-sample frames, and output returned to 16 kHz during measured
+playback. One declared model-only 10 ms zero tail compensates the upstream
+example's priming-frame suppression. Input and forwarded-output counts were both 2,679 evaluation frames,
+including the unchanged final 20 ms padding. Denoising, tail,
+closure and owned-child reaping remained inside measured timing. Stored source
+PCM was not overwritten; preprocessing time was not excluded.
+
+The initial offline run remains failed at 8/11. In the Node socket setup,
+reopening stdin through the file-oriented driver returned ENXIO; that run also
+recorded SIGSEGV. A transport-only successor uses C standard stdin/stdout
+handles and complete I/O without changing the default model, algorithm, frame
+calculation or thresholds. The same eleven offline assertions then passed;
+three actual Nova-3 adapter/fake-provider finality cases passed separately.
+Those controls qualify transport, not acoustic quality. Independent original
+assessor recomputation and 92 frozen inputs verify the eighteen measured
+results. The provider scope peaked at 236,888,064 bytes under a 512 MiB cap,
+with no OOM events and all owned children reaped.
+
+This harness is an external evaluation artifact, not a new supported CLI or
+serving profile. The declared Krisp comparison remains unrun for the known
+missing project developer key. RNNoise's result does not answer that test or
+change any production default, full-call evidence or activation decision.

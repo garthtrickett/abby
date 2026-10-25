@@ -1,6 +1,6 @@
 # Approved communication-memo engineering
 
-**Current callback composition, 22 October 2026:** Five additional actual signed
+**Historical callback composition, 22 October 2026:** Five additional actual signed
 incoming modes qualify the existing observed individual-move memo after verified
 missed-call context. The exact original appointment and independent clinical
 review remain the source; context disclosure grants no memo or mutation
@@ -25,7 +25,7 @@ observed cancellation/rescheduling capture through the approved session/voice
 compositions. Patient-specific ordinary/pass class booking and class cancellation are also
 locally qualified. Partial/completed class movement reports are also locally
 qualified below; complete recovery remains unfinished. No default configuration,
-live write, signed voice acceptance or completed gap 13 is claimed.
+real-patient deployment, signed voice acceptance or completed gap 13 is claimed.
 
 ## Native contract
 
@@ -54,9 +54,20 @@ The correction passes 34 focused adapter/fact controls, complete strict types
 and a 744-output runtime build with only the native memo writer changed. A
 broader source sweep emitted 368 passes and zero failures/skips, but its outer
 wrapper timed out before the worker finished; the worker exit code was not
-recoverable. That sweep remains unqualified. Own exact-head cloud checks and a
-corrected native rehearsal remain pending. The diagnostic above is a failed
-memo rehearsal, not clinic acceptance.
+recoverable. That sweep remains unqualified. At that failed diagnostic checkpoint,
+own exact-head cloud checks and a corrected native rehearsal were pending.
+The separately completed corrective checkpoint follows; the diagnostic above
+remains failed and supplies no clinic acceptance.
+
+## Corrected native memo trial, 24 October 2026
+
+[PR599](https://github.com/garthtrickett/abby/pull/599) normally merged as `08325d8b` after all eight own-head jobs passed. All four actual-main jobs and sixteen parent/own/main raw logs were independently verified. Its 744-output runtime changes only the native memo writer relative to the earlier PR596 runtime. The earlier timed-out source sweep and both uncertain native families keep their original verdicts.
+
+One new, separately consumed Cliniko-demo family then completed the actual admitted booking-to-memo path with synthetic caller verification, playback, author policy and grants. The fixed eight-field request returned HTTP 201 and an accepted original receipt. Independent readback matched the original booking, patient, direction and interval. Denied read authority caused no native I/O; a second POST was refused by the permanent opaque SQL purpose. Full unfiltered SQL-backup privacy checks passed. Exactly one memo was posted and archived after known ownership, followed by exact owned clinical-fixture cleanup and public-booking restoration.
+
+The run used 102 native requests and one Stripe account GET, with no payable or payment. Its separate 32-byte MAC key stored with mode 0600 was persisted before any possible native writing and remains retained. Independent root inspection revalidated the source and all 744 current serving outputs and raw results and found the owned database ID/name/socket folder absent. No key value, patient/native reference or memo body is included here. Private aggregate provenance is `abby-native-memo-participant-rehearsal-v2/root-provider-audit-v1.json` under the existing private state home.
+
+This qualifies the declared native demo path. The earlier 422 rejection and lost-response uncertainty remain failed/uncertain; their private families are neither replayed nor destructively cleaned. Actual clinic author attribution, staff viewer permissions, record-specific retention, additional source/subject variants and supervised voice acceptance retain their separate requirements.
 
 Archived reads explicitly request `archived_at:*`, which includes archived
 records rather than silently treating their absence from a default view as

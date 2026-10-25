@@ -64,7 +64,7 @@ for (const scenario of scenarios) test(`actual emitted signed catalogue booking 
   let call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined, memo: ReturnType<typeof subjectMemoFixture> | undefined;
   try {
     await sql.raw(`create database "${name}"`).execute(admin); created = true;
-    db = connectPostgres(target.toString()); await migrate(db); canary = await captureScopedSqlVerificationCanaryWindow(db);
+    db = connectPostgres(target.toString()); await migrate(db); canary = await captureScopedSqlVerificationCanaryWindow(db, target.toString());
     const unrelated = { tenantId: `unrelated-${randomUUID()}`, clinicId: "index", locationId: "main" }, fingerprint = "e".repeat(64);
     const links = [{ normalizedPhone: "+61400111222", patientId: "101" }], retainedRef = randomUUID();
     assert.ok((await new PostgresPatientPhoneIndex(db).publish(unrelated, links, "61", fingerprint)).ok);

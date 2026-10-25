@@ -95,6 +95,7 @@ export function assertDirectSqlVerificationCanaryContext(): void {
     "postgres-appointment-change-memo.test.ts",
     "postgres-class-booking-memo.test.ts",
     "postgres-class-cancellation-memo.test.ts",
+    "postgres-sql-verification-canary.test.ts",
     "postgres-class-movement-memo.test.ts",
   ];
   let database: URL | undefined;

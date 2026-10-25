@@ -38,13 +38,13 @@ test(`actual emitted ${passes ?? "ordinary"} admitted class cancellation, origin
     await sql.raw(`create database "${databaseName}"`).execute(admin); created = true;
     db = connectPostgres(target.toString()); await migrate(db);
     assert.equal(crypto.randomInt, originalRandomInt);
-    canary = await captureScopedSqlVerificationCanaryWindow(db);
     const unrelated = { tenantId: `unrelated-${randomUUID()}`, clinicId: "index", locationId: "main" };
     const links = [{ normalizedPhone: "+61400111222", patientId: "101" }], fingerprint = "e".repeat(64);
     assert.ok((await new PostgresPatientPhoneIndex(db).publish(unrelated, links, "61", fingerprint)).ok);
     const staged = { ...unrelated, clinicId: "staged" }, scans = new PostgresPatientPhoneScan(db), begun = await scans.begin(staged, "61", fingerprint);
     assert.ok(begun.ok); assert.ok((await scans.append(staged, begun.value.scanRef, { page: 1, totalEntries: 1, patientIds: ["101"], links })).ok);
     const retainedRef = randomUUID(); assert.ok((await new PostgresOutboundEffectBarrier(db, unrelated, fingerprint).claimOnce(retainedRef)).ok);
+    canary = await captureScopedSqlVerificationCanaryWindow(db, target.toString());
     const scope = { tenantId: `memo-sql-${randomUUID()}`, clinicId: "clinic", locationId: "main" };
     const budget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-class-au5", maxPerMinute: 180 });
     const headroom: { requested: number; result: string }[] = [], check = budget.checkHeadroom.bind(budget);
@@ -107,7 +107,11 @@ test(`actual emitted ${passes ?? "ordinary"} admitted class cancellation, origin
     for (let i = 0; i < chunks.length; i += 12) assert.deepEqual(await scanPatientDataCanaries(db, chunks.slice(i, i + 12)), { ok: true, value: [] });
     const dump = execFileSync("pg_dump", [target.toString(), "--no-owner", "--no-privileges"], { timeout: 10000, maxBuffer: 8000000 }).toString();
     const copy = (s: string) => s.replaceAll("\\", "\\\\").replaceAll("\n", "\\n").replaceAll("\r", "\\r").replaceAll("\t", "\\t");
-    for (const raw of canaries) { const json = JSON.stringify(raw).slice(1, -1); for (const candidate of [raw, copy(raw), json, copy(json)]) assert.equal(dump.includes(candidate), false); }
+    for (const [index, raw] of canaries.entries()) {
+      const json = JSON.stringify(raw).slice(1, -1);
+      for (const [variant, candidate] of [raw, copy(raw), json, copy(json)].entries())
+        assert.equal(dump.includes(candidate), false, `Private canary index ${index}, variant ${variant} appears in the unfiltered backup`);
+    }
     assert.equal(dump.includes(retainedRef), true, "unfiltered backup preserves legitimate unrelated opaque evidence");
   } finally {
     try { await f?.close(); } finally {

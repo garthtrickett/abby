@@ -33,7 +33,7 @@ test(`actual emitted ${passes ? "pass" : "ordinary"} admitted class movement ori
     await sql.raw(`create database "${databaseName}"`).execute(admin); created = true;
     db = connectPostgres(target.toString()); await migrate(db);
     assert.equal(crypto.randomInt, originalRandomInt);
-    canary = await captureScopedSqlVerificationCanaryWindow(db);
+    canary = await captureScopedSqlVerificationCanaryWindow(db, target.toString());
     const unrelated = { tenantId: `unrelated-${randomUUID()}`, clinicId: "index", locationId: "main" };
     const links = [{ normalizedPhone: "+61400111222", patientId: "101" }], fingerprint = "e".repeat(64);
     assert.ok((await new PostgresPatientPhoneIndex(db).publish(unrelated, links, "61", fingerprint)).ok);
