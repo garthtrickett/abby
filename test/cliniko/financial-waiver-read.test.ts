@@ -94,3 +94,38 @@ test("a held waiver body is bounded by the native reader deadline", { timeout: 3
   t.mock.timers.enable({ apis: ["setTimeout"] }); const pending = reader.read(f.binding, signal()); await ready; t.mock.timers.tick(1000);
   assert.equal((await pending).ok, false);
 });
+
+
+// Native diagnostic on 25 October: a valid signed approval was 5 ms after a
+// whole-second native updated_at. Record precision cannot round signed data.
+for (const [name, approval, updated, accepted] of [
+  ["whole-second five-millisecond approval", "2026-11-01T09:30:00.005Z", "2026-11-01T09:30:00Z", true],
+  ["whole-second last-millisecond approval", "2026-11-01T09:30:00.999Z", "2026-11-01T09:30:00Z", true],
+  ["following-second approval", "2026-11-01T09:30:01.000Z", "2026-11-01T09:30:00Z", false],
+  ["explicit millisecond ordering", "2026-11-01T09:30:00.005Z", "2026-11-01T09:30:00.000Z", false],
+  ["exact fractional ordering", "2026-11-01T09:30:00.005Z", "2026-11-01T09:30:00.005Z", true],
+  ["whole-second offset timestamp", "2026-11-01T09:30:00.005Z", "2026-11-01T09:30:00+00:00", true],
+] as const)
+test(`native waiver update precision ${name}`, async t => {
+  const f = await nativeWaiverFixture(); t.after(f.close);
+  const decision = { ...f.decision, approvedAt: approval };
+  f.row.notes = f.format(decision); f.row.created_at = "2026-11-01T09:29:59Z"; f.row.updated_at = updated;
+  const found = await f.create().read(f.binding, signal());
+  assert.equal(found.ok, accepted);
+  if (found.ok) assert.deepEqual(found.value.decision, decision, "precision handling must not rewrite signed approval data");
+  assert.equal(f.row.updated_at, updated); assert.equal(f.state.gets, 1);
+});
+
+test("native waiver update precision never permits a future signed approval within the same native second", async t => {
+  const f = await nativeWaiverFixture(); t.after(f.close);
+  const decision = { ...f.decision, approvedAt: new Date(Date.parse(f.sourceState.now) + 5).toISOString() };
+  f.row.notes = f.format(decision); f.row.updated_at = f.sourceState.now.replace(".000Z", "Z");
+  assert.equal((await f.create().read(f.binding, signal())).ok, false);
+});
+
+test("native waiver update precision never extends a signed decision's actual expiry", async t => {
+  const f = await nativeWaiverFixture(); t.after(f.close);
+  const decision = { ...f.decision, expiresAt: f.sourceState.now };
+  f.row.notes = f.format(decision); f.row.updated_at = f.sourceState.now.replace(".000Z", "Z");
+  assert.equal((await f.create().read(f.binding, signal())).ok, false);
+});

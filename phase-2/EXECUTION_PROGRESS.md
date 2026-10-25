@@ -6798,3 +6798,57 @@ The changed test is outside the serving build, so no rebuild was needed; all
 separate speech-control or native-rehearsal counts and imply no Cliniko API,
 clinic-author/viewer/retention or full-call acceptance. Final source/facts
 metadata, review, publication and own/main qualification remain separate.
+
+
+## Native waiver precision finding and local correction, 25 October 2026
+
+A distinct real-demo waiver attempt failed its fixture's post-PATCH seal
+validation before the production waiver reader ran. Its one draft/one seal are
+uncertain and never replayed; 76 native requests and one Stripe account GET created
+no Checkout/payment, message or clinical cancellation. Public settings were
+restored and the owned database was independently absent; native test records
+and the separately persisted owner-only signing key remain retained for review.
+The original failed report remains failed.
+
+Three separately qualified current-state GETs verified the canonical signature
+and exact financial-intent/waiver-record binding. A no-fraction native timestamp
+precedes the signed approval by 5 ms. The decision was already expired at the
+actual inspection time and supplied no current approval or original PATCH ACK.
+The read-only inspector's database was independently absent. See the
+[provider scopes and hashes](STRIPE_PROVIDER_REHEARSAL.md#native-waiver-attempt-and-read-only-precision-diagnosis-25-october-2026).
+
+The production reader's analogous strict comparison was independently reproduced:
+30 reader cases yielded 27 passes and exactly three whole-second failures. The
+narrow correction treats an un-fractioned native timestamp as its recorded second
+while retaining exact signed/current/expiry times and fractional ordering. It
+passes 76 reader/signature/settlement controls across three source files, with
+nine new witnesses and no skips/cancellations. Whole strict and the serving
+build pass locally; 744 outputs include only the changed waiver reader, with 743
+matching qualified PR599 outputs. Independent recomputation verifies original
+RED snapshots, current pass titles and every output hash. New provider acceptance
+and normal-parent/own-head/resulting-main delivery remain unqualified here.
+All eleven stages, thirteen gaps and twenty-eight reuse placements remain in scope.
+
+
+## Waiver correction integrated on the normal PR600 parent, 25 October 2026
+
+PR600 normally merged as `cdef6262eef049fec736f8c0e73c0cceb36928f3`
+after all eight current-head checks and their raw logs passed. The resulting
+main tree exactly matches `749b9d2c`; its independent main checks and root audit
+remain pending at this checkpoint. Local integration can proceed while those
+checks run; publication still requires the verified parent delivery.
+
+The original nine-file waiver draft, clean index, patch and all 744 emitted
+outputs were separately preserved before fast-forwarding the same local branch
+and applying the combined documentation. The production reader and both changed
+test files match their earlier qualified 76-control component byte for byte.
+No component tests or actual provider attempt were replayed.
+
+Fresh whole strict TypeScript and the serving build pass on the combined source
+in tracked work 1792900515744, with its actual exit 0 and paired wait reaped.
+All 744 outputs were rehashed against PR600's graph: only the waiver reader
+changed; the other 743 are exact. The reader itself matches the separately
+qualified component. The bounded run took 5m27s and peaked at 1,792,933,888 bytes
+under its 2 GiB cap, with no OOM/high/max events. Current facts/scenario checks,
+final review, publication and independent own/main delivery remain separate.
+The full eleven stages, thirteen gaps and twenty-eight reuse placements remain.

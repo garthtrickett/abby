@@ -25,6 +25,16 @@ const link = (v: unknown): unknown => record(v) && record(v.links) ? v.links.sel
 function freeze<T>(v: T): T { if (v && typeof v === "object") { for (const x of Object.values(v)) freeze(x); Object.freeze(v); } return v; }
 function discard(r: Response | undefined): void { try { void r?.body?.cancel().catch(() => {}); } catch { /* Private body never escapes. */ } }
 
+/** Native whole-second stamps identify the recorded second, not an exact
+ * millisecond. Fractional stamps keep the existing millisecond ordering. This
+ * comparison never rounds the signed approval, current time or expiry. */
+function nativeUpdateCanFollowApproval(nativeUpdatedAt: unknown, approvedAt: string): boolean {
+  const updated = financialRecordInstant(nativeUpdatedAt);
+  if (!updated || typeof nativeUpdatedAt !== "string") return false;
+  const precisionMs = nativeUpdatedAt.includes(".") ? 1 : 1000;
+  return Date.parse(approvedAt) < Date.parse(updated) + precisionMs;
+}
+
 /** Exact positive waiver observation only. A missing/closed/recalled/unknown
  * record cannot prove no waiver or permit collection/expiry. Nothing is written
  * to native systems, a local private queue, SQL or any public/model channel. */
@@ -95,7 +105,7 @@ export class ClinikoFinancialWaiverReader {
       if (!created || !updated || updated < created || !await permit()) return err({ kind: "forbidden" });
       const verified = await wait(this.#issuer.verifyCurrent(row.notes, binding, signal));
       const observed = financialRecordInstant(this.#config.clock?.() ?? new Date().toISOString());
-      if (!verified?.ok || verified.value.actionRef !== binding.decisionRef || verified.value.approvedAt > updated ||
+      if (!verified?.ok || verified.value.actionRef !== binding.decisionRef || !nativeUpdateCanFollowApproval(row.updated_at, verified.value.approvedAt) ||
           !observed || updated > observed || verified.value.expiresAt <= observed || this.#authority.current(query, signal) !== true || signal.aborted) return err({ kind: "unavailable" });
       return ok(Object.freeze({ decision: verified.value, observedAt: observed }));
     } catch { return err({ kind: "unavailable" }); }

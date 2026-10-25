@@ -1102,3 +1102,32 @@ Current class-source refresh work 1792648400830 passes 124 cases, including the 
 Current exact-head review, same-PR publication and fresh own-head cloud checks, ordinary corrected merge and independent actual-main verification remain delivery gates. Old failed runs stay failed. No live clinic/provider acceptance, staff-review publication, activation or complete-roadmap claim follows from these synthetic tests.
 
 Static review also identified that the original unrelated phone sentinel could contain an admitted six-digit code. The refined sentinel has no six-digit substring ending in zero; a pre-issuance assertion enforces that relationship with the unchanged SQL canary space. The source124, whole strict/emission722 and normal concurrent13 checks above were refreshed after this correction. Three stale current123 prose references are now explicitly historical.
+
+
+## Native waiver record-time precision, 25 October 2026
+
+For comparison with a separately signed approval, a native `updated_at` without
+fractional seconds identifies the recorded second. The approval must precede
+the exclusive end of that second. A timestamp with fractional seconds retains
+the existing millisecond ordering. Signed approval data is returned unchanged;
+this rule does not round an approval, advance the current clock, extend expiry,
+or supply a financial effect grant. The reader still checks native record and
+patient/type binding, current issuer/admin/source approval, independent read
+permission and the exact signature, intent, target, amount and currency.
+
+A private real-demo fixture stopped at its seal-response validation before the
+production reader ran. Three current-state GETs later verified the stored
+canonical signature and original financial-intent/waiver-record binding. The
+native timestamp had no fractional seconds and preceded the signed approval by
+5 ms. That observation reproduces a rejection predicate; it does not recover the
+original PATCH acknowledgement or qualify the original attempt. The citation
+was already expired at inspection and remained invalid at that actual time.
+
+The analogous production-reader issue was reproduced with three failing
+whole-second source cases. The correction passes 76 source checks across reader,
+signature and settlement files, including nine new precision/effect-grant
+witnesses. Whole strict TypeScript and the serving build pass locally:744 outputs,
+only `financial-waiver-read.js` changed against the qualified PR599 graph and
+743 match exactly. The original failed native family remains retained. Corrected
+real-provider acceptance, current normal-parent delivery and clinic approval
+retain their separate requirements. See the [rehearsal scope](STRIPE_PROVIDER_REHEARSAL.md#native-waiver-attempt-and-read-only-precision-diagnosis-25-october-2026).
