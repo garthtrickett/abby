@@ -1,5 +1,18 @@
 # Abby execution order
 
+**Owner-designated demo backup, 25 October 2026:** A separate agent completed
+the actual browser primary-nonacknowledgment to backup-acknowledgment route
+after 60.227 real monotonic seconds. Lost-response retry, receiver retry and
+application reconstruction preserved one acknowledgment and its original
+deadline; current-role denials and owned cleanup passed. The parent independently
+verified the evidence on unchanged 744 runtime outputs. This closes that
+agent-operated demo observation, with an in-memory synthetic sign-in store
+and captured local inbox; it does not establish full process/session recovery,
+external delivery, human clinic acceptance or activation. This fulfills the
+owner's demo-role designation. Cash/bank invoice acceptance remains
+owner-deferred. All eleven stages, thirteen gaps and twenty-eight reuse
+placements remain. See [the observation and limits](../deploy/voice/OPERATOR_RESPONSE.md#agent-operated-demo-backup-observation-25-october-2026).
+
 **Verified waiver demo and SDK delivery, 25 October 2026:** PR601 final `e77828c1`
 normally merged as `dbe130b8`; its own eight checks, actual-main four checks and
 sixteen raw parent/own/main logs are independently qualified. One separate

@@ -123,6 +123,43 @@ corrupt records. Own abandoned temporary files may be removed after 24 hours.
 Scans are bounded at 512 alerts and 16,385 versions per alert; exhaustion is
 unavailable, not a successful acknowledgment.
 
+## Agent-operated demo backup observation, 25 October 2026
+
+The owner designated another agent as the demo backup. Using browser-drive,
+the agent signed distinct synthetic primary and backup accounts into the
+unchanged production TLS, identity, receiver, workflow and HTTP application.
+The primary never acknowledged. After 60.227 actual monotonic seconds under
+the configured one-minute escalation, the backup explicitly clicked the
+acknowledgment button. No workflow clock was injected or accelerated.
+
+The actual server committed the acknowledgment before its response was
+deliberately dropped at the browser boundary. The page showed uncertainty,
+then refreshed the known accepted state. Retrying that acknowledgment and
+the original receiver request, and reconstructing the application/workflow,
+retained version 1 and the original two-minute responsibility deadline.
+Early backup and late primary actions, actor-body spoofing, foreign origin,
+wrong current actor, removed backup membership and withdrawn approving
+administrator role were denied.
+
+Tracked work `1792934942902` completed with exit 0 in about 70 seconds. The
+512 MiB/one-CPU/zero-swap scope closed. The additional 512 MiB browser allowance
+was admission headroom for the existing shared browser, not a whole-browser
+hard cap. Both owned browser contexts and all owned listeners closed; the
+shared default context stayed untouched. All 744 runtime artifacts, owned
+sources and 48 frozen proof pins remained exact. A parent audit independently
+checked the raw ten-step log, durable versions, three screenshots, hashes and
+current listener/browser cleanup.
+
+Private aggregate provenance is
+`abby-agent-backup-rehearsal-20261025/parent-independent-audit-v1.json` under
+the existing private state home; result SHA256
+`cf6a57e3eaf9e60c43580d6c8f8988366299c8c23434590f216ab20bb4a13c19`.
+The synthetic in-memory sign-in store and captured local inbox were retained
+across object reconstruction. Full process/session-database recovery,
+external inbox delivery and human clinic sign-off were not tested by this run.
+It made no patient, Cliniko, Stripe or carrier request and activated nothing.
+Earlier PostgreSQL and process evidence below retains its separate scope.
+
 ## Qualification and remaining deployment evidence
 
 `test/voice/operator-alert-workflow.test.ts` exercises actual private storage,
