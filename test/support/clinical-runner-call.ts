@@ -208,6 +208,12 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
     };
     await mark();
     return { child, messages, output, scope, locations, db, connectionString, mark, say, media, close, signedWebhook,
+      async appointmentReadMode(mode: "shown" | "unavailable" | "empty") {
+        assert.equal(operation, "appointments.read");
+        const before = count("appointmentReadModeChanged");
+        child.send({ kind: "appointmentReadMode", mode });
+        await voiceUntil(() => count("appointmentReadModeChanged") > before, "synthetic appointment read mode");
+      },
       async endCallerForColdReview() {
         assert.equal(options.classColdRecovery, true);
         if (socket!.readyState !== WebSocket.CLOSED) { const ended = once(socket!, "close"); socket!.close(1000); await ended; }

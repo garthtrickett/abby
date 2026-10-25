@@ -646,7 +646,7 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       const presentation = appointmentPresentation(interpretation.snapshot, state.policy.scope, interpretation.from, interpretation.to, now, state.policy.voiceProfile?.locale ?? "en-AU", interpretation.declareRange === true);
       if (turn.quality !== "clear" || !presentation.ok) {
         addStaffTask(state, "systemFailure", now);
-        state.callerMessages.push(staffFallbackText(state, "I can't check appointments right now. I'll request staff follow-up."));
+        state.callerMessages.push(`I can't check appointments right now. ${staffFallbackText(state, "I'll request staff follow-up.")}`);
         state.appointmentReads.push({ turnId: turn.turnId, status: "failed", reason: turn.quality !== "clear" ? "unclear" : "invalidEvidence" });
       } else {
         state.callerMessages.push(presentation.value.text);
@@ -655,13 +655,14 @@ function handleTurn(state: CallState, turn: FinalCallerTurn, interpretation: Tur
       }
       break;
     }
-    case "appointmentsFailure":
+    case "appointmentsFailure": {
       addStaffTask(state, interpretation.reason === "invalidProof" || interpretation.reason === "unclear" ? "verificationFailed" : "systemFailure", now);
-      state.callerMessages.push(staffFallbackText(state, interpretation.reason === "invalidProof" || interpretation.reason === "unclear"
-        ? "I can't verify whose appointment to check. I'll request staff follow-up."
-        : "I can't check appointments right now. I'll request staff follow-up."));
+      const notice = interpretation.reason === "invalidProof" || interpretation.reason === "unclear"
+        ? "I can't verify whose appointment to check." : "I can't check appointments right now.";
+      state.callerMessages.push(`${notice} ${staffFallbackText(state, "I'll request staff follow-up.")}`);
       state.appointmentReads.push({ turnId: turn.turnId, status: "failed", reason: interpretation.reason });
       break;
+    }
   }
   const newMessages = state.callerMessages.slice(messageCount);
   if (newMessages.length > 0 && !state.pendingPresentationId) {
