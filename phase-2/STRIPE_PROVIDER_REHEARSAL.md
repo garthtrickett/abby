@@ -212,3 +212,54 @@ Private preparation provenance is `abby-native-waiver-rehearsal-v2` under the
 existing state home; independent results are `root-offline-result-v1.json`,
 `root-sql-result-v1.json` and `root-entry-result-v1.json`. These do not change
 any original failed-provider verdict, expiry, cleanup or clinic authority.
+
+
+## Reader-clock regression and revised local SDK, 25 October 2026
+
+Further source inspection of unpublished `491bc61f` found that issuer matching
+binds account/source identity without coupling clock functions. The issuer
+validates signed approval at its own start/end times; the native reader captures
+its own observation separately. Exact native update ordering previously implied
+approval was no later than that observation. The coarse-second comparison needed
+an additional explicit reader-time check to preserve that property.
+
+A frozen offline reproduction used native update millisecond 0, valid signed
+approval 5, issuer observation 6 and reader observation 4. It wrongly published
+a positive decision despite the issuer and reader clocks differing by only two
+milliseconds. Work 1792903197075 records intentional reproduction: wrapper exit0,
+Node exit1, three cases with two passes and exactly the before-approval failure.
+Equal/after positive controls passed. No provider, database or project credential
+was involved. This is a separate code finding, not a new explanation or recovered
+acknowledgement for the earlier real-demo fixture failure.
+
+The narrow fix explicitly rejects approval later than the reader's unchanged
+canonical observation, alongside its existing update/expiry/current-grant
+checks. Work 1792903460383 passes all 82 cases: 79 source reader/signature/
+settlement controls, including three new permanent boundaries, plus the same
+three private causal witnesses. The original 76 title multiplicities are
+retained; none was removed or skipped. The source change remains one comparison
+in the native reader, with no added I/O, write, replay or effect authority.
+
+Fresh whole strict and serving build work 1792903652708 passed in 6m46s, peaking
+at 1,737,658,368 bytes under 2 GiB with no OOM/high/max events. All 744 outputs
+were rehashed against the normal PR600 `cdef6262` parent: only the waiver reader
+changes, with 743 exact. Earlier `491bc61f` output and review evidence are retained
+as historical; that candidate was never published. Refreshed facts/review,
+parent independent main/root qualification and corrected SDK own/main delivery
+remain separate. The twelve new permanent witnesses add twelve cases to each
+normal full profile; the private three are not part of those public totals.
+
+Earlier 41 offline controls and CLI refusal retain their original source bindings.
+Their old reader-hash entry cannot be used with this revised runtime. A successor
+source-bound entry and current grants, account/family exclusions and durable
+key preparation are required after actual SDK delivery before a new provider
+trial. The original uncertain records, expired citation, credential and failed
+provider report remain untouched; no cleanup or retry authority follows.
+
+Private provenance is `abby-waiver-reader-clock` in the existing state home:
+`red-result-v1.json`, `green-result-v1.json`, `build-result-v1.json` and their
+actual reaped terminal receipts. The same private test source is bound across
+RED and GREEN. Its RED log SHA256 is
+`5a5236e4c9d305c75b86e4a30c0d0b2a5ea54acca729c886e635e5a5a97af027`;
+GREEN log SHA256 is
+`fa0f3cc580aa8149afc1b54bbd5707fb1362ae7df3dd871d4357ae63ad4ce478`.

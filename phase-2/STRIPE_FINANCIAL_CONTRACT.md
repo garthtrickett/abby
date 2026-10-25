@@ -1131,3 +1131,23 @@ only `financial-waiver-read.js` changed against the qualified PR599 graph and
 743 match exactly. The original failed native family remains retained. Corrected
 real-provider acceptance, current normal-parent delivery and clinic approval
 retain their separate requirements. See the [rehearsal scope](STRIPE_PROVIDER_REHEARSAL.md#native-waiver-attempt-and-read-only-precision-diagnosis-25-october-2026).
+
+
+### Independent reader observation
+
+The issuer and native reader may have separately configured trusted clocks.
+Each independently requires the signed approval to be at or before its own
+current observation and the decision to remain unexpired. The reader therefore
+explicitly checks `approvedAt <= observedAt < expiresAt`, in addition to native
+record ordering and the issuer's checks. No clock synchronization or grace
+period is assumed, and native timestamp precision cannot advance either clock.
+
+A new offline regression found that the earlier coarse-timestamp comparison
+alone could admit approval at millisecond 5 with reader observation 4 and issuer
+observation 6. The unpublished candidate remains retained. The explicit reader
+comparison restores the earlier implied ordering. Three permanent before/equal/
+after boundaries and the original component cases pass: 79 source controls,
+plus the same three private causal cases in one 82-case cohort. Fresh whole
+strict TypeScript and 744 outputs pass, with only the waiver reader different
+from PR600's actual normal parent. Provider and delivery acceptance remain
+separate; see the [new scoped evidence](STRIPE_PROVIDER_REHEARSAL.md#reader-clock-regression-and-revised-local-sdk-25-october-2026).

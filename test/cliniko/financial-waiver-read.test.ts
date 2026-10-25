@@ -129,3 +129,23 @@ test("native waiver update precision never extends a signed decision's actual ex
   f.row.notes = f.format(decision); f.row.updated_at = f.sourceState.now.replace(".000Z", "Z");
   assert.equal((await f.create().read(f.binding, signal())).ok, false);
 });
+
+for (const [label, offsetMs, accepted] of [
+  ["before approval", 4, false],
+  ["equal to approval", 5, true],
+  ["after approval", 6, true],
+] as const)
+test(`native waiver independently checks reader observation ${label}`, async t => {
+  const f = await nativeWaiverFixture(); t.after(f.close);
+  const began = f.sourceState.now; assert.ok(began.endsWith(".000Z")); const start = Date.parse(began);
+  const observedAt = new Date(start + offsetMs).toISOString();
+  const decision = { ...f.decision, approvedAt: new Date(start + 5).toISOString() };
+  f.sourceState.now = new Date(start + 6).toISOString();
+  f.row.notes = f.format(decision); f.row.created_at = new Date(start - 1000).toISOString();
+  f.row.updated_at = began.replace(".000Z", "Z");
+  assert.equal((await f.issuer.verifyCurrent(f.row.notes, f.expected, signal())).ok, true);
+  const found = await f.create(f.port, f.authority, { ...f.config, clock: () => observedAt }).read(f.binding, signal());
+  assert.equal(found.ok, accepted);
+  if (found.ok) { assert.deepEqual(found.value.decision, decision); assert.equal(found.value.observedAt, observedAt); }
+  assert.equal(f.state.gets, 1);
+});

@@ -6679,7 +6679,7 @@ R23/gap3 adds an optional read-only selected systemd oneshot/timer diagnostic. S
 - Whole strict and runtime-only compilation passed in work1792752123897,6m49s. The supervisor then failed its wrong492-versus743 inventory comparison. All490 older outputs actually built were exact; this was no product-test/compiler failure. Its original guard omitted16 auxiliary probe/config files, separately reconciled against qualified parent during that run and after terminal. Frozen history was not rewritten.
 - Corrected fixture-inclusive build1792752773109 passed in2m28s. Expanded1811-input guards qualify743 outputs, all741 prior outputs exact plus two optional checker outputs. The build target was corrected without repeating unchanged whole strict.
 - Actual compiled checker/real systemd source1792753047651 passed seven cases in38s, no skips: never-run calendar; calendar completion; stopped schedule; held new work over old success; owned SIGKILL; reset-failed; nonzero exit. Every temporary unit and fixture file was verified removed. Owner-scope peak21,045,248B/256MiB; separate command/anchor caps64MiB/8MiB, peaks not captured. No provider/DB request, production installation or alert send.
-- Fast-forward9c49a6f to actually normally merged docs parent3213032 preserved all1811 sources and743 artifacts. PR592 own8/raw logs/counts passed; actual-main4 remain tracked. New R23 final metadata/review, own exact-head CI and ordinary delivery remain required.
+- Fast-forward9c49a6f to actually normally merged docs parent3213032 preserved all1811 sources and 743 artifacts. PR592 own8/raw logs/counts passed; actual-main4 remain tracked. New R23 final metadata/review, own exact-head CI and ordinary delivery remain required.
 
 See [contract and remaining acceptance](QUEUE_WORK_FRESHNESS.md). These separate cohorts are not a full-call or roadmap pass. Real units/source/cadence/receiver, independent host coverage, approved primary/backup responsibility and human acceptance remain open. No default/patient-traffic activation follows.
 
@@ -6852,3 +6852,25 @@ qualified component. The bounded run took 5m27s and peaked at 1,792,933,888 byte
 under its 2 GiB cap, with no OOM/high/max events. Current facts/scenario checks,
 final review, publication and independent own/main delivery remain separate.
 The full eleven stages, thirteen gaps and twenty-eight reuse placements remain.
+
+
+## Independent waiver reader clock, 25 October 2026
+
+Unpublished `491bc61f` was held after an offline independent-clock counterexample:
+valid approval at millisecond 5, issuer 6 and reader 4 wrongly passed the coarse
+native-update comparison. The private three-case RED preserved one exact
+failure and two positive controls without provider access. An explicit
+approval-versus-reader-observation comparison plus three permanent boundaries
+now passes 79 source controls and the same three private causal witnesses in
+one 82-case cohort. All original 76 title multiplicities remain, with zero
+skips, failures or cancellations. The old passing reviews/build remain
+historical and never authorized publication of this revised source.
+
+Fresh strict and serving work 1792903652708 exit0/reaped qualifies the new graph:
+744 outputs, only the reader changed against normal PR600 parent `cdef6262` and 743
+exact. The old `491bc61f` runtime is separately preserved. Timing semantics, grants,
+expiry and the original uncertain native family retain their own scopes.
+See the [complete source/clock trace and evidence](STRIPE_PROVIDER_REHEARSAL.md#reader-clock-regression-and-revised-local-sdk-25-october-2026).
+Current facts/scenario checks, new fixed-head review and normal publication/
+cloud/resulting-main/root qualification remain separate. The original eleven
+stages, thirteen gaps and twenty-eight reuse placements remain in scope.

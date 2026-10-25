@@ -106,7 +106,7 @@ export class ClinikoFinancialWaiverReader {
       const verified = await wait(this.#issuer.verifyCurrent(row.notes, binding, signal));
       const observed = financialRecordInstant(this.#config.clock?.() ?? new Date().toISOString());
       if (!verified?.ok || verified.value.actionRef !== binding.decisionRef || !nativeUpdateCanFollowApproval(row.updated_at, verified.value.approvedAt) ||
-          !observed || updated > observed || verified.value.expiresAt <= observed || this.#authority.current(query, signal) !== true || signal.aborted) return err({ kind: "unavailable" });
+          !observed || updated > observed || verified.value.approvedAt > observed || verified.value.expiresAt <= observed || this.#authority.current(query, signal) !== true || signal.aborted) return err({ kind: "unavailable" });
       return ok(Object.freeze({ decision: verified.value, observedAt: observed }));
     } catch { return err({ kind: "unavailable" }); }
     finally { clearTimeout(timer); deadline.abort(); if (!bodyOwned) discard(response); }
