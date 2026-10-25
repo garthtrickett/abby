@@ -7,6 +7,7 @@ import { notificationKind, unknownNotification } from "../../src/core/notificati
 import type { NotificationIntent, NotificationObservation } from "../../src/core/notification-effects.ts";
 import type { ActionKind, ActionRequest, TurnInterpretation } from "../../src/core/model.ts";
 import type { TimerPort } from "../../src/core/timer.ts";
+import { err } from "../../src/core/model.ts";
 import { notificationRegistry } from "../support/notification-settings-contract.ts";
 import { deadline, now, setup, success } from "./fixture.ts";
 import { CallReview, summarizeCall } from "../../src/reference/call-review.ts";
@@ -248,6 +249,87 @@ test("E2E-257 a thrown notification send reconciles its captured owner without r
   assert.equal(app.observations.length, 1);
   assert.equal(app.observations[0]!.owner, "abby");
 });
+
+for (const siblingOutcome of ["rejected", "uncertain"] as const) {
+  test(`E2E-257 committed cancellation survives ${siblingOutcome} booking and failed notification/report readers`, async () => {
+    const app = await fixture(`mixed-outcomes-${siblingOutcome}`);
+    const playPending = async () => {
+      const id = (await app.state()).pendingPresentationId;
+      assert.ok(id);
+      success(await app.runtime.startPresentation(app.callId, id));
+      success(await app.runtime.resolvePresentation(app.callId, id, "played"));
+    };
+    const { action: cancellation, notification } = await app.commit("cancel");
+    const committed = (await app.state()).actions[cancellation.key]!;
+    assert.equal(committed.status, "committed");
+    success(await app.turn("cancellation-outcome", { kind: "outcomeQuery" }));
+    assert.equal((await app.state()).callerMessages.at(-1), "Your appointment cancellation is confirmed.");
+    await playPending();
+
+    success(await app.turn("new-booking-task", { kind: "workflowStarted", operation: "book", next: "codeRequired", advanceTask: true }));
+    await playPending();
+    const newTask = await app.state();
+    success(await app.turn("new-task-notification-outcome", { kind: "notificationOutcomeQuery" }));
+    const newTaskQuery = await app.state();
+    assert.equal(newTaskQuery.callerMessages.at(-1), "I haven't completed an action for this new task. I can't verify that an email confirmation was sent or deliver one from this call. Please contact the clinic for written confirmation.");
+    assert.deepEqual(newTaskQuery.actions, newTask.actions);
+    assert.deepEqual(newTaskQuery.effects, newTask.effects);
+    await playPending();
+    app.host.writeResult = mutation => siblingOutcome === "rejected"
+      ? { kind: "rejected", actionKey: mutation.actionKey, reason: "conflict" }
+      : { kind: "uncertain", actionKey: mutation.actionKey, reconcileAfter: afterDelay, deadline };
+    const booking = await app.prepare("book");
+    await app.worker.process(app.callId, `${booking.key}:write`, now);
+    const beforeObservers = await app.state();
+    assert.equal(beforeObservers.actions[booking.key]!.status, siblingOutcome);
+    assert.deepEqual(beforeObservers.actions[cancellation.key], committed);
+
+    // The cancellation's separate notification fails after both action outcomes exist.
+    app.host.dispatchNotification = async intent => { app.sends.push(structuredClone(intent)); throw new Error("lost notification reply"); };
+    app.host.observeNotification = async intent => { app.observations.push(structuredClone(intent)); throw new Error("notification observation unavailable"); };
+    await app.worker.process(app.callId, notification.id, now);
+    const reconstructed = new EffectWorker(app.runtime, app.host);
+    await reconstructed.process(app.callId, `${notification.id}:reconcile`, afterDelay);
+    const afterNotification = await app.state();
+    assert.deepEqual(afterNotification.actions, beforeObservers.actions);
+    assert.equal(app.sends.length, 1); assert.equal(app.observations.length, 1);
+    assert.equal(app.sends[0]!.actionKey, cancellation.key);
+    assert.equal(app.observations[0]!.actionKey, cancellation.key);
+
+    const listCalls = app.ledger.listCalls;
+    try {
+      app.ledger.listCalls = async () => err({ kind: "storageFailure" });
+      assert.deepEqual(await new CallOutcomeReport(app.ledger).list(app.scope), { ok: false, error: { kind: "storageFailure" } });
+      assert.deepEqual(await app.state(), afterNotification, "a failed report is not a failed or undone appointment action");
+    } finally { app.ledger.listCalls = listCalls; }
+    const summary = success(await new CallReview(app.ledger).read(app.callId, app.scope));
+    assert.deepEqual(summary.actions, [{ kind: "cancel", status: "committed" }, { kind: "book", status: siblingOutcome }]);
+    assert.deepEqual(summary.notifications, [{ kind: "cancellationConfirmation", owner: "host", status: "uncertain", outcome: "unknown" }]);
+    const report = success(await new CallOutcomeReport(app.ledger).list(app.scope));
+    const row = report.rows.find(item => item.callId === app.callId)!;
+    assert.equal(row.committedActions, 1); assert.equal(row.unresolvedActions, siblingOutcome === "uncertain" ? 1 : 0);
+    assert.equal(report.totals.committedActions, 1);
+    assert.equal(report.totals.callsWithUnresolvedActions, siblingOutcome === "uncertain" ? 1 : 0);
+    assert.deepEqual(row.notificationDelivery, { sent: 0, notSent: 0, pending: 0, unconfirmed: 1, needsReview: 0, canceled: 0 });
+    assert.deepEqual(report.notificationDelivery, row.notificationDelivery);
+
+    success(await app.turn("sibling-outcome", { kind: "outcomeQuery" }));
+    const caller = await app.state();
+    assert.equal(caller.callerMessages.at(-1), siblingOutcome === "rejected" ? "That action was not completed."
+      : "I can't confirm that action yet. It is pending review. Please contact the clinic before trying again. I won't send that action again from this call.");
+    assert.ok(caller.callerMessages.includes("Your appointment cancellation is confirmed."));
+    assert.deepEqual(caller.actions, beforeObservers.actions);
+    success(await app.turn("sibling-notification-outcome", { kind: "notificationOutcomeQuery" }));
+    const notificationQuery = await app.state();
+    assert.equal(notificationQuery.callerMessages.at(-1), `${caller.callerMessages.at(-1)} I can't verify that an email confirmation was sent or deliver one from this call. Please contact the clinic for written confirmation.`);
+    assert.deepEqual(notificationQuery.actions, caller.actions);
+    assert.deepEqual(notificationQuery.effects, caller.effects, "a receipt query cannot borrow or retry the earlier cancellation's notification");
+    await assert.rejects(reconstructed.process(app.callId, `${cancellation.key}:write`, now), /invalidTransition/);
+    await assert.rejects(reconstructed.process(app.callId, `${booking.key}:write`, now), /invalidTransition/);
+    await assert.rejects(reconstructed.process(app.callId, notification.id, now), /invalidTransition/);
+    assert.equal(app.host.writes.length, 2); assert.equal(app.sends.length, 1);
+  });
+}
 
 test("E2E-257 a process loss after the notification barrier recovers to observation and never repeats the send", async () => {
   const app = await fixture("barrier-process-loss");
