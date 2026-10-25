@@ -8,8 +8,12 @@ The local panel's former generic-only refusal was reproduced before correction.
 Three source controls and both existing browser workflows pass, including the
 actual missing-media-test response, supervised next step and empty automation
 history after visiting or rejected enabling. Whole strict TypeScript and fresh
-serving emission pass; all 744 serving outputs match qualified parent main
-`1582b193`. This is local explanation evidence; final current-diff review,
+serving emission originally passed on qualified parent main `1582b193`.
+After integrating independently qualified PR605 main `1b9359f5`, whole strict
+TypeScript and fresh serving emission passed again; all 744 current serving
+outputs match that actual parent. Original code/test files and both tested
+dashboard bundles remain byte-identical, with the earlier graph preserved.
+This is local explanation evidence; final current-diff review,
 exact-head CI and normal delivery remain separate. It grants no readiness or
 admission and does not complete the R09 matrix. See
 [the scoped R09 record](KAREN_TO_ABBY_REUSE_AUDIT.md#r09-explain-readiness-using-one-current-read-model)

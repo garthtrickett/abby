@@ -16,8 +16,13 @@ Both browser cases inspect the actual failed API response and show the missing
 media-test requirement and supervised next step. Page visits and rejected
 enables leave automation history empty; the original version, authorization,
 uncertain-write and call-gating assertions remain. Whole strict TypeScript and
-fresh serving emission pass. All 744 serving outputs match qualified parent
-main `1582b193` exactly; the two actual dashboard bundles contain the new copy.
+fresh serving emission originally passed on qualified parent main `1582b193`;
+the two actual dashboard bundles contain the new copy. After normal integration
+of independently qualified PR605 main `1b9359f5`, whole strict TypeScript and a
+fresh serving build passed again. All 744 current serving outputs match that
+actual parent exactly. The six code/test files and both tested dashboard bundles
+are unchanged, so the original three-source/two-browser evidence retains its
+scope. The earlier serving graph and bundles remain preserved separately.
 
 Eight selected catalogue and admission controls were independently found in
 that parent's qualified PostgreSQL log, with their directly selected source
@@ -76,8 +81,12 @@ Whole strict TypeScript and the fresh 744-output serving graph pass. Against
 reviewed local parent `6fe1524a`, only the production transition and three
 synthetic runner/voice fixture modules change; 740 outputs remain exact. The
 previous graph and source patch are retained with explicit byte-identical path
-mapping. Facts/scenario checks and fixed-head review guard this evidence;
-actual-parent integration and this follow-up's CI/delivery remain separate.
+mapping. Subsequent PR605 passed all eight own-head jobs before normal merge
+as `1b9359f5`. All four resulting-main jobs and the four qualified parent jobs
+also passed; all sixteen raw logs, exact counts, inherited passes, expected
+skips, three new non-skipped checks in both ledger modes, normal parents/tree
+and the 744-output graph were independently verified. This qualifies the
+selected engineering delivery, without extending the earlier local cohorts.
 Real-provider, acoustic, carrier and supervised-clinic acceptance are not
 established. All eleven stages, thirteen gaps and twenty-eight reuse placements
 remain in scope. See
