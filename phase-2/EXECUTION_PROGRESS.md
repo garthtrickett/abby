@@ -1,5 +1,37 @@
 # Execution progress and evidence
 
+## Current readiness reasons on both setup surfaces, 25 October 2026
+
+R09 exposed a difference between the two existing automation setup screens:
+the local panel discarded the server's missing readiness requirement and
+showed only a generic refusal. A real browser assertion reproduced that loss
+against the original emitted bundle. Both screens now use one fixed-copy
+explanation of the current `readinessFailed.missing` requirements and their
+next authorized actions. Unknown or malformed details retain a blocked
+explanation without printing their raw values. No new readiness state, cache,
+approval, endpoint or admission rule is introduced.
+
+Three focused source checks and the two existing browser workflows pass.
+Both browser cases inspect the actual failed API response and show the missing
+media-test requirement and supervised next step. Page visits and rejected
+enables leave automation history empty; the original version, authorization,
+uncertain-write and call-gating assertions remain. Whole strict TypeScript and
+fresh serving emission pass. All 744 serving outputs match qualified parent
+main `1582b193` exactly; the two actual dashboard bundles contain the new copy.
+
+Eight selected catalogue and admission controls were independently found in
+that parent's qualified PostgreSQL log, with their directly selected source
+files unchanged. Those are retained witnesses for expiry, revocation,
+incomplete catalogue and tenant/current-state boundaries, not new execution
+or universal R09 acceptance. This correction still needs final review and its
+own exact-head CI and delivery. Clinic approval, real calls, carrier/acoustic
+quality and the rest of R09 remain separate. All eleven stages, thirteen gaps
+and twenty-eight reuse placements remain in scope. See
+[R09](KAREN_TO_ABBY_REUSE_AUDIT.md#r09-explain-readiness-using-one-current-read-model),
+[the shared explanation](../src/standalone/dashboard/readiness-message.ts),
+[local setup](../test/browser/local-automation.spec.ts) and
+[ordinary setup](../test/browser/dashboard.spec.ts).
+
 ## Current-task receipts and mixed action outcomes, 25 October 2026
 
 The R06 cross-reader regression exposed a receipt-selection defect: after
