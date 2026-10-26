@@ -31,8 +31,16 @@ test("E2E-248 local automation preserves readiness, versions, authorization and 
     const disable = panel.getByRole("button", { name: "Disable automation for new calls", exact: true });
     await expect(panel.getByLabel("Automation status")).toHaveText("Automation disabled · version 0");
     await expect(disable).toBeDisabled();
+    assert.deepEqual(await policy.listAutomationChanges(scope), { ok: true, value: { entries: [] } });
+    const rejectedReadiness = page.waitForResponse(response =>
+      response.url().endsWith("/api/settings/automation-enabled") && response.request().method() === "POST");
     await enable.click();
+    assert.deepEqual(await (await rejectedReadiness).json(),
+      { ok: false, error: { kind: "readinessFailed", missing: ["mediaTestCall"] } });
     await expect(panel.getByRole("alert")).toContainText("readiness checks pass");
+    await expect(panel.getByRole("alert")).toContainText("passed media test call");
+    await expect(panel.getByRole("alert")).toContainText("Next:");
+    await expect(panel.getByRole("alert")).toContainText("supervised");
     await expect(enable).toBeEnabled();
     assert.deepEqual(await policy.listAutomationChanges(scope), { ok: true, value: { entries: [] } });
     ready = true;

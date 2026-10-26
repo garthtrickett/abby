@@ -2,11 +2,12 @@ import { html, render } from "lit-html";
 import type { CallPolicy } from "../../core/model.ts";
 import type { AutomationSettingAuditEntry, AutomationSettingAuditPage } from "../../core/host.ts";
 import type { DashboardFailure, DashboardPort } from "./api.ts";
+import { automationReadinessFailureMessage } from "./readiness-message.ts";
 
 type AutomationPort = Pick<DashboardPort, "capabilities" | "settings" | "automationAudit" | "changeAutomationEnabled">;
 
 function failureMessage(failure: DashboardFailure): string {
-  if (failure.kind === "readinessFailed") return "Automation cannot be enabled until the clinic's readiness checks pass.";
+  if (failure.kind === "readinessFailed") return automationReadinessFailureMessage(failure.missing);
   if (failure.kind === "versionConflict") return "Automation changed elsewhere. Review the current setting before trying again.";
   if (failure.kind === "forbidden") return "Clinic administrator access is required.";
   if (failure.kind === "invalid" || failure.kind === "invalidValue") return "The automation change was rejected. Reload and try again.";

@@ -396,8 +396,16 @@ test("SET-001: browser reception switch needs readiness and gates the next call"
     await page.goto(app.url);
     await expect(page.getByRole("heading", { name: "Reception automation" })).toBeVisible();
     await expect(page.getByText("Automation version 0")).toBeVisible();
+    assert.deepEqual(await app.policy.listAutomationChanges(app.scope), { ok: true, value: { entries: [] } });
+    const rejectedReadiness = page.waitForResponse(response =>
+      response.url().endsWith("/api/settings/automation-enabled") && response.request().method() === "POST");
     await page.getByRole("button", { name: "Enable reception" }).click();
+    assert.deepEqual(await (await rejectedReadiness).json(),
+      { ok: false, error: { kind: "readinessFailed", missing: ["mediaTestCall"] } });
     await expect(page.getByRole("alert")).toContainText("passed media test call");
+    await expect(page.getByRole("alert")).toContainText("Next:");
+    await expect(page.getByRole("alert")).toContainText("supervised");
+    assert.deepEqual(await app.policy.listAutomationChanges(app.scope), { ok: true, value: { entries: [] } });
     assert.equal((await app.policy.read(app.scope)).ok, true);
     ready = true;
     await page.getByRole("button", { name: "Enable reception" }).click();

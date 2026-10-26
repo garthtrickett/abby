@@ -1,5 +1,42 @@
 # Execution progress and evidence
 
+## Current readiness reasons on both setup surfaces, 25 October 2026
+
+R09 exposed a difference between the two existing automation setup screens:
+the local panel discarded the server's missing readiness requirement and
+showed only a generic refusal. A real browser assertion reproduced that loss
+against the original emitted bundle. Both screens now use one fixed-copy
+explanation of the current `readinessFailed.missing` requirements and their
+next authorized actions. Unknown or malformed details retain a blocked
+explanation without printing their raw values. No new readiness state, cache,
+approval, endpoint or admission rule is introduced.
+
+Three focused source checks and the two existing browser workflows pass.
+Both browser cases inspect the actual failed API response and show the missing
+media-test requirement and supervised next step. Page visits and rejected
+enables leave automation history empty; the original version, authorization,
+uncertain-write and call-gating assertions remain. Whole strict TypeScript and
+fresh serving emission originally passed on qualified parent main `1582b193`;
+the two actual dashboard bundles contain the new copy. After normal integration
+of independently qualified PR605 main `1b9359f5`, whole strict TypeScript and a
+fresh serving build passed again. All 744 current serving outputs match that
+actual parent exactly. The six code/test files and both tested dashboard bundles
+are unchanged, so the original three-source/two-browser evidence retains its
+scope. The earlier serving graph and bundles remain preserved separately.
+
+Eight selected catalogue and admission controls were independently found in
+that parent's qualified PostgreSQL log, with their directly selected source
+files unchanged. Those are retained witnesses for expiry, revocation,
+incomplete catalogue and tenant/current-state boundaries, not new execution
+or universal R09 acceptance. This correction still needs final review and its
+own exact-head CI and delivery. Clinic approval, real calls, carrier/acoustic
+quality and the rest of R09 remain separate. All eleven stages, thirteen gaps
+and twenty-eight reuse placements remain in scope. See
+[R09](KAREN_TO_ABBY_REUSE_AUDIT.md#r09-explain-readiness-using-one-current-read-model),
+[the shared explanation](../src/standalone/dashboard/readiness-message.ts),
+[local setup](../test/browser/local-automation.spec.ts) and
+[ordinary setup](../test/browser/dashboard.spec.ts).
+
 ## Appointment-read explanations when staff work is unavailable, 25 October 2026
 
 R05's positive inability-to-check requirement exposed a wording defect: an
@@ -44,8 +81,12 @@ Whole strict TypeScript and the fresh 744-output serving graph pass. Against
 reviewed local parent `6fe1524a`, only the production transition and three
 synthetic runner/voice fixture modules change; 740 outputs remain exact. The
 previous graph and source patch are retained with explicit byte-identical path
-mapping. Facts/scenario checks and fixed-head review guard this evidence;
-actual-parent integration and this follow-up's CI/delivery remain separate.
+mapping. Subsequent PR605 passed all eight own-head jobs before normal merge
+as `1b9359f5`. All four resulting-main jobs and the four qualified parent jobs
+also passed; all sixteen raw logs, exact counts, inherited passes, expected
+skips, three new non-skipped checks in both ledger modes, normal parents/tree
+and the 744-output graph were independently verified. This qualifies the
+selected engineering delivery, without extending the earlier local cohorts.
 Real-provider, acoustic, carrier and supervised-clinic acceptance are not
 established. All eleven stages, thirteen gaps and twenty-eight reuse placements
 remain in scope. See

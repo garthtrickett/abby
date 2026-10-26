@@ -14,8 +14,7 @@ import { sumNotificationDeliveryCounts } from "../../reference/notification-deli
 import type { AfterHoursSettingAuditPage, BookingSettingAuditPage, GreetingSettingAuditPage, StaffScheduleSettingAuditPage, UrgentSettingAuditPage } from "../../core/host.ts";
 import { formatWeeklyHours, parseWeeklyHours } from "./staff-hours-form.ts";
 import type { AutomationSettingAuditPage } from "../../core/host.ts";
-import { READINESS_REQUIREMENTS } from "../../core/readiness.ts";
-import type { ReadinessRequirement } from "../../core/readiness.ts";
+import { automationReadinessFailureMessage } from "./readiness-message.ts";
 import type { WriteStopAuditPage, WriteStopStatus } from "../../core/write-stop.ts";
 import type { KnowledgeEntry } from "../../reference/knowledge-catalogue.ts";
 
@@ -75,17 +74,7 @@ function message(failure: DashboardFailure): string {
     case "versionConflict": return "Settings changed elsewhere. The current value has been reloaded.";
     case "callUnknown": return "Call not found for this clinic.";
     case "scopeMismatch": return "This call belongs to another clinic.";
-    case "readinessFailed": {
-      const labels: Record<typeof READINESS_REQUIREMENTS[number], string> = {
-        hostPermissions: "host permissions", selectedLocation: "a selected location", approvedKnowledge: "approved clinic information",
-        approvedGreeting: "an approved greeting",
-        bookableOffers: "booking setup", staffDestination: "staff destination", afterHoursDestination: "after-hours destination",
-        notificationOwner: "notification owner", voiceProfile: "approved locale and voice", fallbackRoute: "tested fallback route", mediaTestCall: "passed media test call",
-      };
-      const missing = Array.isArray(failure.missing) ? failure.missing.filter((item): item is ReadinessRequirement =>
-        READINESS_REQUIREMENTS.includes(item as ReadinessRequirement)) : [];
-      return `Clinic setup incomplete: ${missing.map(item => labels[item]).join(", ") || "readiness evidence"}.`;
-    }
+    case "readinessFailed": return automationReadinessFailureMessage(failure.missing);
     default: return "The request could not be completed. Please try again.";
   }
 }
