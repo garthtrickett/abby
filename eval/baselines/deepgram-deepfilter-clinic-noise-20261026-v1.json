@@ -1,0 +1,281 @@
+{
+  "schema": "abby.deepgram-noise.aggregate.v1",
+  "date": "2026-10-26",
+  "patientFree": true,
+  "runAt": "2026-10-26T07:15:06.816Z",
+  "profile": {
+    "profile": "deepfilter3-056-clinic-v1",
+    "provider": "deepgram-streaming",
+    "model": "nova-3",
+    "language": "en",
+    "keyterms": [
+      "reschedule",
+      "physiotherapy",
+      "physio",
+      "pain",
+      "back",
+      "neck",
+      "pilates",
+      "pelvic",
+      "shockwave",
+      "rehab",
+      "dry needling",
+      "sciatica",
+      "women's health",
+      "rotator cuff",
+      "frozen shoulder",
+      "tennis elbow",
+      "tendonitis",
+      "vertigo",
+      "vestibular",
+      "ACL",
+      "meniscus",
+      "disc bulge",
+      "hamstring",
+      "reformer",
+      "hydrotherapy"
+    ],
+    "denoising": {
+      "provider": "local-deepfilternet",
+      "upstreamTag": "v0.5.6",
+      "sourceCommit": "978576aa8400552a4ce9730838c635aa30db5e61",
+      "nativeLibrarySha256": "5790d9fd5cdafd537dca0ec9a6401dc0d1f933f0c651b4cee4d14ad205a6676e",
+      "modelSha256": "c94d91f70911001c946e0fabb4aa9adc37045f45a03b56008cb0c8244cb63616",
+      "modelConfigSha256": "415eb925d44990d938fb739f514aa3662c1ec0ea836cff044fa1291b82cb4290",
+      "modelParameters": {
+        "sampleRate": 48000,
+        "fftSamples": 960,
+        "hopSamples": 480,
+        "lookaheadHops": 2,
+        "attenuationLimitDb": 100,
+        "postfilter": false,
+        "thresholdsDb": [
+          -10,
+          30,
+          20
+        ]
+      },
+      "quietHopRule": {
+        "meanSquareBelowPcm16": 128,
+        "signedDcAdditionPcm16": 16,
+        "sign": "positive when hop sum>=0 else negative",
+        "purpose": "Avoid upstream RMS<1e-7 early return freezing model state; applies to source quiet hops and declared model tail"
+      },
+      "framing": {
+        "inputPcmRate": 16000,
+        "inputFrameSamples": 320,
+        "originalLastFramePadding": "unchanged evaluator20ms",
+        "nativePrimingHopsDropped": 3,
+        "nativeOnlyZeroTailHops": 3,
+        "tailAndDropSamples48k": 1440,
+        "forwardedSampleCount": "exact original evaluation frames",
+        "quantization": "divide32768, nearest-even round, clamp PCM16",
+        "allDenoisingWithinMeasuredPlaybackAndShared2000msFlush": true
+      },
+      "resampler": "FFmpeg swr filter_size32 phase_shift10 exact_rational1,16k->48k->16k",
+      "ffmpegSha256": "ed16af623947494a72e284b6eb8ff225f2da22b38b5d5069c2fd4b4ba3384e41",
+      "streamedDuringMeasuredPlayback": true,
+      "sharedFlushDeadlineMs": 2000,
+      "equivalenceToKrispOrVapi": "notEstablished",
+      "harness": "separate external evaluation artifact; not an available serving or evaluate-deepgram-transcription.ts profile"
+    },
+    "corpusVersion": "transcription-noise-v1",
+    "corpusSha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+    "repeats": 3,
+    "concurrency": 2,
+    "paceMs": 20,
+    "turnClosure": "per-turn-close-stream-summary-normal-close",
+    "endpointing": false,
+    "mipOptOut": true,
+    "smartFormat": false,
+    "numerals": false,
+    "audioFormat": "mono-pcm16le-16000",
+    "nodeVersion": "v22.23.0"
+  },
+  "corpus": {
+    "version": "transcription-noise-v1",
+    "sha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+    "cases": 6,
+    "repeats": 3,
+    "runs": 18,
+    "originalCasesAndAudioUnchanged": true
+  },
+  "counts": {
+    "match": 6,
+    "mismatch": 9,
+    "critical": 3,
+    "providerFailure": 0
+  },
+  "metrics": {
+    "cases": 6,
+    "runs": 18,
+    "critical": 3,
+    "providerFailures": 0,
+    "empty": 0,
+    "truncated": 0,
+    "delayed": 0,
+    "wordErrorRate": 0.20454545454545456,
+    "finalP95Ms": 333,
+    "missingRepeats": []
+  },
+  "gate": {
+    "status": "fail",
+    "failures": [
+      "critical",
+      "wordErrorRate"
+    ],
+    "thresholds": {
+      "version": "transcription-synthetic-gate-v1",
+      "minRepeatsPerCase": 3,
+      "maxCritical": 0,
+      "maxProviderFailures": 0,
+      "maxEmpty": 0,
+      "maxTruncated": 0,
+      "maxWordErrorRate": 0.1,
+      "maxFinalP95Ms": 2500,
+      "maxIndividualFinalMs": 5000
+    }
+  },
+  "caseVerdicts": [
+    {
+      "caseId": "NS-001",
+      "verdicts": [
+        "match",
+        "match",
+        "match"
+      ]
+    },
+    {
+      "caseId": "NS-002",
+      "verdicts": [
+        "match",
+        "match",
+        "match"
+      ]
+    },
+    {
+      "caseId": "NS-003",
+      "verdicts": [
+        "mismatch",
+        "mismatch",
+        "mismatch"
+      ]
+    },
+    {
+      "caseId": "NS-004",
+      "verdicts": [
+        "mismatch",
+        "mismatch",
+        "mismatch"
+      ]
+    },
+    {
+      "caseId": "NS-005",
+      "verdicts": [
+        "mismatch",
+        "mismatch",
+        "mismatch"
+      ]
+    },
+    {
+      "caseId": "NS-006",
+      "verdicts": [
+        "critical",
+        "critical",
+        "critical"
+      ]
+    }
+  ],
+  "privateReport": "/home/gust/.local/state/abby-deepfilter-clinic-comparison/provider-result-v1.json",
+  "privateReportSha256": "5354c1198160d11b3b000b2c4b2e05ff4642357a3e750423e45cdc1429b9f307",
+  "privateInputs": "/home/gust/.local/state/abby-deepfilter-clinic-comparison/provider-inputs-v1.json",
+  "privateInputsSha256": "83b715f4bead31e4576dc3e08d7053e8d312c2d89fcf6f5b9bef409fc6d3ba5d",
+  "privateRootAudit": "/home/gust/.local/state/abby-deepfilter-clinic-comparison/root-provider-assessment-v1.json",
+  "privateRootAuditSha256": "11a19a78f57a7a295091c39aac5fd63d6f82bc03cdb9625ffc21d79ab8f82b64",
+  "sourceFiles": [
+    {
+      "path": "src/voice/deepgram-streaming-transcription.ts",
+      "sha256": "1e96324d241c7fbd99079fe298561fd05e8d914e0e7c666282bd8529dd6b82df"
+    },
+    {
+      "path": "scripts/lib/deepgram-clinic-vocabulary.ts",
+      "sha256": "4e1407969f853faee6c59d028804f0ecffa7d3cfef5720034d3b73873f69528d"
+    },
+    {
+      "path": "src/voice/transcription-evaluation.ts",
+      "sha256": "3ea30413b80cd28ecf337aaf9ad156dc6d5fd946ee74f81678654f9f2a41943d"
+    },
+    {
+      "path": "src/voice/transcription-evaluation-gate.ts",
+      "sha256": "44f7973d65f8de8261db8030bfbb14ce827a0c14b9b35756c2640133c956357c"
+    }
+  ],
+  "upstream": {
+    "tag": "v0.5.6",
+    "commit": "978576aa8400552a4ce9730838c635aa30db5e61",
+    "model": "DeepFilterNet3_onnx.tar.gz",
+    "modelSha256": "c94d91f70911001c946e0fabb4aa9adc37045f45a03b56008cb0c8244cb63616",
+    "modelConfigSha256": "415eb925d44990d938fb739f514aa3662c1ec0ea836cff044fa1291b82cb4290",
+    "nativeLibrarySha256": "5790d9fd5cdafd537dca0ec9a6401dc0d1f933f0c651b4cee4d14ad205a6676e"
+  },
+  "transportQualification": {
+    "offlineTestsPassed": 17,
+    "skipped": 0,
+    "exactOriginalFrames": 2679,
+    "all18NativeHopAccountsExact": true,
+    "allOwnedChildrenReaped": true,
+    "calibration": "0.1dB full-DSP timing control; full100dB attenuation in provider cohort",
+    "quietHopRule": {
+      "meanSquareBelowPcm16": 128,
+      "signedDcAdditionPcm16": 16,
+      "sign": "positive when hop sum>=0 else negative",
+      "purpose": "Avoid upstream RMS<1e-7 early return freezing model state; applies to source quiet hops and declared model tail"
+    },
+    "sharedFlushDeadlineMs": 2000,
+    "denoisingAndTailWithinMeasuredTiming": true
+  },
+  "historicalProbeFailures": {
+    "preserved": true,
+    "ladspaAlignmentProbes": 4,
+    "noneReclassifiedAsPassed": true,
+    "finalCohortUsesSynchronousStandardModel": true
+  },
+  "selectedForRuntime": false,
+  "cleanSafetyAndRepresentativeQualification": "notRun; noisy gate failed",
+  "productionDefaultsChanged": false,
+  "releaseGate": "unverified",
+  "wholeGoalComplete": false,
+  "selectedKrispComparison": "notRun; known developer Voice Isolation key unavailable",
+  "equivalenceToKrispOrVapi": "notEstablished",
+  "comparisonToVocabularyBaseline": {
+    "profile": "clinic-v1",
+    "counts": {
+      "match": 9,
+      "mismatch": 3,
+      "critical": 6,
+      "providerFailure": 0
+    },
+    "metrics": {
+      "cases": 6,
+      "runs": 18,
+      "critical": 6,
+      "providerFailures": 0,
+      "empty": 0,
+      "truncated": 0,
+      "delayed": 0,
+      "wordErrorRate": 0.18181818181818182,
+      "finalP95Ms": 208,
+      "missingRepeats": []
+    },
+    "sameFourSourcesAndVocabularyVerified": true,
+    "separateCohortsNotStatisticalSignificance": true
+  },
+  "scope": {
+    "memoryMax": 1073741824,
+    "peakBytes": 234528768,
+    "swapMax": 0,
+    "cpuQuota": "200%",
+    "allOwnedChildrenReaped": true,
+    "oomEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0"
+  }
+}

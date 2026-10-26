@@ -25,6 +25,13 @@ uncertainty and task limits remain binding. This is local gap8/gap9 evidence;
 review, exact-head/normal delivery and clinic acceptance retain separate gates.
 See [scope and retained failures](EXECUTION_PROGRESS.md#approved-correction-task-private-succession-26-october-2026).
 
+**Separate synchronous denoising observation, 26 October 2026:** One external
+DeepFilterNet3 v0.5.6 + unchanged Nova-3/public-vocabulary cohort completed all
+18 original noisy attempts but fails the existing gate: 3 critical results,
+20.45% WER, 333 ms final p95 and 0 provider failures. Seventeen offline
+framing/calibration/fake-provider controls pass; all 2,679 input frames are
+accounted for. This supplies no speech-gate pass, supported serving profile or
+activation. See [configuration, failures and limits](../eval/NOVA3_CLINIC_PROFILE.md#separate-synchronous-deepfilternet3-comparison-26-october-2026).
 
 **Ordinary cross-operation coverage, 26 October 2026:** Existing approved
 same-caller task progression is exercised across booking, cancellation and
