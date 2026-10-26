@@ -4,7 +4,11 @@ import { join } from "node:path";
 import type { ClinikoCallFlowConfig } from "../../src/standalone/cliniko-call-flow.ts";
 import { clinikoCredentialFingerprint } from "../../src/cliniko/read-budget.ts";
 
-export async function syntheticTaskSequence(config: ClinikoCallFlowConfig, folder: string, maximumTasks = 2) {
+type TaskSequenceBinding = Pick<ClinikoCallFlowConfig, "receipt" | "policyVersion"> & Readonly<{
+  cliniko: Pick<ClinikoCallFlowConfig["cliniko"], "apiKey" | "businessId" | "timeZone">;
+}>;
+
+export async function syntheticTaskSequence<Config extends TaskSequenceBinding>(config: Config, folder: string, maximumTasks = 2) {
   const path = join(folder, "call-tasks.json"), approval = {
     scope: config.receipt.scope, revision: "tasks-1", approverRef: "synthetic-admin", approved: true, enabled: true,
     approvedAt: "2026-10-04T05:59:00.000Z", effectiveFrom: "2026-10-04T05:59:00.000Z", effectiveUntil: "2026-10-05T06:00:00.000Z",

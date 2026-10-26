@@ -20,6 +20,8 @@ import { confirmationResendFixture } from "./confirmation-resend.ts";
 import { withSmtpVerificationServer } from "./smtp-verification-server.ts";
 import { withApprovedSyntheticVoice } from "./approved-voice.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
+import { syntheticTaskSequence } from "./call-task-sequence.ts";
+import { execFileSync } from "node:child_process";
 
 observeSyntheticWire();
 
@@ -27,15 +29,27 @@ const url = process.env.DATABASE_URL, apiKey = process.env.ABBY_CLINIKO_API_KEY;
 if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
     process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION !== "confirmationResend" || apiKey !== "synthetic-key-au5" ||
     !url?.includes("/abby_test_voice_") || process.env.ABBY_TWILIO_ACCOUNT_SID !== `AC${"1".repeat(32)}`) throw new Error("isolated synthetic resend fixture required");
-process.send?.({ kind: "verificationCanaryWindow", diagnostic: installResendVerificationCanaries() });
+const taskSequence = process.env.ABBY_SYNTHETIC_TASK_SEQUENCE === "1";
+if (process.env.ABBY_SYNTHETIC_TASK_SEQUENCE !== undefined && !taskSequence) throw new Error("invalid synthetic resend task mode");
+const excluded = new Set<string>();
+if (taskSequence) {
+  // Exclude pre-existing schema/data numbers before issuing either real OTP.
+  // Post-challenge all-column and unfiltered backup scans remain unchanged.
+  const snapshot = execFileSync("pg_dump", [url, "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 8_000_000 }).toString();
+  for (const match of snapshot.matchAll(/[0-9]{6,}/g)) for (let i = 0; i <= match[0].length - 6; i++) excluded.add(match[0].slice(i, i + 6));
+  if (excluded.size > 100000) throw new Error("synthetic resend pre-challenge snapshot exceeds its bound");
+}
+process.send?.({ kind: "verificationCanaryWindow", diagnostic: installResendVerificationCanaries(excluded) });
 const db = connectPostgres(url);
 const restoreStageObservers: (() => void)[] = [];
 try {
   await withSmtpVerificationServer(async smtp => {
     const content = process.env.ABBY_SYNTHETIC_RESEND_CONTENT;
     if (content !== undefined && !["telehealth", "cancelled"].includes(content)) throw new Error("unknown synthetic resend content");
+    if (taskSequence && content !== undefined) throw new Error("separate synthetic resend task content mode required");
     const f = await confirmationResendFixture(db, smtp.config, "appointments.resend", true, apiKey, undefined,
       content ? { template: "appointmentDetails.v2", contentKinds: ["activeInPerson", "activeTelehealth", "cancelled"] } : undefined);
+    const tasks = taskSequence ? await syntheticTaskSequence(f.config, f.folder) : undefined;
     // Aggregate fixed stage names only. Arguments, IDs, paths, notes and private
     // values never enter these diagnostics. Real source calls still execute.
     let observationId = 0;
@@ -102,7 +116,7 @@ try {
     const diagnostic = () => Object.fromEntries([...sourceCalls].map(([name, row]) => [name, { ...row,
       totalMs: Math.round(row.totalMs), maximumMs: Math.round(row.maximumMs),
       pendingMaximumMs: Math.round(Math.max(0,...[...(activeStarts.get(name)?.values() ?? [])].map(at => performance.now()-at))) }]));
-    const inputs: string[] = []; let denied = false, loseMail = false;
+    const inputs: string[] = []; let denied = false, loseMail = false, reviews = 0;
     f.setChoices([{ id: "81", starts_at: "2026-10-08T04:00:00.000Z", ends_at: "2026-10-08T04:30:00.000Z" },
       { id: "82", starts_at: "2026-10-09T04:00:00.000Z", ends_at: "2026-10-09T04:30:00.000Z" }]);
     if (content === "telehealth") {
@@ -161,6 +175,11 @@ try {
       if (method === "GET" && path === "/v1/businesses/11/practitioners") return Response.json({ total_entries: 1, practitioners: [{ id: "22" }], links: {} });
       if (method === "GET" && path === "/v1/practitioners/22/appointment_types") return Response.json({ total_entries: 1, appointment_types: [{ id: "33" }], links: {} });
       const result = await f.config.fetchPort(value, init);
+      if (taskSequence && method === "POST" && path === "/v1/recalls") {
+        const row = await result.json(); row.id = String(907 + reviews++);
+        if (loseMail) smtp.fault("dropAfterData");
+        return Response.json(row, { status: result.status });
+      }
       if (method === "GET" && path === "/v1/businesses/11") return Response.json({ ...await result.json(), show_in_online_bookings: true, appointment_type_ids: ["33"] });
       if (method === "GET" && path === "/v1/practitioners/22") return Response.json({ ...await result.json(), active: true, show_in_online_bookings: true });
       if (method === "GET" && path === "/v1/appointment_types/33") return Response.json({ ...await result.json(), show_in_online_bookings: true });
@@ -183,7 +202,7 @@ try {
       const codeDelivery = new SmtpPatientCodeDelivery(smtp.config);
       await serveClinikoVoice({ clinikoFetch: provider, openaiFetch: speech, voiceProfiles, transcriptionFactory: transcription, syntheticClock: now,
         speechQuality: (_scope, configurationHash) => ok({ configurationHash, qualityVersion: "synthetic-clinical-runner.v1" }),
-        clinicalHost: context => new ClinikoVoiceClinicalHost({ ...f.config, scope: f.scope, policies,
+        clinicalHost: context => new ClinikoVoiceClinicalHost({ ...f.config, ...(tasks ? { taskSequence: tasks.config.taskSequence } : {}), scope: f.scope, policies,
           greeting, directory: observedDirectory(new OwnerFileAdminDirectory(f.accountPath, f.scope), "hostMembership"), lookup: f.sessionConfig.lookup,
           verificationBudget: f.sessionConfig.budget,
           cliniko: { ...f.config.cliniko, apiKey: context.apiKey, rateBudget: context.rateBudget, contactRevision: context.contactRevision, practitionerId: "22", appointmentTypeId: "33" },

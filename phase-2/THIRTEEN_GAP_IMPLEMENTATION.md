@@ -1,5 +1,14 @@
 # Cliniko integration: thirteen-gap implementation order
 
+**Local resend-task succession, 26 October 2026:** Explicit continuation for
+another appointment now obtains fresh private verification and selection;
+bare repeated send requests retain their existing outcome. Source37, whole
+strict/744 and fifteen signed compiled cases pass locally, with uncertainty,
+permission, no-replay and SQL/backup privacy controls. The original wrapper's
+suite-count failure is preserved and independently reconciled without replay.
+Review, actual qualified-parent delivery and real acceptance remain separate.
+See [scope and evidence](EXECUTION_PROGRESS.md#approved-resend-task-private-succession-26-october-2026).
+
 **Local correction-task private succession, 26 October 2026:** Existing approved
 same-caller corrections now have three reproduced barriers corrected: trusted
 next-task routing, private ready/field/consent reset and current-task private

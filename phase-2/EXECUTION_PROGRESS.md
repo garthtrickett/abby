@@ -7218,3 +7218,94 @@ qualification retain separate gates. Every original execution stage, four
 booking steps, thirteen gaps and twenty-eight reuse placements remain. Real
 clinic configuration/authority, speech/mail/carrier acceptance, every
 operation/field/cohort combination and activation are not established.
+
+
+## Approved resend task private succession, 26 October 2026
+
+An existing approved same-caller sequence could create a fresh resend owner but
+its private transport stayed ready from the first request and never submitted
+the second code. The original controller fails the same actual two-task journey
+at the second verifier; the corrected controller passes. A fresh verification
+requirement now resets only the prior ready/menu state. Closed inputs remain
+closed; current verifier, patient permission, selected appointment, played
+recipient readback and separate send consent remain independent.
+
+“Please send the confirmation email for another appointment” explicitly requests
+an approved next task. It selects another workflow only when current task
+approval permits continuation, then requires a new code and private appointment
+selection. A bare repeated “Send my appointment email” still reports the existing
+outcome. Another recipient, negation and delivery questions cannot select a new
+resend through this grammar. Unknown first sends and withdrawn sequence approval
+block continuation; second-task permission denial cannot send. No new recipient,
+representative authority, task allowance, native request limit or replay is added.
+
+Current local evidence is scoped as follows:
+
+- Thirty-seven source checks pass without skips: thirty-three registered cases
+  and four exact earlier owning reproductions with only checkout imports rebound.
+  They preserve the correction/task controls, old private-resend finalization and
+  menu-paging cases, new grammar and real task/verifier/SAM/journal/TLS source
+  journeys. Source fixtures use synthetic clinic authority and native records.
+- Whole strict TypeScript and fresh fixture-inclusive emission pass. All 744
+  paths remain; 739 outputs match the separately locally qualified correction candidate.
+  Five change: resend grammar, trusted intent, private resend input, the synthetic
+  resend entry and its numeric-canary helper. Other production and helper bytes
+  remain exact, including the shared task helper's type-only generalization.
+- Fifteen signed compiled HTTP/media/PostgreSQL cases pass without skips: four
+  new resend-task cases (success, first-send uncertainty, second-send uncertainty
+  and second-task permission denial), all six original single-resend cases and
+  the five earlier booking/correction-task cases. Distinct appointments have
+  independent reviews and journal references, fresh private codes and recipient
+  playback, separate SAM consent and truthful SMTP outcomes. Third tasks and
+  bare repeated requests cannot cause another send. SMTP acceptance proves
+  neither external inbox delivery nor clinic acknowledgment.
+- The signed cases retain the native 180-request limit and fixed individual
+  deadlines. Model/output and every-column SQL canaries pass. New task-mode
+  cases additionally scan complete unfiltered schema/data backups, including
+  both OTPs. Before issuing challenges, a bounded synthetic snapshot excludes
+  pre-existing public schema/data numbers from the canary draw; production
+  crypto and all post-challenge scans remain unchanged. Every owned inner case
+  database, outer database/container and volume is absent after normal cleanup.
+
+Reproduce source scope with Node 22.23.0, `scripts/test-node.mjs --test
+--test-concurrency=1`, these six registered files and the preserved external
+reproductions: `test/cliniko/call-task-sequence.test.ts`,
+`test/voice/private-patient-correction-input.test.ts`,
+`test/voice/private-resend-finalization.test.ts`,
+`test/cliniko/confirmation-resend-language.test.ts`,
+`test/cliniko/resend-task-sequence.test.ts` and
+`test/cliniko/confirmation-resend-workflow.test.ts`. Source work1793013387188
+and strict/build1793013249251 naturally terminated/reaped0. Source uses
+Node512MiB and sequential PostgreSQL256MiB, after measured source DB peaks
+below79MB; the unchanged host reserve and fresh peer-growth guards still apply.
+The compiler retains2GiB. These execution budgets change no product quota.
+
+The signed cohort uses `ABBY_ISOLATED_POSTGRES_PROBE=1`, an independently
+disposable admin connection and `scripts/test-node.mjs --test
+--test-concurrency=1` on `test/voice/call-task-sequence-runner.test.ts`,
+`test/voice/confirmation-resend-runner.test.ts` and
+`test/voice/resend-task-sequence-runner.test.ts`. Every serving entry is emitted
+JavaScript, with no source fallback. Node1GiB and separate PostgreSQL512MiB
+limits remain. The original wrapper1793013717859 ended1 after the actual Node
+cohort passed15/15: its passed-name map also contained one existing describe
+heading. The original exit/log remain failed. Separate read-only audit
+1793014199368 ended0, verified all15 exact case identities plus that heading,
+the bootstrap exit0, current sources/artifacts and complete owned cleanup;
+it replayed no test. The original Node peak was not persisted before that
+accounting assertion and is not inferred.
+
+Earlier failures remain retained: the four-case fixture first selected before
+its private menu had played; a later1/4 run confused a handled unavailable-action
+reply with actual task advancement. The corrected helper checks fresh challenge
+creation and proves no extra code/action/review/email. An external baseline
+initially failed package resolution before any case/database. Two admission
+refusals began no Node/database work. Original controller and caller-language
+contract reds remain separate from these setup/fixture failures. Preserved
+source snapshots and original reports are not relabelled.
+
+This is local synthetic gap8/gap9 engineering. Final metadata/facts review,
+qualified-parent integration, own exact-head checks and normal-main/root delivery
+retain separate gates. All eleven execution stages, four booking steps,
+thirteen gaps and twenty-eight reuse placements remain. Every subject/operation
+combination, real clinic/sender/recipient/restore authority, acoustic/public
+route/carrier acceptance and activation remain unproven.

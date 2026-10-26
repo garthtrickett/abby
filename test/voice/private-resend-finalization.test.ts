@@ -6,16 +6,22 @@ import type { ClinikoCallFlow } from "../../src/standalone/cliniko-call-flow.ts"
 function gate<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 function fixture() {
   const menu = gate<{ ok: true; value: { count: number; hasNext: boolean; hasPrevious: boolean } } | { ok: false }>();
-  let played = false, stopped = false;
-  const selected: number[] = [];
+  let played = false, stopped = false, verificationRequired = true, denyVerification = false, menus = 0;
+  const selected: number[] = [], codeDigits: string[] = [];
   const owner = { workflow: "confirmationResend", closed: false,
-    listResendAppointments: () => menu.promise, resendMenuPlaybackCompleted: async () => played,
+    get verificationRequired() { return verificationRequired; },
+    listResendAppointments: () => { menus++; return menu.promise; }, resendMenuPlaybackCompleted: async () => played,
     selectResendAppointment: async (choice: number) => { selected.push(choice); return { ok: true, value: { requestRef: "opaque-request" } }; },
   } as unknown as ClinikoCallFlow;
   const lifetime = new AbortController();
   const input = new PrivateResendVoiceInput({ owner: () => owner, signal: lifetime.signal, present: async () => true,
-    input: { claim: () => true, start: () => true, blocked: () => true, accept: async () => "verified", stop() { stopped = true; } } });
-  return { input, menu, selected, lifetime, play() { played = true; }, get stopped() { return stopped; } };
+    input: { claim: () => true, start: () => true, blocked: () => verificationRequired, accept: async digit => {
+      codeDigits.push(digit);
+      if (digit !== "#" || denyVerification) return "pending";
+      verificationRequired = false; return "verified";
+    }, stop() { stopped = true; } } });
+  return { input, menu, selected, codeDigits, lifetime, play() { played = true; }, get stopped() { return stopped; },
+    get menus() { return menus; }, nextVerification(denied = false) { verificationRequired = true; denyVerification = denied; } };
 }
 const ready = { ok: true as const, value: { count: 2, hasNext: false, hasPrevious: false } };
 const settled = () => new Promise<void>(done => setImmediate(done));
@@ -63,4 +69,42 @@ test("failed menu refresh and explicit stop cannot release a post-play resend ch
       assert.deepEqual(f.selected, []); assert.equal(f.stopped, true);
     } finally { f.input.stop(); }
   }
+});
+
+async function returnToCall(f: ReturnType<typeof fixture>) {
+  await f.input.accept("#"); f.play(); f.menu.resolve(ready); await settled();
+  await f.input.accept("1"); await settled();
+  assert.equal(await f.input.accept("#"), "verified"); assert.equal(f.input.blocked(), false);
+}
+
+test("E2E-381 a fresh resend task accepts its own private code and requires a new appointment selection", async () => {
+  const f = fixture();
+  try {
+    await returnToCall(f); f.nextVerification(); assert.equal(f.input.blocked(), true);
+    await f.input.accept("7"); assert.deepEqual(f.codeDigits, ["#", "7"]);
+    assert.equal(await f.input.accept("#"), "pending"); await settled();
+    assert.equal(f.menus, 2); assert.deepEqual(f.selected, [1]);
+    assert.equal(await f.input.accept("#"), "pending", "the prior selection cannot make this task ready");
+    await f.input.accept("2"); await settled();
+    assert.equal(await f.input.accept("#"), "verified"); assert.deepEqual(f.selected, [1, 2]);
+  } finally { f.input.stop(); }
+});
+
+test("E2E-381 denied fresh resend verification cannot reuse its prior menu or selection", async () => {
+  const f = fixture();
+  try {
+    await returnToCall(f); f.nextVerification(true);
+    await f.input.accept("2"); assert.equal(await f.input.accept("#"), "pending"); await settled();
+    assert.equal(f.input.blocked(), true); assert.equal(f.menus, 1); assert.deepEqual(f.selected, [1]);
+    assert.deepEqual(f.codeDigits, ["#", "2", "#"]);
+  } finally { f.input.stop(); }
+});
+
+test("E2E-381 a stopped resend input cannot reopen for another task's verification", async () => {
+  const f = fixture();
+  try {
+    await returnToCall(f); f.lifetime.abort(); f.nextVerification();
+    assert.equal(await f.input.accept("#"), "failed"); assert.equal(f.input.blocked(), true);
+    assert.equal(f.menus, 1); assert.deepEqual(f.codeDigits, ["#"]);
+  } finally { f.input.stop(); }
 });

@@ -259,6 +259,8 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     const resend = confirmationResendLanguage(turn.text);
     if (!before.callerIdentityDenied && resend) {
       if (resend === "unsupportedRecipient") return ok({ kind: "clarify", reason: "changeUnsupported" });
+      if (resend === "anotherAppointment") return ok(before.nextTaskAvailable
+        ? { kind: "workflow", operation: "confirmationResend" } : { kind: "clarify", reason: "menuUnavailable" });
       if (before.workflow === null || before.workflow === "appointments.read" || before.nextTaskAvailable && before.workflow !== "confirmationResend") return ok({ kind: "workflow", operation: "confirmationResend" });
       if (before.workflow !== "confirmationResend" || before.verificationRequired) return ok({ kind: "clarify", reason: "menuUnavailable" });
       if (before.lastAction && ["dispatched", "committed", "uncertain", "needsReview"].includes(before.lastAction.status)) return ok({ kind: "notificationOutcome" });

@@ -24,9 +24,18 @@ export class PrivateResendVoiceInput implements PrivateKeypadInput {
   }
   claim(callId: string, sessionId: string) { return this.#config.input.claim(callId, sessionId); }
   start() { return this.#stage !== "closed" && this.#config.input.start(); }
+  #resetForFreshResendVerification(owner: ClinikoCallFlow | undefined) {
+    if (owner?.closed || owner?.workflow !== "confirmationResend" || !owner.verificationRequired ||
+        this.#stage !== "ready" || this.#working) return;
+    // A separately approved successor requires its own code and appointment
+    // selection. The previous request's ready state cannot consume that code.
+    this.#stage = "verification"; this.#count = 0;
+    this.#hasNext = false; this.#hasPrevious = false; this.#task = undefined;
+  }
   blocked() {
     if (this.#stage === "closed") return true;
-    return this.#config.owner()?.workflow === "confirmationResend" ? this.#stage !== "ready" || this.#config.input.blocked() : this.#config.input.blocked();
+    const owner = this.#config.owner(); this.#resetForFreshResendVerification(owner);
+    return owner?.workflow === "confirmationResend" ? this.#stage !== "ready" || this.#config.input.blocked() : this.#config.input.blocked();
   }
   handlesDigit(digit: string) { return this.#config.input.handlesDigit?.(digit) === true; }
   #launch(run: (signal: AbortSignal) => Promise<void>) {
@@ -39,6 +48,7 @@ export class PrivateResendVoiceInput implements PrivateKeypadInput {
     const owner = this.#config.owner();
     if (this.#stage === "closed" || owner?.closed) return "failed";
     if (owner?.workflow !== "confirmationResend") return this.#config.input.accept(digit);
+    this.#resetForFreshResendVerification(owner);
     if (this.#stage === "verification") {
       const answer = await this.#config.input.accept(digit);
       if (answer !== "verified") return answer;
