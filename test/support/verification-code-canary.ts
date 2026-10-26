@@ -69,6 +69,23 @@ export function installResendVerificationCanaries(): CanaryClockWindow {
   return install();
 }
 
+/** Cold memo senders are separate disposable children. Exclude only the
+ * database snapshot captured by their parent before the first challenge; actual
+ * codes still pass unchanged all-column and unfiltered logical-backup scans. */
+export function installMemoRecoveryVerificationCanaries(excluded: ReadonlySet<string>): Readonly<{ window: CanaryClockWindow; close: () => void }> {
+  let database: URL | undefined;
+  try { database = new URL(process.env.DATABASE_URL ?? "https://invalid.local"); } catch { /* Generic guard below. */ }
+  if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" ||
+      !process.argv[1]?.replaceAll("\\", "/").endsWith("/dist/runtime/test/support/administrative-memo-recovery-worker.js") ||
+      !["postgres:", "postgresql:"].includes(database?.protocol ?? "") ||
+      !["localhost", "127.0.0.1"].includes(database?.hostname ?? "") ||
+      !/^\/abby_memo_cold_[a-f0-9]{32}$/.test(database?.pathname ?? ""))
+    throw Error("Verification canary sampling requires an isolated memo recovery sender");
+  if (!(excluded instanceof Set) || excluded.size > 100000 || [...excluded].some(v => !/^[0-9]{6}$/.test(v)))
+    throw Error("Invalid synthetic pre-challenge memo canary exclusions");
+  return installSampler(new Set(excluded));
+}
+
 /** Restrict direct SQL instrumentation to its actual isolated Node test child.
  * The production runtime and other test workers never acquire this override. */
 export function assertDirectSqlVerificationCanaryContext(): void {
@@ -97,6 +114,7 @@ export function assertDirectSqlVerificationCanaryContext(): void {
     "postgres-class-cancellation-memo.test.ts",
     "postgres-sql-verification-canary.test.ts",
     "postgres-class-movement-memo.test.ts",
+    "postgres-administrative-memo-recovery.test.ts",
   ];
   let database: URL | undefined;
   try { database = new URL(process.env.DATABASE_URL ?? "https://invalid.local"); } catch { /* Generic guard error below. */ }

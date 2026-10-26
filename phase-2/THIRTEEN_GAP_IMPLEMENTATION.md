@@ -1,5 +1,18 @@
 # Cliniko integration: thirteen-gap implementation order
 
+**Cold memo privacy fixture correction, 26 October 2026:** The actual-main
+class-movement recovery failure was reproduced by issuing a code already present
+in two unrelated phone-index rows before any challenge. Only the isolated test
+sender now draws its code against a validated pre-challenge database snapshot.
+All-column and unfiltered logical-backup scans, native 180, authority, deadlines,
+SIGKILL, cold recovery and retained unrelated data remain unchanged. Twelve
+source controls, full strict TypeScript and a 744-output build, the exact corrected collision
+case and seven selected preservation/SQL leak-detection controls pass locally.
+Only two emitted test helpers change; 742 other outputs remain identical. The
+original failed main and wrapper results stay recorded; own-head CI, review and
+actual-main delivery remain gates. No full-gap or activation claim follows.
+See [the failure and correction](EXECUTION_PROGRESS.md#cold-memo-privacy-canary-correction-26-october-2026).
+
 **Separate synchronous denoising observation, 26 October 2026:** One external
 DeepFilterNet3 v0.5.6 + unchanged Nova-3/public-vocabulary cohort completed all
 18 original noisy attempts but fails the existing gate: 3 critical results,
