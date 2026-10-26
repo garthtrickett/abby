@@ -32,7 +32,7 @@ export function syntheticMultiTaskBookingProvider() {
         cancelled_at: null, archived_at: null, deleted_at: null, notes: body.notes,
         business: link("businesses", body.business_id), practitioner: link("practitioners", body.practitioner_id),
         appointment_type: link("appointment_types", body.appointment_type_id), patient: link("patients", body.patient_id) };
-      assert.equal([...rows.values()].some(previous => previous.starts_at === row.starts_at), false, "fresh availability cannot book an occupied time");
+      assert.equal([...rows.values()].some(previous => previous.cancelled_at === null && previous.starts_at === row.starts_at), false, "fresh availability cannot book an occupied time");
       rows.set(id, row); if (fault) throw new Error("synthetic lost booking response"); return Response.json(row, { status: 201 });
     }
     const id = /^\/v1\/individual_appointments\/([0-9]+)(?:\/conflicts)?$/.exec(url.pathname)?.[1];

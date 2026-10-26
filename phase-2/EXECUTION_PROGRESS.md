@@ -1,5 +1,53 @@
 # Execution progress and evidence
 
+## Ordinary cross-operation tasks, 26 October 2026
+
+The existing same-caller task owner is now exercised across booking,
+cancellation and rescheduling using one native-shaped synthetic appointment
+store. Eight ordered pairs commit both independently verified actions; an
+additional cancellation/booking case checks newly available time without treating
+a cancelled appointment as occupied. Each task retains its own approval, private
+code, played confirmation, native review and immutable action receipt. Retired
+mutations cannot be replayed or reconciled using a different payload digest.
+
+The repeated-reschedule case deliberately stays in one minute and retains the
+shared 200-request limit. The measured second move reaches 199 synthetic HTTP
+requests plus a separately charged lookup, exhausts capacity and is rejected
+before a second clinical PATCH. Two pre-send reviews do not prove two completed
+moves. The first committed receipt survives; neither the write nor review is
+retried. Nine possible-first-write continuations and three withdrawn sequence
+approvals are also covered. No artificial clock advancement or quota increase
+makes these cases pass.
+
+Six signed HTTP/WebSocket/SQL journeys passed locally for the six distinct
+operation orders. Each uses the real reusable clinical host, a separate private
+keypad proof and played confirmation for both tasks, exact first-receipt
+reconciliation, denied replay/third task, SQL privacy scans and owned database
+cleanup. New tasks use the existing explicit “another appointment” syntax;
+cancellation from several appointments uses the exact ordinal cancellation
+request. Generic changes after a sent action retain their existing refusal.
+The initial five signed failures reflected those two fixture assumptions and
+remain preserved. The initial whole strict check passed; a later new voice-test
+inference diagnostic was corrected with an explicit number annotation. Final
+source/type/build/metadata qualification and independent review remain separate.
+
+Cliniko, caller permissions, clinic approvals, mail, classifier, transcription
+and speech are synthetic. This adds no product permission, persistence,
+activation, general representative/staff authority or clinical capability.
+Same-minute repeated reschedules are not claimed as a two-success journey.
+Other operation/catalogue/cohort combinations, per-task staff outcomes, process
+recovery and actual clinic/acoustic/provider acceptance remain open. The original
+eleven stages, four booking steps, thirteen gaps and twenty-eight reuse placements
+remain in scope. Publication must follow qualification of the actual PR607 main
+and integration against that parent; the merely reviewed development parent is
+not sufficient.
+
+Sources: [task owner](../src/standalone/cliniko-call-tasks.ts),
+[source cases](../test/cliniko/cross-operation-tasks.test.ts),
+[signed calls](../test/voice/cross-operation-task-call.test.ts),
+[shared synthetic records](../test/support/cross-operation-tasks.ts),
+[physical budget](../src/cliniko/read-budget.ts).
+
 ## Mixed class and individual booking tasks, 26 October 2026
 
 The remaining-scope audit found that CallFlow refused every class/individual

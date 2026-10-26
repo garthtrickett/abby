@@ -1,4 +1,4 @@
-# Scenario manifest, version 1.249
+# Scenario manifest, version 1.250
 
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
@@ -415,6 +415,8 @@ E2E-378 qualifies resend submission-history transfer through single/multi-locati
 E2E-379 qualifies authenticated target staff receipt inspection after one/two/three reviewed transfers. Original logical scopes survive later exports through validated retained import records; wrong reader account/scope, receipt/digest/barrier drift, revoked permission/source and body-supplied origins deny inspection. New target activity retains its own scope. HTTP returns fixed receipt status only and performs no send/native mutation. Actual clinic session/inspection-host provisioning and operator acceptance remain open.
 
 E2E-380 qualifies explicitly approved v2 in-person, telehealth and cancelled resend content. Current appointment type and complete patient/booking attendee evidence bind the same-clinic patient link; staff links are never mailed. Cancelled history remains bounded and privately labelled; mode/status/recipient/permission drift withdraws the exact send. Signed compiled calls keep private content outside ordinary transcription, model turns, database and stdout, with separately played SAM consent and one reviewed submission. The elapsed-clock regression preserves selection after forty seconds of renewed call authority. Full-call, actual clinic/sender/recipient and operator acceptance remain open.
+
+E2E-381 additionally covers ordinary booking/cancellation/rescheduling task pairs through one synthetic native store and six distinct signed real-host/SQL operation orders. Each new task has fresh private verification, played consent and its own review, with original receipts preserved and replay refused. Same-minute repeated rescheduling retains the physical request limit and refuses its second clinical send; a saved review is not a completed move. Possible first writes and withdrawn approvals block continuation. These are scoped synthetic cases, not every multi-operation/cohort/staff sequence, real clinic acceptance or full-call evidence.
 
 E2E-381 additionally covers approved class/individual booking progression in both orders. Sixteen mixed source controls and four signed ordinary real-host/SQL journeys preserve separate service approvals, new private proofs, played confirmations, previous receipts and no replay. Source pass cases retain independent native consumption and the existing explicit quota wait. Signed second-write uncertainty cannot become a third task. This remains synthetic evidence for mixed booking, not full-call, all multi-operation combinations, financial settlement or clinic acceptance.
 
