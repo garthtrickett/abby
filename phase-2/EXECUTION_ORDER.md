@@ -1,5 +1,14 @@
 # Abby execution order
 
+**Review correction, 26 October 2026:** Both test-only exclusion boundaries
+now require six-digit strings, so numeric JSON or Set elements cannot evade
+string membership checks through regular-expression coercion. The malformed-input
+red is retained. Current twelve source controls, strict/build, the final probe's
+typecheck, the exact cold collision case and seven preservation controls pass.
+All production and 742 unchanged runtime outputs remain exact; only the same two
+test helpers differ. Final fixed-head review and cloud delivery remain pending.
+See [the review refinement](EXECUTION_PROGRESS.md#cold-memo-review-refinement-26-october-2026).
+
 **Cold memo privacy fixture correction, 26 October 2026:** The actual-main
 class-movement recovery failure was reproduced by issuing a code already present
 in two unrelated phone-index rows before any challenge. Only the isolated test

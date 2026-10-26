@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import crypto from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -156,8 +156,10 @@ for (const database of ["postgresql://remote.invalid/abby_memo_cold_" + "a".repe
   assert.equal(crypto.randomInt, original);
 }
 process.env.DATABASE_URL = good;
-assert.throws(() => installMemoRecoveryVerificationCanaries(new Set(["not-a-code"])), /Invalid synthetic/);
-assert.equal(crypto.randomInt, original);
+for (const invalid of [new Set(["not-a-code"]), new Set([111222])]) {
+  assert.throws(() => installMemoRecoveryVerificationCanaries(invalid), /Invalid synthetic/);
+  assert.equal(crypto.randomInt, original);
+}
 const now = Date.now(), window = { sinceMs: now - 65000, throughMs: now + 605000 };
 const candidates = Array.from({ length: 100000 }, (_, i) => i * 10).filter(code => distinctFromClock(code, window));
 assert.ok(candidates.length >= 2);
@@ -177,5 +179,13 @@ Object.defineProperty(crypto, "randomInt", descriptor); syncBuiltinESMExports();
 assert.equal(crypto.randomInt, original); assert.equal(randomInt, original);
 `);
     execFileSync(process.execPath, [entry], { env: { ...process.env, ABBY_ISOLATED_POSTGRES_PROBE: "1" }, timeout: 10000, stdio: "pipe" });
+    const numericInput = spawnSync(process.execPath, [new URL("../../dist/runtime/test/support/administrative-memo-recovery-worker.js", import.meta.url).pathname], {
+      env: { PATH: process.env.PATH, DATABASE_URL: "postgresql://127.0.0.1:1/abby_memo_cold_" + "a".repeat(32), ABBY_ISOLATED_POSTGRES_PROBE: "1" },
+      input: JSON.stringify({ family: "classMovePartial", mode: "send", verificationCanaryExclusions: [111222],
+        scope: { tenantId: "invalid-canary", clinicId: "clinic", locationId: "main" }, proxy: "http://127.0.0.1:1" }), timeout: 10000 });
+    assert.equal(numericInput.error, undefined);
+    assert.equal(numericInput.signal, null); assert.notEqual(numericInput.status, 0);
+    assert.match(numericInput.stderr.toString(), /ERR_ASSERTION/);
+    assert.doesNotMatch(numericInput.stderr.toString(), /isolated memo recovery sender|ECONNREFUSED/);
   } finally { rmSync(folder, { recursive: true, force: true }); }
 });

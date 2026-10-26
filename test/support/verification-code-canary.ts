@@ -81,7 +81,7 @@ export function installMemoRecoveryVerificationCanaries(excluded: ReadonlySet<st
       !["localhost", "127.0.0.1"].includes(database?.hostname ?? "") ||
       !/^\/abby_memo_cold_[a-f0-9]{32}$/.test(database?.pathname ?? ""))
     throw Error("Verification canary sampling requires an isolated memo recovery sender");
-  if (!(excluded instanceof Set) || excluded.size > 100000 || [...excluded].some(v => !/^[0-9]{6}$/.test(v)))
+  if (!(excluded instanceof Set) || excluded.size > 100000 || [...excluded].some(v => typeof v !== "string" || !/^[0-9]{6}$/.test(v)))
     throw Error("Invalid synthetic pre-challenge memo canary exclusions");
   return installSampler(new Set(excluded));
 }

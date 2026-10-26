@@ -1,5 +1,44 @@
 # Execution progress and evidence
 
+## Cold memo review refinement, 26 October 2026
+
+Independent review of the first corrective commit found one malformed-input
+defect: a regular expression coerced numeric exclusion values to strings, but
+the rejection sampler compares string Set entries. The source witness
+`1793023442914` failed that requirement. Both the private sender IPC boundary
+and the test-only sampler now explicitly reject nonstrings before installing
+the sampler or opening the database. The twelve current controls
+(`1793024044965`) pass, including malformed Set and actual compiled-worker JSON
+refusals. Their first source-worker probe timed out at the unchanged ten-second
+bound (`1793023597953`); that failed probe is retained separately.
+
+Current whole strict TypeScript and the voice-test build (`1793023629992`)
+both exit 0, with their individual exits persisted before output validation.
+The final nonemitted probe changed only how it invokes the compiled worker;
+its affected-file typecheck (`1793024313940`) passes under inherited project
+settings with the canonical Node type directory explicitly rebound. The first
+external configuration failed Node type lookup (`1793024109713`, exit 2),
+not a product type assertion. Every emitted input and all 744 output bytes
+match the current whole build. Its peak is 1,711,501,312 bytes, without OOM.
+The original compile wrapper's exit 1 and separate reconciliation remain
+historical evidence; they are not replaced by this newer successful build.
+
+The current exact collision case (`1793024442891`) and seven preservation
+controls (`1793024792617`) pass on these review-corrected bytes, with no skips
+or cancellations. The same first `111222` draw, pre-challenge unrelated rows,
+native 180, unchanged deadlines, actual sender SIGKILL, GET-only cold recovery,
+consumed-purpose denial, all-column scanner, complete unfiltered backup,
+logical restore and owned cleanup remain checked. The deliberate post-issue
+leak remains detected. Only the same two emitted test helpers differ from the
+qualified ancestor; all production and the other 742 outputs remain exact.
+
+Facts fingerprints are refreshed without changing facts rows or the 660 citation
+identities. Current metadata checks and final full-diff Standards/Spec review
+follow this ledger update. Exact own-head CI, normal corrective merge and an
+independently checked actual-main run remain delivery requirements. The original
+red main stays red; no clinic, provider, money, speech or deployment acceptance
+is inferred. The full original execution goal remains active and incomplete.
+
 ## Cold memo privacy canary correction, 26 October 2026
 
 Actual PR #609 main `f13e7c6a593d728e68388e3ab8dafe73840da7d7` PostgreSQL run `40315631160`

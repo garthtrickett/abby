@@ -31,7 +31,7 @@ const input: { family: AdministrativeMemoRecoveryFamily; mode: "send" | "recover
   process.stdin.on("data", part => { text += String(part); }); process.stdin.on("end", () => resolve(text)); }));
 assert.ok(Object.hasOwn(administrativeMemoRecoveryCases, input.family));
 if (input.mode === "send") assert.ok(Array.isArray(input.verificationCanaryExclusions) && input.verificationCanaryExclusions.length <= 100000 &&
-  input.verificationCanaryExclusions.every(value => /^[0-9]{6}$/.test(value)));
+  input.verificationCanaryExclusions.every(value => typeof value === "string" && /^[0-9]{6}$/.test(value)));
 const canary = input.mode === "send" ? installMemoRecoveryVerificationCanaries(new Set(input.verificationCanaryExclusions)) : undefined;
 const db = connectPostgres(process.env.DATABASE_URL!), apiKey = administrativeMemoRecoveryCases[input.family].apiKey;
 const budget = new PostgresClinikoRequestBudget(db, { apiKey, maxPerMinute: 180 });

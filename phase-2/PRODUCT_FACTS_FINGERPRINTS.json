@@ -21,8 +21,8 @@
     "phase-1/OPENAI_REALTIME_TRANSCRIPTION.md": "49651d21fa207fb842c36b54ebd7d9d82052ef197c1105a3e280f67b000bde59",
     "phase-2/CLINIC_SETUP_AND_REHEARSAL.md": "295df507f0d91fb800a3e3f9ee41d0720cb7a8d6d86629e4cf3fa5608d3158e5",
     "phase-2/COMMUNICATION_MEMOS.md": "94abcfb3bb1c0dc2299165dfd7ef998519a641ea72b773090a534068f1ac0f16",
-    "phase-2/EXECUTION_ORDER.md": "401049cbfedc3cb30137021cff9bcc204c9b8ad0e7b7f3ab418b6541d26b051b",
-    "phase-2/EXECUTION_PROGRESS.md": "6798ba56c17994725ef13fc95ec31692006ce68eab088825c778576fda2b1380",
+    "phase-2/EXECUTION_ORDER.md": "bda75900dd5223b066cf3b7bc8ceae59e29422e5bd49c79031d8c4f70ba408b7",
+    "phase-2/EXECUTION_PROGRESS.md": "b31b26d36b9553a701c608e73db8f0295b6b241ab07200fef1ab3037ff070b8a",
     "phase-2/INCOMING_MISSED_CALL_CONTEXT.md": "ddb16adc7208a97c1e2711fc823e50ac825be0e74e45459beda31b275cbe1ab7",
     "phase-2/KAREN_TO_ABBY_REUSE_AUDIT.md": "ea94fadf2728fd5b9b022f3435cfa53b7e8cb678d2c771576f581f12f3dfa14f",
     "phase-2/OUTBOUND_CALL_ADMISSION.md": "93edc93d8868e17133055771c98176af0d6fa13385adbf4f3700069f5d22df2f",
@@ -539,7 +539,7 @@
     "test/storage/postgres-twilio-outbound-stop-recovery.test.ts": "6be02c9c1c2ccea169f843b5afb83d468bc6ff72f6db5d253a3b1237d2d00b19",
     "test/storage/postgres-twilio-outbound-stop-speech.test.ts": "7eacc849cc7c9780f289e397508963ea9cbf60f73a17cb3d2bded17ef1826654",
     "test/support/administrative-memo-recovery-cases.ts": "d1378c6b89a1c2df61422f42eb3b3ae690710c211a49d261e48f6dbda2865dd3",
-    "test/support/administrative-memo-recovery-worker.ts": "815323a3893afe4aee369121b798bec3ecb1cd49b2e197f31addc2586f3b55d3",
+    "test/support/administrative-memo-recovery-worker.ts": "4902d760d877e11590af416b4de961fdcf32f63ec0318db937aae9322b111498",
     "test/support/catalogue-booking-memo-sql.ts": "65240e8e238b3776955d1427bb13bf1b139f9f2be0d7034889fd3784ba9f218b",
     "test/support/class-booking.ts": "53c35dd7b8ecbfbc84261a4cdcf7ca7a264b93ec3a59599235649641fe415783",
     "test/support/class-call-flow.ts": "2cb20377613a1080781e8e3ab1ca2345c378ed68bd0e36ba454d24fb27f3e9cb",
@@ -602,7 +602,7 @@
     "test/support/synthetic-media-timeline.ts": "da5985153a34b822c7d29f3d4fafe9968977121a0dab1109adb76f87e989b35c",
     "test/support/twilio-outbound-conversation.ts": "a962f03483baa47a01f67834324eb0e54cfd8c8e9b75962713e6e730706ad14d",
     "test/support/twilio-outbound-finality-worker.mjs": "b6502925cdd06ca4b2f5ccbbbb3653408a064630175fc3aadfc73baf5d838783",
-    "test/support/verification-code-canary.ts": "f3ffa8dda5e0035df694f44781955ed783f9edeaccefe3c888facc899e017ae4",
+    "test/support/verification-code-canary.ts": "28951edfd47411384cf7aaf4180953fffb2253ed2a131f34993acf214ab3de50",
     "test/text/booking-menu-deadline.test.ts": "cf2c6f24a08c0846e65fbc9be9a4646b18a0f734b6fe0dd9cf1c2da2e7fcc022",
     "test/text/class-movement-consent.test.ts": "1ff94adb26665cb9d686c0efa99d40864b8fd54e3436d41026e0f9cf2a6317af",
     "test/text/class-movement-receipt.test.ts": "663c5de1ba65b9a2032481080a54fe59a2f92d454e5ef87b30932f9fc7af7491",
@@ -662,6 +662,6 @@
     "test/voice/twilio-outbound-runtime.test.ts": "d91cb7bd94a2fafd2258c3bae080cb8b11c2e127d5401bd0b4360fe2e5ff3787",
     "test/voice/twilio-outbound-stop-receiver.test.ts": "8c36bed64ad31a312fa678754b7368ef703f3e5dca011c698d4df7670d98bd16",
     "test/voice/twilio-outbound-stop-speech.test.ts": "d0cb417f573f625abf1598f1ac9555fca03f7f04fcca0b75a54e51e3420a846d",
-    "test/voice/verification-code-canary.test.ts": "9c2470b05142987a5c7a6ad05efb50a5576055310a83ab28c4d29020a42f9571"
+    "test/voice/verification-code-canary.test.ts": "982ae656566016669bdb3942cb7f99fda64f54ca349ece8f645117fe4ec64b9f"
   }
 }
