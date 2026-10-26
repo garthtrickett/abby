@@ -1,5 +1,32 @@
 # Execution progress and evidence
 
+## Separate synchronous denoising comparison, 26 October 2026
+
+The original noisy corpus completed one declared external standard DeepFilterNet3
+v0.5.6 + unchanged Nova-3/public-vocabulary cohort: 6 match, 9 ordinary mismatch,
+3 critical and 0 provider failures across all 18 attempts. The unchanged gate
+fails at 20.45% WER and three critical NS-006 results; final p95 is 333 ms and
+empty/truncated/delayed counts are zero. There is no clean/safety follow-on,
+serving selection or activation. Separate vocabulary-only and RNNoise results
+retain their original scope; no statistical significance or Krisp/Vapi equivalence
+is inferred. Krisp remains unavailable for its known missing developer key.
+
+The source/model archive, native C API, private compatible toolchain and compiled
+library were pinned. Four earlier LADSPA alignment probes remain failed; the
+standard synchronous model is a distinct declared configuration. Seventeen
+actual-library framing, quiet-gap calibration, child-failure/cleanup and fake
+Nova-3 composition controls passed before the provider trial. Three native
+priming/tail hops and a declared near-silence DC floor preserve all 2,679 input
+frame positions, with all processing and reaping inside measured timing.
+Independent audit recomputed all eighteen text verdicts and the original gate,
+verified all 32 frozen inputs and all native hop counts, and retained the failed
+acoustic result. The existing Abby production sources and 744 serving artifacts
+remain unchanged. The harness is external, not a new supported CLI/profile.
+
+See [the configuration and negative result](../eval/NOVA3_CLINIC_PROFILE.md#separate-synchronous-deepfilternet3-comparison-26-october-2026)
+and [the patient-free aggregate](../eval/baselines/deepgram-deepfilter-clinic-noise-20261026-v1.json).
+All original execution stages and roadmap requirements retain their scope.
+
 ## Ordinary cross-operation tasks, 26 October 2026
 
 The existing same-caller task owner is now exercised across booking,
