@@ -7,6 +7,7 @@ import { resultValue } from "../support/agent-appointment-proposals.ts";
 import { bookingCallFlowFixture } from "../support/cliniko-call-flow.ts";
 import { syntheticMultiTaskBookingProvider, syntheticTaskSequence } from "../support/call-task-sequence.ts";
 import { verificationNow, verificationCanaries } from "../support/caller-verification.ts";
+import { correctionTasksFixture } from "../support/patient-correction-tasks.ts";
 
 async function fixture() {
   const native = syntheticMultiTaskBookingProvider(), f = await bookingCallFlowFixture({ fetchAround: native.wrap }); f.flow.dispose();
@@ -134,3 +135,57 @@ test("E2E-381 committed task startup with failed activation stays unconfirmed an
     assert.equal(f.mail.length, 2); assert.equal(f.native.requests.length, 2);
   } finally { await f.closeSequence(); }
 });
+
+test("E2E-381 two approved contact corrections require fresh proof and consent while retaining the first receipt", async () => {
+  const f = await correctionTasksFixture();
+  const firstCity = "First Private Correction Town", secondCity = "Second Private Correction Town";
+  try {
+    await f.start(); const first = await f.correct(firstCity); assert.equal(first.status, "committed");
+    const intent = createOpenAIClinicalIntentResolver({ owner: f.flow, apiKey: "synthetic", model: "synthetic", clinicDate: () => "2026-10-04",
+      fetch: async () => { throw new Error("private contact requests must remain local"); } });
+    assert.deepEqual(resultValue(await intent({ callId: f.callId, sessionId: f.sessionId, turnId: crypto.randomUUID(),
+      text: "Please update my email to next-private-correction@example.test.", quality: "clear", at: verificationNow })), { kind: "workflow", operation: "patientUpdate" });
+    await f.start(); assert.equal(f.patches.length, 1); assert.equal(f.flow.verificationRequired, true);
+    assert.equal((await f.flow.publicIntentContext())?.lastAction, null);
+    if (first.mutation.request.kind !== "patientUpdate") throw new Error("wrong retired correction kind");
+    assert.equal((await f.flow.resolvePatientCorrection({ scope: f.scope, callId: f.callId, sessionId: f.sessionId,
+      policyVersion: f.flowConfig.policyVersion, correctionRef: first.mutation.request.correctionRef, now: verificationNow })).ok, false);
+    const second = await f.correct(secondCity); assert.equal(second.status, "committed");
+    assert.notEqual(first.key, second.key); assert.equal(f.mail.length, 2); assert.equal(f.reviews(), 2);
+    assert.deepEqual(f.patches, [{ city: firstCity }, { city: secondCity }]);
+    assert.deepEqual((await f.state()).actions[first.key], first);
+    assert.deepEqual(await f.flow.reconcile(first.mutation), { kind: "exactCommit", actionKey: first.key, hostRef: first.hostRef });
+    assert.deepEqual(await f.flow.write(first.mutation, verificationNow), { kind: "rejected", actionKey: first.key, reason: "forbidden" });
+    assert.equal((await f.flow.choose("patientUpdate")).ok, false);
+    // The active MemoryLedger may retain native references. Private values stay
+    // outside SAM; standalone SQL persistence is qualified separately.
+    for (const secret of [verificationCanaries[0]!, verificationCanaries[1]!, firstCity, secondCity, ...f.mail.map(mail => mail.code)])
+      assert.equal(JSON.stringify(await f.state()).includes(secret), false);
+    assert.equal(JSON.stringify(await f.flow.publicIntentContext()).includes(verificationCanaries[2]!), false);
+  } finally { await f.closeTasks(); }
+});
+
+for (const fault of ["unknown", "withdrawn", "permission"] as const)
+  test(`E2E-381 ${fault} contact correction cannot carry prior authority into another task`, async () => {
+    const f = await correctionTasksFixture();
+    try {
+      await f.start(); if (fault === "unknown") f.loseResponse();
+      const first = await f.correct("Private Correction Fault Town");
+      if (fault === "unknown") assert.ok(["uncertain", "needsReview"].includes(first.status));
+      else assert.equal(first.status, "committed");
+      if (fault === "withdrawn") await f.sequence.replace({ enabled: false });
+      if (fault === "permission") {
+        await f.start(); f.setPermitted(false);
+        assert.equal((await f.flow.submitCode(f.mail.at(-1)!.code)).verified, false);
+        assert.equal((await f.flow.collectPatientCorrection({ city: "Unapproved Correction Town" })).ok, false);
+      } else {
+        assert.equal((await f.flow.choose("patientUpdate")).ok, false); assert.equal(f.mail.length, 1);
+      }
+      const intent = createOpenAIClinicalIntentResolver({ owner: f.flow, apiKey: "synthetic", model: "synthetic", clinicDate: () => "2026-10-04",
+        fetch: async () => { throw new Error("denied private contact request must remain local"); } });
+      assert.deepEqual(resultValue(await intent({ callId: f.callId, sessionId: f.sessionId, turnId: crypto.randomUUID(),
+        text: "Update my contact details.", quality: "clear", at: verificationNow })), { kind: "clarify", reason: "menuUnavailable" });
+      assert.equal(f.patches.length, 1); assert.equal(f.reviews(), 1);
+      assert.deepEqual((await f.state()).actions[first.key], first);
+    } finally { await f.closeTasks(); }
+  });

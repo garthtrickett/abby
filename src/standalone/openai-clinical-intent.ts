@@ -268,7 +268,7 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     // Contact values supplied alongside an explicit correction request never go to the public model.
     if (!before.callerIdentityDenied && /\b(?:change|correct|update)\b.{0,48}\b(?:my (?:email|address|name|phone|date of birth|postcode)|patient details|contact details)\b/i.test(turn.text) &&
         !/\b(?:not|don't|do not|someone else|daughter|son|husband|wife)\b/i.test(turn.text)) {
-      return ok(before.workflow === null || before.workflow === "appointments.read" ? { kind: "workflow", operation: "patientUpdate" } : { kind: "clarify", reason: "menuUnavailable" });
+      return ok(before.workflow === null || before.workflow === "appointments.read" || before.nextTaskAvailable ? { kind: "workflow", operation: "patientUpdate" } : { kind: "clarify", reason: "menuUnavailable" });
     }
     if (before.workflow === "patientUpdate" && /^(?:please )?(?:prepare|save|review)(?: the| my)? correction[.!]?$/i.test(turn.text.trim())) {
       if (before.lastAction && ["dispatched", "committed", "uncertain", "needsReview"].includes(before.lastAction.status)) return ok({ kind: "outcome" });

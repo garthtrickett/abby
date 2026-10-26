@@ -1,5 +1,16 @@
 # Cliniko integration: thirteen-gap implementation order
 
+**Local correction-task private succession, 26 October 2026:** Existing approved
+same-caller corrections now have three reproduced barriers corrected: trusted
+next-task routing, private ready/field/consent reset and current-task private
+prompt guards. Seventeen source/private controls and five signed compiled
+HTTP/media/SQL cases pass; whole strict and 744 serving outputs pass, with 740
+parent outputs unchanged. Fresh proof/terms/consent, prior receipts, current
+uncertainty and task limits remain binding. This is local gap8/gap9 evidence;
+review, exact-head/normal delivery and clinic acceptance retain separate gates.
+See [scope and retained failures](EXECUTION_PROGRESS.md#approved-correction-task-private-succession-26-october-2026).
+
+
 **Ordinary cross-operation coverage, 26 October 2026:** Existing approved
 same-caller task progression is exercised across booking, cancellation and
 rescheduling, with fresh private proofs, played consent and preserved receipts.

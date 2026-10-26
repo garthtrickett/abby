@@ -39,7 +39,7 @@ if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_T
 }
 process.send?.({ kind: "verificationCanaryWindow", diagnostic: installClinicalVerificationCanaries() });
 const taskSequence = process.env.ABBY_SYNTHETIC_TASK_SEQUENCE === "1";
-if (process.env.ABBY_SYNTHETIC_TASK_SEQUENCE && (!taskSequence || operation !== "book" || process.env.ABBY_SYNTHETIC_SERVICE_MODE || process.env.ABBY_SYNTHETIC_LOCATION_MODE)) throw new Error("invalid synthetic task sequence mode");
+if (process.env.ABBY_SYNTHETIC_TASK_SEQUENCE && (!taskSequence || !["book", "patientUpdate"].includes(operation!) || process.env.ABBY_SYNTHETIC_SERVICE_MODE || process.env.ABBY_SYNTHETIC_LOCATION_MODE)) throw new Error("invalid synthetic task sequence mode");
 const intakeFields = process.env.ABBY_SYNTHETIC_INTAKE_FIELDS === "1";
 if (intakeFields && operation !== "intake") throw new Error("invalid synthetic intake field mode");
 const services = process.env.ABBY_SYNTHETIC_SERVICE_MODE === "1", smtpMode = process.env.ABBY_SYNTHETIC_SMTP_MODE === "1";
@@ -110,7 +110,7 @@ for (const path of approvalPaths) {
 }
 }
 const taskSource = taskSequence ? await syntheticTaskSequence({ ...c, cliniko: { ...c.cliniko, apiKey } }, f.folder) : undefined;
-const taskNative = taskSequence ? syntheticMultiTaskBookingProvider() : undefined;
+const taskNative = taskSequence && operation === "book" ? syntheticMultiTaskBookingProvider() : undefined;
 const publicInputs: string[] = [], privateInputs: string[] = [];
 let denied = false, lostWrite = false, mailLost = false, mutatePolicy = false, intakeFieldMismatch = false;
 let appointmentReadMode: "shown" | "unavailable" | "empty" = "shown";
@@ -160,6 +160,7 @@ return new Proxy(policies, { get(target, key) {
 const base = "https://api.au5.cliniko.com/v1";
 let after: Record<string, unknown> | undefined, patient: Record<string, unknown> | undefined;
 function providerFor(c: typeof f.flowConfig): typeof fetch {
+let correctionReviews = 0;
 let calendarPort = c.fetchPort!;
 if (offlineCalendar) {
   const members = new Set(c.serviceCatalogue!.services.flatMap(service => service.practitioners.map(p => p.practitionerId)));
@@ -210,6 +211,10 @@ return async (value, init) => {
     const body = JSON.parse(String(init?.body)); process.send?.({ kind: "providerMutation", method, path: url.pathname, body });
     const response = await c.fetchPort!(value, init);
     if (lostWrite && method === "PATCH") throw new Error("synthetic unknown correction write");
+    if (taskSequence && method === "POST" && response.status === 201) {
+      const row = await response.json(); row.id = String(71 + correctionReviews++);
+      return Response.json(row, { status: response.status });
+    }
     return response;
   }
   if (operation === "staff.request" && method === "POST" && url.pathname === "/v1/recalls") {
@@ -314,7 +319,7 @@ async function run(delivery?: PatientCodeDelivery) {
         intent(owner) {
           const submit = owner.submitCode.bind(owner);
           owner.submitCode = async code => { const result = await submit(code); process.send?.({ kind: "verificationResult", verified: result.verified }); return result; };
-          if (taskSequence) return createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-intent", model: "synthetic-model", clinicDate: () => "2026-10-04",
+          if (taskSequence && operation === "book") return createOpenAIClinicalIntentResolver({ owner, apiKey: "synthetic-intent", model: "synthetic-model", clinicDate: () => "2026-10-04",
             fetch: async (_value, init) => {
               const text = JSON.parse(JSON.parse(String(init?.body)).input[1].content).callerText; process.send?.({ kind: "modelTurn", text });
               const decisions = {

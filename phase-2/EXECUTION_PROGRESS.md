@@ -7147,3 +7147,74 @@ See the [complete source/clock trace and evidence](STRIPE_PROVIDER_REHEARSAL.md#
 Current facts/scenario checks, new fixed-head review and normal publication/
 cloud/resulting-main/root qualification remain separate. The original eleven
 stages, thirteen gaps and twenty-eight reuse placements remain in scope.
+
+## Approved correction task private succession, 26 October 2026
+
+A current earlier-gap check reproduced three independent barriers in the existing
+approved same-caller sequence. The trusted contact-request mapper refused an
+explicit new correction even when next-task approval was current. The private
+controller retained its previous ready state during the next registered-channel
+code. The core private-prompt guard counted the retired committed correction as
+current work and denied the next task's terms. Each failure has its original
+owning regression retained; all three exact cases subsequently pass.
+
+The mapper now admits the existing approved next task. A newly installed
+correction owner resets private verification, fields, consent and transcription
+state. Private correction/resend prompt guards consider current actions while
+preserving retired receipts. Current committed, uncertain or possibly-sent work
+remains noneditable. Sequence approval, fresh operation-bound proof, private
+terms/readback, separately played SAM consent and current patient permission
+remain independent; no new clinic authority, replay or request-limit change is
+introduced.
+
+Current local evidence:
+
+- Seventeen source/private checks pass without skips: fourteen registered
+  controls and three exact preserved reproductions. They cover both tasks,
+  fresh terms, prior receipt integrity, maximum-task refusal, approval withdrawal,
+  permission denial, uncertain writes and current-versus-retired prompt guards.
+- Whole strict TypeScript and a fresh fixture-inclusive serving build pass on
+  the corrective production bytes. All 744 output paths remain; 740 outputs
+  match the reviewed cross-operation parent. The intended changes are core
+  transition, trusted intent, private correction input and the synthetic runner.
+- All five signed compiled HTTP/media/PostgreSQL cases pass without skips:
+  correction success, unknown first correction, unknown second correction and
+  the two original booking cases. Private codes/values bypass the model; played
+  private terms and independent SAM consent precede writes. An uncertain
+  correction retains the contact fence. Both alias revisions advance at begin
+  and at inspected completion; uncertainty retains only the beginning fence.
+  All-column SQL/stdout canaries pass and all five case databases, the owned
+  outer database/container and its volume are absent after cleanup.
+
+The source cohort uses Node 22.23.0 and these registered files:
+`test/cliniko/call-task-sequence.test.ts` and
+`test/voice/private-patient-correction-input.test.ts`. The three unchanged
+external reproductions remain under the private
+`abby-administrative-call-tasks` state directory. The compiled cohort executes
+`test/voice/call-task-sequence-runner.test.ts` with
+`ABBY_ISOLATED_POSTGRES_PROBE=1` against an independently disposable admin
+connection and the emitted `start-synthetic-clinical-runner.js`; there is no
+source fallback. Source work1793005349465, build1793005626958 and compiled
+work1793006484328 naturally terminated/reaped0. Current compiled Node peak was
+450,633,728 bytes under 1 GiB; external PostgreSQL peaked at 142,184,448 bytes
+under 512 MiB, both Swap0 and no OOM/high/max events.
+
+Historical failures remain failed. The first source13/14 run used a wrapper
+spread that copied the synthetic patient getter; both writes had committed.
+Initial compiled3/5 and selected0/1 failures occur at second-task private terms,
+not at the final third-task response: the loader's .ts stack locations refer
+to generated JavaScript. The later core-corrected3/5 result retained an incorrect
+revision-count expectation; begin and completion each advance the fence.
+The final5/5 result corrects that test expectation and preserves every deadline,
+private playback, task-limit, write-count and SQL assertion. The initial two
+memory-only diagnostics also incorrectly banned native IDs in transient
+reference fields; they supplied no standalone SQL leak evidence. A resource
+admission refusal started no compiler. All reports and original artifacts remain
+preserved; none is relabelled green.
+
+This is scoped synthetic gap8/gap9 engineering. Metadata, two-axis review,
+qualified-parent integration, exact-head cloud checks and normal-main/root
+qualification retain separate gates. Every original execution stage, four
+booking steps, thirteen gaps and twenty-eight reuse placements remain. Real
+clinic configuration/authority, speech/mail/carrier acceptance, every
+operation/field/cohort combination and activation are not established.
