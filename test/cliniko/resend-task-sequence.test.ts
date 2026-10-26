@@ -19,6 +19,10 @@ test("E2E-381 two approved resends retain separate private proofs, native review
       const classify = (text: string) => f.intent(f.turn(crypto.randomUUID(), text));
       assert.deepEqual(resultValue(await classify("Send my appointment email.")), { kind: "notificationOutcome" });
       assert.deepEqual(resultValue(await classify("Send my appointment email to my wife.")), { kind: "clarify", reason: "changeUnsupported" });
+      for (const text of ["Did you resend my appointment details to alternate-private@example.test?", "Have you sent my appointment details to my wife?",
+        "Was the confirmation email sent to another address?", "Did you resend my confirmation email for another appointment to other@example.test?"])
+        assert.deepEqual(resultValue(await classify(text)), { kind: "clarify", reason: "changeUnsupported" });
+      assert.deepEqual(resultValue(await classify("Did you send the confirmation email for another appointment?")), { kind: "notificationOutcome" });
       assert.deepEqual(resultValue(await classify("Please send the confirmation email for another appointment.")), { kind: "workflow", operation: "confirmationResend" });
       assert.equal(await f.next(), true); assert.equal(f.input.blocked(), true);
       assert.equal(f.flow.confirmationResendRef, undefined);

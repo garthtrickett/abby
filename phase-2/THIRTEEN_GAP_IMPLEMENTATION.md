@@ -1,5 +1,11 @@
 # Cliniko integration: thirteen-gap implementation order
 
+**Recipient-question review refinement, 26 October 2026:** A supplied alternate
+recipient is refused locally even in a delivery question; an ordinary question
+about another appointment remains read-only. The exact regression is retained.
+Fresh 37 source checks, whole strict/744 emission and all 15 signed cases pass;
+final review, qualified-parent integration and normal delivery remain separate.
+
 **Local resend-task succession, 26 October 2026:** Explicit continuation for
 another appointment now obtains fresh private verification and selection;
 bare repeated send requests retain their existing outcome. Source37, whole

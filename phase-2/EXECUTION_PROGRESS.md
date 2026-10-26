@@ -7309,3 +7309,41 @@ retain separate gates. All eleven execution stages, four booking steps,
 thirteen gaps and twenty-eight reuse placements remain. Every subject/operation
 combination, real clinic/sender/recipient/restore authority, acoustic/public
 route/carrier acceptance and activation remain unproven.
+
+
+### Recipient-question review correction
+
+The full combined correction/resend review found that the new question shortcut
+ran before alternate-recipient rejection. A question about sending appointment
+details to a supplied address could therefore reach public classification. The
+exact new wording assertion fails against the unchanged earlier grammar
+(work1793015427786, original control passed). That failure and the original
+review remain preserved; it made no provider or database request.
+
+The correction keeps recipient-bearing questions in local refusal before the
+question shortcut. The exact phrase “for another appointment” identifies the
+appointment rather than an alternate recipient. Ordinary delivery questions
+remain read-only; no question gains send authority. Tests cover supplied
+addresses, spouse/other-address wording, past-tense questions and another-
+appointment questions with an address. Actual-owner source assertions require
+local refusal with a model port that throws if called; the ordinary delivery
+question still resolves to notification outcome.
+
+After that review correction, source1793015474684 passed all 37 controls,
+strict/build1793015505355 passed with all 744 paths and only the grammar output
+changed from the previous resend build, and signed1793015800238 passed all 15
+exact earlier case identities without skips. Source and signed SQL/privacy,
+OTP/raw-backup/native180, fresh proofs, separate consent, uncertainty and owned
+cleanup assertions remain. The signed wrapper now explicitly distinguishes the
+15 test cases from the one existing suite heading. It records its measured
+observations before parser assertions; its actual exit is 0, Node peak
+371,974,144 bytes and separate database peak 163,581,952 bytes, with zero recorded
+OOM events. All waits were reaped and owned containers/volumes are absent.
+The previous 744 outputs were preserved byte-for-byte before rebuilding.
+
+The original wrapper1/read-only reconciliation0 and their missing original
+Node peak remain historical facts, rather than being replaced by this new run.
+The new source, compiler and signed checks bind the same corrected production
+and test bytes; the final facts/docs refresh changes only documentation. This
+remains local synthetic qualification, with fixed-head final review, actual
+qualified parent, own CI and resulting-main/root delivery still separate.

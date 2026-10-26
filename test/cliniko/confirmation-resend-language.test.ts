@@ -14,6 +14,8 @@ test("E2E-381 another appointment resend is distinct from another recipient or a
     assert.equal(confirmationResendLanguage(text), "anotherAppointment");
   for (const text of ["Don't send the confirmation email for another appointment", "Did you send the confirmation email for another appointment?"])
     assert.equal(confirmationResendLanguage(text), undefined);
-  for (const text of ["Send the confirmation email for another appointment to my wife", "Send the confirmation email for another appointment to other@example.test"])
+  for (const text of ["Send the confirmation email for another appointment to my wife", "Send the confirmation email for another appointment to other@example.test",
+    "Did you resend my appointment details to alternate-private@example.test?", "Have you sent my appointment details to my wife?",
+    "Was the confirmation email sent to another address?", "Did you resend my confirmation email for another appointment to other@example.test?"])
     assert.equal(confirmationResendLanguage(text), "unsupportedRecipient");
 });
