@@ -1,5 +1,46 @@
 # Execution progress and evidence
 
+## Mixed class and individual booking tasks, 26 October 2026
+
+The remaining-scope audit found that CallFlow refused every class/individual
+owner switch before consulting approved settled-task progression. The owning
+reproduction committed each first booking but refused the second verifier in
+both directions. The correction retains that boundary unless the existing
+same-caller task approval independently permits advancement. Each new owner
+still captures its own service approval, native binding and fresh private proof;
+no offer, pass entitlement, verification or write permission transfers.
+
+Current local preservation passes **64 source checks, zero skips**: sixteen mixed
+controls plus forty-eight existing task, class-routing and native-pass controls.
+The mixed controls cover both service orders, separately checked pass consumption,
+missing task approval, unsent confirmation, possible first writes, sequence and
+service withdrawal, approving membership, changed caller candidates, and authority
+withdrawal after the second readback. The pass fixture honors the existing played
+quota wait and requires a new affirmation; production limits are unchanged.
+
+Four signed HTTP/WebSocket journeys through the real clinical host and disposable
+PostgreSQL also pass, zero skips. Both service orders cover confirmed and lost
+second responses, fresh private keypad verification, separate played consent,
+first-receipt reconciliation, denied mutation replay, third-task refusal and SQL
+privacy scans. All four bounded databases and volumes are absent after cleanup.
+The classifier, Cliniko, delivery, transcription and speech are synthetic; this
+is neither real acoustic/carrier acceptance nor full process recovery.
+
+The first fixture omitted native relationship self-links; the next pass fixture
+omitted the required quota-wait confirmation. Both failures remain preserved.
+The initial whole strict check reported three new test inference errors, corrected
+with explicit ActionState and number types. Final strict/build, independent review,
+exact-head cloud delivery and actual-main qualification are separate evidence.
+This qualifies mixed **booking** progression, not every multi-operation, catalogue,
+representative, financial or staff combination. All eleven stages, thirteen gaps,
+booking requirements and twenty-eight reuse placements remain in scope.
+
+Sources: [progression](../src/standalone/cliniko-call-flow.ts),
+[existing task authority](../src/standalone/cliniko-call-tasks.ts),
+[source controls](../test/cliniko/mixed-class-tasks.test.ts),
+[signed journeys](../test/voice/mixed-class-task-call.test.ts),
+[one-caller native fixture](../test/support/mixed-class-tasks.ts).
+
 ## Current readiness reasons on both setup surfaces, 25 October 2026
 
 R09 exposed a difference between the two existing automation setup screens:

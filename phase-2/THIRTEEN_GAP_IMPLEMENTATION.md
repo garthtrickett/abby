@@ -1,5 +1,18 @@
 # Cliniko integration: thirteen-gap implementation order
 
+**Gap9/gap10 mixed booking checkpoint, 26 October 2026:** A completed ordinary
+class booking and an individual appointment may now progress in either order
+under the existing explicit same-caller task sequence. The previous unconditional
+service-type refusal is retained for in-progress or unapproved switching. Sixteen
+new ordinary/pass source controls and forty-eight inherited controls pass; four
+signed ordinary real-host/SQL journeys also pass, including uncertain second
+outcomes, original receipts, no replay and third-task refusal. Each task retains
+independent service approval, fresh patient verification and played consent.
+Pass consumption is not individual appointment authority or financial settlement.
+Whole strict/build and normal delivery remain independently qualified gates;
+other operation/catalogue/representative/staff combinations and clinic acceptance
+remain open. All original gaps remain. See [evidence and limits](EXECUTION_PROGRESS.md#mixed-class-and-individual-booking-tasks-26-october-2026).
+
 ## Readiness explanations and owner-designated demo backup, 25 October 2026
 
 The scoped R09 correction gives both existing automation setup screens shared
