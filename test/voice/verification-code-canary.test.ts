@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import crypto from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { distinctFromClock, drawDistinctCode, drawSqlCanaryCode, assertDirectSqlVerificationCanaryContext, installDirectSqlVerificationCanaries, installScopedDirectSqlVerificationCanaries, installClinicalVerificationCanaries, installResendVerificationCanaries, installStagedVerificationCanaries } from "../support/verification-code-canary.ts";
+import { distinctFromClock, drawDistinctCode, drawSqlCanaryCode, assertDirectSqlVerificationCanaryContext, installDirectSqlVerificationCanaries, installScopedDirectSqlVerificationCanaries, installMemoRecoveryVerificationCanaries, installClinicalVerificationCanaries, installResendVerificationCanaries, installStagedVerificationCanaries } from "../support/verification-code-canary.ts";
 import { withIsolatedVerificationSql, assertIsolatedVerificationCanary } from "../support/isolated-verification-sql.ts";
 
 test("numeric verification canaries reject every real timestamp substring across decimal rollovers", () => {
@@ -128,5 +128,64 @@ test("actual isolated SQL child canary lifetime", () => {
     const env: NodeJS.ProcessEnv = { ...process.env, ABBY_ISOLATED_POSTGRES_PROBE: "1", DATABASE_URL: "postgresql://localhost/abby_test_canary_lifecycle" };
     delete env.NODE_TEST_CONTEXT;
     execFileSync(process.execPath, ["--test", entry], { env, timeout: 10000, stdio: "pipe" });
+  } finally { rmSync(folder, { recursive: true, force: true }); }
+});
+
+
+test("cold memo canary sampling cannot change the issuer in another process", () => {
+  const before = crypto.randomInt;
+  assert.throws(() => installMemoRecoveryVerificationCanaries(new Set()), /isolated memo recovery sender/);
+  assert.equal(crypto.randomInt, before);
+});
+
+test("cold memo sender rejects pre-challenge numbers and invalid contexts while restoring its exact issuer", () => {
+  const folder = mkdtempSync(join(tmpdir(), "abby-cold-memo-canary-"));
+  try {
+    const directory = join(folder, "dist", "runtime", "test", "support"); mkdirSync(directory, { recursive: true });
+    const entry = join(directory, "administrative-memo-recovery-worker.js");
+    const source = new URL("../support/verification-code-canary.ts", import.meta.url).href;
+    writeFileSync(entry, `import assert from "node:assert/strict";
+import crypto, { randomInt } from "node:crypto";
+import { syncBuiltinESMExports } from "node:module";
+import { installMemoRecoveryVerificationCanaries, distinctFromClock } from ${JSON.stringify(source)};
+const original = crypto.randomInt, descriptor = Object.getOwnPropertyDescriptor(crypto, "randomInt");
+const good = "postgresql://127.0.0.1/abby_memo_cold_" + "a".repeat(32);
+for (const database of ["postgresql://remote.invalid/abby_memo_cold_" + "a".repeat(32), "postgresql://127.0.0.1/postgres", "https://127.0.0.1/abby_memo_cold_" + "a".repeat(32)]) {
+  process.env.DATABASE_URL = database;
+  assert.throws(() => installMemoRecoveryVerificationCanaries(new Set()), /isolated memo recovery sender/);
+  assert.equal(crypto.randomInt, original);
+}
+process.env.DATABASE_URL = good;
+for (const invalid of [new Set(["not-a-code"]), new Set([111222])]) {
+  assert.throws(() => installMemoRecoveryVerificationCanaries(invalid), /Invalid synthetic/);
+  assert.equal(crypto.randomInt, original);
+}
+const now = Date.now(), window = { sinceMs: now - 65000, throughMs: now + 605000 };
+const candidates = Array.from({ length: 100000 }, (_, i) => i * 10).filter(code => distinctFromClock(code, window));
+assert.ok(candidates.length >= 2);
+const [blocked, accepted] = candidates; let calls = 0;
+Object.defineProperty(crypto, "randomInt", { ...descriptor, value: (...args) => args.length === 2 && args[0] === 0 && args[1] === 1000000
+  ? (++calls === 1 ? blocked : accepted) : Reflect.apply(original, crypto, args) });
+syncBuiltinESMExports();
+const priorIssuer = crypto.randomInt, exclusions = new Set([String(blocked).padStart(6, "0")]);
+const sampler = installMemoRecoveryVerificationCanaries(exclusions);
+try {
+  exclusions.add(String(accepted).padStart(6, "0"));
+  assert.equal(randomInt(0, 1000000), accepted); assert.equal(calls, 2);
+  assert.throws(() => installMemoRecoveryVerificationCanaries(new Set()), /already installed/);
+} finally { sampler.close(); }
+assert.equal(crypto.randomInt, priorIssuer); assert.equal(randomInt, priorIssuer);
+Object.defineProperty(crypto, "randomInt", descriptor); syncBuiltinESMExports();
+assert.equal(crypto.randomInt, original); assert.equal(randomInt, original);
+`);
+    execFileSync(process.execPath, [entry], { env: { ...process.env, ABBY_ISOLATED_POSTGRES_PROBE: "1" }, timeout: 10000, stdio: "pipe" });
+    const numericInput = spawnSync(process.execPath, [new URL("../../dist/runtime/test/support/administrative-memo-recovery-worker.js", import.meta.url).pathname], {
+      env: { PATH: process.env.PATH, DATABASE_URL: "postgresql://127.0.0.1:1/abby_memo_cold_" + "a".repeat(32), ABBY_ISOLATED_POSTGRES_PROBE: "1" },
+      input: JSON.stringify({ family: "classMovePartial", mode: "send", verificationCanaryExclusions: [111222],
+        scope: { tenantId: "invalid-canary", clinicId: "clinic", locationId: "main" }, proxy: "http://127.0.0.1:1" }), timeout: 10000 });
+    assert.equal(numericInput.error, undefined);
+    assert.equal(numericInput.signal, null); assert.notEqual(numericInput.status, 0);
+    assert.match(numericInput.stderr.toString(), /ERR_ASSERTION/);
+    assert.doesNotMatch(numericInput.stderr.toString(), /isolated memo recovery sender|ECONNREFUSED/);
   } finally { rmSync(folder, { recursive: true, force: true }); }
 });
