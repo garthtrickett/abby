@@ -1,5 +1,13 @@
 # Abby execution order
 
+**Ordinary cross-operation coverage, 26 October 2026:** Existing approved
+same-caller task progression is exercised across booking, cancellation and
+rescheduling, with fresh private proofs, played consent and preserved receipts.
+The same-minute repeated-reschedule limit remains a truthful pre-send refusal.
+Six distinct signed real-host/SQL operation orders pass locally; source/type/build,
+review and actual qualified-parent delivery retain separate gates. This does not
+complete gap9 or authorize clinic activation. See [scope and limits](EXECUTION_PROGRESS.md#ordinary-cross-operation-tasks-26-october-2026).
+
 **Mixed booking tasks, 26 October 2026:** The remaining-scope audit reproduced
 an unconditional class/individual switch refusal after a completed booking.
 Advancement now uses the existing current settled-task approval and creates a
