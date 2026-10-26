@@ -1,5 +1,17 @@
 # Abby execution order
 
+**Mixed booking tasks, 26 October 2026:** The remaining-scope audit reproduced
+an unconditional class/individual switch refusal after a completed booking.
+Advancement now uses the existing current settled-task approval and creates a
+new separately approved service owner and fresh private proof. Sixty-four source
+preservation checks and four signed ordinary HTTP/WebSocket/SQL journeys pass
+locally, with no skips. Pass consumption is separately exercised in both source
+orders; no money, representative class authority, real provider or activation is
+inferred. Whole strict/build, reviews and actual-head/main delivery are separately
+qualified. The original eleven stages, four booking steps, thirteen gaps and
+twenty-eight reuse placements remain; this is one gap9/gap10 cohort, not their
+completion. See [the exact scope](EXECUTION_PROGRESS.md#mixed-class-and-individual-booking-tasks-26-october-2026).
+
 **Owner-designated demo backup, 25 October 2026:** A separate agent completed
 the actual browser primary-nonacknowledgment to backup-acknowledgment route
 after 60.227 real monotonic seconds. Lost-response retry, receiver retry and

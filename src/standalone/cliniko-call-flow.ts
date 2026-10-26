@@ -869,12 +869,14 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     let created: Owner | undefined;
     try {
       const previousOwner = this.#owner;
-      if (previousOwner && (previousOwner instanceof ClinikoClassSession) !== classAttendance) return unavailable();
       const replacingService = !!previousOwner && (!!serviceChoice && ["book", "intake"].includes(operation) || !!classSelectionRef && classAttendance) && this.#workflow === operation;
       const before = await awaitUntilAbort(this.#config.ledger.read(this.#config.receipt.callId, this.#config.receipt.scope), signal);
       if (!before?.ok || expectedRevision !== undefined && before.value.conversationRevision !== expectedRevision) return unavailable();
       if (this.#tasks && representative && !await this.#tasks.allowsRepresentative(before.value, operation, false)) return unavailable();
       const advancing = !!previousOwner && !!this.#tasks && await this.#tasks.allows(before.value, operation, true);
+      // A settled, approved next task constructs its own service owner and proof.
+      // An in-progress task cannot change between class and individual workflows.
+      if (previousOwner && !advancing && (previousOwner instanceof ClinikoClassSession) !== classAttendance) return unavailable();
       if (this.#tasks && !advancing && !await this.#tasks.allows(before.value, operation, false)) return unavailable();
       const currentActions = this.#tasks?.currentActions(before.value) ?? Object.values(before.value.actions);
       const replacingPerson = !!representative && (this.#representative?.owner !== representative.owner || this.#representative.selectionRef !== representative.selectionRef);
