@@ -105,7 +105,7 @@ export class PrivatePatientCorrectionInput implements PrivateKeypadInput {
     this.#launch(async () => { await this.#media.stop(); if (this.#lifetime.signal.aborted) return; this.#media = this.#createMedia(); await this.#menu(); });
     return true;
   }
-  #currentCorrection(): boolean {
+  #synchronizeCorrectionTask(): boolean {
     const correction = this.#config.owner()?.patientCorrection;
     if (!correction || this.#lifetime.signal.aborted) return false;
     if (correction === this.#correction) return true;
@@ -122,18 +122,18 @@ export class PrivatePatientCorrectionInput implements PrivateKeypadInput {
     return true;
   }
   handlesDigit(digit: string): boolean {
-    return this.#currentCorrection() && this.#stage === "ready" && (digit === "1" || digit === "3");
+    return this.#synchronizeCorrectionTask() && this.#stage === "ready" && (digit === "1" || digit === "3");
   }
   claim(callId: string, sessionId: string) { return this.#keypad.claim(callId, sessionId); }
   start() { return !this.#lifetime.signal.aborted && this.#keypad.start(); }
   blocked(): boolean {
-    if (this.#stage === "closed" || this.#config.owner()?.closed || !this.#currentCorrection()) return true;
+    if (this.#stage === "closed" || this.#config.owner()?.closed || !this.#synchronizeCorrectionTask()) return true;
     return this.#stage !== "ready" || this.#keypad.blocked();
   }
   async accept(digit: string): Promise<"pending" | "verified" | "failed"> {
     const owner = this.#config.owner();
     if (this.#stage === "closed" || !owner?.patientCorrection || owner.closed) return "failed";
-    if (!this.#currentCorrection()) return this.#lifetime.signal.aborted ? "failed" : "pending";
+    if (!this.#synchronizeCorrectionTask()) return this.#lifetime.signal.aborted ? "failed" : "pending";
     if (digit === "*" && !["verification", "prospectiveCode"].includes(this.#stage)) { this.stop(); return "failed"; }
     if (this.#working) return "pending";
     if (this.#stage === "verification") {
@@ -195,7 +195,7 @@ export class PrivatePatientCorrectionInput implements PrivateKeypadInput {
   }
   async acceptMedia(frame: MediaFrame): Promise<"pending" | "failed"> {
     if (this.#stage === "closed") return "failed";
-    if (!this.#currentCorrection()) return this.#lifetime.signal.aborted ? "failed" : "pending";
+    if (!this.#synchronizeCorrectionTask()) return this.#lifetime.signal.aborted ? "failed" : "pending";
     if (this.#stage !== "field") return "pending";
     const result = await this.#media.acceptMedia({ ...frame, sessionId: `${this.#privateSession}:${this.#mediaGeneration - 1}`, sequence: this.#sequence++ });
     if (!result.ok) { this.stop(); return "failed"; } return "pending";
