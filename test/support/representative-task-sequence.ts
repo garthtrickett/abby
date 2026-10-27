@@ -8,7 +8,7 @@ import { verificationNow } from "./caller-verification.ts";
 import type { ClinikoBookingMemoConfig } from "../../src/standalone/cliniko-booking-memo.ts";
 
 export async function representativeTaskSequenceFixture(mode = "independentlyVerifiedPatients", supplied?: Readonly<{
-  caller: Awaited<ReturnType<typeof representativeCallOwnerFixture>>; memo: ClinikoBookingMemoConfig; clock: () => string
+  caller: Awaited<ReturnType<typeof representativeCallOwnerFixture>>; memo?: ClinikoBookingMemoConfig; clock: () => string
 }>) {
   const f = supplied?.caller ?? await representativeCallOwnerFixture({ multiplePatients: true }); f.flow.dispose();
   const clock = supplied?.clock ?? (() => verificationNow);
@@ -20,7 +20,7 @@ export async function representativeTaskSequenceFixture(mode = "independentlyVer
     resultValue(await f.f.runtime.resolvePresentation(f.f.callId, pending, "played", f.f.sessionId, clock()));
   };
   const native = syntheticMultiTaskBookingProvider();
-  const source = await syntheticTaskSequence({ ...f.flowConfig, ...(supplied ? { memo: supplied.memo, clock } : {}), representativeInput: representativeInputOptions(f), fetchPort: native.wrap(f.flowConfig.fetchPort) }, f.f.folder);
+  const source = await syntheticTaskSequence({ ...f.flowConfig, ...(supplied ? { ...(supplied.memo ? { memo: supplied.memo } : {}), clock } : {}), representativeInput: representativeInputOptions(f), fetchPort: native.wrap(f.flowConfig.fetchPort) }, f.f.folder);
   await source.replace({ patientSelection: mode });
   const flow = resultValue(ClinikoCallFlow.create(source.config)), reception = new TextReception(f.f.ledger, f.f.policies, flow, undefined, undefined, undefined, undefined, supplied?.clock);
   let sequence = 0;
@@ -50,4 +50,3 @@ export async function representativeTaskSequenceFixture(mode = "independentlyVer
   };
   return { ...f, flow, reception, source, native, start, verify, book, play, closeSequence: async () => { flow.dispose(); await f.close(); } };
 }
-
