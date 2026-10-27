@@ -52,6 +52,12 @@ scope and 256 MiB database without changing assertions, deadlines or product quo
 the original admission exit 1 remains recorded separately. Earlier failed fixtures, wrapper accounting results,
 independent reconciliation and unavailable original peak measurements stay recorded.
 
+The first final metadata check (`1793064278340`) ended with two passes and
+one failure: the fingerprint date said 27 October while the unchanged facts
+retained their 26 October review date. The fingerprint now preserves that original
+review date; the failed check remains recorded and the corrected metadata still
+requires its own successful check.
+
 This final ledger refresh changes no code, tests or runtime bytes. The 127 facts
 and 674 citation identities remain, with hashes refreshed for current files.
 Exact-head metadata, both full BASE808...finalHEAD reviews, own CI, normal merge,
