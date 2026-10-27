@@ -499,8 +499,8 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
     return { kind: "reschedulingMenu", stage: "practitioners", from: date, to: date, ...(next ? { nextPractitioners: true as const } : {}) };
   }
   async preferenceMenuIntent(text: string): Promise<VoiceIntent | undefined> {
-    const preference = bookingPreferenceLanguage(text);
-    if (!preference) return undefined;
+    const requested = bookingPreferenceLanguage(text);
+    if (!requested) return undefined;
     const denied = { kind: "clarify", reason: "searchPreferenceUnavailable" } as const;
     if (this.closed || this.#staffActive || this.#verificationRequired || !(this.#owner instanceof ClinikoBookingSession)) return denied;
     const state = await this.#config.ledger.read(this.#config.receipt.callId, this.#config.receipt.scope);
@@ -509,6 +509,8 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       return { kind: "clarify", reason: "changeAfterSend" };
     const host = this.#owner.effects;
     if (!(host instanceof ClinikoCatalogueBookingHost)) return denied;
+    const preference: import("../core/booking-search-preference.ts").BookingSearchPreference =
+      "kind" in requested ? { practitioner: host.originalPractitionerName() } : requested;
     const profile = await host.searchProfile();
     if (!profile || this.closed) return denied;
     const deniedAt = { ...denied, approvedLocation: profile.locationName };

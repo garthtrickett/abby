@@ -3,8 +3,10 @@ import { normalizedSpokenName } from "../core/pending-location.ts";
 
 /** Public preference syntax; never a provider ID, implicit fallback consent or
  * clinical service selection. Unmatched names are checked by the call owner. */
-export function bookingPreferenceLanguage(text: string): BookingSearchPreference | undefined {
+export function bookingPreferenceLanguage(text: string): BookingSearchPreference | Readonly<{ kind: "originalPractitioner" }> | undefined {
   const value = text.trim().replace(/[.!?]+$/, "").replace(/\s+/g, " ");
+  if (/^(?:(?:can|could) (?:I|we) |(?:please )?)?(?:go back to|check|see) (?:my|the) original practitioner(?: again)?(?:,? please)?$/i.test(value))
+    return { kind: "originalPractitioner" };
   if (/^(?:anyone|any practitioner) is fine(?:[.!?]? (?:what is|what's) the soonest opening)?$/i.test(value)) return { practitioner: "any" };
   const person = value.match(/^(?:I would rather see|I prefer|I want to see|Can I see) (.+?)(?:,? even if I have to wait|,? please)?$/i);
   if (person && normalizedSpokenName(person[1])) return { practitioner: person[1]! };

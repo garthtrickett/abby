@@ -29,6 +29,7 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
   readonly #lifetime = new AbortController();
   #window: BookingSearchWindow | undefined;
   #preference: BookingSearchPreference | undefined;
+  #originalPractitioner: string;
   #menu: Readonly<{ turnId: string; member: Member }> | undefined;
   #selection: Readonly<{ verificationRef: string; offerRef: string; member: Member }> | undefined;
   #prepared: Readonly<{ request: Extract<ActionRequest, { kind: "book" }>; revision: number; member: Member }> | undefined;
@@ -40,12 +41,15 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
     if (!(config.catalogue instanceof OwnerFileBookingCatalogue) || !config.members.length || config.members.length > 3 || config.members.some(member => !(member.host instanceof ClinikoBookingHost))) throw new TypeError("invalid approved catalogue composition");
     if (config.initialPreference !== undefined && !validBookingSearchPreference(config.initialPreference)) throw new TypeError("invalid initial practitioner preference");
     this.#preference = config.initialPreference && Object.freeze({ ...config.initialPreference });
+    this.#originalPractitioner = config.initialPreference?.practitioner && config.initialPreference.practitioner !== "any"
+      ? config.initialPreference.practitioner : config.members[0]!.name;
     this.#config = Object.freeze({ ...config, scope: Object.freeze({ ...config.scope }), members: Object.freeze(config.members.map(member => Object.freeze({ ...member }))) });
   }
   get financial() { return this.#selection?.member.host.financial ?? this.#prepared?.member.host.financial; }
   bookingMenuAvailable(): boolean { return !this.#lifetime.signal.aborted && !this.#attempted; }
   async searchProfile() { return this.#lifetime.signal.aborted ? undefined : this.#profile(); }
   currentSearchPreference(): BookingSearchPreference | undefined { return this.#preference && { ...this.#preference }; }
+  originalPractitionerName(): string { return this.#originalPractitioner; }
   async #profile() { const read = await this.#config.catalogue.current(this.#config.scope); return read.ok ? read.value : undefined; }
   #matches(query: BookingMenuQuery): boolean {
     const c = this.#config;
@@ -71,6 +75,7 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
     const members = preference?.practitioner === "any" ? this.#config.members : preference?.practitioner ?
       this.#config.members.filter(member => normalizedSpokenName(member.name) === normalizedSpokenName(preference.practitioner)) : [this.#config.members[0]!];
     if (!members.length) return denied();
+    if (preference?.practitioner && preference.practitioner !== "any") this.#originalPractitioner = members[0]!.name;
     // Member reads share one operation-bound verifier. Its contact-attestation
     // recheck is exclusive, so serialize these reads; independent calls/tests
     // still run in parallel. Partial evidence never establishes earliest/no-match.
@@ -87,9 +92,14 @@ export class ClinikoCatalogueBookingHost extends NoStoredKnowledge implements Bo
     const winner = found[0];
     if (!winner || !this.#matches(bound) || epoch !== this.#epoch) return denied();
     this.#menu = { turnId: query.turnId, member: winner.member };
+    const original = completed.find(item => item.member.name === this.#originalPractitioner);
     return ok({ ...winner.read, locationName: profile.locationName, searchScope: { locationName: profile.locationName,
       practitioners: members.map(member => member.name), from: query.from, to: query.to,
       selection: preference?.practitioner === "any" ? "earliestApproved" : preference?.practitioner ? "preferred" : "default" },
+      ...(preference?.practitioner === "any" && winner.read.choices.length && original && original !== winner ? { comparison: { original: {
+        ...original.read, locationName: profile.locationName, searchScope: { locationName: profile.locationName,
+          practitioners: [original.member.name], from: query.from, to: query.to, selection: "preferred" as const },
+      } } } : {}),
       ...(completed.some(item => item.read.maxSearchDays !== undefined)
         ? { maxSearchDays: Math.min(...completed.map(item => item.read.maxSearchDays ?? 7)) } : {}) });
   }
