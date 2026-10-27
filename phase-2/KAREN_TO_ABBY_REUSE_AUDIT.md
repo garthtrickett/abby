@@ -218,7 +218,7 @@ Abby already has membership-bound magic links, origin/CSRF controls, secure cook
 
 **Local R15/R16 evidence, 27 October 2026:** Four additional witnesses, within
 26 passing catalogue/setup/gateway controls, exercise exact saved-approval
-preservation, explicit new-member approval and revocation/rotation while an
+preservation, discovery without automatic approval and revocation/rotation while an
 actual native relationship page is held. Current strict types and the reused
 746-output serving graph pass with no production change. Independent custom
 service metadata and authenticated clinic acceptance remain separate; this does
