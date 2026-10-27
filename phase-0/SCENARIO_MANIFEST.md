@@ -1,5 +1,10 @@
 # Scenario manifest, version 1.250
 
+**Booking final-read refusal qualification, 27 October 2026:** E2E-279/E2E-392 add direct final-read refusal assertions.
+Four new source cases supply16 fault scenarios; all22 cases pass with the original
+18 retained. Full-call and other evidence levels remain unchanged; runtime744
+matches parent. See [scope](../phase-2/EXECUTION_PROGRESS.md#booking-final-read-refusal-qualification-27-october-2026).
+
 **Deliberately suspended booking preparation, 27 October 2026:** E2E-279 and E2E-392 retain their existing evidence levels.
 Four existing source dispatch-order witnesses now suspend preparation; all18
 selected cases pass and all744 fresh runtime outputs remain exact. Full-call

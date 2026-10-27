@@ -1,8 +1,16 @@
 # Cliniko integration: thirteen-gap implementation order
 
+**Booking final-read refusal qualification, 27 October 2026:** The same local test-only patch now passes22 cases:
+the original18 plus four final-read cases containing16 malformed, incomplete,
+deadline and interruption scenarios across online/roster/ordinary-class/pass
+dispatch. Saved reviews survive; no create or late/replayed send occurs. Whole
+strict/fresh744 emission passes, all runtime bytes exact to parent. No product
+quota, existing deadline or runtime change; review/delivery and real acceptance
+remain separate. See [scope](EXECUTION_PROGRESS.md#booking-final-read-refusal-qualification-27-october-2026).
+
 **Deliberately suspended booking preparation, 27 October 2026:** Four existing online/roster/ordinary-class/pass-class
 ordering cases now suspend actual contact, proof, policy, POST-budget and selected
-pass preparation. All18 cases in both files pass; whole strict and fresh744
+pass preparation. At the earlier checkpoint, all18 cases in both files passed; whole strict and fresh744
 serving outputs pass, all byte-identical to the reviewed parent. No runtime,
 case identity, deadline or clinic policy changes. Final review/delivery and real
 acceptance remain separate. See [scope and retained failures](EXECUTION_PROGRESS.md#deliberately-suspended-booking-preparation-27-october-2026).

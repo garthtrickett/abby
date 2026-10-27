@@ -1,6 +1,55 @@
 # Execution progress and evidence
 
+## Booking final-read refusal qualification, 27 October 2026
+
+The same unpublished booking-verification change now directly covers the plan's
+final-read failure row, alongside its deliberately suspended preparation cases.
+Four new cases exercise online, approved-roster, ordinary-class and approved-pass
+class dispatch. Each arms faults only at the actual final availability/capacity
+reader, after proof, played consent and the acknowledged provider review. Four
+faults per path supply malformed native data, incomplete pagination, an actual
+unchanged read deadline and caller-owner interruption. Deadline/interruption
+providers deliberately ignore abort and later return valid data.
+
+All22 cases in the two complete files pass: the original18 identities are retained
+plus four new cases containing16 fault scenarios. Every new scenario requires
+zero clinical writes, the one saved review and a terminal noncommitted action.
+The deadline/interruption paths observe the native read signal aborted; releasing
+the late provider result and draining again still makes no create or replay.
+Ordinary/pass preparation, exact acknowledgement and local lifetime controls
+remain in that same cohort. Existing parser pagination and proof/lease expiry
+tests keep their separate scope; this is direct composed fault evidence, not a
+claim of every possible provider fault or race combination.
+
+Whole strict TypeScript and a fresh serving build pass. All744 runtime outputs
+match the separately preserved earlier build and reviewed guardian parent. Only
+the same two source test files change; no production code or support-worker output
+changes. Existing case deadlines and configured product quotas are untouched.
+The four new outer cases have90-second test ceilings, while their actual reader
+and host deadlines remain unchanged. Source time stays fixed; the timeout witness
+uses real bounded waiting rather than advancing caller time or shrinking a gate.
+
+Reproduce with Node22.23.0 and `scripts/test-node.mjs --test --test-concurrency=1
+test/cliniko/provider-acknowledged-booking.test.ts
+test/cliniko/class-booking-acknowledgement.test.ts`, whole `tsc --noEmit` and
+`tsc --project tsconfig.voice-test.json`. Source512MiB and compiler2GiB retain
+fresh host admission; no external provider, SQL database or carrier is used.
+The earlier18-case build/review and both instrumentation negatives remain
+preserved as historical observations. The new22-case source cohort passes first
+attempt; final metadata/review and actual qualified-parent/own/main delivery
+remain independent gates.
+
+This supplies local evidence for the named delayed-preparation and failed-final-
+read requirements, not completion of all14 booking rows, all13 gaps or activation.
+All11 execution stages,4 booking steps,9 implementation commands and28 scoped
+reuse placements remain. Real clinic/staff/inbox/private-record access/retention,
+source/restore, noisy-speech/public-route/carrier and activation acceptance remain
+separate; the unavailable Krisp key and owner-deferred cash/bank invoice stay
+pending. No deployment or patient traffic is authorized.
+
 ## Deliberately suspended booking preparation, 27 October 2026
+
+This section records the earlier18-case checkpoint; current22-case qualification is above.
 
 The booking plan explicitly requires delayed preparation before final availability.
 Four existing positive source cases now keep real preparation promises pending
