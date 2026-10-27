@@ -1,5 +1,96 @@
 # Execution progress and evidence
 
+## Cold memo review refinement, 26 October 2026
+
+Independent review of the first corrective commit found one malformed-input
+defect: a regular expression coerced numeric exclusion values to strings, but
+the rejection sampler compares string Set entries. The source witness
+`1793023442914` failed that requirement. Both the private sender IPC boundary
+and the test-only sampler now explicitly reject nonstrings before installing
+the sampler or opening the database. The twelve current controls
+(`1793024044965`) pass, including malformed Set and actual compiled-worker JSON
+refusals. Their first source-worker probe timed out at the unchanged ten-second
+bound (`1793023597953`); that failed probe is retained separately.
+
+Current whole strict TypeScript and the voice-test build (`1793023629992`)
+both exit 0, with their individual exits persisted before output validation.
+The final nonemitted probe changed only how it invokes the compiled worker;
+its affected-file typecheck (`1793024313940`) passes under inherited project
+settings with the canonical Node type directory explicitly rebound. The first
+external configuration failed Node type lookup (`1793024109713`, exit 2),
+not a product type assertion. Every emitted input and all 744 output bytes
+match the current whole build. Its peak is 1,711,501,312 bytes, without OOM.
+The original compile wrapper's exit 1 and separate reconciliation remain
+historical evidence; they are not replaced by this newer successful build.
+
+The current exact collision case (`1793024442891`) and seven preservation
+controls (`1793024792617`) pass on these review-corrected bytes, with no skips
+or cancellations. The same first `111222` draw, pre-challenge unrelated rows,
+native 180, unchanged deadlines, actual sender SIGKILL, GET-only cold recovery,
+consumed-purpose denial, all-column scanner, complete unfiltered backup,
+logical restore and owned cleanup remain checked. The deliberate post-issue
+leak remains detected. Only the same two emitted test helpers differ from the
+qualified ancestor; all production and the other 742 outputs remain exact.
+
+Facts fingerprints are refreshed without changing facts rows or the 660 citation
+identities. Current metadata checks and final full-diff Standards/Spec review
+follow this ledger update. Exact own-head CI, normal corrective merge and an
+independently checked actual-main run remain delivery requirements. The original
+red main stays red; no clinic, provider, money, speech or deployment acceptance
+is inferred. The full original execution goal remains active and incomplete.
+
+## Cold memo privacy canary correction, 26 October 2026
+
+Actual PR #609 main `f13e7c6a593d728e68388e3ab8dafe73840da7d7` PostgreSQL run `40315631160`
+finished with 7,101 passes, one failure and one existing skip, with no ordered follow-ups.
+Its other three jobs passed. The failed classMovePartial/stored cold recovery
+assertion reported cold_26_0 in normalized_phone of patient_phone_index and
+patient_phone_scan_links. A separate local observer had already exited 1 on a
+read-only GitHub GET failure; archived remote metadata and all four raw logs
+retain the actual test result independently.
+
+Deterministic red run `1793020998636` forces `111222` through the unchanged code issuer,
+after asserting those two phone matches exist before any challenge or clinical
+sender. It reproduces the same label/tables/column. The first diagnostic's bare
+package-import failure remains separate and supplies no product verdict. The
+fix captures only the validated isolated database's pre-challenge schema/data
+and existing request-clock digits, passes this public baseline through private
+child IPC, and uses the existing bounded sampler only in the exact disposable
+compiled memo sender. Invalid contexts/sets refuse before changing crypto;
+ordinary close restores the exact issuer. Recovery does not install it. Actual
+code hashing, delivery, verification and all post-issue scans remain unchanged.
+
+Twelve canary/guard/lifecycle source controls (`1793021369789`) pass. Whole strict
+TypeScript and the voice-test compiler subprocesses in run `1793021415954` completed with exit 0;
+its wrapper exited 1 because it incorrectly expected output for a source-only SQL
+snapshot helper. Read-only reconciliation `1793021835647` verifies the frozen
+success-only control path and actual 744 outputs without rerunning either compiler
+or relabelling that wrapper. Only administrative-memo-recovery-worker and
+verification-code-canary emitted helpers differ; the other 742 outputs, all
+production source and the scanner implementation are exact. The original compile
+peak was not persisted before the assertion and remains unknown.
+
+The exact corrected cold case `1793021868734` passes with the same first `111222`
+draw and pre-issue phone assertions, plus actual sender SIGKILL, GET-only recovery,
+consumed-purpose refusal, every-column scanning, complete unfiltered backup,
+logical restore, retained unrelated records and owned cleanup. Preservation
+`1793022107626` passes seven distinct controls: partial-move archived and
+unretained, full pass-move stored, individual stored, release-one class-cancellation
+stored, and the two existing SQL canary leak/foreign-target controls. The deliberate
+post-issue leak is still detected in its column and the unfiltered backup. All
+eight local SQL/cold checks have zero skips/cancellations. Node 1 GiB plus owned
+PostgreSQL 512 MiB, CPU 100%/50%, no swap; original native 180 and case/child deadlines
+remain unchanged. Database/container/volume cleanup is independently checked.
+
+Current facts/scenario checks, fixed-head two-axis review, own exact-head CI and
+normal corrective main delivery remain separate gates. The original red f13 main
+is not a qualified parent: green ancestor `af8` supplies the inherited regression
+baseline, and this correction requires its own complete current CI. The reviewed
+correction/resend branch remains separate until reintegrated with the corrected
+qualified main. All eleven stages, four booking steps, thirteen gaps and twenty-eight
+reuse placements remain in scope. No provider/native family replay, real clinic,
+inbox, acoustic/carrier, source/restore, money or activation acceptance is claimed.
+
 ## Separate synchronous denoising comparison, 26 October 2026
 
 The original noisy corpus completed one declared external standard DeepFilterNet3

@@ -17,6 +17,7 @@ import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko
 import { PostgresPatientPhoneIndex } from "../../src/storage/postgres-patient-phone-index.ts";
 import { PostgresPatientPhoneScan } from "../../src/storage/postgres-patient-phone-scan.ts";
 import { PostgresOutboundEffectBarrier } from "../../src/storage/postgres-outbound-effect-barrier.ts";
+import { captureSqlVerificationCanaryExclusions } from "../support/sql-verification-canary.ts";
 import { verificationCanaries } from "../support/caller-verification.ts";
 import { administrativeMemoRecoveryCases } from "../support/administrative-memo-recovery-cases.ts";
 import type { AdministrativeMemoRecoveryFamily } from "../support/administrative-memo-recovery-cases.ts";
@@ -162,12 +163,13 @@ test(`actual admitted ${family} sender SIGKILL, cold GET-only recovery and full 
     assert.ok((await new PostgresOutboundEffectBarrier(db, unrelated, binding).claimOnce(retainedRef)).ok);
     server.listen(0, "127.0.0.1"); await once(server, "listening"); const address = server.address(); assert.ok(address && typeof address !== "string");
     const proxy = `http://127.0.0.1:${address.port}`;
+    const verificationCanaryExclusions = [...await captureSqlVerificationCanaryExclusions(db, target)];
     const launch = (mode: "send" | "recover", database: string) => {
-      const child = spawn(process.execPath, [worker.pathname], { cwd: folder, env: { DATABASE_URL: database, NODE_OPTIONS: "--max-old-space-size=384" },
+      const child = spawn(process.execPath, [worker.pathname], { cwd: folder, env: { DATABASE_URL: database, ABBY_ISOLATED_POSTGRES_PROBE: "1", NODE_OPTIONS: "--max-old-space-size=384" },
         stdio: ["pipe", "pipe", "pipe"], signal: AbortSignal.timeout(scenario.review === "classMove" ? 600000 : 200000) }); children.push(child);
       let stdout = "", stderr = ""; child.stdout.on("data", chunk => { stdout += String(chunk); }); child.stderr.on("data", chunk => { stderr += String(chunk); });
       const terminal = once(child, "exit").then(([code, signal]) => { output.push(stdout, stderr); return { code, signal, stdout, stderr }; });
-      child.stdin.end(JSON.stringify({ family, mode, scope, proxy, ...(mode === "recover" ? { settings } : {}) })); return { child, terminal };
+      child.stdin.end(JSON.stringify({ family, mode, scope, proxy, ...(mode === "recover" ? { settings } : { verificationCanaryExclusions }) })); return { child, terminal };
     };
     const sender = launch("send", target);
     await Promise.race([Promise.all([clinical, received]), sender.terminal.then(result => { throw Error(`sender ended before held native response: ${result.stderr}`); })]);

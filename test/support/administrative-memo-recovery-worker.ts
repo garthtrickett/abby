@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { installMemoRecoveryVerificationCanaries } from "./verification-code-canary.ts";
 import { classBookingMemoFixture } from "./class-booking-memo.ts";
 import { bookingMemoSessionFixture } from "./booking-memo-session.ts";
 import { appointmentChangeMemoFixture } from "./appointment-change-memo.ts";
@@ -23,12 +24,15 @@ import type { AdministrativeMemoHistoryAuthority, AdministrativeMemoHistoryResul
 // Separate disposable child, no inherited caller objects or local cache. Its
 // protected clinic inputs contain a native review/appointment selection, never
 // a communication ID or an action root supplied by the stopped sender.
-const input: { family: AdministrativeMemoRecoveryFamily; mode: "send" | "recover"; proxy: string; scope: LocationScope; settings?: {
+const input: { family: AdministrativeMemoRecoveryFamily; mode: "send" | "recover"; verificationCanaryExclusions?: readonly string[]; proxy: string; scope: LocationScope; settings?: {
   key: string; businessId: string; authorRef: string; policy: { version: string; digest: string }; now: string;
   selection: AdministrativeMemoRecoverySelection | BookingMemoRecoverySelection;
 } } = JSON.parse(await new Promise<string>(resolve => { let text = "";
   process.stdin.on("data", part => { text += String(part); }); process.stdin.on("end", () => resolve(text)); }));
 assert.ok(Object.hasOwn(administrativeMemoRecoveryCases, input.family));
+if (input.mode === "send") assert.ok(Array.isArray(input.verificationCanaryExclusions) && input.verificationCanaryExclusions.length <= 100000 &&
+  input.verificationCanaryExclusions.every(value => typeof value === "string" && /^[0-9]{6}$/.test(value)));
+const canary = input.mode === "send" ? installMemoRecoveryVerificationCanaries(new Set(input.verificationCanaryExclusions)) : undefined;
 const db = connectPostgres(process.env.DATABASE_URL!), apiKey = administrativeMemoRecoveryCases[input.family].apiKey;
 const budget = new PostgresClinikoRequestBudget(db, { apiKey, maxPerMinute: 180 });
 const notify = async (path: string, body: unknown) => {
@@ -160,4 +164,4 @@ try {
     assert.equal(spent.claimed, false, "native absence and cold recovery must not recreate a consumed memo purpose");
     process.stdout.write(JSON.stringify({ kind: found.kind, scanned: found.scanned, spent: true, replayed: false }) + "\n");
   }
-} finally { await db.destroy(); }
+} finally { try { canary?.close(); } finally { await db.destroy(); } }

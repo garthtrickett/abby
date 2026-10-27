@@ -12,14 +12,14 @@ import type { CanaryClockWindow } from "./verification-code-canary.ts";
  * column and the unfiltered post-challenge backup are still scanned unchanged.
  * No current secret or post-write leak may enter this snapshot. */
 export async function captureSqlVerificationCanaryWindow(db: Kysely<Database>, connectionString: string): Promise<CanaryClockWindow> {
-  return installDirectSqlVerificationCanaries(await priorSqlExclusions(db, connectionString));
+  return installDirectSqlVerificationCanaries(await captureSqlVerificationCanaryExclusions(db, connectionString));
 }
 
 export async function captureScopedSqlVerificationCanaryWindow(db: Kysely<Database>, connectionString: string): Promise<ReturnType<typeof installScopedDirectSqlVerificationCanaries>> {
-  return installScopedDirectSqlVerificationCanaries(await priorSqlExclusions(db, connectionString));
+  return installScopedDirectSqlVerificationCanaries(await captureSqlVerificationCanaryExclusions(db, connectionString));
 }
 
-async function priorSqlExclusions(db: Kysely<Database>, connectionString: string): Promise<ReadonlySet<string>> {
+export async function captureSqlVerificationCanaryExclusions(db: Kysely<Database>, connectionString: string): Promise<ReadonlySet<string>> {
   assertDirectSqlVerificationCanaryContext();
   const target = new URL(connectionString), expected = new URL(process.env.DATABASE_URL!);
   expected.pathname = target.pathname;
