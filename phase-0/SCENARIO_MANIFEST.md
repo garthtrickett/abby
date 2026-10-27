@@ -1,5 +1,11 @@
 # Scenario manifest, version 1.250
 
+E2E-381 adds four source controls for correction/enquiry task limits: a played
+enquiry requires approved advancement, an explicitly configured three-task sequence
+retains earlier receipts, and unfinished replacement obtains fresh correction
+authority. These extend text evidence; existing signed evidence and planned
+full-call status retain their separate scope.
+
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
 distinct physical configuration hash and intersects fallback voice support.
@@ -415,6 +421,10 @@ E2E-378 qualifies resend submission-history transfer through single/multi-locati
 E2E-379 qualifies authenticated target staff receipt inspection after one/two/three reviewed transfers. Original logical scopes survive later exports through validated retained import records; wrong reader account/scope, receipt/digest/barrier drift, revoked permission/source and body-supplied origins deny inspection. New target activity retains its own scope. HTTP returns fixed receipt status only and performs no send/native mutation. Actual clinic session/inspection-host provisioning and operator acceptance remain open.
 
 E2E-380 qualifies explicitly approved v2 in-person, telehealth and cancelled resend content. Current appointment type and complete patient/booking attendee evidence bind the same-clinic patient link; staff links are never mailed. Cancelled history remains bounded and privately labelled; mode/status/recipient/permission drift withdraws the exact send. Signed compiled calls keep private content outside ordinary transcription, model turns, database and stdout, with separately played SAM consent and one reviewed submission. The elapsed-clock regression preserves selection after forty seconds of renewed call authority. Full-call, actual clinic/sender/recipient and operator acceptance remain open.
+
+E2E-381 additionally covers explicitly approved same-caller resends for another appointment. Each uses fresh private verification/selection and independently played send consent; a bare repeat retains its existing outcome. Current source37 and signed compiled15 preserve prior task and single-resend cases while adding uncertainty/permission refusal, distinct review/journal outcomes, native180, no extra third-task send and every-column/OTP/unfiltered-backup/output privacy. The original suite-count wrapper failure remains preserved with separate successful raw-only reconciliation. This is synthetic local evidence; full-call, real sender/inbox, clinic acceptance and activation remain open.
+
+E2E-381 additionally covers approved same-caller correction tasks across the local router, private keypad/media controller and current-task private prompt guard. Each task obtains fresh registered-channel proof and newly played terms/consent; old fields and ready state cannot carry forward. Seventeen local source/private checks include fourteen registered controls and three preserved owning regressions. Five signed compiled cases cover correction success, first/second uncertainty and the two original booking cases with SQL privacy. Retired first actions remain unchanged, current committed/uncertain corrections remain noneditable, and a third task gets no new code or write. This does not establish every operation/field combination, clinic policy, real speech/mail/carrier acceptance or activation.
 
 E2E-381 additionally covers ordinary booking/cancellation/rescheduling task pairs through one synthetic native store and six distinct signed real-host/SQL operation orders. Each new task has fresh private verification, played consent and its own review, with original receipts preserved and replay refused. Same-minute repeated rescheduling retains the physical request limit and refuses its second clinical send; a saved review is not a completed move. Possible first writes and withdrawn approvals block continuation. These are scoped synthetic cases, not every multi-operation/cohort/staff sequence, real clinic acceptance or full-call evidence.
 

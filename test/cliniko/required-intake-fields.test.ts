@@ -8,7 +8,9 @@ import { resultValue } from "../support/agent-appointment-proposals.ts";
 import { privateRegistrationField } from "../../src/standalone/private-registration-field.ts";
 
 const address = { address1: "1 Private Road", address2: "Private Flat", address3: "Private Building", city: "Private City",
-  state: "VIC", postCode: "3999", countryCode: "AU" };
+  // A full postal value with nonhex characters cannot match an unrelated UUID
+  // or digest. Keep the unfiltered whole-SAM substring privacy assertions below.
+  state: "BC", postCode: "V6B 1A1", countryCode: "CA" };
 test("E2E-369 clinic-required registration fields must be complete, approved and current", async () => {
   const f = await intakePolicyFixture();
   try {

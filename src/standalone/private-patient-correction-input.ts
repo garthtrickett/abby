@@ -37,6 +37,7 @@ export class PrivatePatientCorrectionInput implements PrivateKeypadInput {
   #sequence = 0;
   #codeOverflow = false;
   #fragment: string | undefined;
+  #correction: ClinikoCallFlow["patientCorrection"];
   constructor(config: Config) {
     this.#config = Object.freeze({ ...config }); this.#keypad = new PrivateWorkflowKeypad(config);
     this.#privateSession = `${config.sessionId}:private-correction`;
@@ -104,18 +105,35 @@ export class PrivatePatientCorrectionInput implements PrivateKeypadInput {
     this.#launch(async () => { await this.#media.stop(); if (this.#lifetime.signal.aborted) return; this.#media = this.#createMedia(); await this.#menu(); });
     return true;
   }
+  #synchronizeCorrectionTask(): boolean {
+    const correction = this.#config.owner()?.patientCorrection;
+    if (!correction || this.#lifetime.signal.aborted) return false;
+    if (correction === this.#correction) return true;
+    if (this.#working) return false;
+    // An approved next task has a new verifier and correction owner. The
+    // previous task's ready state, fields and consent cannot enter that task.
+    if (this.#correction && this.#stage !== "ready") { this.stop(); return false; }
+    const previousMedia = this.#media;
+    this.#correction = correction; this.#stage = "verification";
+    this.#draft = {}; this.#digits = ""; this.#fields = []; this.#field = undefined;
+    this.#consentRef = undefined; this.#fragment = undefined; this.#attempts = 0; this.#codeOverflow = false;
+    this.#media = this.#createMedia();
+    void previousMedia.stop().catch(() => this.stop());
+    return true;
+  }
   handlesDigit(digit: string): boolean {
-    return this.#stage === "ready" && !!this.#config.owner()?.patientCorrection && (digit === "1" || digit === "3");
+    return this.#synchronizeCorrectionTask() && this.#stage === "ready" && (digit === "1" || digit === "3");
   }
   claim(callId: string, sessionId: string) { return this.#keypad.claim(callId, sessionId); }
   start() { return !this.#lifetime.signal.aborted && this.#keypad.start(); }
   blocked(): boolean {
-    if (this.#stage === "closed" || this.#config.owner()?.closed) return true;
+    if (this.#stage === "closed" || this.#config.owner()?.closed || !this.#synchronizeCorrectionTask()) return true;
     return this.#stage !== "ready" || this.#keypad.blocked();
   }
   async accept(digit: string): Promise<"pending" | "verified" | "failed"> {
     const owner = this.#config.owner();
     if (this.#stage === "closed" || !owner?.patientCorrection || owner.closed) return "failed";
+    if (!this.#synchronizeCorrectionTask()) return this.#lifetime.signal.aborted ? "failed" : "pending";
     if (digit === "*" && !["verification", "prospectiveCode"].includes(this.#stage)) { this.stop(); return "failed"; }
     if (this.#working) return "pending";
     if (this.#stage === "verification") {
@@ -177,6 +195,7 @@ export class PrivatePatientCorrectionInput implements PrivateKeypadInput {
   }
   async acceptMedia(frame: MediaFrame): Promise<"pending" | "failed"> {
     if (this.#stage === "closed") return "failed";
+    if (!this.#synchronizeCorrectionTask()) return this.#lifetime.signal.aborted ? "failed" : "pending";
     if (this.#stage !== "field") return "pending";
     const result = await this.#media.acceptMedia({ ...frame, sessionId: `${this.#privateSession}:${this.#mediaGeneration - 1}`, sequence: this.#sequence++ });
     if (!result.ok) { this.stop(); return "failed"; } return "pending";
@@ -184,7 +203,7 @@ export class PrivatePatientCorrectionInput implements PrivateKeypadInput {
   stop(): void {
     if (this.#stage === "closed") return;
     this.#stage = "closed"; this.#lifetime.abort(); this.#config.signal.removeEventListener("abort", this.#onClose);
-    this.#draft = {}; this.#digits = ""; this.#fields = []; this.#field = undefined; this.#consentRef = undefined; this.#fragment = undefined;
+    this.#draft = {}; this.#digits = ""; this.#fields = []; this.#field = undefined; this.#consentRef = undefined; this.#fragment = undefined; this.#correction = undefined;
     this.#keypad.stop(); void this.#media.stop().catch(() => undefined);
   }
 }

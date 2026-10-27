@@ -876,7 +876,8 @@ export function transition(current: CallState, action: TransitionAction): Result
       if (action.kind === "privateCorrectionPrompt" || action.kind === "privateResendPrompt") {
         // Re-entering private fields withdraws the old correction confirmation.
         // A dispatched/possibly-sent correction cannot be edited or retried.
-        const corrections = Object.values(state.actions).filter(item => item.kind === (action.kind === "privateCorrectionPrompt" ? "patientUpdate" : "confirmationResend"));
+        const corrections = Object.values(state.actions).filter(item => !state.previousTaskActionKeys?.includes(item.key) &&
+          item.kind === (action.kind === "privateCorrectionPrompt" ? "patientUpdate" : "confirmationResend"));
         if (corrections.some(item => ["dispatched", "committed", "uncertain", "needsReview"].includes(item.status) ||
             state.effects[`${item.key}:write`]?.status === "possiblySent")) return err({ kind: "invalidTransition" });
         for (const item of corrections) {

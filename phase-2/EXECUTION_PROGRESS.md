@@ -1,5 +1,157 @@
 # Execution progress and evidence
 
+## Task-limit and qualification refinement, 27 October 2026
+
+This is a normal corrective continuation of the same PR #611, based on independently
+qualified PR #610 main `808a04fc2ef84a3c5a2a428b3d0842f0760fb106`. The earlier
+integrated 49/15/3 observations below retain their exact historical scope; they do
+not qualify the later task-limit correction or the new final head.
+
+An unchanged causal witness on published `d044b4e1` committed one correction,
+completed and played an appointment enquiry, then admitted a third correction and
+second native PATCH despite a configured maximum of two tasks. A settled enquiry
+was being replaced through the unfinished-enquiry fallback after advancement was
+refused. The call-flow owner now refuses that fallback for a completed enquiry
+without approved advancement. Same-owner reads remain permitted; an unplayed,
+unfinished enquiry can still be replaced within its existing task. Four registered
+source controls cover exhausted two tasks, fresh proof/terms/played consent after
+enquiry, an explicitly configured three-task sequence and unfinished replacement.
+The original actual third-write red and unchanged five-control green are retained.
+The clinic's configured 2–10 range, task-specific proof and independent grants,
+immutable receipts, uncertainty/no-replay, native 180 and existing deadlines and
+quotas are unchanged. No household, representative or minor authority is added.
+
+Whole strict/build on that correction passed, but its initial full source cohort
+actually ended 52 passed/1 failed. A held-playback control then reproduced the
+resend fixture submitting a menu choice after observing text but before the real
+playback receipt. The helper now waits for the owning flow's actual playback
+completion within the same five-second deadline before submitting that choice.
+Production correctly refuses premature choices and is unchanged by this fixture
+fix. The original 53-case failure's exact playback state was not logged; the
+controlled reproduction establishes the race, not that unavailable historical state.
+
+Separately, the old published push text job failed a whole-SAM private-field
+substring assertion in the existing required-intake registration case. Its exact
+matched field/path was not logged. A controlled synthetic scope containing the
+old short postcode `3999` before any patient collection reproduces the same false
+positive; a valid Canadian address with a distinct nonhexadecimal postal canary
+passes the untouched assertions. Only that registration fixture address changes
+to BC / V6B 1A1 / CA. Required fields, private readback, verification, separate
+confirmation, native payload, whole-SAM substring assertions and all-column/full
+unfiltered SQL backup scanners remain intact. The earlier cloud failure and causal
+negative observations are preserved; no production privacy leak or exact historical
+match is inferred from this controlled witness.
+
+Normal commits `4e88371e` (task-limit guard and four controls) and `bd9254c0`
+(two fixture corrections) preserve the earlier published history. Current whole
+strict TypeScript and the serving compiler both pass (`1793068349517`),
+with their individual exits recorded. All 744 emitted paths are independently
+rehashed; nine differ from qualified main and 735 are exact. The fixture corrections
+change no emitted bytes from the preceding task-limit build.
+
+All 56 source controls pass (`1793068706561`): the previous 49,
+four new correction/enquiry controls and three existing required-intake controls.
+The two sequential isolated databases and volumes are independently confirmed
+absent. All 15 original signed compiled cases pass (`1793069309898`),
+with their direct identities checked separately from the single suite heading.
+These preserve actual HTTP/media playback, separate task proofs and consent,
+native outcomes, current permission/uncertainty refusals and private SQL/backups.
+The new mixed correction/enquiry limit controls are source evidence, not an added
+signed or real-carrier claim. Synthetic providers and local mail do not establish
+external inbox delivery or human clinic acceptance.
+
+Three inherited cold/SQL controls pass (`1793069758425`): the forced-first
+111222 class-movement memo case, deliberate post-issue SQL leakage and foreign
+server/database refusal. The cold witness imports this current source and compiled
+worker and preserves both unrelated phone rows, actual sender SIGKILL, GET-only
+discovery, spent-purpose refusal, complete unfiltered backup and logical restore.
+Case/child deadlines, native budgets, canaries and production scanners remain
+unchanged. The current measured Node 512 MiB and database 256 MiB budgets are
+prospective execution limits, not altered product quotas or assertions.
+
+This seven-path final metadata refresh preserves all runtime, test and compiler
+inputs and all 744 emitted bytes. The existing 127 product facts remain, with the
+new source-control citation and reviewed date reflected in their fingerprints;
+E2E-381 gains source evidence without promoting planned full-call evidence.
+Current metadata checks, both full qualified-base-to-final-head reviews, fresh
+own eight CI jobs/raw logs, normal exact-head merge, actual-main four jobs and
+independent sixteen-log baseline/own/main qualification remain delivery gates.
+The old published head's failed push text job grants no merge clearance.
+
+All eleven execution stages, four booking steps, thirteen gaps and twenty-eight
+differently scoped reuse placements remain in scope. The failing speech gate,
+real clinic policy/grants, external inbox/human duty, acoustic/carrier/public route,
+source/restore and deployment/activation acceptance remain open. The agent-operated
+demo backup is already observed in its recorded scope. The owner-deferred cash/bank
+invoice and unavailable Krisp developer key are not new requests or prerequisites
+to this corrective delivery. No live provider/native-family replay is included.
+
+## Integrated correction/resend qualification, 27 October 2026
+
+PR #610 normally merged as `808a04fc2ef84a3c5a2a428b3d0842f0760fb106`
+after all eight exact-head raw CI logs qualified. All four actual-main checks then
+passed, followed by independent verification of sixteen baseline/own/main raw
+logs, source, facts and all 744 outputs. The earlier failed f13 main stays failed;
+no absent root receipt was invented. This qualified parent is now normally merged
+into the existing correction/resend branch, preserving both documentation histories
+and physical copies of all earlier runtime bytes.
+
+Approved next corrections and explicit another-appointment resends obtain fresh
+task-specific proof, private fields/selection and separately played consent.
+Retired actions cannot authorize or block the current private task incorrectly.
+Earlier immutable receipts and unknown outcomes retain their original meaning;
+current committed/uncertain corrections stay noneditable. Bare repeat sends and
+delivery questions grant no new effect. Supplied alternate-recipient questions
+are refused locally before public intent classification; registered contact,
+codes and private mail fields stay outside the public model/SAM and persistence.
+The clinic's existing task limit, independent patient/action permission, native 180,
+leases, proof lifetimes, quotas and deadlines remain unchanged. No household,
+representative or minor authority is inferred.
+
+Current whole strict TypeScript and the serving compiler
+(`1793062148837`) both pass, with each child exit recorded before
+output validation. The build retains all 744 paths: eight outputs change from the
+qualified parent and the other 736 are exact. Current controls
+(`1793062544195`) pass all 49 distinct cases: 37 existing task
+controls and 12 inherited canary guards, with zero skips/cancellations. Their two
+owned PostgreSQL databases run sequentially and their containers/volumes are
+independently confirmed absent.
+
+All 15 signed compiled cases (`1793063062683`) pass: five
+original correction cases, six original single-resend cases and four successor
+resend cases. The single suite heading is separate from the fifteen direct cases.
+Actual HTTP/media, private verification, played consent, native outcomes, current
+permission/uncertainty refusal, every-column/full-backup privacy and owned cleanup
+remain checked. These use synthetic providers and local mail; transport acceptance
+does not establish external inbox delivery or real clinic acceptance.
+
+Three inherited controls (`1793063815133`) also pass on the current
+combined code/runtime: forced-first111222 class-movement memo recovery, deliberate
+post-issue SQL leak detection, and foreign server/database refusal. The copied cold
+witness explicitly imports this integrated source and compiled worker. It retains
+both pre-challenge unrelated phone rows, actual sender SIGKILL, GET-only cold
+discovery, consumed-purpose refusal, the complete unfiltered backup, logical restore
+and unrelated retained records. The original scanner, case/child deadlines and all
+private canaries remain intact. Its first launcher refused live capacity before
+starting a test or database. The measured-budget successor uses a 512 MiB Node
+scope and 256 MiB database without changing assertions, deadlines or product quotas;
+the original admission exit 1 remains recorded separately. Earlier failed fixtures, wrapper accounting results,
+independent reconciliation and unavailable original peak measurements stay recorded.
+
+The first final metadata check (`1793064278340`) ended with two passes and
+one failure: the fingerprint date said 27 October while the unchanged facts
+retained their 26 October review date. The fingerprint now preserves that original
+review date; the failed check remains recorded and the corrected metadata still
+requires its own successful check.
+
+This final ledger refresh changes no code, tests or runtime bytes. The 127 facts
+and 674 citation identities remain, with hashes refreshed for current files.
+Exact-head metadata, both full BASE808...finalHEAD reviews, own CI, normal merge,
+actual resulting-main qualification and independent root verification remain delivery
+requirements. Real clinic policy/grants, external inbox/human duty, acoustic/carrier,
+source/restore and deployment/activation acceptance remain open. All eleven stages,
+four booking steps, thirteen gaps and twenty-eight reuse placements remain in scope.
+
 ## Cold memo review refinement, 26 October 2026
 
 Independent review of the first corrective commit found one malformed-input
@@ -7265,3 +7417,203 @@ See the [complete source/clock trace and evidence](STRIPE_PROVIDER_REHEARSAL.md#
 Current facts/scenario checks, new fixed-head review and normal publication/
 cloud/resulting-main/root qualification remain separate. The original eleven
 stages, thirteen gaps and twenty-eight reuse placements remain in scope.
+
+## Approved correction task private succession, 26 October 2026
+
+A current earlier-gap check reproduced three independent barriers in the existing
+approved same-caller sequence. The trusted contact-request mapper refused an
+explicit new correction even when next-task approval was current. The private
+controller retained its previous ready state during the next registered-channel
+code. The core private-prompt guard counted the retired committed correction as
+current work and denied the next task's terms. Each failure has its original
+owning regression retained; all three exact cases subsequently pass.
+
+The mapper now admits the existing approved next task. A newly installed
+correction owner resets private verification, fields, consent and transcription
+state. Private correction/resend prompt guards consider current actions while
+preserving retired receipts. Current committed, uncertain or possibly-sent work
+remains noneditable. Sequence approval, fresh operation-bound proof, private
+terms/readback, separately played SAM consent and current patient permission
+remain independent; no new clinic authority, replay or request-limit change is
+introduced.
+
+Current local evidence:
+
+- Seventeen source/private checks pass without skips: fourteen registered
+  controls and three exact preserved reproductions. They cover both tasks,
+  fresh terms, prior receipt integrity, maximum-task refusal, approval withdrawal,
+  permission denial, uncertain writes and current-versus-retired prompt guards.
+- Whole strict TypeScript and a fresh fixture-inclusive serving build pass on
+  the corrective production bytes. All 744 output paths remain; 740 outputs
+  match the reviewed cross-operation parent. The intended changes are core
+  transition, trusted intent, private correction input and the synthetic runner.
+- All five signed compiled HTTP/media/PostgreSQL cases pass without skips:
+  correction success, unknown first correction, unknown second correction and
+  the two original booking cases. Private codes/values bypass the model; played
+  private terms and independent SAM consent precede writes. An uncertain
+  correction retains the contact fence. Both alias revisions advance at begin
+  and at inspected completion; uncertainty retains only the beginning fence.
+  All-column SQL/stdout canaries pass and all five case databases, the owned
+  outer database/container and its volume are absent after cleanup.
+
+The source cohort uses Node 22.23.0 and these registered files:
+`test/cliniko/call-task-sequence.test.ts` and
+`test/voice/private-patient-correction-input.test.ts`. The three unchanged
+external reproductions remain under the private
+`abby-administrative-call-tasks` state directory. The compiled cohort executes
+`test/voice/call-task-sequence-runner.test.ts` with
+`ABBY_ISOLATED_POSTGRES_PROBE=1` against an independently disposable admin
+connection and the emitted `start-synthetic-clinical-runner.js`; there is no
+source fallback. Source work1793005349465, build1793005626958 and compiled
+work1793006484328 naturally terminated/reaped0. Current compiled Node peak was
+450,633,728 bytes under 1 GiB; external PostgreSQL peaked at 142,184,448 bytes
+under 512 MiB, both Swap0 and no OOM/high/max events.
+
+Historical failures remain failed. The first source13/14 run used a wrapper
+spread that copied the synthetic patient getter; both writes had committed.
+Initial compiled3/5 and selected0/1 failures occur at second-task private terms,
+not at the final third-task response: the loader's .ts stack locations refer
+to generated JavaScript. The later core-corrected3/5 result retained an incorrect
+revision-count expectation; begin and completion each advance the fence.
+The final5/5 result corrects that test expectation and preserves every deadline,
+private playback, task-limit, write-count and SQL assertion. The initial two
+memory-only diagnostics also incorrectly banned native IDs in transient
+reference fields; they supplied no standalone SQL leak evidence. A resource
+admission refusal started no compiler. All reports and original artifacts remain
+preserved; none is relabelled green.
+
+This is scoped synthetic gap8/gap9 engineering. Metadata, two-axis review,
+qualified-parent integration, exact-head cloud checks and normal-main/root
+qualification retain separate gates. Every original execution stage, four
+booking steps, thirteen gaps and twenty-eight reuse placements remain. Real
+clinic configuration/authority, speech/mail/carrier acceptance, every
+operation/field/cohort combination and activation are not established.
+
+
+## Approved resend task private succession, 26 October 2026
+
+An existing approved same-caller sequence could create a fresh resend owner but
+its private transport stayed ready from the first request and never submitted
+the second code. The original controller fails the same actual two-task journey
+at the second verifier; the corrected controller passes. A fresh verification
+requirement now resets only the prior ready/menu state. Closed inputs remain
+closed; current verifier, patient permission, selected appointment, played
+recipient readback and separate send consent remain independent.
+
+“Please send the confirmation email for another appointment” explicitly requests
+an approved next task. It selects another workflow only when current task
+approval permits continuation, then requires a new code and private appointment
+selection. A bare repeated “Send my appointment email” still reports the existing
+outcome. Another recipient, negation and delivery questions cannot select a new
+resend through this grammar. Unknown first sends and withdrawn sequence approval
+block continuation; second-task permission denial cannot send. No new recipient,
+representative authority, task allowance, native request limit or replay is added.
+
+Current local evidence is scoped as follows:
+
+- Thirty-seven source checks pass without skips: thirty-three registered cases
+  and four exact earlier owning reproductions with only checkout imports rebound.
+  They preserve the correction/task controls, old private-resend finalization and
+  menu-paging cases, new grammar and real task/verifier/SAM/journal/TLS source
+  journeys. Source fixtures use synthetic clinic authority and native records.
+- Whole strict TypeScript and fresh fixture-inclusive emission pass. All 744
+  paths remain; 739 outputs match the separately locally qualified correction candidate.
+  Five change: resend grammar, trusted intent, private resend input, the synthetic
+  resend entry and its numeric-canary helper. Other production and helper bytes
+  remain exact, including the shared task helper's type-only generalization.
+- Fifteen signed compiled HTTP/media/PostgreSQL cases pass without skips: four
+  new resend-task cases (success, first-send uncertainty, second-send uncertainty
+  and second-task permission denial), all six original single-resend cases and
+  the five earlier booking/correction-task cases. Distinct appointments have
+  independent reviews and journal references, fresh private codes and recipient
+  playback, separate SAM consent and truthful SMTP outcomes. Third tasks and
+  bare repeated requests cannot cause another send. SMTP acceptance proves
+  neither external inbox delivery nor clinic acknowledgment.
+- The signed cases retain the native 180-request limit and fixed individual
+  deadlines. Model/output and every-column SQL canaries pass. New task-mode
+  cases additionally scan complete unfiltered schema/data backups, including
+  both OTPs. Before issuing challenges, a bounded synthetic snapshot excludes
+  pre-existing public schema/data numbers from the canary draw; production
+  crypto and all post-challenge scans remain unchanged. Every owned inner case
+  database, outer database/container and volume is absent after normal cleanup.
+
+Reproduce source scope with Node 22.23.0, `scripts/test-node.mjs --test
+--test-concurrency=1`, these six registered files and the preserved external
+reproductions: `test/cliniko/call-task-sequence.test.ts`,
+`test/voice/private-patient-correction-input.test.ts`,
+`test/voice/private-resend-finalization.test.ts`,
+`test/cliniko/confirmation-resend-language.test.ts`,
+`test/cliniko/resend-task-sequence.test.ts` and
+`test/cliniko/confirmation-resend-workflow.test.ts`. Source work1793013387188
+and strict/build1793013249251 naturally terminated/reaped0. Source uses
+Node512MiB and sequential PostgreSQL256MiB, after measured source DB peaks
+below79MB; the unchanged host reserve and fresh peer-growth guards still apply.
+The compiler retains2GiB. These execution budgets change no product quota.
+
+The signed cohort uses `ABBY_ISOLATED_POSTGRES_PROBE=1`, an independently
+disposable admin connection and `scripts/test-node.mjs --test
+--test-concurrency=1` on `test/voice/call-task-sequence-runner.test.ts`,
+`test/voice/confirmation-resend-runner.test.ts` and
+`test/voice/resend-task-sequence-runner.test.ts`. Every serving entry is emitted
+JavaScript, with no source fallback. Node1GiB and separate PostgreSQL512MiB
+limits remain. The original wrapper1793013717859 ended1 after the actual Node
+cohort passed15/15: its passed-name map also contained one existing describe
+heading. The original exit/log remain failed. Separate read-only audit
+1793014199368 ended0, verified all15 exact case identities plus that heading,
+the bootstrap exit0, current sources/artifacts and complete owned cleanup;
+it replayed no test. The original Node peak was not persisted before that
+accounting assertion and is not inferred.
+
+Earlier failures remain retained: the four-case fixture first selected before
+its private menu had played; a later1/4 run confused a handled unavailable-action
+reply with actual task advancement. The corrected helper checks fresh challenge
+creation and proves no extra code/action/review/email. An external baseline
+initially failed package resolution before any case/database. Two admission
+refusals began no Node/database work. Original controller and caller-language
+contract reds remain separate from these setup/fixture failures. Preserved
+source snapshots and original reports are not relabelled.
+
+This is local synthetic gap8/gap9 engineering. Final metadata/facts review,
+qualified-parent integration, own exact-head checks and normal-main/root delivery
+retain separate gates. All eleven execution stages, four booking steps,
+thirteen gaps and twenty-eight reuse placements remain. Every subject/operation
+combination, real clinic/sender/recipient/restore authority, acoustic/public
+route/carrier acceptance and activation remain unproven.
+
+
+### Recipient-question review correction
+
+The full combined correction/resend review found that the new question shortcut
+ran before alternate-recipient rejection. A question about sending appointment
+details to a supplied address could therefore reach public classification. The
+exact new wording assertion fails against the unchanged earlier grammar
+(work1793015427786, original control passed). That failure and the original
+review remain preserved; it made no provider or database request.
+
+The correction keeps recipient-bearing questions in local refusal before the
+question shortcut. The exact phrase “for another appointment” identifies the
+appointment rather than an alternate recipient. Ordinary delivery questions
+remain read-only; no question gains send authority. Tests cover supplied
+addresses, spouse/other-address wording, past-tense questions and another-
+appointment questions with an address. Actual-owner source assertions require
+local refusal with a model port that throws if called; the ordinary delivery
+question still resolves to notification outcome.
+
+After that review correction, source1793015474684 passed all 37 controls,
+strict/build1793015505355 passed with all 744 paths and only the grammar output
+changed from the previous resend build, and signed1793015800238 passed all 15
+exact earlier case identities without skips. Source and signed SQL/privacy,
+OTP/raw-backup/native180, fresh proofs, separate consent, uncertainty and owned
+cleanup assertions remain. The signed wrapper now explicitly distinguishes the
+15 test cases from the one existing suite heading. It records its measured
+observations before parser assertions; its actual exit is 0, Node peak
+371,974,144 bytes and separate database peak 163,581,952 bytes, with zero recorded
+OOM events. All waits were reaped and owned containers/volumes are absent.
+The previous 744 outputs were preserved byte-for-byte before rebuilding.
+
+The original wrapper1/read-only reconciliation0 and their missing original
+Node peak remain historical facts, rather than being replaced by this new run.
+The new source, compiler and signed checks bind the same corrected production
+and test bytes; the final facts/docs refresh changes only documentation. This
+remains local synthetic qualification, with fixed-head final review, actual
+qualified parent, own CI and resulting-main/root delivery still separate.

@@ -1,5 +1,51 @@
 # Abby execution order
 
+**Task-limit and qualification refinement, 27 October 2026:** A reproduced
+correction/enquiry sequence bypassed the configured task limit; a played enquiry
+now requires approved advancement before replacement. Fresh proof and consent,
+earlier receipts, uncertainty and native limits remain binding. Current strict/744
+build, 56 source controls, 15 signed compiled cases and three cold/SQL controls
+pass locally. Nine outputs differ from qualified PR #610 main; 735 are exact.
+Two fixture corrections retain actual playback ordering and complete private-field
+assertions. Earlier failures remain recorded. Metadata, final review, new exact-head
+CI and actual-main delivery remain separate gates; all original stages and gaps
+remain in scope. See [scope and retained failures](EXECUTION_PROGRESS.md#task-limit-and-qualification-refinement-27-october-2026).
+
+**Integrated correction/resend qualification, 27 October 2026:** Approved
+next tasks obtain fresh private verification, input/menu state and played consent
+while retaining earlier results and current uncertainty. Alternate-recipient mail
+questions are refused locally before public intent classification. On independently
+qualified PR #610 main, current strict/744 build, 49 controls, 15 signed call-flow
+cases and three inherited cold/SQL controls pass. Eight outputs differ from that
+parent; the other 736 are exact. Current metadata, final full-diff review, own CI
+and actual-main delivery remain gates. All original stages and gaps remain in scope.
+See [the integrated evidence](EXECUTION_PROGRESS.md#integrated-correctionresend-qualification-27-october-2026).
+
+**Recipient-question review refinement, 26 October 2026:** A supplied alternate
+recipient is refused locally even in a delivery question; an ordinary question
+about another appointment remains read-only. The exact regression is retained.
+Fresh 37 source checks, whole strict/744 emission and all 15 signed cases pass;
+final review, qualified-parent integration and normal delivery remain separate.
+
+**Local resend-task succession, 26 October 2026:** Explicit continuation for
+another appointment now obtains fresh private verification and selection;
+bare repeated send requests retain their existing outcome. Source37, whole
+strict/744 and fifteen signed compiled cases pass locally, with uncertainty,
+permission, no-replay and SQL/backup privacy controls. The original wrapper's
+suite-count failure is preserved and independently reconciled without replay.
+Review, actual qualified-parent delivery and real acceptance remain separate.
+See [scope and evidence](EXECUTION_PROGRESS.md#approved-resend-task-private-succession-26-october-2026).
+
+**Local correction-task private succession, 26 October 2026:** Existing approved
+same-caller corrections now have three reproduced barriers corrected: trusted
+next-task routing, private ready/field/consent reset and current-task private
+prompt guards. Seventeen source/private controls and five signed compiled
+HTTP/media/SQL cases pass; whole strict and 744 serving outputs pass, with 740
+parent outputs unchanged. Fresh proof/terms/consent, prior receipts, current
+uncertainty and task limits remain binding. This is local gap8/gap9 evidence;
+review, exact-head/normal delivery and clinic acceptance retain separate gates.
+See [scope and retained failures](EXECUTION_PROGRESS.md#approved-correction-task-private-succession-26-october-2026).
+
 **Review correction, 26 October 2026:** Both test-only exclusion boundaries
 now require six-digit strings, so numeric JSON or Set elements cannot evade
 string membership checks through regular-expression coercion. The malformed-input

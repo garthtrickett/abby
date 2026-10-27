@@ -61,12 +61,12 @@ export function installClinicalVerificationCanaries(): CanaryClockWindow {
   return install();
 }
 
-export function installResendVerificationCanaries(): CanaryClockWindow {
+export function installResendVerificationCanaries(excluded: ReadonlySet<string> = new Set()): CanaryClockWindow {
   if (process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1" || process.env.ABBY_VOICE_TEST_MODE !== "1" ||
       process.env.ABBY_CLINIKO_API_KEY !== "synthetic-key-au5" || !process.env.DATABASE_URL?.includes("/abby_test_voice_") ||
       process.env.ABBY_SYNTHETIC_CLINICAL_OPERATION !== "confirmationResend")
     throw Error("Verification canary sampling requires an isolated resend fixture");
-  return install();
+  return install(excluded);
 }
 
 /** Cold memo senders are separate disposable children. Exclude only the
