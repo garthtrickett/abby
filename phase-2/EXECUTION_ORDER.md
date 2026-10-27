@@ -1,5 +1,13 @@
 # Abby execution order
 
+**Acknowledged booking result-failure preservation, 27 October 2026:** A new actual admitted booking case fails its SAM result
+playback and report reader after exact acknowledgement, retaining the receipt,
+one review/create and no compensating/replayed writes. All33 complete source
+cases and current whole strict types pass. Serving graph sources and all744
+preserved artifacts exactly match the earlier fresh build; no new emission is
+claimed. Scope is application failure handling, not acoustic/clinic acceptance;
+current review/delivery remains separate. See [evidence](EXECUTION_PROGRESS.md#acknowledged-booking-result-failure-preservation-27-october-2026).
+
 **Booking final-read refusal qualification, 27 October 2026:** The same local test-only patch now passes22 cases:
 the original18 plus four final-read cases containing16 malformed, incomplete,
 deadline and interruption scenarios across online/roster/ordinary-class/pass

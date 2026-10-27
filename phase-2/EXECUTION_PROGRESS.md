@@ -1,6 +1,46 @@
 # Execution progress and evidence
 
+## Acknowledged booking result-failure preservation, 27 October 2026
+
+The booking plan's named later-failure row now has an explicit admitted booking
+witness. Actual email verification, current menu, played selection and separate
+played affirmation lead to one acknowledged Cliniko review and exact clinical
+creation. The actual SAM result presentation is then started and resolved failed;
+the committed action and its receipt stay identical. The real CallOutcomeReport
+then receives a storage failure from its listCalls port. The report returns that
+failure and changes no call state. After restoring the reader, two effect drains
+retain one review, one create and the identical committed action; no PATCH or
+DELETE is attempted, and a successful report still counts one committed action.
+
+This exercises the application playback-failure receipt, not physical synthesis,
+carrier delivery or real acoustic acceptance. The earlier generic cancellation
+report case is not used as a booking-specific witness. No production or support
+worker is changed. The complete three-file source cohort passes33/33 with no
+skips: all22 prior preparation/final-read cases, ten existing admitted-booking
+cases and this one new result-failure case. Existing deadlines and assertions
+are unchanged. Reproduce using Node22.23.0 and scripts/test-node.mjs --test
+--test-concurrency=1 with provider-acknowledged-booking.test.ts,
+class-booking-acknowledgement.test.ts and booking-session.test.ts under test/cliniko.
+
+The current whole strict TypeScript check passes. A fresh no-emit serving graph
+enumeration proves the added test is outside the serving graph and every actual
+transitive serving source is exact to the earlier successful fresh build; all744
+runtime files are independently rehashed and unchanged. The earlier fresh strict/
+serving qualification is reused for those identical inputs, not relabelled as a
+new emission. Source512MiB and strict2GiB retain fresh host admission. No database,
+real provider, credential or carrier request is used for this new source witness.
+
+Earlier22-case and18-case qualification/reviews, instrumentation negatives,
+resource refusals and receipt-adapter failures remain preserved. Current final
+metadata/review, qualified-parent integration and own/main/root delivery remain
+separate gates. This closes the identified local witness gap for row9; it does
+not establish all booking,13-gap,clinic or activation acceptance. The original
+11 stages,4 booking steps,14 verification rows,9 commands and28 scoped reuse
+placements remain. No deploy, live traffic or source deletion is implied.
+
 ## Booking final-read refusal qualification, 27 October 2026
+
+This section records the earlier22-case checkpoint; current33-case qualification is above.
 
 The same unpublished booking-verification change now directly covers the plan's
 final-read failure row, alongside its deliberately suspended preparation cases.

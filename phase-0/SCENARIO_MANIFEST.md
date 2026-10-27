@@ -1,5 +1,10 @@
 # Scenario manifest, version 1.250
 
+**Acknowledged booking result-failure preservation, 27 October 2026:** E2E-284 directly preserves an exactly acknowledged booking
+through failed result presentation and report storage failure. Source33 and whole
+strict pass; serving744 and their source graph remain exact. Evidence levels are
+unchanged. See [scope](../phase-2/EXECUTION_PROGRESS.md#acknowledged-booking-result-failure-preservation-27-october-2026).
+
 **Booking final-read refusal qualification, 27 October 2026:** E2E-279/E2E-392 add direct final-read refusal assertions.
 Four new source cases supply16 fault scenarios; all22 cases pass with the original
 18 retained. Full-call and other evidence levels remain unchanged; runtime744
