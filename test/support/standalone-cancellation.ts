@@ -125,7 +125,7 @@ export async function cancellationFixture(scenario: CancellationScenario = "succ
   const select = (authority as Partial<AppointmentHost>).select;
   const appointmentHost: AppointmentHost | undefined = typeof list === "function" ? { list: list.bind(authority),
     ...(typeof select === "function" ? { select: select.bind(authority) } : {}) } : undefined;
-  const reception = new TextReception(ledger, policy, host, undefined, appointmentHost), runtime = new CallRuntime(ledger, scope);
+  const reception = new TextReception(ledger, policy, host, undefined, appointmentHost, undefined, undefined, () => cancellationNow), runtime = new CallRuntime(ledger, scope);
   const agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope }, policy, reception, undefined, undefined, undefined, ledger);
   resultValue(await runtime.admit(callId, captured, { key: { accountRef: "synthetic-account", providerCallRef: callId },
     dialedNumber: "+6125550199", acceptedAt: cancellationNow, deadline: "2026-10-04T04:00:30.000Z" }));

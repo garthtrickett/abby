@@ -15,8 +15,8 @@ async function fixture(first: Operation) {
   const underlying = new ClinikoReadBudget(180, () => Date.parse(current));
   let allowed = 0, denied = 0;
   const byWindow = new Map<number, number>();
-  // Keep the exact production-shaped budget object, including headroom and
-  // reservations and their object-bound context; observe claim without a stub.
+  // Pass the actual180 budget to the established representative fixture and
+  // observe claims. The fixture forwards claim/observe429, not every optional port.
   const budget = underlying, originalClaim = underlying.claim.bind(underlying);
   budget.claim = () => { const result = originalClaim(); result ? denied++ : allowed++;
     if (!result) byWindow.set(Date.parse(current), (byWindow.get(Date.parse(current)) ?? 0) + 1); return result; };
@@ -25,7 +25,7 @@ async function fixture(first: Operation) {
   await source.replace({ patientSelection: "independentlyVerifiedPatients" });
   const flow = resultValue(ClinikoCallFlow.create(source.config));
   const reception = new TextReception(f.f.ledger, f.f.policies, flow, undefined, {
-    list: (...args) => flow.appointments!.list(...args), select: (...args) => flow.appointments!.select!(...args) });
+    list: (...args) => flow.appointments!.list(...args), select: (...args) => flow.appointments!.select!(...args) }, undefined, undefined, () => current);
   const agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope: f.f.scope }, f.f.policies,
     reception, undefined, undefined, undefined, f.f.ledger);
   let sequence = 0;
@@ -99,7 +99,7 @@ async function fixture(first: Operation) {
     resultValue(await reception.drain(f.f.scope, f.f.callId, current)); await play();
     return (await f.f.state()).actions[action.key]!;
   };
-  return { ...f, source, flow, reception, start, perform, turn, counts, nextWindow, approveSecondPatient, diagnostics: () => ({ allowed, denied, claimsPerSourceWindow: [...byWindow.values()] }), assertWindowBounds: () => { for (const count of byWindow.values()) assert.ok(count <= 180); }, now: () => current,
+  return { ...f, source, flow, reception, start, perform, turn, counts, nextWindow, approveSecondPatient, playTaskPresentation: play, diagnostics: () => ({ allowed, denied, claimsPerSourceWindow: [...byWindow.values()] }), assertWindowBounds: () => { for (const count of byWindow.values()) assert.ok(count <= 180); }, now: () => current,
     closeProbe: async () => { flow.dispose(); await f.close(); } };
 }
 
@@ -151,3 +151,25 @@ for (const firstOperation of ["cancel", "reschedule"] as const) {
     } finally { context.diagnostic(JSON.stringify(f.diagnostics())); await f.closeProbe(); }
   });
 }
+
+test("E2E-389 an expired second patient grant refuses selection without a patient code or another native write", { timeout: 120_000 }, async () => {
+  const f = await fixture("reschedule");
+  try {
+    await f.start("reschedule", "43"); const first = await f.perform("reschedule");
+    assert.equal(first.status, "committed"); await f.nextWindow();
+    assert.ok(Date.parse(f.r.authorizations.get("44")!.expiresAt) <= Date.parse(f.now()));
+    resultValue(await f.reception.startWorkflow(f.f.scope, f.turn("Cancel an appointment for another patient"), "cancel",
+      f.now(), (await f.f.state()).conversationRevision, undefined, false, undefined, true)); await f.playTaskPresentation();
+    const owner = f.flow.representativeInputOwner; assert.ok(owner);
+    assert.equal(owner.beginCallerVerification(), true); await f.waitForMail(3);
+    assert.equal((await owner.submitCallerCode(f.mail.at(-1)!.code)).verified, true);
+    const patient = f.r.patients.get("44")!, subjectReads = f.r.requests.filter(path => path.endsWith("/patients/44")).length;
+    assert.equal((await owner.selectPatient({ firstName: patient.first_name, lastName: patient.last_name,
+      dateOfBirth: patient.date_of_birth })).ok, false);
+    assert.equal(f.r.requests.filter(path => path.endsWith("/patients/44")).length, subjectReads);
+    assert.equal(f.mail.length, 3); assert.equal(f.patches.length, 1); assert.equal(f.f.recalls.length, 1);
+    assert.deepEqual((await f.f.state()).actions[first.key], first);
+    assert.deepEqual(await f.flow.write(first.mutation, f.now()), { kind: "rejected", actionKey: first.key, reason: "forbidden" });
+    assert.equal(f.patches.length, 1); f.assertWindowBounds();
+  } finally { await f.closeProbe(); }
+});

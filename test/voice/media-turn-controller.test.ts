@@ -90,6 +90,39 @@ function value<T>(result: { ok: true; value: T } | { ok: false; error: { kind: s
   return result.value;
 }
 
+for (const pending of ["interpretation", "model"] as const)
+test(`pending ${pending} consumes only ordered quiet frames while preserving voiced and malformed input`, async () => {
+  let release!: () => void, entered!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; }), ready = new Promise<void>(resolve => { entered = resolve; });
+  let transcribed = 0, starts = 0;
+  const media = new MediaTurnController("session", {
+    async speechStarted() { return ok(++starts); },
+    acceptTranscript() { return ok(undefined); },
+    async finishTurn() { entered(); if (pending === "interpretation") await held; return ok(pending); },
+    pendingModelEffect(kind) { return kind === "model"; },
+  }, { async accept() { transcribed++; return ok([]); }, async flush() { return ok([]); } }, { silenceMs: 100 });
+  let finishing: ReturnType<typeof media.acceptMedia> | undefined;
+  try {
+    assert.equal(media.consumePendingSilence(frame(0, 0)), false, "ordinary silence keeps normal endpointing");
+    for (let sequence = 0; sequence < 6; sequence++) value(await media.acceptMedia(frame(sequence, sequence < 2 ? 2000 : 0)));
+    finishing = media.acceptMedia(frame(6, 0)); await ready;
+    if (pending === "model") value(await finishing);
+    assert.equal(media.consumePendingSilence(frame(7, 2000)), false);
+    assert.equal(media.consumePendingSilence(frame(8, 0)), false, "cannot overtake a missing packet");
+    assert.equal(media.consumePendingSilence(frame(7, 0, "foreign")), false);
+    assert.equal(media.consumePendingSilence({ ...frame(7, 0), bytes: new Uint8Array(1) }), false);
+    assert.equal(media.consumePendingSilence({ ...frame(7, 0), capturedAt: "invalid" }), false);
+    for (let sequence = 7; sequence < 107; sequence++) assert.equal(media.consumePendingSilence(frame(sequence, 0)), true);
+    assert.equal(transcribed, 7); assert.equal(starts, 1);
+    release(); value(await finishing);
+    if (pending === "model") media.endPendingEffect();
+    assert.equal(media.consumePendingSilence(frame(107, 0)), false);
+    value(await media.acceptMedia(frame(107, 2000))); value(await media.acceptMedia(frame(108, 2000)));
+    assert.equal(starts, 2, "next voiced input keeps its exact sequence and onset");
+  } finally { release(); await finishing; await media.stop(); }
+  assert.equal(media.consumePendingSilence(frame(109, 0)), false);
+});
+
 test("media input rejects malformed and out-of-order frames without consuming their sequence", async () => {
   const accepted: number[] = [];
   const media = new MediaTurnController("session", {
@@ -263,4 +296,64 @@ test("pre-location and scoped turns have distinct IDs even with the same session
   }
   assert.notEqual(value(pre.finish(new Date(start).toISOString())).turnId,
     value(scoped.finish(new Date(start).toISOString())).turnId);
+});
+
+
+test("pending silence cannot overtake queued voiced input or join speech across an unheard quiet frame", async () => {
+  let release!: () => void, entered!: () => void, starts = 0;
+  const held = new Promise<void>(resolve => { release = resolve; }), ready = new Promise<void>(resolve => { entered = resolve; });
+  const media = new MediaTurnController("session", {
+    async speechStarted() { return ok(++starts); }, acceptTranscript() { return ok(undefined); },
+    async finishTurn() { entered(); await held; return ok(undefined); },
+  }, { async accept() { return ok([]); }, async flush() { return ok([]); } }, { silenceMs: 100 });
+  let finishing: ReturnType<typeof media.acceptMedia> | undefined, queued: ReturnType<typeof media.acceptMedia> | undefined;
+  try {
+    for (let sequence = 0; sequence < 6; sequence++) value(await media.acceptMedia(frame(sequence, sequence < 2 ? 2000 : 0)));
+    finishing = media.acceptMedia(frame(6, 0)); await ready;
+    queued = media.acceptMedia(frame(7, 2000));
+    assert.equal(media.consumePendingSilence(frame(8, 0)), false, "queued voice must consume the earlier position first");
+    release(); value(await finishing); value(await queued);
+    value(await media.acceptMedia(frame(8, 0)));
+    assert.equal(value(await media.acceptMedia(frame(9, 2000))).kind, "listening");
+    assert.equal(starts, 1, "the real quiet frame separates the two voiced candidates");
+  } finally { release(); await finishing; await queued; await media.stop(); }
+});
+
+test("completed-turn work admits only quiet media for its actual lifetime and keeps private entry fenced", async () => {
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const media = new MediaTurnController("session", {
+    async speechStarted() { return ok(1); }, acceptTranscript() { return ok(undefined); }, async finishTurn() { return ok(undefined); },
+  }, { async accept() { throw Error("quiet completion cannot transcribe"); }, async flush() { throw Error("quiet completion cannot flush"); } });
+  const completing = media.whileCompletingTurn(async () => { await held; return "complete"; });
+  try {
+    assert.equal(media.consumePendingSilence(frame(0, 2000)), false);
+    for (let sequence = 0; sequence < 100; sequence++) assert.equal(media.consumePendingSilence(frame(sequence, 0)), true);
+    assert.deepEqual(media.discardPrivateMedia(frame(100, 0)), { ok: false, error: { kind: "mediaUnavailable" } });
+    release(); assert.equal(await completing, "complete");
+    assert.equal(media.consumePendingSilence(frame(100, 0)), false);
+    assert.equal(value(media.discardPrivateMedia(frame(100, 0))), 20);
+    await assert.rejects(media.whileCompletingTurn(async () => { throw Error("failed completion"); }), /failed completion/);
+    assert.equal(media.consumePendingSilence(frame(101, 0)), false);
+    assert.equal(value(media.discardPrivateMedia(frame(101, 0))), 20);
+  } finally { release(); await completing; await media.stop(); }
+});
+
+test("pending model work cannot consume silence needed to separate or end a new voiced utterance", async () => {
+  let starts = 0;
+  const media = new MediaTurnController("session", {
+    async speechStarted() { return ok(++starts); }, acceptTranscript() { return ok(undefined); },
+    async finishTurn() { return ok("model"); }, pendingModelEffect() { return true; },
+  }, { async accept() { return ok([]); }, async flush() { return ok([]); } }, { silenceMs: 100 });
+  try {
+    for (let sequence = 0; sequence < 7; sequence++) value(await media.acceptMedia(frame(sequence, sequence < 2 ? 2000 : 0)));
+    value(await media.acceptMedia(frame(7, 2000)));
+    assert.equal(media.consumePendingSilence(frame(8, 0)), false, "a pending effect cannot join candidates across silence");
+    value(await media.acceptMedia(frame(8, 0)));
+    assert.equal(value(await media.acceptMedia(frame(9, 2000))).kind, "listening");
+    assert.equal(value(await media.acceptMedia(frame(10, 2000))).kind, "speaking");
+    assert.equal(media.consumePendingSilence(frame(11, 0)), false, "an active new utterance needs its silence endpoint");
+    assert.equal(value(await media.acceptMedia(frame(11, 0))).kind, "speaking");
+    assert.equal(starts, 2);
+  } finally { media.endPendingEffect(); await media.stop(); }
 });

@@ -602,6 +602,9 @@ export class TextReception {
 
   async checkAppointments(scope: LocationScope, turn: FinalCallerTurn, verificationRef: string, from: string, to: string, now: string,
                           expectedConversationRevision?: number): Promise<Result<CallState, TextReceptionFailure>> {
+    const startedAt = this.currentInstant();
+    if (!startedAt) return err({ kind: "invalidTransition" as const });
+    now = startedAt;
     const denied = await this.patientAccessDenied(scope, turn, expectedConversationRevision);
     if (denied) return denied;
     const runtime = this.runtime(scope);
@@ -622,7 +625,11 @@ export class TextReception {
         interpretation = { kind: "appointmentsFailure", reason: "unavailable" };
       }
     }
-    return runtime.acceptTurn(turn, interpretation, now, expectedConversationRevision);
+    // Provider reads can finish after the speech turn. Neither the old turn
+    // timestamp nor a returned snapshot supplies current presentation authority.
+    const completedAt = this.currentInstant();
+    if (!completedAt || Date.parse(completedAt) < Date.parse(startedAt)) return err({ kind: "invalidTransition" as const });
+    return runtime.acceptTurn(turn, interpretation, completedAt, expectedConversationRevision);
   }
 
   async selectAppointment(scope: LocationScope, turn: FinalCallerTurn, verificationRef: string, choice: 1 | 2 | 3,

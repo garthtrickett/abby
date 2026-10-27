@@ -8,7 +8,6 @@ import type { Result } from "../../src/core/model.ts";
 import { CallReview } from "../../src/reference/call-review.ts";
 import { CommandGateway } from "../../src/reference/command-gateway.ts";
 import { ReferenceClinicHost } from "../../src/reference/clinic-host.ts";
-import { createEmbeddedTextComposition } from "../../src/reference/embedded-composition.ts";
 import { MemoryPolicyStore } from "../../src/reference/policy-store.ts";
 import { TextReception } from "../../src/reference/text-reception.ts";
 import { createReferenceStandaloneTextComposition } from "../support/reference-standalone-composition.ts";
@@ -52,9 +51,9 @@ async function fixture(kind: "memory" | "postgres", suffix: string, verified = t
   const ledger = kind === "postgres" ? new PostgresLedger(db!, suggestedAt => suggestedAt, undefined, "unsafeReference") : new MemoryLedger();
   const composed = kind === "postgres"
     ? createReferenceStandaloneTextComposition(db!, host, "execute", ledger, undefined, reader)
-    : { policy: withApprovedSyntheticVoice(new MemoryPolicyStore()), reception: undefined };
+    : { policy: withApprovedSyntheticVoice(new MemoryPolicyStore()), knowledge: undefined };
   const policy = composed.policy;
-  const reception = kind === "postgres" ? composed.reception : createEmbeddedTextComposition(ledger, policy, host, undefined, reader);
+  const reception = new TextReception(ledger, policy, host, undefined, reader, undefined, composed.knowledge, () => at(3));
   assert.ok(reception);
   const admission = new CallAdmissionService(ledger, async () => {
     const result = await policy.read(scope);

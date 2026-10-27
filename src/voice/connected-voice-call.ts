@@ -188,6 +188,10 @@ export class ConnectedVoiceCall {
     }
   }
 
+  consumePendingSilence(frame: MediaFrame): boolean {
+    return this.begun && !this.closing && !this.stopped && !this.terminal && this.media.consumePendingSilence(frame);
+  }
+
   discardPrivateMedia(frame: MediaFrame): Result<number, ConnectedVoiceFailure> {
     if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
     if (!this.begun || !this.scope) return err({ kind: "locationUnbound" });
@@ -205,30 +209,32 @@ export class ConnectedVoiceCall {
     if (result.value.kind !== "turnCompleted") return ok({ kind: result.value.kind });
     const turn = result.value.value;
     if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
-    try {
-      if (turn.kind === "locationBound") this.scope = turn.receipt.scope;
-      let corrected = false;
-      if (turn.kind === "callerTurn") {
-        const pendingModel = this.call.pendingModelEffect(turn);
-        try {
-          const drained = await this.call.drainVoiceEffects(frame.capturedAt);
-          if (!drained.ok) {
-            await this.close(frame.capturedAt, "sessionClosed");
-            return drained;
+    return this.media.whileCompletingTurn(async (): Promise<Result<ConnectedVoiceProgress, ConnectedVoiceFailure>> => {
+      try {
+        if (turn.kind === "locationBound") this.scope = turn.receipt.scope;
+        let corrected = false;
+        if (turn.kind === "callerTurn") {
+          const pendingModel = this.call.pendingModelEffect(turn);
+          try {
+            const drained = await this.call.drainVoiceEffects(frame.capturedAt);
+            if (!drained.ok) {
+              await this.close(frame.capturedAt, "sessionClosed");
+              return drained;
+            }
+          } finally {
+            if (pendingModel) corrected = this.media.endPendingEffect();
           }
-        } finally {
-          if (pendingModel) corrected = this.media.endPendingEffect();
         }
+        if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
+        if (corrected) return ok({ kind: "listening" });
+        const delivery = await this.dispatchReady(frame.capturedAt);
+        if (!delivery.ok) return delivery;
+        return ok({ kind: "turnCompleted", turn, delivery: delivery.value });
+      } catch {
+        await this.close(frame.capturedAt, "sessionClosed");
+        return err({ kind: "targetUnavailable" });
       }
-      if (this.closing || this.stopped || this.terminal) return err({ kind: "disconnected" });
-      if (corrected) return ok({ kind: "listening" });
-      const delivery = await this.dispatchReady(frame.capturedAt);
-      if (!delivery.ok) return delivery;
-      return ok({ kind: "turnCompleted", turn, delivery: delivery.value });
-    } catch {
-      await this.close(frame.capturedAt, "sessionClosed");
-      return err({ kind: "targetUnavailable" });
-    }
+    });
   }
 
   async acceptKeypadAvailability(date: string, now: string): Promise<Result<ConnectedVoiceProgress, ConnectedVoiceFailure>> {

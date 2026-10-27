@@ -48,6 +48,9 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     clinicalHost?: true;
     financialPolicyForCall?: NonNullable<import("../../src/standalone/cliniko-voice-clinical-host.ts").FinancialVoiceProvision["policyForCall"]>;
     maximumWrites?: 2 | 3; classMove?: true;
+    /** Long real-clock callers keep receiving quiet carrier packets while
+     * native/private callbacks are awaited; source-only fixtures stay manual. */
+    steadyMedia?: true;
     routingHost?: (accountSid: string) => ClinicNumberRoutingHost;
     locationServiceSources?: readonly Parameters<typeof OwnerFileServiceCatalogue.capture>[0][];
     appointmentTypeMetadata?: Readonly<Record<string, Readonly<{ durationMinutes: number }>>>;
@@ -58,7 +61,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
   const accountSid = `AC${"4".repeat(32)}`, callSid = `CA${randomUUID().replaceAll("-", "")}`, streamSid = `MZ${randomUUID().replaceAll("-", "")}`;
   const webhookUrl = "https://workflow.example.test/twilio/inbound", streamUrl = "wss://workflow.example.test/twilio/media/";
   let mediaElapsedMs = 0;
-  const classMedia = options.classMove ? new SyntheticMediaTimeline() : undefined;
+  const mediaClock = (options.classMove || options.steadyMedia) ? new SyntheticMediaTimeline() : undefined;
   const sourceClock = config.clock ?? (() => verificationNow);
   let mediaStartedAt = Date.parse(sourceClock());
   // Source ticks and media represent the same elapsed interval. The decoder
@@ -122,9 +125,11 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     calls: Object.fromEntries([...sourceCalls].map(([name, record]) => [name, { ...record,
       totalMs: Math.round(record.totalMs), maximumMs: Math.round(record.maximumMs) }])) });
   let ledger: MemoryLedger | undefined, flow: ClinikoCallFlow | undefined, socket: WebSocket | undefined, closed = false;
+  let quietMedia: ReturnType<typeof setInterval> | undefined;
   let disposedState: ReturnType<MemoryLedger["read"]> | undefined, closeCode: number | undefined;
   let after: Record<string, unknown> | undefined, sequence = 1, chunk = 0, utterance = 0, transcriptionFrames = 0;
   let processedChunk = 0, processedSequence = 0, hostWritesStarted = 0, hostWritesSettled = 0;
+  const completedChunks = new Set<number>(), completedControls = new Set<number>();
   function sendEvent(event: Record<string, unknown>) {
     socket!.send(JSON.stringify({ ...event, streamSid: event.streamSid ?? streamSid, sequenceNumber: String(sequence++) }));
   }
@@ -304,16 +309,23 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     }));
     return { receive: async raw => { const result = await composed.receive(raw);
       if (!result.ok) failures.push("error" in result ? String((result.error as { kind: string }).kind) : "unknown");
-      const decoded = JSON.parse(raw); if (decoded.event === "media") processedChunk = Number(decoded.media.chunk);
+      const decoded = JSON.parse(raw);
+      if (decoded.event === "media") {
+        completedChunks.add(Number(decoded.media.chunk));
+        while (completedChunks.delete(processedChunk + 1)) processedChunk++;
+      } else if (decoded.sequenceNumber) completedControls.add(Number(decoded.sequenceNumber));
       if (decoded.sequenceNumber) processedSequence = Math.max(processedSequence, Number(decoded.sequenceNumber));
       return result; },
       disconnect: async () => { await composed.disconnect(); closed = true; } };
   } });
   server.listen(0, "127.0.0.1"); await once(server, "listening"); const address = server.address(); assert.ok(address && typeof address !== "string");
   const close = async () => {
+    if (quietMedia) clearInterval(quietMedia);
+    quietMedia = undefined;
     try { if (socket && socket.readyState !== WebSocket.CLOSED) { socket.terminate(); await once(socket, "close"); }
       if (flow) await voiceUntil(() => closed, "call owner cleanup"); }
     finally { server.close(); await once(server, "close"); }
+    assert.equal(failures.includes("syntheticQuietMediaFailed"), false, "steady media must retain the original clock bounds");
   };
   try {
     const form = { AccountSid: accountSid, CallSid: callSid, To: config.inbound.dialedNumber, From: config.inbound.presentedCallerNumber! };
@@ -339,7 +351,8 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       throw new Error(`greeting mark timed out: ${JSON.stringify(transport)}`, { cause: error });
     }
     const media = (voiced: boolean) => {
-      const packet = classMedia?.next();
+      if (options.steadyMedia) mediaClock!.alignAfter(Math.max(0, Date.parse(sourceClock()) - mediaStartedAt));
+      const packet = mediaClock?.next();
       chunk = packet ? Number(packet.chunk) : chunk + 1;
       mediaElapsedMs = packet ? Number(packet.timestamp) : (chunk - 1) * 20;
       sendEvent({ event: "media", media: { track: "inbound", chunk: String(chunk), timestamp: String(mediaElapsedMs),
@@ -349,13 +362,26 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       await voiceUntil(() => playback.hasPendingAfter(), "fresh queued playback marker");
       const markSequence = sequence;
       assert.equal(playback.acknowledgeLatest(), true);
-      await voiceUntil(() => processedSequence >= markSequence, "processed playback receipt");
+      await voiceUntil(() => completedControls.has(markSequence), "processed playback receipt");
+      completedControls.delete(markSequence);
     };
     const privateQuiet = async () => {
       for (let frame = 0; frame < 25; frame++) media(false);
       const resumeChunk = chunk; await voiceUntil(() => processedChunk >= resumeChunk, "fresh private-audio quiet interval");
     };
     await mark();
+    if (options.steadyMedia) {
+      quietMedia = setInterval(() => {
+        if (closed || socket?.readyState !== WebSocket.OPEN) return;
+        try { media(false); }
+        catch {
+          clearInterval(quietMedia);
+          quietMedia = undefined;
+          failures.push("syntheticQuietMediaFailed");
+        }
+      }, 20);
+      quietMedia.unref();
+    }
     return { callId, currentTime: now, retainedNative: retainedNativeAppointments(nativeRows, now, port), sent, spoken, transcripts, privateTranscripts, modelTurns, transitionTrace, writes, writeRequests, close, mark, media, sendEvent, privateQuiet,
       get workflowStarted() { return flow !== undefined; },
       get flow() { assert.ok(flow); return flow; }, get transcriptionFrames() { return transcriptionFrames; },
@@ -376,11 +402,12 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       async privateKey(digit: string) {
         const keySequence = sequence;
         sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
-        await voiceUntil(() => processedSequence >= keySequence || closed, "processed private keypad event");
+        await voiceUntil(() => completedControls.has(keySequence) || closed, "processed private keypad event");
+        completedControls.delete(keySequence);
         assert.deepEqual(failures, []);
       },
       async turn(text: string, options: { expectedFailure?: "confirmationMissing" | "staleGeneration" | "automatedCallUnavailable"; interrupt?: boolean } = {}) {
-        classMedia?.alignAfter(Math.max(0, Date.parse(now()) - mediaStartedAt));
+        mediaClock?.alignAfter(Math.max(0, Date.parse(now()) - mediaStartedAt));
         stages.length = 0;
         const marks = sent.filter(item => item.event === "mark").length, clears = sent.filter(item => item.event === "clear").length;
         let replyAfterMarks = marks;

@@ -144,3 +144,48 @@ test("E2E-294 disconnected quiet frames cannot establish the continuous 500 ms p
     assert.equal(f.detailReads, 1);
   } finally { await f.close(); }
 });
+
+test("E2E-294 held private verification consumes ordered audio without blocking the call or opening public transcription", async () => {
+  const released = intakeDeferred<boolean>();
+  const f = await privateKeypadCallFixture({ delivery: { send: async () => released.promise } });
+  let answering: ReturnType<typeof f.digit> | undefined;
+  try {
+    await f.start(); await f.mark(); await f.delivered;
+    for (const digit of f.mail[0]!.code) await f.digit(digit);
+    answering = f.digit("#");
+    for (let frame = 0; frame < 100; frame++) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const processed = await Promise.race([f.media(frame % 10 === 0), new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("private audio must drain while verification remains held")), 500);
+        })]);
+        assert.deepEqual(processed, { ok: true, value: { kind: "privateInput" } });
+      } finally { clearTimeout(timer); }
+    }
+    assert.equal(f.privateInput.blocked(), true);
+    assert.deepEqual(f.transcripts, []); assert.deepEqual(f.modelTurns, []); assert.equal(f.detailReads, 0);
+    released.resolve(true); assert.ok((await answering).ok);
+    assert.deepEqual(await f.media(), { ok: true, value: { kind: "privateInput" } }, "held private audio cannot satisfy the later resume fence");
+    await f.resume();
+    for (let frame = 0; frame < 7; frame++) assert.ok((await f.media(frame < 2)).ok);
+    assert.equal(f.detailReads, 1); assert.equal(f.normalKeys, 0);
+  } finally { released.resolve(false); await answering; await f.close(); }
+});
+
+test("E2E-294 pending private digits retain the shared 64-message admission bound", async () => {
+  const released = intakeDeferred<boolean>();
+  const f = await privateKeypadCallFixture({ delivery: { send: async () => released.promise } });
+  let answering: ReturnType<typeof f.digit> | undefined;
+  try {
+    await f.start(); await f.mark(); await f.delivered;
+    for (const digit of f.mail[0]!.code) await f.digit(digit);
+    answering = f.digit("#");
+    assert.deepEqual(await f.media(false), { ok: true, value: { kind: "privateInput" } });
+    const queued = Array.from({ length: 64 }, () => f.digit("1"));
+    const results = await Promise.all(queued);
+    assert.ok(results.some(result => !result.ok && result.error.kind === "streamOverloaded"));
+    assert.equal((await answering).ok, false); assert.equal(await f.owner.verified(), undefined);
+    assert.equal(f.privateInput.blocked(), true); assert.equal(f.normalKeys, 0);
+    assert.deepEqual(f.transcripts, []); assert.deepEqual(f.modelTurns, []); assert.equal(f.detailReads, 0);
+  } finally { released.resolve(false); await answering; await f.close(); }
+});

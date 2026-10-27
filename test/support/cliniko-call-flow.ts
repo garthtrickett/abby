@@ -14,7 +14,7 @@ function connect(config: ClinikoCallFlowConfig) {
   const reception = new TextReception(config.ledger as ConstructorParameters<typeof TextReception>[0], config.policies, flow, undefined, {
     list: (...args) => flow.appointments?.list(...args) ?? Promise.resolve(err({ kind: "unavailable" as const })),
     select: (...args) => flow.appointments?.select(...args) ?? Promise.resolve(err({ kind: "unavailable" as const })),
-  });
+  }, undefined, undefined, config.clock);
   return { flow, reception, flowConfig: config };
 }
 function paths(caller: string, booking: string, cancellation = booking, rescheduling = booking) {

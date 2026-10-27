@@ -109,7 +109,7 @@ export async function callerVerificationFixture(options: { apiKey?: string; scop
       clock: () => now, ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }) };
     session = resultValue(CallerVerificationSession.create(sessionConfig));
     const reader = resultValue(ClinikoAppointmentReader.create({ scope, apiKey, contactEmail, businessId: "11" }, session.proof, fetchPort, () => now));
-    const reception = new TextReception(ledger, policies, new DisabledStandaloneHost(), undefined, reader);
+    const reception = new TextReception(ledger, policies, new DisabledStandaloneHost(), undefined, reader, undefined, undefined, () => now);
     const agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope }, policies, reception);
     let turns = 0;
     const read = (verificationRef: string) => agent.submit({ kind: "appointments.read.v1", turn: { callId, sessionId,

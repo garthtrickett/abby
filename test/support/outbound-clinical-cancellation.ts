@@ -100,7 +100,7 @@ export async function outboundClinicalCancellationFixture(options: Readonly<{ bu
     const { inbound: _, representative: __, incomingOriginal: ___, ...config } = f.config;
     const outgoingConfig = { ...config, cliniko: c, receipt, sessionId, outbound: context, fetchPort: native, signal: lifetime.signal };
     const owner = value(await ClinikoCancellationSession.createOutbound(outgoingConfig));
-    const reception = new TextReception(f.ledger, f.policies, owner.effects, undefined, owner.appointments);
+    const reception = new TextReception(f.ledger, f.policies, owner.effects, undefined, owner.appointments, undefined, undefined, outgoingConfig.clock);
     const agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope: f.scope }, f.policies, reception, undefined, undefined, undefined, f.ledger);
     const currentState = async () => value(await f.ledger.read(callId, f.scope));
     const turn = (turnId: string, text = "Cancel my appointment"): FinalCallerTurn & Readonly<{ sessionId: string }> => ({ callId, sessionId, turnId, text, quality: "clear", at: verificationNow });
