@@ -1,5 +1,65 @@
 # Execution progress and evidence
 
+## Integrated correction/resend qualification, 27 October 2026
+
+PR #610 normally merged as `808a04fc2ef84a3c5a2a428b3d0842f0760fb106`
+after all eight exact-head raw CI logs qualified. All four actual-main checks then
+passed, followed by independent verification of sixteen baseline/own/main raw
+logs, source, facts and all 744 outputs. The earlier failed f13 main stays failed;
+no absent root receipt was invented. This qualified parent is now normally merged
+into the existing correction/resend branch, preserving both documentation histories
+and physical copies of all earlier runtime bytes.
+
+Approved next corrections and explicit another-appointment resends obtain fresh
+task-specific proof, private fields/selection and separately played consent.
+Retired actions cannot authorize or block the current private task incorrectly.
+Earlier immutable receipts and unknown outcomes retain their original meaning;
+current committed/uncertain corrections stay noneditable. Bare repeat sends and
+delivery questions grant no new effect. Supplied alternate-recipient questions
+are refused locally before public intent classification; registered contact,
+codes and private mail fields stay outside the public model/SAM and persistence.
+The clinic's existing task limit, independent patient/action permission, native 180,
+leases, proof lifetimes, quotas and deadlines remain unchanged. No household,
+representative or minor authority is inferred.
+
+Current whole strict TypeScript and the serving compiler
+(`1793062148837`) both pass, with each child exit recorded before
+output validation. The build retains all 744 paths: eight outputs change from the
+qualified parent and the other 736 are exact. Current controls
+(`1793062544195`) pass all 49 distinct cases: 37 existing task
+controls and 12 inherited canary guards, with zero skips/cancellations. Their two
+owned PostgreSQL databases run sequentially and their containers/volumes are
+independently confirmed absent.
+
+All 15 signed compiled cases (`1793063062683`) pass: five
+original correction cases, six original single-resend cases and four successor
+resend cases. The single suite heading is separate from the fifteen direct cases.
+Actual HTTP/media, private verification, played consent, native outcomes, current
+permission/uncertainty refusal, every-column/full-backup privacy and owned cleanup
+remain checked. These use synthetic providers and local mail; transport acceptance
+does not establish external inbox delivery or real clinic acceptance.
+
+Three inherited controls (`1793063815133`) also pass on the current
+combined code/runtime: forced-first111222 class-movement memo recovery, deliberate
+post-issue SQL leak detection, and foreign server/database refusal. The copied cold
+witness explicitly imports this integrated source and compiled worker. It retains
+both pre-challenge unrelated phone rows, actual sender SIGKILL, GET-only cold
+discovery, consumed-purpose refusal, the complete unfiltered backup, logical restore
+and unrelated retained records. The original scanner, case/child deadlines and all
+private canaries remain intact. Its first launcher refused live capacity before
+starting a test or database. The measured-budget successor uses a 512 MiB Node
+scope and 256 MiB database without changing assertions, deadlines or product quotas;
+the original admission exit 1 remains recorded separately. Earlier failed fixtures, wrapper accounting results,
+independent reconciliation and unavailable original peak measurements stay recorded.
+
+This final ledger refresh changes no code, tests or runtime bytes. The 127 facts
+and 674 citation identities remain, with hashes refreshed for current files.
+Exact-head metadata, both full BASE808...finalHEAD reviews, own CI, normal merge,
+actual resulting-main qualification and independent root verification remain delivery
+requirements. Real clinic policy/grants, external inbox/human duty, acoustic/carrier,
+source/restore and deployment/activation acceptance remain open. All eleven stages,
+four booking steps, thirteen gaps and twenty-eight reuse placements remain in scope.
+
 ## Cold memo review refinement, 26 October 2026
 
 Independent review of the first corrective commit found one malformed-input

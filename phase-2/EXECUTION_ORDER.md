@@ -1,5 +1,15 @@
 # Abby execution order
 
+**Integrated correction/resend qualification, 27 October 2026:** Approved
+next tasks obtain fresh private verification, input/menu state and played consent
+while retaining earlier results and current uncertainty. Alternate-recipient mail
+questions are refused locally before public intent classification. On independently
+qualified PR #610 main, current strict/744 build, 49 controls, 15 signed call-flow
+cases and three inherited cold/SQL controls pass. Eight outputs differ from that
+parent; the other 736 are exact. Current metadata, final full-diff review, own CI
+and actual-main delivery remain gates. All original stages and gaps remain in scope.
+See [the integrated evidence](EXECUTION_PROGRESS.md#integrated-correctionresend-qualification-27-october-2026).
+
 **Recipient-question review refinement, 26 October 2026:** A supplied alternate
 recipient is refused locally even in a delivery question; an ordinary question
 about another appointment remains read-only. The exact regression is retained.
