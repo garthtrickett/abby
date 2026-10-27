@@ -8,12 +8,28 @@ import { verificationNow } from "../support/caller-verification.ts";
 
 for (const mode of ["online", "roster"] as const) test(`final ${mode} availability follows quota, proof, policy and ledger preparation and directly precedes POST`, async t => {
   const events: string[] = [];
+  const delayed = new Set<string>();
+  let delaying = false, sent = false, waitingPostBudget = false;
+  const suspendPreparation = async (label: string) => {
+    if (delayed.has(label)) return;
+    delayed.add(label);
+    assert.equal(sent, false, label);
+    assert.equal(events.includes("finalAvailabilityComplete"), false, label);
+    // Keep actual preparation pending across an event-loop turn. Assertions
+    // on both sides catch dispatch while the preparation promise is unsettled.
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.equal(sent, false, label);
+    assert.equal(events.includes("finalAvailabilityComplete"), false, label);
+  };
   const calendar = mode === "roster" ? syntheticRosterProvider() : undefined;
   const f = await bookingOffersFixture({ ...(calendar ? { availabilityPlan: rosterPlan } : {}), fetchAround: port => {
     const provider = calendar ? calendar.wrap(port) : port;
     return async (input, init) => {
+      const path = new URL(String(input)).pathname;
+      if (init?.method === "POST" && path === "/v1/individual_appointments") sent = true;
       events.push(`dispatch:${init?.method ?? "GET"}:${new URL(String(input)).pathname}`);
       const response = await provider(input, init);
+      if (delaying && !sent && path.startsWith("/v1/patients/")) await suspendPreparation("patientContact");
       events.push(`native:${init?.method ?? "GET"}:${new URL(String(input)).pathname}`);
       return response;
     };
@@ -27,6 +43,7 @@ for (const mode of ["online", "roster"] as const) test(`final ${mode} availabili
       t.mock.method(object, method as never, async (...args: unknown[]) => {
         events.push(`${label}:begin`);
         const value = await original.apply(object, args);
+        if (!sent) await suspendPreparation(label);
         events.push(`${label}:end`);
         return value;
       });
@@ -36,22 +53,32 @@ for (const mode of ["online", "roster"] as const) test(`final ${mode} availabili
     trace(f.policies, "read", "settings");
     trace(f.bookingPolicy, "current", "approvalFile");
     trace(f.session.proof, "verifyOperation", "patientProof");
+    const budget = f.ownerPorts.rateBudget, claim = budget.claim.bind(budget);
+    t.mock.method(budget, "claim", async () => {
+      const result = await claim();
+      if (waitingPostBudget) { waitingPostBudget = false; await suspendPreparation("postBudget"); }
+      return result;
+    });
     const write = f.writer.writeOnce.bind(f.writer);
-    t.mock.method(f.writer, "writeOnce", (...[request, signal, beforeSend, onAccepted, atDispatch]: Parameters<typeof write>) =>
-      write(request, signal, async stop => {
+    t.mock.method(f.writer, "writeOnce", (...[request, signal, beforeSend, onAccepted, atDispatch]: Parameters<typeof write>) => {
+      waitingPostBudget = true;
+      return write(request, signal, async stop => {
         // The writer has already claimed its actual POST budget at this point.
         events.length = 0;
         events.push("postBudgetClaimed");
         return beforeSend!(stop);
-      }, receipt => { events.push("acknowledged"); onAccepted?.(receipt); }, atDispatch));
+      }, receipt => { events.push("acknowledged"); onAccepted?.(receipt); }, atDispatch);
+    });
     const finalRead = f.source.resolveForSend.bind(f.source);
     t.mock.method(f.source, "resolveForSend", async (...args: Parameters<typeof finalRead>) => {
       const read = await finalRead(...args);
       events.push("finalAvailabilityComplete");
       return read;
     });
-    resultValue(await f.drain());
+    delaying = true; resultValue(await f.drain());
     assert.equal(f.posts, 1);
+    for (const label of ["patientContact", "patientProof", "approvalFile", "postBudget"])
+      assert.equal(delayed.has(label), true, `actual ${label} preparation was suspended`);
     assert.equal(Object.values((await f.state()).actions)[0]!.status, "committed");
     const lastRead = events.indexOf("finalAvailabilityComplete"), ack = events.indexOf("acknowledged");
     assert.ok(lastRead > 0 && ack > lastRead, JSON.stringify(events));
