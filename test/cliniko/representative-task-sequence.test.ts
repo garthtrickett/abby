@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
-import { verificationNow } from "../support/caller-verification.ts";
+import { verificationNow, verificationCanaries } from "../support/caller-verification.ts";
+import { ClinikoReadBudget } from "../../src/cliniko/read-budget.ts";
+import { representativeCallOwnerFixture } from "../support/representative-call-owner.ts";
 
 import { representativeTaskSequenceFixture as fixture } from "../support/representative-task-sequence.ts";
 
@@ -99,3 +101,62 @@ test("E2E-387 aborted related-person preparation preserves the original actor an
     assert.deepEqual((await f.f.state()).actions[first.key], first); assert.equal(f.native.requests.length, 2);
   } finally { await f.closeSequence(); }
 });
+
+for (const outcome of ["accepted", "missingAuthority", "recipientDrift"] as const) {
+  test(`E2E-387 two guardian-authorized children sharing a registered email retain independent proof: ${outcome}`, { timeout: 120_000 }, async () => {
+    let current = verificationNow;
+    const budget = new ClinikoReadBudget(180, () => Date.parse(current));
+    const caller = await representativeCallOwnerFixture({ multiplePatients: true, guardian: true, budget });
+    // The actual standalone native actor record uses this fixed registered
+    // address; the inherited base-verifier setEmail does not change that record.
+    const registeredEmail = verificationCanaries[0]!;
+    for (const patient of caller.r.patients.values()) patient.email = registeredEmail;
+    const f = await fixture("independentlyVerifiedPatients", { caller, clock: () => current });
+    try {
+      const firstOwner = await f.verify("43"), first = await f.book();
+      assert.equal(first.status, "committed");
+      const firstReceipt = structuredClone(first), firstAuthority = structuredClone(f.r.authorizations.get("43"));
+      assert.equal(f.mail.length, 2); assert.equal(f.native.requests.length, 1);
+      // Controlled source time only. Keep each original30s lease alive before
+      // expiry; the original180 budget gains capacity only in its next window.
+      const began = Date.parse(current);
+      for (const seconds of [20, 40, 61]) {
+        current = new Date(began + seconds * 1000).toISOString(); f.f.setTime(current);
+        const lease = (await f.f.state()).sessionLease!;
+        resultValue(await f.f.runtime.renewSession(f.f.callId, f.f.sessionId, lease.version, current));
+      }
+      assert.equal(budget.checkHeadroom(180), null);
+      if (outcome === "missingAuthority") {
+        f.r.authorizations.delete("44");
+        const owner = await f.start(); assert.equal(owner.beginCallerVerification(), true);
+        await f.waitForMail(3); assert.equal((await owner.submitCallerCode(f.mail[2]!.code)).verified, true);
+        const patient = f.r.patients.get("44")!;
+        assert.equal((await owner.selectPatient({ firstName: patient.first_name, lastName: patient.last_name, dateOfBirth: patient.date_of_birth })).ok, false);
+        assert.equal(owner.beginPatientVerification(), false);
+        assert.equal(f.mail.length, 3, "the shared mailbox does not authorize another child's challenge");
+      } else {
+        const secondOwner = await f.verify("44", false);
+        assert.notEqual(firstOwner, secondOwner); assert.equal(firstOwner.closed, true);
+        assert.equal(f.mail.length, 4); assert.equal(f.native.requests.length, 1);
+        if (outcome === "recipientDrift") f.r.patients.get("44")!.email = "changed-subject-private@example.test";
+        assert.equal((await f.flow.submitCode(f.mail[3]!.code)).verified, outcome === "accepted");
+        if (outcome === "accepted") {
+          const second = await f.book(); assert.equal(second.status, "committed");
+          assert.deepEqual(f.native.requests.map(row => row.patient_id), ["43", "44"]);
+          if (first.mutation.request.kind !== "book" || second.mutation.request.kind !== "book") throw Error("wrong operation");
+          assert.notEqual(first.mutation.request.patient.verificationRef, second.mutation.request.patient.verificationRef);
+          assert.equal((await f.flow.resolveBooking(f.f.scope, first.mutation.request.patient.verificationRef,
+            first.mutation.request.offer.offerRef, current)).ok, false, "an earlier child's proof cannot resolve the new owner's booking");
+        }
+      }
+      assert.ok(f.mail.every(row => row.email === registeredEmail));
+      assert.equal(f.native.requests.length, outcome === "accepted" ? 2 : 1);
+      const state = await f.f.state(); assert.deepEqual(state.actions[first.key], firstReceipt);
+      assert.deepEqual(f.r.authorizations.get("43"), firstAuthority, "task progression cannot extend the earlier guardian grant");
+      const publicProjection = JSON.stringify([state.callerMessages, await f.flow.publicIntentContext()]);
+      for (const secret of [registeredEmail, "Subject Canaries", "Second Person", ...f.mail.map(row => row.code)]) {
+        assert.equal(publicProjection.includes(secret), false, "registered address, child identity and codes stay outside public turns");
+      }
+    } finally { await f.closeSequence(); }
+  });
+}

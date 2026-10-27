@@ -1,5 +1,14 @@
 # Abby execution order
 
+**Guardian shared registered-email qualification, 27 October 2026:** The existing selected-patient registered-email policy
+now has source and emitted signed SQL coverage for two independently authorized
+children sharing the caller's registered email. Fresh per-child proof and played
+consent remain separate; missing authority or post-challenge recipient drift
+refuses the second write. Source20, strict/744 and signed3 pass locally;743
+runtime files and all production outputs remain exact. This adds no guardian
+channel or general representative authority. Review, delivery and real acceptance
+remain separate. See [scope](EXECUTION_PROGRESS.md#guardian-shared-registered-email-qualification-27-october-2026).
+
 **Cross-patient task and continuous-media qualification, 27 October 2026:** Current local strict/744 emission,198 selected source
 cases and four actual emitted signed HTTP/media/PostgreSQL cases pass. Both
 patient-operation orders retain fresh per-task proof, independent current grants,
