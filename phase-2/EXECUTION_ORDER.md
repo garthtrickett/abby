@@ -1,5 +1,14 @@
 # Abby execution order
 
+**Approved practitioner comparison, 27 October 2026:** A locally qualified
+R02 candidate retains the original approved practitioner when an earlier
+alternative is shown, and an explicit return fetches fresh original times.
+Equal starts keep the existing member order; failed original reads remain
+unknown. 20 source checks, whole strict types, 745 serving outputs and three actual emitted
+signed SQL calls pass. Four existing signed search/deadline checks also passed.
+This is local engineering; independent review, normal delivery and clinic/voice
+acceptance remain separate. See [scope and results](EXECUTION_PROGRESS.md#approved-practitioner-comparison-27-october-2026).
+
 **Acknowledged booking result-failure preservation, 27 October 2026:** A new actual admitted booking case fails its SAM result
 playback and report reader after exact acknowledgement, retaining the receipt,
 one review/create and no compensating/replayed writes. All33 complete source

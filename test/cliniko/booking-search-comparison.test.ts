@@ -1,3 +1,4 @@
+// E2E-313: approved original-versus-alternative booking comparison.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { bookingCatalogueFixture } from "../support/cliniko-booking-catalogue.ts";

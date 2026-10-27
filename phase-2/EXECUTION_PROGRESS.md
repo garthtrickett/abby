@@ -1,5 +1,28 @@
 # Execution progress and evidence
 
+## Local qualification checkpoint, 27 October 2026
+
+This dated snapshot describes locally qualified R02 code `b16b741b`; the full
+[execution order](EXECUTION_ORDER.md) and its thirteen-gap scope remain. PR #612
+normally merged as `869ddf53` after own-head, actual-main and raw qualification.
+PR #613 normally merged as `7375cff1`; its original own eight jobs and logs
+passed. Its independently tracked actual-main/raw/root qualification is required
+before the booking successor delivery. The reviewed booking verification
+successor retains all 33 local cases, current strict types,
+744 preserved outputs and its independent reviews; its normal delivery follows
+the guardian parent. It supplies the remaining three locally qualified rows of
+the fourteen-row booking matrix; eleven already map to qualified merged evidence.
+
+The [R02 comparison candidate](#approved-practitioner-comparison-27-october-2026)
+has current local qualification on that reviewed booking tree. Its approval
+scope is one existing service/location catalogue. It adds no new service,
+guardian, financial or outbound authority. All thirteen gaps retain their real
+clinic/provider/source, sender/staff, restore and applicable speech acceptance.
+Noisy/safety recognition remains a failed gate; the unavailable Krisp developer
+key and owner-deferred cash/bank invoice remain pending. These local results
+authorize no deployment, patient traffic or Karen deletion. Earlier dated
+checkpoints below retain the state they actually described.
+
 ## Acknowledged booking result-failure preservation, 27 October 2026
 
 The booking plan's named later-failure row now has an explicit admitted booking
@@ -7920,3 +7943,54 @@ The new source, compiler and signed checks bind the same corrected production
 and test bytes; the final facts/docs refresh changes only documentation. This
 remains local synthetic qualification, with fixed-head final review, actual
 qualified parent, own CI and resulting-main/root delivery still separate.
+
+## Approved practitioner comparison, 27 October 2026
+
+Audit R02 asks Abby to retain the original option while explaining an approved
+alternative. An actual admitted-host witness first failed: the earlier-member
+menu described only the winner and omitted the original available time. The
+local candidate now derives public comparison evidence from the same completed
+native reads. It discloses the original practitioner, service, location, time
+and duration; distinguishes an earlier alternative, an equal start and a
+complete empty original search; and retains the existing approved member order
+for ties. An unreadable original still cannot establish an earliest or empty
+answer. Actual local dates and both intervals are validated, rather than
+implying that an alternative covers an unobserved requested day.
+
+The remembered public name belongs to the current call's approved preference
+or initial clinic choice; it does not infer a previous practitioner or visit.
+An explicit request to check the original resolves that approved public name
+and performs a fresh owned menu read. The original displayed time is not a
+selectable cached offer. Existing proof, member approval, played menu and
+clinical affirmation, review, final availability and one-send rules still apply.
+Cross-service comparison evidence is refused; a different service uses its own
+explicit approved service selection and confirmation.
+
+Actual local qualification on code `b16b741b`:
+
+- Eight comparison controls plus twelve existing canary-isolation controls:
+  20 passed, zero failed/cancelled/skipped.
+- Whole strict TypeScript and fresh745-output serving build passed. Relative
+  to the reviewed booking parent, four production outputs and one test helper
+  differ, one catalogue test fixture is added, and 739 parent outputs are exact.
+- Four existing signed practitioner-search/deadline checks passed. Their
+  original cohort remains failed overall because the following new SQL cases
+  initially refused at setup; that failure is retained, not relabelled green.
+- After registering only the new test's exact filename in the restricted
+  canary fixture list, all three emitted signed HTTP/media/PostgreSQL cases
+  passed: fresh original return with one exact original booking, unavailable
+  original with no clinical send, and withdrawn alternative with no clinical
+  send. The native limit of 180 requests per minute, real deadlines, public-context exclusions, all-column scans
+  and unfiltered logical-backup checks remain. The outer server, three case
+  databases and volumes were removed normally, with no OOM or emergency cleanup.
+
+The first source failure and a new-test branded-ID typing error remain recorded.
+Review also removed an unnecessary tie-ranking change before final qualification.
+The only later test-source edits add plain E2E-313 trace comments; executable
+bodies and all 745 outputs remain exact to the qualified code. Two metadata
+contracts must then pass on the final documentation. All425 scenario IDs and
+existing evidence tiers remain; full-call acceptance remains planned.
+
+This is a local candidate, not a delivered clinic feature or acoustic proof.
+Full fixed-diff review, qualified-parent integration, original exact-head CI,
+normal merge and actual-main qualification remain separate delivery gates.

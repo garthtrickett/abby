@@ -1,3 +1,4 @@
+// E2E-313: approved original-versus-alternative booking comparison.
 // R02: emitted serving modules, signed media, real SQL/native budget and exact original return.
 import assert from "node:assert/strict";
 import test from "node:test";
