@@ -13,10 +13,10 @@ import { syntheticTaskSequence } from "./call-task-sequence.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 
 type InputFactory = (config: ConstructorParameters<typeof PrivateResendVoiceInput>[0]) => PrivateKeypadInput;
-async function until(check: () => boolean, message = "expected private resend task progress") {
+async function until(check: () => boolean | Promise<boolean>, message = "expected private resend task progress") {
   const end = Date.now() + 5000;
-  while (!check() && Date.now() < end) await new Promise(resolve => setTimeout(resolve, 5));
-  assert.equal(check(), true, message);
+  while (!await check() && Date.now() < end) await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(await check(), true, message);
   await new Promise(resolve => setImmediate(resolve));
 }
 
@@ -61,6 +61,7 @@ export async function resendTasksFixture(db: Kysely<Database>, smtp: SmtpPatient
       await until(() => !w.flow.verificationRequired, `resend task ${f.mail.length} must accept its current verifier's private code`);
       await until(() => f.readbacks.length > previousReadbacks && f.readbacks.at(-1)!.includes("Choose the appointment"),
         "the current private appointment menu must play before a choice");
+      await until(() => w.flow.resendMenuPlaybackCompleted(), "the current private appointment menu playback must finish before a choice");
       await input.accept(String(choice));
       await until(() => prompts.length > before && prompts.at(-1)!.includes("Press pound"));
       assert.equal(await input.accept("#"), "verified"); assert.equal(input.blocked(), false);
