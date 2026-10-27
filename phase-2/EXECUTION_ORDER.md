@@ -1,5 +1,16 @@
 # Abby execution order
 
+**R02 review correction, 27 October 2026:** Five actual emitted signed SQL cases
+now pass, including a return to the original practitioner followed by an explicit
+approved duration or service correction. Each correction cancels the old proposal,
+obtains fresh private verification and confirms only the final exact type/interval.
+Current whole strict types pass; 746 serving outputs retain all 745 prior bytes.
+The original 20 source checks and four earlier search/deadline cases retain their original
+evidence. Failed fixture/wrapper attempts remain recorded, with independent
+reconciliation of successful original compiler and SQL phases. Review and normal
+delivery remain separate; no clinic, acoustic or activation acceptance is claimed.
+See [the correction and evidence](EXECUTION_PROGRESS.md#composed-r02-service-and-duration-correction-27-october-2026).
+
 **Approved practitioner comparison, 27 October 2026:** A locally qualified
 R02 candidate retains the original approved practitioner when an earlier
 alternative is shown, and an explicit return fetches fresh original times.

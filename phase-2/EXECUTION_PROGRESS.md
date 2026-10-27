@@ -1,5 +1,60 @@
 # Execution progress and evidence
 
+## Composed R02 service and duration correction, 27 October 2026
+
+Independent review of the original comparison candidate found no documented
+standards breach or concrete runtime defect, but correctly identified a partial
+acceptance witness: its unequal-duration check only rendered synthetic evidence.
+The correction now exercises both named boundaries in actual emitted, signed
+HTTP/WebSocket/PostgreSQL calls through the reusable clinical host.
+
+After hearing the approved 60-minute Physiotherapy practitioner comparison,
+the caller asks again for the original practitioner and selects that fresh
+option. Before affirmation, an explicit request changes either the duration
+to the separately approved 45-minute Physiotherapy type or the service to
+45-minute Massage. The old proposal is canceled, with no review or clinical
+write. A new private challenge is required; voiced frames while that keypad
+gate is active bypass public transcription/classification and cannot authorize
+a write. Fresh proof, menu, played selection and separate played confirmation
+then produce one native POST for the exact final type, practitioner, patient,
+start and 45-minute end. A repeated affirmation retains the same receipt and
+one write. This does not compare or implicitly substitute different services.
+
+All five original emitted SQL cases pass without skips: the three original
+return/unavailable/withdrawn cases plus the two explicit corrections. Current
+whole strict TypeScript passes. All 745 previously qualified serving outputs
+remain exact; one existing service-practitioner fixture is newly emitted,
+giving 746 outputs. Every production output remains exact to the prior R02
+qualification. The original 20 source checks executable bodies and production dependencies
+were independently reconciled unchanged; four earlier signed search/deadline
+cases retain their original evidence and are not presented as freshly rerun.
+The native limit of 180 requests per minute, real business deadlines, all-column scans and unfiltered logical
+backup assertions remain. The outer database, all five case databases and
+their volume were removed normally. Node peak was 256,790,528 bytes and the
+external database peak was 125,546,496 bytes, with no OOM or emergency cleanup.
+
+Earlier failures remain failures. The first added-case cohort passed three
+and failed two because its fixture queued ordinary ASR text during private
+keypad verification and waited for public speech that the gate deliberately
+bypasses. The corrected private audio/quiet path passes all five actual tests.
+Its supervisor still exited 1 by reading the previous failed bootstrap summary;
+an independent audit rehashed the original TAP, exact five titles, actual new
+bootstrap exit 0, source/artifact pins and complete cleanup, without replay.
+Likewise both preceding compiler phases exited 0, but their supervisor expected
+747 rather than 746 files because one helper was already included. Independent
+reconciliation proves all 745 prior bytes plus the one intended addition; that
+original supervisor remains failed. A subsequent whole strict check passes on
+the corrected test body without rebuilding or rewriting serving artifacts.
+
+Guardian PR #613 is now independently qualified after normal merge as
+`7375cff1`, including all parent/own/main raw evidence. Reviewed booking checks
+are published as PR #614 at `84addd97`; their eight original CI jobs and normal
+delivery remain separate. Current R02 code `6a6a5a65` is local pending refreshed
+full-diff review, qualified booking-parent integration, own exact-head CI and
+actual-main qualification. All 11 stages, 13 gaps and 28 reuse placements remain.
+No deployment, live patient traffic, clinic/acoustic acceptance or Karen
+deletion follows. Earlier dated checkpoints below retain their original state.
+
 ## Local qualification checkpoint, 27 October 2026
 
 This dated snapshot describes locally qualified R02 code `b16b741b`; the full

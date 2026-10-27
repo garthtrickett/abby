@@ -606,3 +606,16 @@ locally; four prior signed search/deadline controls also passed. The initial
 source omission and test setup/type failures retain their actual outcomes.
 Independent review, normal delivery and clinic/acoustic acceptance remain
 separate. See [current evidence](EXECUTION_PROGRESS.md#approved-practitioner-comparison-27-october-2026).
+
+### Explicit service and duration corrections after comparison
+
+The review-corrected candidate now has five actual emitted signed SQL passes.
+After returning to the original practitioner, a caller can explicitly request
+a separately approved 45-minute Physiotherapy type or Massage service. The old
+proposal is canceled; fresh private verification, menu, played selection and
+confirmation bind the exact final type and interval. Private keypad-gate audio
+does not reach the public classifier. No different service is inferred from
+comparison evidence. Current whole strict types and the unchanged prior 745
+outputs plus one emitted existing fixture (746 total) are qualified. Original
+failed attempts remain recorded; refreshed review, normal delivery and real
+acceptance remain separate. See [the composed evidence](EXECUTION_PROGRESS.md#composed-r02-service-and-duration-correction-27-october-2026).
