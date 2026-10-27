@@ -39,6 +39,13 @@ export type TwilioConnectedProgress =
   | Readonly<{ kind: "played"; value: PendingLocationCall | CallState }>;
 export type TwilioConnectedFailure = TwilioStreamFailure | ConnectedVoiceFailure |
   Readonly<{ kind: "streamOverloaded" | "keypadUnavailable" | "privateInputUnavailable" }>;
+type WireDispatch = Result<TwilioConnectedProgress, TwilioConnectedFailure> |
+  Readonly<{ privateCompletion: Promise<Result<TwilioConnectedProgress, TwilioConnectedFailure>> }>;
+type QueuedMedia = {
+  consumed: boolean;
+  consumeSilence(): boolean;
+  complete(result: WireDispatch): void;
+};
 
 /** Serializes provider events through Abby's call owner; the host owns signature verification and WebSocket closure. */
 export class TwilioConnectedCall {
@@ -59,6 +66,9 @@ export class TwilioConnectedCall {
   private readonly stopCall: () => void;
   private callStopDelivered = false;
   private tail: Promise<void> = Promise.resolve();
+  private readonly queuedMedia: QueuedMedia[] = [];
+  private privateDigits: Promise<void> = Promise.resolve();
+  private privateOutstanding = 0;
   private locationBound = false;
   private outstanding = 0;
   private begun = false;
@@ -226,7 +236,7 @@ export class TwilioConnectedCall {
   }
 
   private async handlePrivateInput(event: TwilioStreamEvent, privateAtArrival: "collecting" | "draining" | undefined, digitArrival?: object):
-    Promise<Result<TwilioConnectedProgress, TwilioConnectedFailure> | undefined> {
+    Promise<WireDispatch | undefined> {
     if (event.kind === "media" && (privateAtArrival || this.privateInputMode())) {
       const discarded = this.call.discardPrivateMedia(event.frame);
       if (!discarded.ok) { await this.failSession(); return discarded; }
@@ -245,20 +255,39 @@ export class TwilioConnectedCall {
     }
     const privateEdit = event.kind === "dtmf" && this.privateKeypadInput?.handlesDigit?.(event.digit) === true;
     if (event.kind === "dtmf" && (privateAtArrival || this.privateInputMode() || privateEdit)) {
-      if (!this.privateKeypadInput) { await this.failSession(); return err({ kind: "privateInputUnavailable" }); }
-      // A queued private digit never becomes an availability choice after verification opens media.
-      if (!this.privateKeypadInput.blocked() && !privateEdit) return ok({ kind: "privateInput" });
-      const entered = await this.privateKeypadInput.accept(event.digit, digitArrival);
-      if (entered === "failed") { await this.failSession(); return err({ kind: "privateInputUnavailable" }); }
-      if (entered === "verified") { this.privateResuming = true; this.privateQuietMs = 0; this.privateQuietUntil = undefined; }
-      if (!this.pendingPlayback) this.scheduleSilenceTimer("listening");
-      return ok({ kind: "privateInput" });
+      return { privateCompletion: this.acceptPrivateDigit(event.digit, digitArrival) };
     }
     return undefined;
   }
 
+  private acceptPrivateDigit(digit: string, arrival?: object): Promise<Result<TwilioConnectedProgress, TwilioConnectedFailure>> {
+    // Native verification can outlast many audio packets. Serialize private digits
+    // separately so ordered private media and playback receipts can still drain.
+    // The receive promise retains the actual result, and both queues share the
+    // same admission bound. Arrival-private audio cannot establish a resume fence.
+    this.privateOutstanding += 1;
+    const completed = this.privateDigits.then(async (): Promise<Result<TwilioConnectedProgress, TwilioConnectedFailure>> => {
+      if (this.closed) return err({ kind: "streamClosed" });
+      if (!this.privateKeypadInput) { await this.failSession(); return err({ kind: "privateInputUnavailable" }); }
+      const privateEdit = this.privateKeypadInput.handlesDigit?.(digit) === true;
+      // Queued private digits never become ordinary availability choices.
+      if (!this.privateKeypadInput.blocked() && !privateEdit) return ok({ kind: "privateInput" });
+      const entered = await this.privateKeypadInput.accept(digit, arrival);
+      if (this.closed) return err({ kind: "streamClosed" });
+      if (entered === "failed") { await this.failSession(); return err({ kind: "privateInputUnavailable" }); }
+      if (entered === "verified") { this.privateResuming = true; this.privateQuietMs = 0; this.privateQuietUntil = undefined; }
+      if (!this.pendingPlayback) this.scheduleSilenceTimer("listening");
+      return ok({ kind: "privateInput" });
+    }).catch(async () => {
+      try { await this.failSession(); } catch { /* preserve the private operation failure */ }
+      return err<TwilioConnectedFailure>({ kind: "streamUnavailable" });
+    });
+    this.privateDigits = completed.then(() => { this.privateOutstanding -= 1; });
+    return completed;
+  }
+
   private async handle(received: Result<TwilioStreamEvent, TwilioStreamFailure>, privateAtArrival: "collecting" | "draining" | undefined, digitArrival?: object):
-    Promise<Result<TwilioConnectedProgress, TwilioConnectedFailure>> {
+    Promise<WireDispatch> {
     if (this.closed) return err({ kind: "streamClosed" });
     if (!received.ok) {
       await this.failSession();
@@ -347,6 +376,17 @@ export class TwilioConnectedCall {
     return ok({ kind: "ignored" });
   }
 
+  private drainQueuedSilence(): void {
+    // A packet can queue just before the endpoint enters pending work. Drain
+    // that predecessor first: later wire packets cannot skip its sequence.
+    // Voiced or private media stay on the semantic queue and block this drain.
+    while (!this.closed && this.queuedMedia[0]?.consumeSilence()) {
+      const media = this.queuedMedia.shift()!;
+      media.consumed = true;
+      media.complete(ok({ kind: "media", value: { kind: "listening" } }));
+    }
+  }
+
   receive(raw: string | Uint8Array): Promise<Result<TwilioConnectedProgress, TwilioConnectedFailure>> {
     if (this.closed) return Promise.resolve(err({ kind: "streamClosed" }));
     // Decode wire order immediately. A clear fence must be acknowledged while an earlier
@@ -364,10 +404,14 @@ export class TwilioConnectedCall {
       if (!this.privateKeypadInput) {
         try { this.onPublicContactMedia?.(received.value.frame); } catch { this.stopCall(); return this.failSession().then(() => err({ kind: "streamUnavailable" })); }
       }
+      this.drainQueuedSilence();
       this.call.observePendingCorrection(received.value.frame);
+      if (this.call.consumePendingSilence(received.value.frame)) {
+        return Promise.resolve(ok({ kind: "media", value: { kind: "listening" } }));
+      }
     }
     if (received.ok && received.value.kind === "ignoredMark") return Promise.resolve(ok({ kind: "ignored" }));
-    if (this.outstanding >= 64) {
+    if (this.outstanding + this.privateOutstanding >= 64) {
       this.closed = true;
       this.cancelSilenceTimer();
       this.stopCall();
@@ -378,12 +422,30 @@ export class TwilioConnectedCall {
       });
     }
     this.outstanding += 1;
-    const handled = this.tail.then(() => this.handle(received, privateAtArrival, digitArrival)).catch(async () => {
+    let complete!: (result: WireDispatch) => void;
+    const completion = new Promise<WireDispatch>(resolve => { complete = result => { this.outstanding -= 1; resolve(result); }; });
+    let queuedReceived: Result<TwilioStreamEvent, TwilioStreamFailure> | undefined = received;
+    const queuedMedia: QueuedMedia | undefined = received.ok && received.value.kind === "media" ? {
+      consumed: false,
+      consumeSilence: () => {
+        if (privateAtArrival || this.privateInputMode() || !queuedReceived?.ok || queuedReceived.value.kind !== "media" ||
+            !this.call.consumePendingSilence(queuedReceived.value.frame)) return false;
+        queuedReceived = undefined;
+        return true;
+      },
+      complete,
+    } : undefined;
+    if (queuedMedia) this.queuedMedia.push(queuedMedia);
+    const handled = this.tail.then(() => {
+      if (queuedMedia?.consumed) return ok({ kind: "media", value: { kind: "listening" } } as const);
+      if (queuedMedia) this.queuedMedia.shift();
+      return this.handle(queuedReceived!, privateAtArrival, digitArrival);
+    }).catch(async () => {
       try { await this.failSession(); } catch { /* original failure remains authoritative */ }
       return err<TwilioConnectedFailure>({ kind: "streamUnavailable" });
     });
-    this.tail = handled.then(() => { this.outstanding -= 1; });
-    return handled;
+    this.tail = handled.then(result => { queuedReceived = undefined; if (!queuedMedia?.consumed) complete(result); });
+    return completion.then(result => "privateCompletion" in result ? result.privateCompletion : result);
   }
 
   async disconnect(): Promise<Result<PendingLocationCall | CallState | undefined, TwilioConnectedFailure>> {
@@ -394,6 +456,7 @@ export class TwilioConnectedCall {
     const stopped = this.lease.stop();
     this.stream.close();
     await this.tail;
+    await this.privateDigits;
     await stopped;
     return this.begun ? this.call.disconnect(this.now()) : ok(undefined);
   }

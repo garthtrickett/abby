@@ -16,7 +16,7 @@ import { CallRuntime } from "../../src/core/runtime.ts";
 import type { TimerPort } from "../../src/voice/timer.ts";
 
 /** Manual clocks exercise lease boundaries without extending a production deadline. */
-async function heldCallerFixture() {
+async function heldCallerFixture(beforeEffects?: () => Promise<void>, queuedBeforePending?: "quiet" | "voiced") {
   const base = Date.parse("2026-10-08T00:00:00.000Z"); let elapsed = 0;
   const now = () => new Date(base + elapsed).toISOString();
   const scope = { tenantId: "renewal-during-turn", clinicId: "clinic", locationId: "main" };
@@ -36,8 +36,15 @@ async function heldCallerFixture() {
   const held = new Promise<void>(resolve => { entered = resolve; });
   const waiting = new Promise<void>(resolve => { release = resolve; });
   const call = new TwilioConnectedCall({ event, sessionId: "session", ledger, intake,
-    fullFactory: (receipt, sessionId, playback) => new VoiceSession(receipt.callId, sessionId, receipt.scope, ledger, reception, playback,
-      async () => { entered(); await waiting; return ok({ kind: "clarify" }); }, undefined, () => elapsed),
+    fullFactory: (receipt, sessionId, playback) => {
+      const voice = new VoiceSession(receipt.callId, sessionId, receipt.scope, ledger, reception, playback,
+        async () => { entered(); await waiting; return ok({ kind: "clarify" }); }, undefined, () => elapsed);
+      if (beforeEffects) {
+        const drain = voice.drainVoiceEffects.bind(voice);
+        voice.drainVoiceEffects = async now => { await beforeEffects(); return drain(now); };
+      }
+      return voice;
+    },
     ...syntheticSpeech({ synthesis: { async *stream() { yield new Uint8Array(640); } }, transcription: {
       async accept() { return ok([]); }, async flush(generation) { return ok([{ kind: "segmentFinal", sessionId: "session", generation,
         utteranceId: "ordinary-booking", text: "I would like an appointment.", quality: "clear" }]); },
@@ -58,8 +65,24 @@ async function heldCallerFixture() {
       media: { track: "inbound", chunk: String(i + 1), timestamp: String(i * 20), payload: Buffer.alloc(160, i < 2 ? 0x9f : 0xff).toString("base64") } }));
     if (i < 6) assert.ok((await received).ok); else final = received;
   }
+  let sequence = 10, chunk = 8;
+  // Arrive in the same stack as the endpoint, before it reaches finishTurn.
+  // This packet is already queued when interpretation becomes pending.
+  const queuedPacket = queuedBeforePending ? call.receive(JSON.stringify({ event: "media", sequenceNumber: String(sequence++), streamSid,
+    media: { track: "inbound", chunk: String(chunk++), timestamp: "140",
+      payload: Buffer.alloc(160, queuedBeforePending === "voiced" ? 0x9f : 0xff).toString("base64") } })) : undefined;
   await held;
-  return { call, ledger, scope, attempts, sent, scheduled, final, release,
+  return { call, ledger, scope, attempts, sent, scheduled, final, release, queuedPacket,
+    mark() {
+      const mark = sent.filter(item => item.event === "mark").at(-1)!.mark;
+      return call.receive(JSON.stringify({ event: "mark", sequenceNumber: String(sequence++), streamSid, mark }));
+    },
+    media(voiced = false) {
+      const current = chunk++;
+      return call.receive(JSON.stringify({ event: "media", sequenceNumber: String(sequence++), streamSid,
+        media: { track: "inbound", chunk: String(current), timestamp: String((current - 1) * 20),
+          payload: Buffer.alloc(160, voiced ? 0x9f : 0xff).toString("base64") } }));
+    },
     get stops() { return stops; },
     setTime(ms: number) { elapsed = ms; },
     fireRenewal() { const entry = scheduled.entries().next().value; assert.ok(entry); const [id, tick] = entry; scheduled.delete(id); tick(); },
@@ -67,6 +90,74 @@ async function heldCallerFixture() {
     async close() { release(); await final; await call.disconnect(); },
   };
 }
+
+test("E2E-141 pending caller interpretation consumes ordered silence without retaining a carrier backlog", async () => {
+  const f = await heldCallerFixture();
+  try {
+    for (let frame = 0; frame < 100; frame++) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const received = await Promise.race([f.media(), new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("quiet carrier audio must drain while caller interpretation is held")), 500);
+        })]);
+        assert.deepEqual(received, { ok: true, value: { kind: "media", value: { kind: "listening" } } });
+      } finally { clearTimeout(timer); }
+    }
+    const pending = await f.state(); assert.ok(pending.ok); assert.equal(pending.value.processedTurnIds.length, 0);
+    f.release(); assert.ok((await f.final).ok); assert.ok((await f.mark()).ok);
+    for (let frame = 0; frame < 7; frame++) {
+      const result = await f.media(frame < 2); assert.ok(result.ok, JSON.stringify(result));
+    }
+    const completed = await f.state(); assert.ok(completed.ok); assert.equal(completed.value.processedTurnIds.length, 2);
+    assert.equal(f.stops, 0);
+  } finally { await f.close(); }
+});
+
+test("E2E-141 silence queued before endpoint completion drains before later carrier packets", async () => {
+  const f = await heldCallerFixture(undefined, "quiet");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const next = f.media();
+    const results = await Promise.race([Promise.all([f.queuedPacket!, next]), new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("the queued quiet predecessor must drain while interpretation remains held")), 500);
+    })]);
+    assert.deepEqual(results, [
+      { ok: true, value: { kind: "media", value: { kind: "listening" } } },
+      { ok: true, value: { kind: "media", value: { kind: "listening" } } },
+    ]);
+    for (let index = 0; index < 100; index++) assert.ok((await f.media()).ok);
+    assert.equal(f.stops, 0);
+    f.release(); assert.ok((await f.final).ok); assert.ok((await f.mark()).ok);
+    for (let index = 0; index < 7; index++) assert.ok((await f.media(index < 2)).ok);
+    const state = await f.state(); assert.ok(state.ok); assert.equal(state.value.processedTurnIds.length, 2);
+  } finally { clearTimeout(timer); await f.close(); }
+});
+
+test("E2E-141 pending interpretation cannot skip queued speech or its separating silence", async () => {
+  const f = await heldCallerFixture(undefined, "voiced");
+  let settled = false;
+  try {
+    const quiet = f.media().then(result => { settled = true; return result; });
+    await nextTick(); assert.equal(settled, false);
+    f.release(); assert.ok((await f.final).ok); assert.ok((await f.queuedPacket!).ok); assert.ok((await quiet).ok);
+    assert.ok((await f.mark()).ok);
+    for (let index = 0; index < 7; index++) assert.ok((await f.media(index < 2)).ok);
+    const state = await f.state(); assert.ok(state.ok); assert.equal(state.value.processedTurnIds.length, 2);
+    assert.equal(f.stops, 0);
+  } finally { await f.close(); }
+});
+
+test("E2E-141 queued voiced media retains the shared 64-message admission bound", async () => {
+  const f = await heldCallerFixture(undefined, "voiced");
+  try {
+    const queued = Array.from({ length: 64 }, () => f.media());
+    assert.equal(f.stops, 1);
+    f.release();
+    const results = await Promise.all([f.final, f.queuedPacket!, ...queued]);
+    assert.ok(results.some(result => !result.ok && result.error.kind === "streamOverloaded"));
+    const state = await f.state(); assert.ok(state.ok); assert.equal(state.value.lifecycle, "ended");
+  } finally { await f.close(); }
+});
 
 test("E2E-141 renewal completes while caller interpretation is pending and the turn survives its initial lease", { timeout: 10_000 }, async () => {
   const f = await heldCallerFixture();
@@ -171,4 +262,30 @@ for (const outcome of ["late response", "disconnect"] as const) test(`E2E-141 a 
     assert.equal(f.stops, 1);
     assert.equal(f.scheduled.size, 0);
   } finally { releaseRenewal(); await f.close(); }
+});
+
+
+test("E2E-141 completed caller interpretation still drains quiet carrier audio while effects are held", async () => {
+  let release!: () => void, entered!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; }), ready = new Promise<void>(resolve => { entered = resolve; });
+  const f = await heldCallerFixture(async () => { entered(); await held; });
+  try {
+    f.release(); await ready;
+    for (let frame = 0; frame < 100; frame++) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const received = await Promise.race([f.media(), new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("quiet carrier audio must drain while completed-turn effects are held")), 500);
+        })]);
+        assert.deepEqual(received, { ok: true, value: { kind: "media", value: { kind: "listening" } } });
+      } finally { clearTimeout(timer); }
+    }
+    const pending = await f.state(); assert.ok(pending.ok); assert.equal(pending.value.processedTurnIds.length, 1);
+    release(); assert.ok((await f.final).ok); assert.ok((await f.mark()).ok);
+    for (let frame = 0; frame < 7; frame++) {
+      const received = await f.media(frame < 2); assert.ok(received.ok, JSON.stringify(received));
+    }
+    const completed = await f.state(); assert.ok(completed.ok); assert.equal(completed.value.processedTurnIds.length, 2);
+    assert.equal(f.stops, 0);
+  } finally { release(); await f.close(); }
 });

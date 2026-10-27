@@ -100,7 +100,7 @@ for (const operation of ["appointments.cancel", "appointments.reschedule"] as co
       while (!r.mail.length && Date.now() < deadline) await new Promise<void>(resolve => setTimeout(resolve, 5));
       assert.equal(r.mail[0]?.email, "subject-one-private@example.test"); assert.equal((await owner.submitCode(r.mail[0]!.code)).verified, true);
       phase = "subject-grant"; const grant = await owner.verified(); assert.ok(grant);
-      const reception = new TextReception(f.ledger, f.policies, owner.effects, undefined, owner instanceof ClinikoCancellationSession ? owner.appointments : undefined);
+      const reception = new TextReception(f.ledger, f.policies, owner.effects, undefined, owner instanceof ClinikoCancellationSession ? owner.appointments : undefined, undefined, undefined, f.sessionConfig.clock);
       const agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope: f.scope }, f.policies, reception, undefined, undefined, undefined, f.ledger);
       const turn = (id: string, text = "Change the selected appointment") => ({ callId: f.callId, sessionId: f.sessionId, turnId: id, text, quality: "clear" as const, at: verificationNow });
       async function play() { const pending = (await f.state()).pendingPresentationId!; assert.ok(pending);

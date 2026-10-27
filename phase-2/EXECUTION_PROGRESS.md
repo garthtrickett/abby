@@ -1,5 +1,114 @@
 # Execution progress and evidence
 
+## Cross-patient task and continuous-media qualification, 27 October 2026
+
+The existing approved patient-task sequence now has current local coverage for
+cancellation then rescheduling and the reverse order across two independently
+approved patients. Each task gets fresh caller and selected-patient proof,
+independent current clinic authority, its own native target/review and actually
+played consent. The first receipt remains immutable. An unknown first result
+blocks the next task and another patient code; an expired second-patient grant
+refuses selection before another subject lookup/code or native write. A separately
+issued second-subject version2 grant has the original120-second duration; a
+caller turn or old proof cannot renew it. This adds no general proxy authority.
+
+Actual continuous-media qualification exposed four production corrections:
+
+- Appointment reads use TextReception's independent start and completion clocks,
+  rather than caller/provider-supplied time. Observation and proof freshness are
+  checked at completion; invalid/backwards independent time refuses the read.
+  Existing fixture clocks are bound explicitly instead of weakening those checks.
+- Private digit verification is serialized separately from carrier media and
+  playback receipts. Its original receive promise retains the real digit result.
+  Arrival-private packets remain private, both queues retain shared64 admission,
+  and only fresh contiguous500ms quiet after verification can reopen public ASR.
+- Ordered quiet media can drain while the completed turn's interpretation,
+  model, native effects and output settle. The completion lifetime belongs to
+  that actual work. The shortcut cannot consume new voiced speech, silence
+  separating/ending a new utterance, earlier queued voice, private packets,
+  malformed/foreign media or a sequence/timestamp gap.
+- A quiet packet can queue just before pending work begins. The adapter drains
+  that eligible queued predecessor before later quiet packets; otherwise the
+  missing sequence blocks every following packet until the socket's64-message
+  limit closes it. Each consumed packet settles its original admission/promise
+  once, releases its packet reference and performs no later semantic action.
+
+The exact queued-before-pending reproduction fails against the unchanged prior
+production and passes with the correction. Thirty-nine focused controls also
+retain queued speech/separating silence, shared64 overload, controller validity,
+private verification, lease/revision and disposal checks. No32/64 limit,500ms
+fence,30-second freshness, native180 ceiling,120-second grant duration or
+individual case deadline is increased.
+
+Current whole strict TypeScript and fresh serving emission pass. All744 runtime
+paths remain:12 outputs differ from PR611 and732 match. Four production outputs
+change (TextReception, ConnectedVoiceCall, MediaTurnController and
+TwilioConnectedCall); eight test-helper outputs change. The last queued-packet
+correction changes only TwilioConnectedCall relative to the preceding build.
+Every earlier runtime set is separately preserved and rehashed.
+
+Current local qualification retains all30 selected source files:
+
+| Source group | Passed cases | Scope |
+| --- | ---: | --- |
+| Appointment reads |50| Five complete files; privacy, time and composed caller controls. |
+| Representative preservation |27| Four complete files; task/enquiry/change/canary controls. |
+| Cross-operation |5| One complete file; both operation orders, unknown outcomes and expired second grant. |
+| Media/private/time |90| Thirteen complete files; includes the39 focused controls above. |
+| Explicit fixture clocks |19| Two complete caller-verification/appointment-read files. |
+| Selected fixture controls |5| Five named cases across four files; other cases in those files are not claimed here. |
+| Private spelling SQL |2| One complete source-based signed HTTP/media file; its first case exercises16 modes. |
+
+These are198 selected source-case invocations, without double-counting the39
+focused controls. The spelling file owns one bounded disposable PostgreSQL;
+its source imports are distinct from emitted-serving qualification. Every group
+passes without skips. The four filtered files select only the positive
+cancellation, two representative changes, outgoing cancellation and agent-enquiry
+command controls; their other registered cases remain for normal full CI.
+
+Separately, all four actual emitted signed HTTP/WebSocket/PostgreSQL scenarios
+pass: both operation orders with accepted and unknown-first results. They use
+the fresh744-output serving build, real private playback/code entry and actual
+PostgreSQL accounting, retaining real elapsed61-second quota pauses where
+required before proposals and normal20ms carrier audio/lease renewal. Native180,
+all-column and full unfiltered backup privacy scans, independent lower-budget
+refusal, unrelated phone-index/staged-scan rows and permanent effect exclusions
+remain. All owned case databases, servers and volumes are independently absent
+afterward. The finite canary filename guard adds this exact isolated SQL entry;
+its environment/process/loopback/database/exclusion/size guards remain intact.
+
+Reproduction uses Node22.23.0 and `scripts/test-node.mjs --test
+--test-concurrency=1` with the selected group files, and whole strict
+`tsc --noEmit` plus `tsc --project tsconfig.voice-test.json`. The signed serving
+entry is `test/storage/postgres-representative-cross-operation-tasks.test.ts` with `ABBY_ISOLATED_POSTGRES_PROBE=1` and its own disposable
+admin connection. Source spellings are `test/voice/private-intake-spelling.test.ts`
+with their own disposable server and no outer database. Source512MiB (measured
+cross5 uses256MiB), compiler2GiB, signedNode1GiB and separatePostgreSQL512MiB
+limits retain current shared-host reserve/peer-growth checks. Signed work
+1793092209827 passed4/4 in500seconds; compiler1793091803635 passed both phases;
+source cohorts1793092216890/1793092224344/1793092266794/1793092522088/
+1793092579266/1793092759291/1793092818523 completed their scoped gates.
+
+Earlier negatives remain preserved: an earlier build passed all4 signed cases,
+then its final repeat failed both unknown-first cases. An observational two-case
+probe passed one and failed one, showing62 quiet packets blocked behind a queued
+predecessor followed by socket1008 closure, with no correction speech. The new
+causal red/green controls and current fresh4/4 result address that failure rather
+than replacing it with an old green run. Oversized source-cohort timeouts,
+wrapper accounting errors and prelaunch capacity refusals retain their separate
+outcomes; no refused prelaunch is a product-test result.
+
+This is local gap9/composed-call engineering with real production corrections,
+not a full regression or production-readiness claim. Final metadata review,
+fixed-head Spec/Standards review, actual qualified-parent integration, own CI,
+normal merge and independent resulting-main/root qualification remain separate.
+All eleven execution stages, four booking steps, thirteen gaps and twenty-eight
+reuse placements remain. Other subject/operation/class/memo combinations, real
+clinic/staff/inbox/private-record permissions and retention, source/restore,
+noisy-speech/public-route/carrier and activation acceptance are not supplied by
+synthetic tests. No deployment is authorized; missing Krisp access and the
+owner-deferred cash/bank invoice remain explicit pending inputs.
+
 ## Task-limit and qualification refinement, 27 October 2026
 
 This is a normal corrective continuation of the same PR #611, based on independently

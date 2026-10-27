@@ -85,7 +85,7 @@ export async function cancellationSessionFixture(options: { budget?: PatientVeri
         rateBudget: options.rateBudget ?? { claim: async () => { claims++; return null; }, observe429: async () => ({ kind: "rateLimited" }) } },
       signal: lifetime.signal, fetchPort: providerPort, clock: f.sessionConfig.clock, ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }) };
     owner = resultValue(await ClinikoCancellationSession.create(config));
-    const reception = new TextReception(f.ledger, f.policies, owner.effects, undefined, owner.appointments);
+    const reception = new TextReception(f.ledger, f.policies, owner.effects, undefined, owner.appointments, undefined, undefined, f.sessionConfig.clock);
     const agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope: f.scope }, f.policies, reception, undefined, undefined, undefined, f.ledger);
     const turn = (turnId: string, text = "Cancel my appointment") => ({ callId: f.callId, sessionId: f.sessionId, turnId, text, quality: "clear" as const, at: verificationNow });
     const read = (verificationRef: string) => agent.submit({ kind: "appointments.read.v1", turn: turn("list"),

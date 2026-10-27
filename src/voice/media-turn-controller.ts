@@ -76,6 +76,7 @@ export class MediaTurnController<T, F> {
   private trailingSilenceMs = 0;
   private pendingTurn = false;
   private pendingEffect = false;
+  private pendingCompletions = 0;
   private correctionMs = 0;
   private correctionRequested = false;
 
@@ -117,6 +118,31 @@ export class MediaTurnController<T, F> {
         this.target.supersedePendingIntent?.();
       }
     }
+  }
+
+  /** Finished speech needs no more quiet audio while its work settles.
+   * Consume only the next valid silent frame, without retaining it.
+   * Voiced frames and any gap behind queued media keep their ordinary ordering
+   * and queue limits; this never admits a new utterance or skips a correction. */
+  consumePendingSilence(frame: MediaFrame): boolean {
+    const waiting = this.pendingTurn || this.pendingEffect || this.pendingCompletions > 0;
+    if (this.closed || !waiting) return false;
+    if (this.queuedFrames > (this.pendingTurn ? 1 : 0) ||
+        !this.pendingTurn && (this.generation !== undefined || this.candidateMs > 0)) return false;
+    if (decodedFrame(frame, this.sessionId) === undefined || frame.sequence !== this.nextSequence) return false;
+    const captured = Date.parse(frame.capturedAt);
+    if (captured < this.lastCapturedMs || averageAmplitude(frame.bytes) >= this.speechThreshold) return false;
+    this.nextSequence += 1; this.lastCapturedMs = captured;
+    this.correctionMs = 0;
+    return true;
+  }
+
+  /** The call owner completes native effects and output after endpointing.
+   * Keep quiet-media admission tied to the actual lifetime of that work. */
+  async whileCompletingTurn<Value>(complete: () => Promise<Value>): Promise<Value> {
+    this.pendingCompletions += 1;
+    try { return await complete(); }
+    finally { this.pendingCompletions -= 1; }
   }
 
   constructor(sessionId: string, target: MediaTurnTarget<T, F>, transcription: TranscriptionPort,
@@ -280,7 +306,7 @@ export class MediaTurnController<T, F> {
   /** Consume ordered private-mode audio without storing, transcribing or making a caller turn.
    * Entry is allowed only before an ordinary turn is pending; fail closed otherwise. */
   discardPrivateMedia(frame: MediaFrame): Result<number, MediaFailure> {
-    if (!this.idle() || this.pendingTurn || this.pendingEffect) return err({ kind: "mediaUnavailable" });
+    if (!this.idle() || this.pendingTurn || this.pendingEffect || this.pendingCompletions > 0) return err({ kind: "mediaUnavailable" });
     const durationMs = decodedFrame(frame, this.sessionId);
     if (durationMs === undefined) return err({ kind: "invalidMedia" });
     const capturedMs = Date.parse(frame.capturedAt);

@@ -50,7 +50,7 @@ export async function appointmentEnquiryFixture() {
       approvals: { bookCaller: "disabled", cancelCaller: "disabled", rescheduleCaller: "disabled", booking: "disabled", cancellation: "disabled", rescheduling: "disabled" },
       permission, enquiry: { callerApprovalPath: f.path, readApprovalPath: path, permission }, signal: lifetime.signal, fetchPort };
     const flow = resultValue(ClinikoCallFlow.create(flowConfig));
-    const reception = new TextReception(f.ledger, f.policies, flow, undefined, { list: (...args) => flow.appointments?.list(...args) ?? Promise.resolve(err({ kind: "unavailable" })) });
+    const reception = new TextReception(f.ledger, f.policies, flow, undefined, { list: (...args) => flow.appointments?.list(...args) ?? Promise.resolve(err({ kind: "unavailable" })) }, undefined, undefined, f.sessionConfig.clock);
     return { ...f, flow, reception, flowConfig, traffic, permissionOperations, lifetime,
       replaceRead: async (patch: Partial<AppointmentReadApproval>) => { record = { ...record, ...patch }; await replace(); },
       setMultiple: () => { multiple = true; }, setEmpty: () => { empty = true; }, setChanged: () => { changed = true; },

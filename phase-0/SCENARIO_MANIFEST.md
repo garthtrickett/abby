@@ -1,5 +1,11 @@
 # Scenario manifest, version 1.250
 
+**Cross-patient task and continuous-media qualification, 27 October 2026:** E2E-389 adds cross-patient source controls and four
+emitted signed HTTP/media/PostgreSQL cases in both operation orders. Fresh proof,
+current grants, played consent, uncertainty and private SQL barriers remain.
+Appointment-read time and continuous-media corrections retain separate source
+controls. Full-call evidence remains planned. See [scope](../phase-2/EXECUTION_PROGRESS.md#cross-patient-task-and-continuous-media-qualification-27-october-2026).
+
 E2E-381 adds four source controls for correction/enquiry task limits: a played
 enquiry requires approved advancement, an explicitly configured three-task sequence
 retains earlier receipts, and unfinished replacement obtains fresh correction

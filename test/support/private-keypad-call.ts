@@ -71,7 +71,7 @@ export async function privateKeypadCallFixture(options: Parameters<typeof caller
           if (path === "/v1/businesses/11") return Response.json({ id: "11", archived_at: null, time_zone_identifier: "Australia/Sydney" });
           assert.equal(path, "/v1/individual_appointments"); detailReads++; return Response.json({ total_entries: 0, individual_appointments: [] });
         }, () => verificationNow); assert.ok(reader.ok);
-      const reception = new TextReception(ledger, policies, new DisabledStandaloneHost(), undefined, reader.value);
+      const reception = new TextReception(ledger, policies, new DisabledStandaloneHost(), undefined, reader.value, undefined, undefined, () => verificationNow);
       return new VoiceSession(receipt.callId, actualSessionId, receipt.scope, ledger, reception, playback, async turn => {
         modelTurns.push(structuredClone(turn));
         const grant = await owner!.verified();

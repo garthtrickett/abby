@@ -100,7 +100,7 @@ async function fixture(options: {
   const host = new DisabledStandaloneHost();
   const appointmentHost = options.selectionOverride
     ? { list: verified.appointments.list, select: options.selectionOverride } : verified.appointments;
-  const reception = new TextReception(ledger, policy, host, undefined, appointmentHost, undefined, host);
+  const reception = new TextReception(ledger, policy, host, undefined, appointmentHost, undefined, host, () => clockTime);
   let verificationRef = "unverified-reference";
   const voice = new VoiceSession(actualCallId, sessionId, scope, ledger, reception,
     { async enqueue(_playbackId, text) { spoken.push(text); return "queued"; }, async clear() { return true; } },

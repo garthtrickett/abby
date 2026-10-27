@@ -11,7 +11,7 @@ import { syntheticTaskSequence } from "../support/call-task-sequence.ts";
 async function fixture(operation: "cancel" | "reschedule") {
   const f = await representativeChangeCallFixture(operation);
   const reception = new TextReception(f.f.ledger, f.f.policies, f.flow, undefined, {
-    list: (...args) => f.flow.appointments!.list(...args), select: (...args) => f.flow.appointments!.select!(...args) });
+    list: (...args) => f.flow.appointments!.list(...args), select: (...args) => f.flow.appointments!.select!(...args) }, undefined, undefined, f.flowConfig.clock);
   const agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope: f.f.scope }, f.f.policies, reception,
     undefined, undefined, undefined, f.f.ledger);
   const verify = async () => {
@@ -50,7 +50,7 @@ test("E2E-389 an enquiry followed by another patients cancellation gets fresh op
   await source.replace({ patientSelection: "independentlyVerifiedPatients" });
   const flow = resultValue(ClinikoCallFlow.create(source.config));
   const reception = new TextReception(f.f.ledger, f.f.policies, flow, undefined, {
-    list: (...args) => flow.appointments!.list(...args), select: (...args) => flow.appointments!.select!(...args) });
+    list: (...args) => flow.appointments!.list(...args), select: (...args) => flow.appointments!.select!(...args) }, undefined, undefined, f.flowConfig.clock);
   const agent = new CommandGateway({ actorRef: "trusted-agent", role: "agent", scope: f.f.scope }, f.f.policies, reception,
     undefined, undefined, undefined, f.f.ledger);
   try {

@@ -1,5 +1,15 @@
 # Abby execution order
 
+**Cross-patient task and continuous-media qualification, 27 October 2026:** Current local strict/744 emission,198 selected source
+cases and four actual emitted signed HTTP/media/PostgreSQL cases pass. Both
+patient-operation orders retain fresh per-task proof, independent current grants,
+played consent and immutable receipts; unknown-first results block continuation.
+Four production modules correct independent appointment-read time and ordered
+media during verification/completion, including a queued quiet predecessor.
+Original32/64 bounds,500ms quiet fence, native180, privacy and deadlines remain.
+This is scoped local engineering; final review/CI/delivery and broader clinic,
+speech and activation gates remain. See [scope and evidence](EXECUTION_PROGRESS.md#cross-patient-task-and-continuous-media-qualification-27-october-2026).
+
 **Task-limit and qualification refinement, 27 October 2026:** A reproduced
 correction/enquiry sequence bypassed the configured task limit; a played enquiry
 now requires approved advancement before replacement. Fresh proof and consent,

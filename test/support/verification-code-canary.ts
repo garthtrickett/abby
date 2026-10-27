@@ -95,6 +95,7 @@ export function assertDirectSqlVerificationCanaryContext(): void {
     "postgres-incoming-clinical-voice.test.ts",
     "postgres-representative-booking-memo.test.ts",
     "postgres-representative-change-memo.test.ts",
+    "postgres-representative-cross-operation-tasks.test.ts",
     "postgres-guardian-booking-memo.test.ts",
     "postgres-guardian-change-memo.test.ts",
     "postgres-multiple-patient-memo.test.ts",
