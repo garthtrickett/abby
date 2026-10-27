@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ClinikoBookingSession } from "../../src/standalone/cliniko-booking-session.ts";
+import { CallOutcomeReport } from "../../src/reference/call-outcome-report.ts";
 import { bookingSessionFixture } from "../support/booking-session.ts";
 import { verificationCanaries, verificationNow } from "../support/caller-verification.ts";
 import type { BookingMenuRead } from "../../src/core/booking-menu.ts";
@@ -28,6 +29,36 @@ test("E2E-283 E2E-284 actual admitted email verification, played numbered menu a
       assert.equal(JSON.stringify([shown,selection]).includes(secret), false);
     }
     assert.equal(f.claims, f.allTraffic.length);
+  } finally { await f.close(); }
+});
+
+test("an acknowledged admitted booking survives failed result speech and reporting without compensation or replay", async () => {
+  const f = await bookingSessionFixture();
+  try {
+    await f.verify(); assert.ok((await f.readMenu()).ok); await f.playPending();
+    assert.ok((await f.select()).ok); assert.ok((await f.confirm()).ok); assert.ok((await f.drain()).ok);
+    const accepted = await f.state(), action = structuredClone(Object.values(accepted.actions)[0]!);
+    assert.equal(action.status, "committed"); assert.equal(f.posts, 1); assert.equal(f.recalls.length, 1);
+    const resultId = accepted.pendingPresentationId; assert.ok(resultId);
+    const resultSpeech = accepted.presentations[resultId]!;
+    assert.equal(resultSpeech.kind, "notice"); assert.match(resultSpeech.approvedText, /Your booking is confirmed/);
+    assert.ok((await f.runtime.startPresentation(f.callId, resultId, f.sessionId, verificationNow)).ok);
+    assert.ok((await f.runtime.resolvePresentation(f.callId, resultId, "failed", f.sessionId, verificationNow)).ok);
+    const afterSpeech = await f.state();
+    assert.equal(afterSpeech.presentations[resultId]!.status, "failed");
+    assert.deepEqual(afterSpeech.actions[action.key], action, "failed result playback cannot erase an exact native receipt");
+    const listCalls = f.ledger.listCalls;
+    try {
+      f.ledger.listCalls = async () => ({ ok: false, error: { kind: "storageFailure" } });
+      assert.deepEqual(await new CallOutcomeReport(f.ledger).list(f.scope), { ok: false, error: { kind: "storageFailure" } });
+      assert.deepEqual(await f.state(), afterSpeech, "an unavailable report cannot change appointment truth");
+    } finally { f.ledger.listCalls = listCalls; }
+    assert.ok((await f.drain()).ok); assert.ok((await f.drain()).ok);
+    assert.deepEqual((await f.state()).actions[action.key], action);
+    assert.equal(f.posts, 1); assert.equal(f.recalls.length, 1);
+    assert.equal(f.allTraffic.some(value => value.startsWith("PATCH ") || value.startsWith("DELETE ")), false);
+    const report = await new CallOutcomeReport(f.ledger).list(f.scope); assert.ok(report.ok);
+    assert.equal(report.value.rows.find(row => row.callId === f.callId)?.committedActions, 1);
   } finally { await f.close(); }
 });
 
