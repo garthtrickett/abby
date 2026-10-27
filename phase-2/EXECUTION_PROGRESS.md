@@ -1,5 +1,49 @@
 # Execution progress and evidence
 
+## Deliberately suspended booking preparation, 27 October 2026
+
+The booking plan explicitly requires delayed preparation before final availability.
+Four existing positive source cases now keep real preparation promises pending
+across an event-loop turn in online, approved-roster, ordinary-class and
+approved-pass class booking. They assert no clinical transport or completed final
+availability/capacity while the promise remains unsettled, then retain the exact
+provider-read/transport ordering and one exactly acknowledged create. Patient
+contact, proof, policy and the writer's actual POST-budget claim are suspended;
+the pass case also suspends its independent entitlement selection. The class
+contact check instruments its actual verification contact reader, which is
+separate from the class API fixture port. Original budget claims still execute.
+
+All18 original cases in the two complete selected files pass, with no new case,
+skip or title. Whole strict TypeScript and a fresh serving build pass; all744
+runtime outputs exactly match the reviewed guardian parent, including every
+production output. Only the two source test files change before this metadata
+refresh. Existing proof/offer/lease and individual test deadlines, configured
+budgets, capacity snapshots, exact receipts, no-replay and post-acknowledgement
+truth remain unchanged. The source clock is held fixed: this tests pending
+preparation and ordering, not elapsed-time expiry or real carrier behaviour.
+
+Reproduce with Node22.23.0 and `scripts/test-node.mjs --test --test-concurrency=1
+test/cliniko/provider-acknowledged-booking.test.ts
+test/cliniko/class-booking-acknowledgement.test.ts`, with whole `tsc --noEmit`
+and `tsc --project tsconfig.voice-test.json`. The source cohort uses512MiB and
+the compiler2GiB under fresh shared-host admission. There is no external provider call
+or new signed/PostgreSQL qualification in this source-only change.
+
+Both earlier16-pass/2-fail observations remain preserved. The first introduced
+a new boolean shadowed by the existing later transport-index constant; the
+second asserted contact interception on the class API port while actual contact
+verification used its separate reader. Corrected instrumentation retains the
+required assertions. These failures do not establish a production defect.
+
+This is scoped verification for one named booking-matrix requirement. Final
+metadata/review, actual qualified-parent integration, own CI and independent
+resulting-main qualification remain separate. All eleven execution stages, four
+booking steps, fourteen verification rows, thirteen gaps and twenty-eight reuse
+placements remain. Real clinic/staff/inbox/private-record permissions and
+retention, source/restore, noisy-speech/public-route/carrier and activation
+acceptance remain unproven. The missing Krisp key and owner-deferred cash/bank
+invoice remain pending; no deployment or patient traffic is authorized.
+
 ## Guardian shared registered-email qualification, 27 October 2026
 
 Two independently guardian-authorized native minors can have the same registered

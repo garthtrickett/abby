@@ -1,5 +1,12 @@
 # Abby execution order
 
+**Deliberately suspended booking preparation, 27 October 2026:** Four existing online/roster/ordinary-class/pass-class
+ordering cases now suspend actual contact, proof, policy, POST-budget and selected
+pass preparation. All18 cases in both files pass; whole strict and fresh744
+serving outputs pass, all byte-identical to the reviewed parent. No runtime,
+case identity, deadline or clinic policy changes. Final review/delivery and real
+acceptance remain separate. See [scope and retained failures](EXECUTION_PROGRESS.md#deliberately-suspended-booking-preparation-27-october-2026).
+
 **Guardian shared registered-email qualification, 27 October 2026:** The existing selected-patient registered-email policy
 now has source and emitted signed SQL coverage for two independently authorized
 children sharing the caller's registered email. Fresh per-child proof and played

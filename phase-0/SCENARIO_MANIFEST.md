@@ -1,5 +1,10 @@
 # Scenario manifest, version 1.250
 
+**Deliberately suspended booking preparation, 27 October 2026:** E2E-279 and E2E-392 retain their existing evidence levels.
+Four existing source dispatch-order witnesses now suspend preparation; all18
+selected cases pass and all744 fresh runtime outputs remain exact. Full-call
+evidence is not promoted. See [scope](../phase-2/EXECUTION_PROGRESS.md#deliberately-suspended-booking-preparation-27-october-2026).
+
 **Guardian shared registered-email qualification, 27 October 2026:** E2E-387 adds the shared registered-email guardian cohort:
 source8 task controls plus12 canary guards and three emitted signed SQL cases.
 Each child retains independent authority/proof/consent; missing permission and
