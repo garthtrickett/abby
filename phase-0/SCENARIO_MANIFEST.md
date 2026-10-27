@@ -1,5 +1,11 @@
 # Scenario manifest, version 1.250
 
+E2E-381 adds four source controls for correction/enquiry task limits: a played
+enquiry requires approved advancement, an explicitly configured three-task sequence
+retains earlier receipts, and unfinished replacement obtains fresh correction
+authority. These extend text evidence; existing signed evidence and planned
+full-call status retain their separate scope.
+
 E2E-128 adds an opt-in Realtime speech binding through the actual profile host,
 standalone server and runnable signed synthetic caller. The replacement has a
 distinct physical configuration hash and intersects fallback voice support.

@@ -1,5 +1,91 @@
 # Execution progress and evidence
 
+## Task-limit and qualification refinement, 27 October 2026
+
+This is a normal corrective continuation of the same PR #611, based on independently
+qualified PR #610 main `808a04fc2ef84a3c5a2a428b3d0842f0760fb106`. The earlier
+integrated 49/15/3 observations below retain their exact historical scope; they do
+not qualify the later task-limit correction or the new final head.
+
+An unchanged causal witness on published `d044b4e1` committed one correction,
+completed and played an appointment enquiry, then admitted a third correction and
+second native PATCH despite a configured maximum of two tasks. A settled enquiry
+was being replaced through the unfinished-enquiry fallback after advancement was
+refused. The call-flow owner now refuses that fallback for a completed enquiry
+without approved advancement. Same-owner reads remain permitted; an unplayed,
+unfinished enquiry can still be replaced within its existing task. Four registered
+source controls cover exhausted two tasks, fresh proof/terms/played consent after
+enquiry, an explicitly configured three-task sequence and unfinished replacement.
+The original actual third-write red and unchanged five-control green are retained.
+The clinic's configured 2–10 range, task-specific proof and independent grants,
+immutable receipts, uncertainty/no-replay, native 180 and existing deadlines and
+quotas are unchanged. No household, representative or minor authority is added.
+
+Whole strict/build on that correction passed, but its initial full source cohort
+actually ended 52 passed/1 failed. A held-playback control then reproduced the
+resend fixture submitting a menu choice after observing text but before the real
+playback receipt. The helper now waits for the owning flow's actual playback
+completion within the same five-second deadline before submitting that choice.
+Production correctly refuses premature choices and is unchanged by this fixture
+fix. The original 53-case failure's exact playback state was not logged; the
+controlled reproduction establishes the race, not that unavailable historical state.
+
+Separately, the old published push text job failed a whole-SAM private-field
+substring assertion in the existing required-intake registration case. Its exact
+matched field/path was not logged. A controlled synthetic scope containing the
+old short postcode `3999` before any patient collection reproduces the same false
+positive; a valid Canadian address with a distinct nonhexadecimal postal canary
+passes the untouched assertions. Only that registration fixture address changes
+to BC / V6B 1A1 / CA. Required fields, private readback, verification, separate
+confirmation, native payload, whole-SAM substring assertions and all-column/full
+unfiltered SQL backup scanners remain intact. The earlier cloud failure and causal
+negative observations are preserved; no production privacy leak or exact historical
+match is inferred from this controlled witness.
+
+Normal commits `4e88371e` (task-limit guard and four controls) and `bd9254c0`
+(two fixture corrections) preserve the earlier published history. Current whole
+strict TypeScript and the serving compiler both pass (`1793068349517`),
+with their individual exits recorded. All 744 emitted paths are independently
+rehashed; nine differ from qualified main and 735 are exact. The fixture corrections
+change no emitted bytes from the preceding task-limit build.
+
+All 56 source controls pass (`1793068706561`): the previous 49,
+four new correction/enquiry controls and three existing required-intake controls.
+The two sequential isolated databases and volumes are independently confirmed
+absent. All 15 original signed compiled cases pass (`1793069309898`),
+with their direct identities checked separately from the single suite heading.
+These preserve actual HTTP/media playback, separate task proofs and consent,
+native outcomes, current permission/uncertainty refusals and private SQL/backups.
+The new mixed correction/enquiry limit controls are source evidence, not an added
+signed or real-carrier claim. Synthetic providers and local mail do not establish
+external inbox delivery or human clinic acceptance.
+
+Three inherited cold/SQL controls pass (`1793069758425`): the forced-first
+111222 class-movement memo case, deliberate post-issue SQL leakage and foreign
+server/database refusal. The cold witness imports this current source and compiled
+worker and preserves both unrelated phone rows, actual sender SIGKILL, GET-only
+discovery, spent-purpose refusal, complete unfiltered backup and logical restore.
+Case/child deadlines, native budgets, canaries and production scanners remain
+unchanged. The current measured Node 512 MiB and database 256 MiB budgets are
+prospective execution limits, not altered product quotas or assertions.
+
+This seven-path final metadata refresh preserves all runtime, test and compiler
+inputs and all 744 emitted bytes. The existing 127 product facts remain, with the
+new source-control citation and reviewed date reflected in their fingerprints;
+E2E-381 gains source evidence without promoting planned full-call evidence.
+Current metadata checks, both full qualified-base-to-final-head reviews, fresh
+own eight CI jobs/raw logs, normal exact-head merge, actual-main four jobs and
+independent sixteen-log baseline/own/main qualification remain delivery gates.
+The old published head's failed push text job grants no merge clearance.
+
+All eleven execution stages, four booking steps, thirteen gaps and twenty-eight
+differently scoped reuse placements remain in scope. The failing speech gate,
+real clinic policy/grants, external inbox/human duty, acoustic/carrier/public route,
+source/restore and deployment/activation acceptance remain open. The agent-operated
+demo backup is already observed in its recorded scope. The owner-deferred cash/bank
+invoice and unavailable Krisp developer key are not new requests or prerequisites
+to this corrective delivery. No live provider/native-family replay is included.
+
 ## Integrated correction/resend qualification, 27 October 2026
 
 PR #610 normally merged as `808a04fc2ef84a3c5a2a428b3d0842f0760fb106`

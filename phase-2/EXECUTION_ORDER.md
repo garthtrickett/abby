@@ -1,5 +1,16 @@
 # Abby execution order
 
+**Task-limit and qualification refinement, 27 October 2026:** A reproduced
+correction/enquiry sequence bypassed the configured task limit; a played enquiry
+now requires approved advancement before replacement. Fresh proof and consent,
+earlier receipts, uncertainty and native limits remain binding. Current strict/744
+build, 56 source controls, 15 signed compiled cases and three cold/SQL controls
+pass locally. Nine outputs differ from qualified PR #610 main; 735 are exact.
+Two fixture corrections retain actual playback ordering and complete private-field
+assertions. Earlier failures remain recorded. Metadata, final review, new exact-head
+CI and actual-main delivery remain separate gates; all original stages and gaps
+remain in scope. See [scope and retained failures](EXECUTION_PROGRESS.md#task-limit-and-qualification-refinement-27-october-2026).
+
 **Integrated correction/resend qualification, 27 October 2026:** Approved
 next tasks obtain fresh private verification, input/menu state and played consent
 while retaining earlier results and current uncertainty. Alternate-recipient mail
