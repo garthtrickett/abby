@@ -1,5 +1,11 @@
 # Scenario manifest, version 1.250
 
+**Guardian shared registered-email qualification, 27 October 2026:** E2E-387 adds the shared registered-email guardian cohort:
+source8 task controls plus12 canary guards and three emitted signed SQL cases.
+Each child retains independent authority/proof/consent; missing permission and
+changed recipient refuse continuation. Full-call evidence remains planned.
+See [scope](../phase-2/EXECUTION_PROGRESS.md#guardian-shared-registered-email-qualification-27-october-2026).
+
 **Cross-patient task and continuous-media qualification, 27 October 2026:** E2E-389 adds cross-patient source controls and four
 emitted signed HTTP/media/PostgreSQL cases in both operation orders. Fresh proof,
 current grants, played consent, uncertainty and private SQL barriers remain.

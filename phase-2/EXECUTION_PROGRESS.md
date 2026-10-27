@@ -1,5 +1,66 @@
 # Execution progress and evidence
 
+## Guardian shared registered-email qualification, 27 October 2026
+
+Two independently guardian-authorized native minors can have the same registered
+email as their caller. The existing selected-patient registered-email policy
+already permits this. Sharing an address supplies neither clinic authority nor a
+reusable patient proof: each task separately verifies the original caller and the
+selected child, reads a fresh menu and plays its own confirmation. The first
+receipt and first guardian grant remain unchanged. No arbitrary guardian address,
+missing-email fallback, alternative channel or inferred family authority is added.
+
+Current local qualification passes eight complete source task cases, including
+three new shared-email modes, and all twelve existing verification-canary guards.
+The three new source modes use native180 with a controlled clock and original
+lease renewals; the five inherited cases retain their historical200 source profile.
+Those controlled61-second source advances are not real elapsed serving evidence.
+Whole strict TypeScript and fresh744-output emission pass. Only the test-only
+finite SQL canary filename registration changes an output;743 other files,
+including every production output, match the PR612 parent exactly. The supplied
+source helper accepts a caller/clock without requiring an unrelated memo config.
+
+Separately, all three emitted signed HTTP/WebSocket/PostgreSQL cases pass:
+accepted, missingAuthority and recipientDrift. The accepted case books both native
+children with separate fresh proofs, played consent and original immutable first
+receipt. Removing the second guardian permission refuses its challenge/write even
+though the caller mailbox is verified. Changing the second native email after
+challenge delivery refuses verification and leaves the first booking untouched;
+no mail is redirected to the new address. Every delivered code goes to the same
+actually registered fixture address. Each case retains real elapsed61-second
+pacing, ordinary20ms carrier media and lease handling, native180, a separately
+issued second120-second synthetic grant where applicable and the unchanged first
+grant. No caller turn or old proof renews a guardian grant.
+
+Private identities, dates, addresses, codes, proof references and native review
+contents stay out of public model/transcript/progress projections, every SQL
+column and the complete unfiltered logical backup. The actual shared native and
+verification budgets are checked. Unrelated phone-index/staged-scan rows,
+permanent effect barriers and lower-budget rows remain intact. Owned case
+and outer databases, containers and volumes are removed and independently checked.
+The new finite SQL entry does not relax environment, process, loopback, database,
+exclusion-type/size or privacy-scanner guards.
+
+Reproduce source cases with Node22.23.0 and `scripts/test-node.mjs --test
+--test-concurrency=1 test/cliniko/representative-task-sequence.test.ts test/voice/verification-code-canary.test.ts` after
+`tsc --noEmit` and `tsc --project tsconfig.voice-test.json`; the existing cold
+memo canary test needs the emitted recovery worker. Run `test/storage/postgres-guardian-registered-email.test.ts` only with
+`ABBY_ISOLATED_POSTGRES_PROBE=1` and its own disposable admin connection.
+Compiler2GiB, source512MiB, signedNode1GiB and ownedPostgreSQL512MiB budgets
+retain fresh shared-host reserve and peer-growth checks. Case deadlines remain
+300seconds for accepted and180seconds for each denial.
+
+Earlier failed observations remain: an initial source fixture changed an unused
+verifier email rather than the actual native actor record; the corrected fixture
+uses that actor's existing registered address without weakening assertions. A
+preservation cohort ran before its required emitted worker existed and passed19
+of20; the same20 passed after the actual build completed. Neither negative is
+relabelled or discarded. These are local synthetic engineering observations, not
+real clinic/guardian authority, inbox delivery, human acceptance, acoustic/carrier
+or activation evidence. Parent delivery, final review, exact-head cloud and
+independent actual-main qualification remain separate gates. All original eleven
+stages, four booking steps, thirteen gaps and twenty-eight reuse placements remain.
+
 ## Cross-patient task and continuous-media qualification, 27 October 2026
 
 The existing approved patient-task sequence now has current local coverage for
