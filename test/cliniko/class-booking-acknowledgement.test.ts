@@ -95,10 +95,21 @@ test("class dispatch reader completes metadata and proof before its complete dou
 
 for (const passes of [false, true]) test(`actual ${passes ? "pass" : "ordinary"} SAM class dispatch has no preparation or native observation after final capacity`, async t => {
   const events: string[] = [];
+  const delayed = new Set<string>();
+  let delaying = false, dispatched = false, capacityCompleted = false, waitingPostBudget = false;
+  const suspendPreparation = async (label: string) => {
+    if (delayed.has(label)) return;
+    delayed.add(label);
+    assert.equal(dispatched, false, label); assert.equal(capacityCompleted, false, label);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.equal(dispatched, false, label); assert.equal(capacityCompleted, false, label);
+  };
   const f = await classBookingFixture({ passes, fetchAround: port => async (url, init) => {
     const path = new URL(String(url)).pathname;
+    if (init?.method === "POST" && path === "/v1/attendees") dispatched = true;
     events.push(`dispatch:${init?.method ?? "GET"}:${path}`);
-    const response = await port(url, init); events.push(`native:${init?.method ?? "GET"}:${path}`); return response;
+    const response = await port(url, init);
+    events.push(`native:${init?.method ?? "GET"}:${path}`); return response;
   } });
   try {
     await f.verify(); const action = await f.propose();
@@ -110,13 +121,34 @@ for (const passes of [false, true]) test(`actual ${passes ? "pass" : "ordinary"}
     const trace = <T extends object, K extends keyof T>(target: T, key: K, label: string) => {
       const original = target[key] as (...args: unknown[]) => Promise<unknown>;
       t.mock.method(target, key as never, async (...args: unknown[]) => {
-        events.push(`${label}:begin`); const value = await original.apply(target, args); events.push(`${label}:end`); return value;
+        events.push(`${label}:begin`); const value = await original.apply(target, args);
+        if (delaying && !dispatched) await suspendPreparation(label);
+        events.push(`${label}:end`); return value;
       });
     };
     trace(f.ledger, "read", "ledger"); trace(f.ledger, "readWriteStop", "stop"); trace(f.policies, "read", "settings");
     trace(f.policy, "current", "approval"); trace(f.session.proof, "verifyOperation", "proof");
+    trace(f.sessionConfig.contact, "read", "patientContact");
     if (passes) trace(f.pass.authority, "select", "passAuthority");
-    events.length = 0; resultValue(await f.drain());
+    const budget = f.classSessionConfig.cliniko.rateBudget, claim = budget.claim.bind(budget);
+    t.mock.method(budget, "claim", async () => {
+      const result = await claim();
+      if (waitingPostBudget) { waitingPostBudget = false; await suspendPreparation("postBudget"); }
+      return result;
+    });
+    const write = ClinikoClassAttendanceWriter.prototype.executeBookingOnce;
+    t.mock.method(ClinikoClassAttendanceWriter.prototype, "executeBookingOnce", function(this: ClinikoClassAttendanceWriter,
+      ...args: Parameters<typeof write>) {
+      waitingPostBudget = true; return write.apply(this, args);
+    });
+    const inspect = ClinikoClassAttendanceReader.prototype.inspectForSend;
+    t.mock.method(ClinikoClassAttendanceReader.prototype, "inspectForSend", async function(this: ClinikoClassAttendanceReader,
+      ...args: Parameters<typeof inspect>) {
+      const result = await inspect.apply(this, args); capacityCompleted = true; return result;
+    });
+    events.length = 0; delaying = true; resultValue(await f.drain());
+    for (const label of ["patientContact", "proof", "approval", "postBudget", ...(passes ? ["passAuthority"] : [])])
+      assert.equal(delayed.has(label), true, `actual ${label} preparation was suspended`);
     assert.equal((await f.state()).actions[action.key]!.status, "committed");
     const sent = events.indexOf("dispatch:POST:/v1/attendees"); assert.ok(sent > 0);
     const finalCapacity = events.slice(0, sent).lastIndexOf("native:GET:/v1/attendees"); assert.ok(finalCapacity > 0);
@@ -163,4 +195,45 @@ for (const invalidation of ["lifetime", "proof", "expiry"] as const)
       assert.equal(f.recalls.length, 1); assert.equal(f.writes.length, 0);
       assert.notEqual((await f.state()).actions[action.key]!.status, "committed");
     } finally { await f.close(); }
+  });
+
+for (const passes of [false, true])
+  test(`actual ${passes ? "pass" : "ordinary"} SAM class final read failures prevent attendance and late sends`, { timeout: 90_000 }, async t => {
+    for (const fault of ["malformed", "incomplete", "deadline", "interrupted"] as const) {
+      let armed = false, observed = false, entered!: () => void, release!: () => void;
+      let restoreRead = () => {};
+      let readSignal: AbortSignal | undefined;
+      const reached = new Promise<void>(resolve => { entered = resolve; });
+      const held = new Promise<void>(resolve => { release = resolve; });
+      const f = await classBookingFixture({ passes, fetchAround: port => async (input, init) => {
+        if (armed && new URL(String(input)).pathname === "/v1/attendees" && init?.method === "GET" && !observed) {
+          observed = true; entered();
+          if (fault === "malformed") return Response.json({ total_entries: 1, attendees: [{ id: "invalid" }] });
+          if (fault === "incomplete") return Response.json({ total_entries: 2, attendees: [] });
+          assert.ok(init.signal); readSignal = init.signal; await held;
+        }
+        return port(input, init);
+      } });
+      try {
+        await f.verify(); const action = await f.propose();
+        const confirmed = resultValue(await f.confirm());
+        const notice = confirmed.pendingPresentationId ? confirmed.presentations[confirmed.pendingPresentationId] : undefined;
+        if (notice?.kind === "notice" && notice.confirmationWaitSeconds) {
+          await f.play(); await f.pause(notice.confirmationWaitSeconds + 1); resultValue(await f.confirm());
+        }
+        const read = ClinikoClassAttendanceReader.prototype.inspectForSend;
+        const mockedRead = t.mock.method(ClinikoClassAttendanceReader.prototype, "inspectForSend", function(this: ClinikoClassAttendanceReader,
+          ...args: Parameters<typeof read>) { armed = true; return read.apply(this, args); });
+        restoreRead = () => mockedRead.mock.restore();
+        const pending = f.drain();
+        await Promise.race([reached, pending.then(() => { throw new Error("dispatch finished before final native capacity read"); })]);
+        if (fault === "interrupted") f.host.dispose();
+        await pending;
+        assert.equal(observed, true); assert.equal(f.writes.length, 0); assert.equal(f.recalls.length, 1);
+        assert.ok(["rejected", "uncertain", "needsReview", "canceled"].includes((await f.state()).actions[action.key]!.status));
+        if (fault === "deadline" || fault === "interrupted") assert.equal(readSignal?.aborted, true);
+        release(); await new Promise<void>(resolve => setImmediate(resolve));
+        await f.drain(); assert.equal(f.writes.length, 0, "late capacity and another drain cannot create or replay");
+      } finally { release(); restoreRead(); await f.close(); }
+    }
   });

@@ -8,12 +8,28 @@ import { verificationNow } from "../support/caller-verification.ts";
 
 for (const mode of ["online", "roster"] as const) test(`final ${mode} availability follows quota, proof, policy and ledger preparation and directly precedes POST`, async t => {
   const events: string[] = [];
+  const delayed = new Set<string>();
+  let delaying = false, sent = false, waitingPostBudget = false;
+  const suspendPreparation = async (label: string) => {
+    if (delayed.has(label)) return;
+    delayed.add(label);
+    assert.equal(sent, false, label);
+    assert.equal(events.includes("finalAvailabilityComplete"), false, label);
+    // Keep actual preparation pending across an event-loop turn. Assertions
+    // on both sides catch dispatch while the preparation promise is unsettled.
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.equal(sent, false, label);
+    assert.equal(events.includes("finalAvailabilityComplete"), false, label);
+  };
   const calendar = mode === "roster" ? syntheticRosterProvider() : undefined;
   const f = await bookingOffersFixture({ ...(calendar ? { availabilityPlan: rosterPlan } : {}), fetchAround: port => {
     const provider = calendar ? calendar.wrap(port) : port;
     return async (input, init) => {
+      const path = new URL(String(input)).pathname;
+      if (init?.method === "POST" && path === "/v1/individual_appointments") sent = true;
       events.push(`dispatch:${init?.method ?? "GET"}:${new URL(String(input)).pathname}`);
       const response = await provider(input, init);
+      if (delaying && !sent && path.startsWith("/v1/patients/")) await suspendPreparation("patientContact");
       events.push(`native:${init?.method ?? "GET"}:${new URL(String(input)).pathname}`);
       return response;
     };
@@ -27,6 +43,7 @@ for (const mode of ["online", "roster"] as const) test(`final ${mode} availabili
       t.mock.method(object, method as never, async (...args: unknown[]) => {
         events.push(`${label}:begin`);
         const value = await original.apply(object, args);
+        if (!sent) await suspendPreparation(label);
         events.push(`${label}:end`);
         return value;
       });
@@ -36,22 +53,32 @@ for (const mode of ["online", "roster"] as const) test(`final ${mode} availabili
     trace(f.policies, "read", "settings");
     trace(f.bookingPolicy, "current", "approvalFile");
     trace(f.session.proof, "verifyOperation", "patientProof");
+    const budget = f.ownerPorts.rateBudget, claim = budget.claim.bind(budget);
+    t.mock.method(budget, "claim", async () => {
+      const result = await claim();
+      if (waitingPostBudget) { waitingPostBudget = false; await suspendPreparation("postBudget"); }
+      return result;
+    });
     const write = f.writer.writeOnce.bind(f.writer);
-    t.mock.method(f.writer, "writeOnce", (...[request, signal, beforeSend, onAccepted, atDispatch]: Parameters<typeof write>) =>
-      write(request, signal, async stop => {
+    t.mock.method(f.writer, "writeOnce", (...[request, signal, beforeSend, onAccepted, atDispatch]: Parameters<typeof write>) => {
+      waitingPostBudget = true;
+      return write(request, signal, async stop => {
         // The writer has already claimed its actual POST budget at this point.
         events.length = 0;
         events.push("postBudgetClaimed");
         return beforeSend!(stop);
-      }, receipt => { events.push("acknowledged"); onAccepted?.(receipt); }, atDispatch));
+      }, receipt => { events.push("acknowledged"); onAccepted?.(receipt); }, atDispatch);
+    });
     const finalRead = f.source.resolveForSend.bind(f.source);
     t.mock.method(f.source, "resolveForSend", async (...args: Parameters<typeof finalRead>) => {
       const read = await finalRead(...args);
       events.push("finalAvailabilityComplete");
       return read;
     });
-    resultValue(await f.drain());
+    delaying = true; resultValue(await f.drain());
     assert.equal(f.posts, 1);
+    for (const label of ["patientContact", "patientProof", "approvalFile", "postBudget"])
+      assert.equal(delayed.has(label), true, `actual ${label} preparation was suspended`);
     assert.equal(Object.values((await f.state()).actions)[0]!.status, "committed");
     const lastRead = events.indexOf("finalAvailabilityComplete"), ack = events.indexOf("acknowledged");
     assert.ok(lastRead > 0 && ack > lastRead, JSON.stringify(events));
@@ -115,3 +142,48 @@ test("local expiry and proof invalidation after final availability still prevent
     } finally { await f.close(); }
   }
 });
+
+for (const mode of ["online", "roster"] as const)
+  test(`final ${mode} read failures prevent creates and late sends`, { timeout: 90_000 }, async t => {
+    for (const fault of ["malformed", "incomplete", "deadline", "interrupted"] as const) {
+      let armed = false, observed = false, entered!: () => void, release!: () => void;
+      let readSignal: AbortSignal | undefined;
+      const reached = new Promise<void>(resolve => { entered = resolve; });
+      const held = new Promise<void>(resolve => { release = resolve; });
+      const calendar = mode === "roster" ? syntheticRosterProvider() : undefined;
+      const f = await bookingOffersFixture({ ...(calendar ? { availabilityPlan: rosterPlan } : {}), fetchAround: port => {
+        const provider = calendar ? calendar.wrap(port) : port;
+        return async (input, init) => {
+          const path = new URL(String(input)).pathname;
+          const target = mode === "online" ? path.endsWith("/available_times") : path === "/v1/group_appointments";
+          if (armed && target && !observed) {
+            observed = true; entered();
+            const collection = mode === "online" ? "available_times" : "group_appointments";
+            if (fault === "malformed") return Response.json({ total_entries: 1, [collection]: [{ id: "invalid" }] });
+            if (fault === "incomplete") return Response.json({ total_entries: 2, [collection]: [] });
+            assert.ok(init?.signal); readSignal = init.signal;
+            // Deliberately ignore abort in the provider. Its late valid result
+            // must not regain permission to send after the bounded caller exits.
+            await held;
+          }
+          return provider(input, init);
+        };
+      } });
+      try {
+        const proof = await f.verify(), offers = resultValue(await f.list(proof));
+        resultValue(await f.propose(proof, "final-read-failure", offers.choices[0]!.offerRef));
+        resultValue(await f.confirm());
+        const read = f.source.resolveForSend.bind(f.source);
+        t.mock.method(f.source, "resolveForSend", (...args: Parameters<typeof read>) => { armed = true; return read(...args); });
+        const pending = f.drain();
+        await Promise.race([reached, pending.then(() => { throw new Error("dispatch finished before final native read"); })]);
+        if (fault === "interrupted") f.host.dispose();
+        await pending;
+        assert.equal(observed, true); assert.equal(f.posts, 0); assert.equal(f.recalls.length, 1);
+        assert.ok(["rejected", "uncertain", "needsReview", "canceled"].includes(Object.values((await f.state()).actions)[0]!.status));
+        if (fault === "deadline" || fault === "interrupted") assert.equal(readSignal?.aborted, true);
+        release(); await new Promise<void>(resolve => setImmediate(resolve));
+        await f.drain(); assert.equal(f.posts, 0, "late native read and another drain cannot create or replay");
+      } finally { release(); await f.close(); }
+    }
+  });

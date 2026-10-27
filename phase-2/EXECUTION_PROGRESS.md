@@ -1,5 +1,138 @@
 # Execution progress and evidence
 
+## Acknowledged booking result-failure preservation, 27 October 2026
+
+The booking plan's named later-failure row now has an explicit admitted booking
+witness. Actual email verification, current menu, played selection and separate
+played affirmation lead to one acknowledged Cliniko review and exact clinical
+creation. The actual SAM result presentation is then started and resolved failed;
+the committed action and its receipt stay identical. The real CallOutcomeReport
+then receives a storage failure from its listCalls port. The report returns that
+failure and changes no call state. After restoring the reader, two effect drains
+retain one review, one create and the identical committed action; no PATCH or
+DELETE is attempted, and a successful report still counts one committed action.
+
+This exercises the application playback-failure receipt, not physical synthesis,
+carrier delivery or real acoustic acceptance. The earlier generic cancellation
+report case is not used as a booking-specific witness. No production or support
+worker is changed. The complete three-file source cohort passes33/33 with no
+skips: all22 prior preparation/final-read cases, ten existing admitted-booking
+cases and this one new result-failure case. Existing deadlines and assertions
+are unchanged. Reproduce using Node22.23.0 and scripts/test-node.mjs --test
+--test-concurrency=1 with provider-acknowledged-booking.test.ts,
+class-booking-acknowledgement.test.ts and booking-session.test.ts under test/cliniko.
+
+The current whole strict TypeScript check passes. A fresh no-emit serving graph
+enumeration proves the added test is outside the serving graph and every actual
+transitive serving source is exact to the earlier successful fresh build; all744
+runtime files are independently rehashed and unchanged. The earlier fresh strict/
+serving qualification is reused for those identical inputs, not relabelled as a
+new emission. Source512MiB and strict2GiB retain fresh host admission. No database,
+real provider, credential or carrier request is used for this new source witness.
+
+Earlier22-case and18-case qualification/reviews, instrumentation negatives,
+resource refusals and receipt-adapter failures remain preserved. Current final
+metadata/review, qualified-parent integration and own/main/root delivery remain
+separate gates. This closes the identified local witness gap for row9; it does
+not establish all booking,13-gap,clinic or activation acceptance. The original
+11 stages,4 booking steps,14 verification rows,9 commands and28 scoped reuse
+placements remain. No deploy, live traffic or source deletion is implied.
+
+## Booking final-read refusal qualification, 27 October 2026
+
+This section records the earlier22-case checkpoint; current33-case qualification is above.
+
+The same unpublished booking-verification change now directly covers the plan's
+final-read failure row, alongside its deliberately suspended preparation cases.
+Four new cases exercise online, approved-roster, ordinary-class and approved-pass
+class dispatch. Each arms faults only at the actual final availability/capacity
+reader, after proof, played consent and the acknowledged provider review. Four
+faults per path supply malformed native data, incomplete pagination, an actual
+unchanged read deadline and caller-owner interruption. Deadline/interruption
+providers deliberately ignore abort and later return valid data.
+
+All22 cases in the two complete files pass: the original18 identities are retained
+plus four new cases containing16 fault scenarios. Every new scenario requires
+zero clinical writes, the one saved review and a terminal noncommitted action.
+The deadline/interruption paths observe the native read signal aborted; releasing
+the late provider result and draining again still makes no create or replay.
+Ordinary/pass preparation, exact acknowledgement and local lifetime controls
+remain in that same cohort. Existing parser pagination and proof/lease expiry
+tests keep their separate scope; this is direct composed fault evidence, not a
+claim of every possible provider fault or race combination.
+
+Whole strict TypeScript and a fresh serving build pass. All744 runtime outputs
+match the separately preserved earlier build and reviewed guardian parent. Only
+the same two source test files change; no production code or support-worker output
+changes. Existing case deadlines and configured product quotas are untouched.
+The four new outer cases have90-second test ceilings, while their actual reader
+and host deadlines remain unchanged. Source time stays fixed; the timeout witness
+uses real bounded waiting rather than advancing caller time or shrinking a gate.
+
+Reproduce with Node22.23.0 and `scripts/test-node.mjs --test --test-concurrency=1
+test/cliniko/provider-acknowledged-booking.test.ts
+test/cliniko/class-booking-acknowledgement.test.ts`, whole `tsc --noEmit` and
+`tsc --project tsconfig.voice-test.json`. Source512MiB and compiler2GiB retain
+fresh host admission; no external provider, SQL database or carrier is used.
+The earlier18-case build/review and both instrumentation negatives remain
+preserved as historical observations. The new22-case source cohort passes first
+attempt; final metadata/review and actual qualified-parent/own/main delivery
+remain independent gates.
+
+This supplies local evidence for the named delayed-preparation and failed-final-
+read requirements, not completion of all14 booking rows, all13 gaps or activation.
+All11 execution stages,4 booking steps,9 implementation commands and28 scoped
+reuse placements remain. Real clinic/staff/inbox/private-record access/retention,
+source/restore, noisy-speech/public-route/carrier and activation acceptance remain
+separate; the unavailable Krisp key and owner-deferred cash/bank invoice stay
+pending. No deployment or patient traffic is authorized.
+
+## Deliberately suspended booking preparation, 27 October 2026
+
+This section records the earlier18-case checkpoint; current22-case qualification is above.
+
+The booking plan explicitly requires delayed preparation before final availability.
+Four existing positive source cases now keep real preparation promises pending
+across an event-loop turn in online, approved-roster, ordinary-class and
+approved-pass class booking. They assert no clinical transport or completed final
+availability/capacity while the promise remains unsettled, then retain the exact
+provider-read/transport ordering and one exactly acknowledged create. Patient
+contact, proof, policy and the writer's actual POST-budget claim are suspended;
+the pass case also suspends its independent entitlement selection. The class
+contact check instruments its actual verification contact reader, which is
+separate from the class API fixture port. Original budget claims still execute.
+
+All18 original cases in the two complete selected files pass, with no new case,
+skip or title. Whole strict TypeScript and a fresh serving build pass; all744
+runtime outputs exactly match the reviewed guardian parent, including every
+production output. Only the two source test files change before this metadata
+refresh. Existing proof/offer/lease and individual test deadlines, configured
+budgets, capacity snapshots, exact receipts, no-replay and post-acknowledgement
+truth remain unchanged. The source clock is held fixed: this tests pending
+preparation and ordering, not elapsed-time expiry or real carrier behaviour.
+
+Reproduce with Node22.23.0 and `scripts/test-node.mjs --test --test-concurrency=1
+test/cliniko/provider-acknowledged-booking.test.ts
+test/cliniko/class-booking-acknowledgement.test.ts`, with whole `tsc --noEmit`
+and `tsc --project tsconfig.voice-test.json`. The source cohort uses512MiB and
+the compiler2GiB under fresh shared-host admission. There is no external provider call
+or new signed/PostgreSQL qualification in this source-only change.
+
+Both earlier16-pass/2-fail observations remain preserved. The first introduced
+a new boolean shadowed by the existing later transport-index constant; the
+second asserted contact interception on the class API port while actual contact
+verification used its separate reader. Corrected instrumentation retains the
+required assertions. These failures do not establish a production defect.
+
+This is scoped verification for one named booking-matrix requirement. Final
+metadata/review, actual qualified-parent integration, own CI and independent
+resulting-main qualification remain separate. All eleven execution stages, four
+booking steps, fourteen verification rows, thirteen gaps and twenty-eight reuse
+placements remain. Real clinic/staff/inbox/private-record permissions and
+retention, source/restore, noisy-speech/public-route/carrier and activation
+acceptance remain unproven. The missing Krisp key and owner-deferred cash/bank
+invoice remain pending; no deployment or patient traffic is authorized.
+
 ## Guardian shared registered-email qualification, 27 October 2026
 
 Two independently guardian-authorized native minors can have the same registered

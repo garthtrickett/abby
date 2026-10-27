@@ -1,5 +1,28 @@
 # Abby execution order
 
+**Acknowledged booking result-failure preservation, 27 October 2026:** A new actual admitted booking case fails its SAM result
+playback and report reader after exact acknowledgement, retaining the receipt,
+one review/create and no compensating/replayed writes. All33 complete source
+cases and current whole strict types pass. Serving graph sources and all744
+preserved artifacts exactly match the earlier fresh build; no new emission is
+claimed. Scope is application failure handling, not acoustic/clinic acceptance;
+current review/delivery remains separate. See [evidence](EXECUTION_PROGRESS.md#acknowledged-booking-result-failure-preservation-27-october-2026).
+
+**Booking final-read refusal qualification, 27 October 2026:** The same local test-only patch now passes22 cases:
+the original18 plus four final-read cases containing16 malformed, incomplete,
+deadline and interruption scenarios across online/roster/ordinary-class/pass
+dispatch. Saved reviews survive; no create or late/replayed send occurs. Whole
+strict/fresh744 emission passes, all runtime bytes exact to parent. No product
+quota, existing deadline or runtime change; review/delivery and real acceptance
+remain separate. See [scope](EXECUTION_PROGRESS.md#booking-final-read-refusal-qualification-27-october-2026).
+
+**Deliberately suspended booking preparation, 27 October 2026:** Four existing online/roster/ordinary-class/pass-class
+ordering cases now suspend actual contact, proof, policy, POST-budget and selected
+pass preparation. At the earlier checkpoint, all18 cases in both files passed; whole strict and fresh744
+serving outputs pass, all byte-identical to the reviewed parent. No runtime,
+case identity, deadline or clinic policy changes. Final review/delivery and real
+acceptance remain separate. See [scope and retained failures](EXECUTION_PROGRESS.md#deliberately-suspended-booking-preparation-27-october-2026).
+
 **Guardian shared registered-email qualification, 27 October 2026:** The existing selected-patient registered-email policy
 now has source and emitted signed SQL coverage for two independently authorized
 children sharing the caller's registered email. Fresh per-child proof and played
