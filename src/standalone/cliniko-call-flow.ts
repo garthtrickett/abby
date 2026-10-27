@@ -21,6 +21,7 @@ import type { VerifiedPatient } from "../core/model.ts";
 import { copyBookingServiceChoice } from "../core/booking-service-choice.ts";
 import { servicePractitionerPreferenceLanguage } from "./service-practitioner-preference.ts";
 import { hasSentPatientWork } from "../core/request-boundary.ts";
+import { completedAppointmentEnquiry } from "../core/completed-appointment-enquiry.ts";
 import { readClinikoBookingHorizon, requestedDatesOutsideHorizon } from "./cliniko-booking-horizon.ts";
 import { validCallerIdentityDenial } from "../core/caller-identity.ts";
 import { bookingPreferenceLanguage } from "./booking-preference-language.ts";
@@ -884,6 +885,9 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
         if (operation === "patientUpdate" || currentActions.some(action => action.status !== "canceled")) return unavailable();
         return await this.#active(operation, external) ? ok({ kind: operation === "intake" ? "intakeRequired" : "codeRequired" }) : unavailable();
       }
+      // A played enquiry has completed its task. Replacing that owner requires
+      // approved advancement; the unsent-enquiry fallback cannot bypass its limit.
+      if (this.#tasks && !advancing && completedAppointmentEnquiry(before.value)) return unavailable();
       // Only an explicitly requested unsent cancellation/move may be replaced.
       // New owners issue new operation-bound verification; no prior grant or target transfers.
       const fromEnquiry = previousOwner instanceof ClinikoAppointmentEnquirySession || previousOwner instanceof ClinikoPractitionerHistorySession;
