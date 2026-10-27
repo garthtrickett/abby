@@ -23,7 +23,9 @@ function fixture() {
   let businessEnabled = true;
   let businessTimeZone = "Australia/Sydney";
   let partialPractitionerPage = false;
+  let relationshipPage: ((url: URL) => unknown) | undefined;
   let onBusinessRead: (() => void | Promise<void>) | undefined;
+  let onRelationshipRead: (() => void | Promise<void>) | undefined;
   const fetchPort: typeof fetch = async input => {
     const url = new URL(String(input));
     const path = url.pathname;
@@ -45,9 +47,12 @@ function fixture() {
       archived_at: null, show_in_online_bookings: true });
     if (path === "/v1/appointment_types/55") return Response.json({ id: "55", name: "Follow up",
       archived_at: null, show_in_online_bookings: true });
-    if (path === "/v1/businesses/11/practitioners") return partialPractitionerPage
-      ? Response.json({ total_entries: 2, practitioners: [{ id: url.searchParams.get("page") === "1" ? "55" : "22" }] })
-      : Response.json({ total_entries: 2, practitioners: [{ id: "22" }, { id: "44" }] });
+    if (path === "/v1/businesses/11/practitioners") {
+      await onRelationshipRead?.();
+      return relationshipPage ? Response.json(relationshipPage(url))
+      : partialPractitionerPage ? Response.json({ total_entries: 2, practitioners: [{ id: url.searchParams.get("page") === "1" ? "55" : "22" }] })
+        : Response.json({ total_entries: 2, practitioners: [{ id: "22" }, { id: "44" }] });
+    }
     if (path === "/v1/practitioners/22/appointment_types") return Response.json({ total_entries: 1,
       appointment_types: [{ id: "33" }] });
     if (path === "/v1/practitioners/44/appointment_types") return Response.json({ total_entries: 1,
@@ -68,14 +73,16 @@ function fixture() {
   } };
   const store = new MemoryClinikoApprovalStore();
   const setup = new ClinikoCatalogueSetup(reader.value, routing, policy, store, () => now);
-  return { setup, store, requests, reader: reader.value,
+  return { setup, store, requests, reader: reader.value, fetchPort, routing, policy,
     setNow(value: string) { now = value; },
     setRouteVersion(value: string) { routeVersion = value; },
     setPolicyVersion(value: string) { policyVersion = value; },
     setBusinessEnabled(value: boolean) { businessEnabled = value; },
     setBusinessTimeZone(value: string) { businessTimeZone = value; },
     setPartialPractitionerPage(value: boolean) { partialPractitionerPage = value; },
-    onBusinessRead(callback: () => void | Promise<void>) { onBusinessRead = callback; } };
+    setRelationshipPage(value: ((url: URL) => unknown) | undefined) { relationshipPage = value; },
+    onBusinessRead(callback: () => void | Promise<void>) { onBusinessRead = callback; },
+    onRelationshipRead(callback: () => void | Promise<void>) { onRelationshipRead = callback; } };
 }
 
 test("B1 clinic admin confirms a scoped read-only candidate and every call reproves it", async () => {
@@ -240,4 +247,100 @@ test("B4 clinic admin approves only bounded alternatives for the same business a
   const replaced = await app.setup.approve(admin, route, selection, 1);
   assert.ok(replaced.ok);
   assert.deepEqual(replaced.value.approval?.alternatives, []);
+});
+
+test("R15 rejected partial duplicate and inconsistent refreshes preserve the exact prior approval", async () => {
+  for (const fault of ["partial", "duplicate", "inconsistent"] as const) {
+    const app = fixture();
+    const approved = await app.setup.approveAlternatives(admin, route, selection, [alternativeSelection], 0);
+    assert.ok(approved.ok);
+    const prior = structuredClone(approved.value);
+    app.setRelationshipPage(url => Number(url.searchParams.get("page")) === 1
+      ? { total_entries: 101, practitioners: Array.from({ length: 100 }, (_, index) => ({ id: String(index + 1) })) }
+      : { total_entries: fault === "inconsistent" ? 102 : 101,
+        practitioners: fault === "partial" ? [] : [{ id: fault === "duplicate" ? "22" : "101" }] });
+    assert.deepEqual(await app.setup.approveAlternatives(admin, route, selection, [alternativeSelection], 1),
+      { ok: false, error: { kind: "catalogueUnavailable" } });
+    assert.deepEqual(await app.store.read(scope), { ok: true, value: prior });
+    assert.deepEqual(await app.setup.resolveForCall(scope, route), { ok: false, error: { kind: "catalogueUnavailable" } });
+    assert.deepEqual(await app.store.read(scope), { ok: true, value: prior });
+    app.setRelationshipPage(undefined);
+    const retried = await app.setup.approveAlternatives(admin, route, selection, [alternativeSelection], 1);
+    assert.ok(retried.ok); assert.equal(retried.value.version, 2);
+    assert.deepEqual(retried.value.approval?.selection, selection);
+    assert.deepEqual(retried.value.approval?.alternatives, [alternativeSelection]);
+    assert.equal(retried.value.approval?.patientActionMode, "unavailable");
+    assert.equal(retried.value.approval?.patientRequestMode, "unavailable");
+  }
+});
+
+test("R15 complete removal differs from unreadable refresh and discovered members need explicit approval", async () => {
+  const app = fixture();
+  const approved = await app.setup.approveAlternatives(admin, route, selection, [alternativeSelection], 0);
+  assert.ok(approved.ok); const prior = structuredClone(approved.value);
+  app.setRelationshipPage(() => ({ total_entries: 0, practitioners: [] }));
+  assert.deepEqual(await app.setup.resolveForCall(scope, route), { ok: false, error: { kind: "selectionUnavailable" } });
+  assert.deepEqual(await app.store.read(scope), { ok: true, value: prior });
+  app.setRelationshipPage(url => ({ total_entries: 101, practitioners: Number(url.searchParams.get("page")) === 1
+    ? Array.from({ length: 100 }, (_, index) => ({ id: String(index + 1), display_name: `Public member ${index + 1}`, active: true, show_in_online_bookings: true }))
+    : [{ id: "101", display_name: "New public member", active: true, show_in_online_bookings: true }] }));
+  const discovered = await app.setup.practitioners(admin, "11"); assert.ok(discovered.ok);
+  assert.ok(discovered.value.practitioners.some(member => member.practitionerId === "101"));
+  assert.deepEqual(await app.store.read(scope), { ok: true, value: prior }, "native discovery cannot change the approved selection or fallback set");
+  const explicit = await app.setup.approveAlternatives(admin, route, selection, [alternativeSelection], 1);
+  assert.ok(explicit.ok); assert.equal(explicit.value.version, 2);
+  assert.deepEqual(explicit.value.approval?.selection, selection);
+  assert.deepEqual(explicit.value.approval?.alternatives, [alternativeSelection]);
+  const resolved = await app.setup.resolveForCall(scope, route); assert.ok(resolved.ok);
+  assert.deepEqual(resolved.value, explicit.value.approval);
+  assert.equal(resolved.value.patientActionMode, "unavailable"); assert.equal(resolved.value.patientRequestMode, "unavailable");
+});
+
+test("R16 revocation while an approval request is held defeats the old completion", { timeout: 20_000 }, async () => {
+  const app = fixture();
+  assert.ok((await app.setup.approve(admin, route, selection, 0)).ok);
+  let entered = () => {}, release = () => {};
+  const reached = new Promise<void>(resolve => { entered = resolve; });
+  const held = new Promise<void>(resolve => { release = resolve; });
+  app.onRelationshipRead(async () => { app.onRelationshipRead(() => {}); entered(); await held; });
+  const pending = app.setup.approveAlternatives(admin, route, selection, [alternativeSelection], 1);
+  try {
+    await reached;
+    const revoked = await app.setup.revoke(admin, 1); assert.ok(revoked.ok);
+    assert.deepEqual(revoked.value, { version: 2, approval: null });
+    release();
+    assert.deepEqual(await pending, { ok: false, error: { kind: "versionConflict" } });
+    assert.deepEqual(await app.store.read(scope), revoked);
+    assert.deepEqual(await app.setup.readApprovedRoute(scope, route), { ok: false, error: { kind: "notApproved" } });
+    assert.deepEqual(await app.setup.resolveForCall(scope, route), { ok: false, error: { kind: "notApproved" } });
+  } finally { release(); await pending; }
+});
+
+test("R16 rotated-key reapproval wins over an older held worker and every reader keeps its credential binding", { timeout: 20_000 }, async () => {
+  const app = fixture();
+  const first = await app.setup.approve(admin, route, selection, 0); assert.ok(first.ok);
+  let entered = () => {}, release = () => {};
+  const reached = new Promise<void>(resolve => { entered = resolve; });
+  const held = new Promise<void>(resolve => { release = resolve; });
+  app.onRelationshipRead(async () => { app.onRelationshipRead(() => {}); entered(); await held; });
+  const pending = app.setup.approveAlternatives(admin, route, selection, [alternativeSelection], 1);
+  try {
+    await reached;
+    const reader = ClinikoCatalogueReader.create({ scope, apiKey: "synthetic-rotated-key-au5", contactEmail: "demo@example.test" }, app.fetchPort, () => observedAt);
+    assert.ok(reader.ok);
+    const rotated = new ClinikoCatalogueSetup(reader.value, app.routing, app.policy, app.store, () => observedAt);
+    const replaced = await rotated.approve(admin, route, alternativeSelection, 1); assert.ok(replaced.ok);
+    assert.equal(replaced.value.version, 2);
+    assert.notEqual(replaced.value.approval?.credentialFingerprint, first.value.approval?.credentialFingerprint);
+    release(); assert.deepEqual(await pending, { ok: false, error: { kind: "versionConflict" } });
+    assert.deepEqual(await app.store.read(scope), replaced);
+    const before = app.requests.length;
+    assert.deepEqual(await app.setup.resolveForCall(scope, route), { ok: false, error: { kind: "staleApproval" } });
+    assert.equal(app.requests.length, before, "the old credential must refuse before native reads");
+    const current = await rotated.resolveForCall(scope, route); assert.ok(current.ok);
+    assert.deepEqual(current.value, replaced.value.approval);
+    assert.deepEqual(current.value.selection, alternativeSelection);
+    assert.deepEqual(current.value.alternatives, []);
+    assert.equal(current.value.patientActionMode, "unavailable"); assert.equal(current.value.patientRequestMode, "unavailable");
+  } finally { release(); await pending; }
 });

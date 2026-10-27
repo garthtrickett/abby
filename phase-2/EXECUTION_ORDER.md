@@ -1,5 +1,15 @@
 # Abby execution order
 
+**Catalogue refresh and stale setup qualification, 27 October 2026:** A local
+test-only candidate passes all 26 catalogue, setup and gateway controls, current
+whole strict types and the exact 746-source serving graph. Short, duplicate or
+inconsistent relationship pages preserve the saved approval and refuse uncertain
+reads; complete removal and newly discovered members remain distinct. Revocation
+and rotated-key reapproval defeat an older worker held on an actual native
+relationship page. All 746 reused runtime outputs remain byte-identical; no
+production change or new emission is claimed. Review, delivery, clinic policy and
+activation remain separate. See [scope and limits](EXECUTION_PROGRESS.md#catalogue-refresh-and-stale-setup-qualification-27-october-2026).
+
 **R02 review correction, 27 October 2026:** Five actual emitted signed SQL cases
 now pass, including a return to the original practitioner followed by an explicit
 approved duration or service correction. Each correction cancels the old proposal,

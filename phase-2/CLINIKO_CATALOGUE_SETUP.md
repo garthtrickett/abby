@@ -1,5 +1,15 @@
 # Cliniko catalogue selection contract
 
+**Catalogue refresh and stale setup qualification, 27 October 2026:** A local
+test-only candidate passes all 26 catalogue, setup and gateway controls, current
+whole strict types and the exact 746-source serving graph. Short, duplicate or
+inconsistent relationship pages preserve the saved approval and refuse uncertain
+reads; complete removal and newly discovered members remain distinct. Revocation
+and rotated-key reapproval defeat an older worker held on an actual native
+relationship page. All 746 reused runtime outputs remain byte-identical; no
+production change or new emission is claimed. Review, delivery, clinic policy and
+activation remain separate. See [scope and limits](EXECUTION_PROGRESS.md#catalogue-refresh-and-stale-setup-qualification-27-october-2026).
+
 `ClinikoCatalogueReader` lists bounded business metadata and checks one business, practitioner, and appointment type. Its `candidate` result means the selected metadata currently appears eligible for online availability reads. It never grants booking, patient disclosure, or staff-request authority.
 
 Every paginated business or relationship list must contain the expected number of records for its `per_page=100` position. A short page with a larger `total_entries` is `unavailable`, even if a later page might make the final count add up. E2E-191 proves such a response cannot be approved and cannot pass a previously approved route's call-time provider recheck.
