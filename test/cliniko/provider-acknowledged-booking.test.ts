@@ -142,3 +142,48 @@ test("local expiry and proof invalidation after final availability still prevent
     } finally { await f.close(); }
   }
 });
+
+for (const mode of ["online", "roster"] as const)
+  test(`final ${mode} read failures prevent creates and late sends`, { timeout: 90_000 }, async t => {
+    for (const fault of ["malformed", "incomplete", "deadline", "interrupted"] as const) {
+      let armed = false, observed = false, entered!: () => void, release!: () => void;
+      let readSignal: AbortSignal | undefined;
+      const reached = new Promise<void>(resolve => { entered = resolve; });
+      const held = new Promise<void>(resolve => { release = resolve; });
+      const calendar = mode === "roster" ? syntheticRosterProvider() : undefined;
+      const f = await bookingOffersFixture({ ...(calendar ? { availabilityPlan: rosterPlan } : {}), fetchAround: port => {
+        const provider = calendar ? calendar.wrap(port) : port;
+        return async (input, init) => {
+          const path = new URL(String(input)).pathname;
+          const target = mode === "online" ? path.endsWith("/available_times") : path === "/v1/group_appointments";
+          if (armed && target && !observed) {
+            observed = true; entered();
+            const collection = mode === "online" ? "available_times" : "group_appointments";
+            if (fault === "malformed") return Response.json({ total_entries: 1, [collection]: [{ id: "invalid" }] });
+            if (fault === "incomplete") return Response.json({ total_entries: 2, [collection]: [] });
+            assert.ok(init?.signal); readSignal = init.signal;
+            // Deliberately ignore abort in the provider. Its late valid result
+            // must not regain permission to send after the bounded caller exits.
+            await held;
+          }
+          return provider(input, init);
+        };
+      } });
+      try {
+        const proof = await f.verify(), offers = resultValue(await f.list(proof));
+        resultValue(await f.propose(proof, "final-read-failure", offers.choices[0]!.offerRef));
+        resultValue(await f.confirm());
+        const read = f.source.resolveForSend.bind(f.source);
+        t.mock.method(f.source, "resolveForSend", (...args: Parameters<typeof read>) => { armed = true; return read(...args); });
+        const pending = f.drain();
+        await Promise.race([reached, pending.then(() => { throw new Error("dispatch finished before final native read"); })]);
+        if (fault === "interrupted") f.host.dispose();
+        await pending;
+        assert.equal(observed, true); assert.equal(f.posts, 0); assert.equal(f.recalls.length, 1);
+        assert.ok(["rejected", "uncertain", "needsReview", "canceled"].includes(Object.values((await f.state()).actions)[0]!.status));
+        if (fault === "deadline" || fault === "interrupted") assert.equal(readSignal?.aborted, true);
+        release(); await new Promise<void>(resolve => setImmediate(resolve));
+        await f.drain(); assert.equal(f.posts, 0, "late native read and another drain cannot create or replay");
+      } finally { release(); await f.close(); }
+    }
+  });

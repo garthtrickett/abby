@@ -196,3 +196,44 @@ for (const invalidation of ["lifetime", "proof", "expiry"] as const)
       assert.notEqual((await f.state()).actions[action.key]!.status, "committed");
     } finally { await f.close(); }
   });
+
+for (const passes of [false, true])
+  test(`actual ${passes ? "pass" : "ordinary"} SAM class final read failures prevent attendance and late sends`, { timeout: 90_000 }, async t => {
+    for (const fault of ["malformed", "incomplete", "deadline", "interrupted"] as const) {
+      let armed = false, observed = false, entered!: () => void, release!: () => void;
+      let restoreRead = () => {};
+      let readSignal: AbortSignal | undefined;
+      const reached = new Promise<void>(resolve => { entered = resolve; });
+      const held = new Promise<void>(resolve => { release = resolve; });
+      const f = await classBookingFixture({ passes, fetchAround: port => async (input, init) => {
+        if (armed && new URL(String(input)).pathname === "/v1/attendees" && init?.method === "GET" && !observed) {
+          observed = true; entered();
+          if (fault === "malformed") return Response.json({ total_entries: 1, attendees: [{ id: "invalid" }] });
+          if (fault === "incomplete") return Response.json({ total_entries: 2, attendees: [] });
+          assert.ok(init.signal); readSignal = init.signal; await held;
+        }
+        return port(input, init);
+      } });
+      try {
+        await f.verify(); const action = await f.propose();
+        const confirmed = resultValue(await f.confirm());
+        const notice = confirmed.pendingPresentationId ? confirmed.presentations[confirmed.pendingPresentationId] : undefined;
+        if (notice?.kind === "notice" && notice.confirmationWaitSeconds) {
+          await f.play(); await f.pause(notice.confirmationWaitSeconds + 1); resultValue(await f.confirm());
+        }
+        const read = ClinikoClassAttendanceReader.prototype.inspectForSend;
+        const mockedRead = t.mock.method(ClinikoClassAttendanceReader.prototype, "inspectForSend", function(this: ClinikoClassAttendanceReader,
+          ...args: Parameters<typeof read>) { armed = true; return read.apply(this, args); });
+        restoreRead = () => mockedRead.mock.restore();
+        const pending = f.drain();
+        await Promise.race([reached, pending.then(() => { throw new Error("dispatch finished before final native capacity read"); })]);
+        if (fault === "interrupted") f.host.dispose();
+        await pending;
+        assert.equal(observed, true); assert.equal(f.writes.length, 0); assert.equal(f.recalls.length, 1);
+        assert.ok(["rejected", "uncertain", "needsReview", "canceled"].includes((await f.state()).actions[action.key]!.status));
+        if (fault === "deadline" || fault === "interrupted") assert.equal(readSignal?.aborted, true);
+        release(); await new Promise<void>(resolve => setImmediate(resolve));
+        await f.drain(); assert.equal(f.writes.length, 0, "late capacity and another drain cannot create or replay");
+      } finally { release(); restoreRead(); await f.close(); }
+    }
+  });
