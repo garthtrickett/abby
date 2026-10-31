@@ -1,5 +1,55 @@
 # Execution progress and evidence
 
+## Non-patient guardian records, 31 October 2026
+
+The owner-selected route supports a caller with no Cliniko patient record. A
+separately approved Standard contact and fresh registered-email code establish
+only guardian identity. Independent current clinic authority names the exact
+patient, operation, record versions and purposes before protected native patient
+identity is read. The selected patient still needs a separate registered-email
+proof, workflow permission and played consent. Explicitly approved adult
+representation remains distinct from guardian/minor approval. Existing native
+patient representatives remain selectable. When both methods are configured,
+played private keypad choice precedes either code; failed verification cannot
+fall back to the other source. Private fields and codes stay outside ordinary
+ASR/model turns and durable call state.
+
+The current cohort passes 203/203 source controls across 22 files, including
+preserved native/patient/private/cold-worker controls. Whole strict TypeScript,
+the actual serving graph and fresh emission pass: all 746 inherited outputs
+remain, with 738 exact, eight changed shared/private outputs and eleven new
+outputs, totalling 757. The SQL refusal test-driver correction separately passed
+whole strict without changing production or helper emission.
+
+All seven new actual emitted clinical-host signed HTTP/media/PostgreSQL cases
+pass with zero skips: enquiry, booking, cancellation, rescheduling, missing
+guardian identity, missing patient authority and withdrawal before consent.
+Each retains all-column privacy, complete unfiltered dump/restore checks and an
+unrelated exclusion row. The Node scope peaked at 270,274,560 bytes and external
+PostgreSQL at 143,437,824 bytes, with no OOM events. The three unchanged signed
+native-patient guardian/shared-email cases also pass, preserving separate child
+proof, task ownership and recipient/authority denials under the existing 180
+native budget, SQL privacy and raw backup checks. They are separate evidence,
+not three additional new guardian-record cases or a full restore qualification.
+Owned case/outer databases, containers and anonymous volumes were removed.
+
+Earlier failures remain retained: the all-operation move exceeded the unchanged
+180 budget due to a duplicate full guardian channel read; the correction removes
+that duplicate while requiring fresh native channel evidence for every protected
+read. The first seven-case SQL run passed six and failed its intended final
+refusal through a strict helper. The corrected test observes the real refusal
+and closure without altering the emitted input implementation or weakening any
+privacy assertion. Original native diagnostic-hook and cold-worker prerequisite
+failures likewise retain their original verdicts; current controls now pass.
+
+The [guardian contract](CLINIKO_GUARDIAN_RECORDS.md) identifies the three approval
+owners and trusted host interfaces. Synthetic identity/authority sources do not
+constitute a production storage adapter or clinic approval. Provisioning,
+access/retention/withdrawal, registered-mail and human staff acceptance,
+carrier/acoustic and deployment gates remain. Fixed-head reviews, this feature's
+own CI, normal merge and independent actual-main qualification are still future.
+The full original execution objective remains; no live traffic or activation.
+
 ## Catalogue refresh and stale setup qualification, 27 October 2026
 
 This scoped R15/R16 addition changes tests only. All 26 complete catalogue,
@@ -8090,3 +8140,49 @@ existing evidence tiers remain; full-call acceptance remains planned.
 This is a local candidate, not a delivered clinic feature or acoustic proof.
 Full fixed-diff review, qualified-parent integration, original exact-head CI,
 normal merge and actual-main qualification remain separate delivery gates.
+
+
+## Guardian CI public-code canary refinement, 31 October 2026
+
+PR #617's original push database run finished with 7,271 tests: 7,269 passed,
+one failed and one existing skip. Its two-patient memo `secondDenied` case found
+private canary index 30 in public output. The separate original PR database
+run passed all 7,270 executable tests plus six ordered controls on the exact
+same head. Both raw logs remain retained. Neither that pass nor a later local
+pass reconstructs the original matching value, which was not logged.
+
+A deterministic witness using the actual SQL code selector and public command
+projection demonstrates a fixture ambiguity: a public hash can predate a
+six-digit challenge whose raw substring happens to match it. The scoped direct
+SQL fixture now captures existing public numeric substrings before each code
+issue and rejects those prospective draws. It uses the actual issuer, salt,
+hash, delivery and verification. Each case owns its migrated and seeded database
+snapshot, bounded clock window and sampler lifetime. A snapshot containing an
+already issued code fails immediately and cannot become an exclusion; rejected,
+oversized and excessive snapshots add no partial exclusions. Closed/replaced
+scopes cannot change the next sampler, and closure restores the exact issuer.
+Production code and crypto remain unchanged.
+
+All 13 code-sampling/clock/isolation/lifetime controls pass, including the new
+deterministic hash-collision and actual-disclosure controls. The first wrapper
+incorrectly expected 15 by also counting two test statements inside fixture
+strings; its failed verdict remains. Independent TypeScript top-level syntax
+and the completed raw TAP prove 13 exact tests, zero failures or skips, without
+replaying the cohort. Whole strict TypeScript and fresh 757-output serving pass;
+only the existing test helper changes and all other 756 outputs are exact.
+All six original signed multiple-patient SQL cases pass with zero skips,
+including accepted/first-denied/second-denied/lost-stored and pending/uncertain
+prior tasks. Existing native 180 limits, per-case deadlines, original subjects,
+separate permissions, immutable receipts, every-column scans, complete raw
+logical backups and unrelated retained rows remain. Public, SQL and backup
+canary assertions are unchanged and unfiltered. Owned database cleanup is
+verified separately.
+
+Evidence is private under `~/.local/state/abby-guardian-ci-canary/`: original
+failed and independent green CI evidence stays under
+`~/.local/state/abby-outbound-stop-speech/guardian-records/`. This is a scoped
+fixture correction, not proof of the exact original CI cause, production
+record provisioning, clinic acceptance, speech quality or activation. The
+corrected head still needs full review, original own-head CI, normal merge and
+independent actual-main qualification. All original execution stages, gaps and
+reuse placements remain in scope.

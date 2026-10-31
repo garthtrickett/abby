@@ -37,12 +37,12 @@ test("scenario manifest tracks every designed E2E and never promotes a planned f
   assert.ok(overview.includes(`tracks the ${manifest.scenarios.length} stable E2E IDs`));
   const design = read("TECHNICAL_DESIGN.md");
   const rows = [...design.matchAll(/^\| `(E2E-\d{3})` \| (.*?) \| (FR-\d{2}(?:, FR-\d{2})*) \|$/gm)];
-  assert.equal(manifest.version, "1.250");
+  assert.equal(manifest.version, "1.251");
   assert.equal(manifest.source, "TECHNICAL_DESIGN.md Section 11");
   assert.equal(manifest.fixtureIdPattern, "fixture-{lowercase scenario id}");
-  assert.equal(rows.length, 425);
+  assert.equal(rows.length, 426);
   assert.deepEqual(manifest.scenarios.map(scenario => scenario.id),
-    Array.from({ length: 425 }, (_, index) => `E2E-${String(index + 1).padStart(3, "0")}`));
+    Array.from({ length: 426 }, (_, index) => `E2E-${String(index + 1).padStart(3, "0")}`));
   const ids = new Set(manifest.scenarios.map(scenario => scenario.id));
   for (const [file, profile] of Object.entries(manifest.executionOverrides)) {
     assert.ok(profile === "browserCoordinator" || profile === "nodeCoordinator");

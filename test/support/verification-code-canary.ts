@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import { syncBuiltinESMExports } from "node:module";
 
 export type CanaryClockWindow = Readonly<{ sinceMs: number; throughMs: number }>;
+type ScopedCanaries = Readonly<{ window: CanaryClockWindow; close: () => void;
+  excludePreexistingPublicText: (text: string) => void }>;
 const space = 1_000_000;
 function validWindow(window: CanaryClockWindow): boolean {
   return Number.isSafeInteger(window.sinceMs) && Number.isSafeInteger(window.throughMs) && window.sinceMs > 0 &&
@@ -97,6 +99,7 @@ export function assertDirectSqlVerificationCanaryContext(): void {
     "postgres-representative-change-memo.test.ts",
     "postgres-representative-cross-operation-tasks.test.ts",
     "postgres-guardian-registered-email.test.ts",
+    "postgres-guardian-records.test.ts",
     "postgres-booking-comparison.test.ts",
     "postgres-guardian-booking-memo.test.ts",
     "postgres-guardian-change-memo.test.ts",
@@ -133,7 +136,7 @@ export function installDirectSqlVerificationCanaries(excluded: ReadonlySet<strin
 
 /** A long normal SQL file may have several independently bounded cases. Each
  * gets its own pre-issue window and restores the issuer after its owner closes. */
-export function installScopedDirectSqlVerificationCanaries(excluded: ReadonlySet<string>): Readonly<{ window: CanaryClockWindow; close: () => void }> {
+export function installScopedDirectSqlVerificationCanaries(excluded: ReadonlySet<string>): ScopedCanaries {
   return installSampler(directSqlExclusions(excluded));
 }
 
@@ -148,17 +151,41 @@ function install(excluded: ReadonlySet<string> = new Set()): CanaryClockWindow {
   return installSampler(excluded).window;
 }
 
-function installSampler(excluded: ReadonlySet<string>): Readonly<{ window: CanaryClockWindow; close: () => void }> {
+function installSampler(excluded: ReadonlySet<string>): ScopedCanaries {
   if (installed) throw Error("Synthetic verification canary sampling already installed");
   const now = Date.now(), window = Object.freeze({ sinceMs: now - 60_000, throughMs: now + 600_000 });
   const randomInt = crypto.randomInt, descriptor = Object.getOwnPropertyDescriptor(crypto, "randomInt");
   if (!descriptor?.writable) throw Error("Synthetic verification crypto is unavailable");
-  const sampler = (...args: unknown[]) => args.length === 2 && args[0] === 0 && args[1] === space
-    ? drawSqlCanaryCode(() => randomInt(0, space), window, excluded) : Reflect.apply(randomInt, crypto, args);
+  const priorNumbers = new Set(excluded), issued = new Set<string>();
+  const sampler = (...args: unknown[]) => {
+    if (args.length !== 2 || args[0] !== 0 || args[1] !== space) return Reflect.apply(randomInt, crypto, args);
+    const code = drawSqlCanaryCode(() => randomInt(0, space), window, priorNumbers);
+    issued.add(String(code).padStart(6, "0"));
+    return code;
+  };
   Object.defineProperty(crypto, "randomInt", { ...descriptor, value: sampler });
   syncBuiltinESMExports(); installed = true;
   let closed = false;
-  return Object.freeze({ window, close: () => {
+  return Object.freeze({ window,
+    /** A public hash may already contain a prospective six-digit code. Reject
+     * that draw BEFORE issuing it; no existing secret or privacy probe is exempt.
+     * A snapshot containing an already issued code is itself a failed canary. */
+    excludePreexistingPublicText: (text: string) => {
+      if (closed || Object.getOwnPropertyDescriptor(crypto, "randomInt")?.value !== sampler)
+        throw Error("Synthetic verification canary scope no longer owns the issuer");
+      if (typeof text !== "string" || text.length > 8_000_000)
+        throw Error("Invalid synthetic pre-challenge public snapshot");
+      const next = new Set(priorNumbers);
+      for (const match of text.matchAll(/[0-9]{6,}/g)) {
+        for (let offset = 0; offset <= match[0].length - 6; offset++) {
+          const code = match[0].slice(offset, offset + 6);
+          if (issued.has(code)) throw Error("Issued verification canary already occurs in public snapshot");
+          next.add(code);
+          if (next.size > 100000) throw Error("Synthetic pre-challenge public exclusions exceed their declared bound");
+        }
+      }
+      for (const code of next) priorNumbers.add(code);
+    }, close: () => {
     if (closed) return;
     if (Object.getOwnPropertyDescriptor(crypto, "randomInt")?.value !== sampler)
       throw Error("Synthetic verification canary sampler no longer owns the issuer");

@@ -189,3 +189,76 @@ assert.equal(crypto.randomInt, original); assert.equal(randomInt, original);
     assert.doesNotMatch(numericInput.stderr.toString(), /isolated memo recovery sender|ECONNREFUSED/);
   } finally { rmSync(folder, { recursive: true, force: true }); }
 });
+
+test("scoped SQL challenges reject prior public hash collisions without exempting issued secrets", () => {
+  const folder = mkdtempSync(join(tmpdir(), "abby-public-code-canary-"));
+  try {
+    const directory = join(folder, "test", "storage"); mkdirSync(directory, { recursive: true });
+    const entry = join(directory, "postgres-sql-verification-canary.test.ts");
+    const source = new URL("../support/verification-code-canary.ts", import.meta.url).href;
+    const progress = new URL("../../src/reference/command-progress.ts", import.meta.url).href;
+    writeFileSync(entry, `import assert from "node:assert/strict";
+import test from "node:test";
+import crypto, { randomInt, createHash } from "node:crypto";
+import { syncBuiltinESMExports } from "node:module";
+import { installScopedDirectSqlVerificationCanaries, drawSqlCanaryCode, distinctFromClock } from ${JSON.stringify(source)};
+import { commandProgress } from ${JSON.stringify(progress)};
+test("pre-issue public snapshot is an exclusion, never a privacy exemption", () => {
+  const descriptor = Object.getOwnPropertyDescriptor(crypto, "randomInt"), original = crypto.randomInt;
+  let draws = [], calls = 0;
+  Object.defineProperty(crypto, "randomInt", { ...descriptor, value: (...args) => args.length === 2 && args[0] === 0 && args[1] === 1000000
+    ? draws[Math.min(calls++, draws.length - 1)] : Reflect.apply(original, crypto, args) });
+  syncBuiltinESMExports();
+  const priorIssuer = crypto.randomInt, canary = installScopedDirectSqlVerificationCanaries(new Set());
+  try {
+    let collision;
+    for (let seed = 0; seed < 256 && !collision; seed++) {
+      const actionKey = createHash("sha256").update("prior-public-action:" + seed).digest("hex");
+      for (const match of actionKey.matchAll(/[0-9]{6,}/g)) for (let i = 0; i <= match[0].length - 6; i++) {
+        const code = Number(match[0].slice(i, i + 6));
+        if (code % 10 === 0 && distinctFromClock(code, canary.window)) { collision = { actionKey, code }; break; }
+      }
+    }
+    assert.ok(collision, "bounded deterministic public-hash witness");
+    const state = { callId: "synthetic", version: 1, lifecycle: "active", actions: { [collision.actionKey]: {
+      key: collision.actionKey, kind: "book", status: "committed", presentationId: collision.actionKey + ":details" } },
+      staffItems: {}, presentations: {}, knowledgeAnswers: [], availabilityReads: [], appointmentReads: [] };
+    const publicBeforeIssue = JSON.stringify(commandProgress(state, "multiple-patient-memo"));
+    const blocked = String(collision.code).padStart(6, "0");
+    assert.ok(publicBeforeIssue.includes(blocked));
+    assert.equal(drawSqlCanaryCode(() => collision.code, canary.window), collision.code);
+    const safe = Array.from({ length: 100000 }, (_, i) => i * 10).filter(code => distinctFromClock(code, canary.window) &&
+      !publicBeforeIssue.includes(String(code).padStart(6, "0"))).slice(0, 2);
+    assert.equal(safe.length, 2);
+    canary.excludePreexistingPublicText(publicBeforeIssue);
+    draws = [collision.code, safe[0]]; calls = 0;
+    const code = String(randomInt(0, 1000000)).padStart(6, "0");
+    assert.ok(code === String(safe[0]).padStart(6, "0") && calls === 2);
+    assert.ok(!publicBeforeIssue.includes(code));
+    const next = String(safe[1]).padStart(6, "0");
+    assert.throws(() => canary.excludePreexistingPublicText(next + "|" + code), /already occurs in public snapshot/);
+    draws = [safe[1]]; calls = 0;
+    assert.ok(randomInt(0, 1000000) === safe[1], "a refused snapshot must add no partial exclusions");
+    assert.throws(() => canary.excludePreexistingPublicText(JSON.stringify({ transcript: code })), /already occurs/);
+    assert.throws(() => canary.excludePreexistingPublicText(null), /Invalid synthetic/);
+    assert.throws(() => canary.excludePreexistingPublicText("x".repeat(8000001)), /Invalid synthetic/);
+    draws = [collision.code]; calls = 0;
+    assert.throws(() => randomInt(0, 1000000), /exhausted/); assert.equal(calls, 4096);
+    assert.throws(() => assert.equal(publicBeforeIssue.includes(blocked), false));
+    assert.throws(() => assert.equal(JSON.stringify({ transcript: code }).includes(code), false));
+  } finally { canary.close(); }
+  assert.equal(crypto.randomInt, priorIssuer); assert.equal(randomInt, priorIssuer);
+  assert.throws(() => canary.excludePreexistingPublicText("123450"), /no longer owns/);
+  const full = new Set(Array.from({ length: 100000 }, (_, i) => String(i).padStart(6, "0")));
+  const second = installScopedDirectSqlVerificationCanaries(full);
+  try {
+    assert.throws(() => second.excludePreexistingPublicText("100000"), /declared bound/);
+    assert.throws(() => canary.excludePreexistingPublicText("100000"), /no longer owns/);
+  } finally { second.close(); Object.defineProperty(crypto, "randomInt", descriptor); syncBuiltinESMExports(); }
+  assert.equal(crypto.randomInt, original); assert.equal(randomInt, original);
+});
+`);
+    execFileSync(process.execPath, ["--test", entry], { env: { ...process.env, ABBY_ISOLATED_POSTGRES_PROBE: "1",
+      DATABASE_URL: "postgresql://127.0.0.1/abby_test_public_canary" }, timeout: 10000, stdio: "pipe" });
+  } finally { rmSync(folder, { recursive: true, force: true }); }
+});
