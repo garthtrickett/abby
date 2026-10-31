@@ -24,8 +24,12 @@ const { commandProgress } = await import(new URL("src/reference/command-progress
 const { ok } = await import(new URL("src/core/model.js", emitted).href) as typeof import("../../src/core/model.ts");
 const { CallerVerificationSession } = await import(new URL("src/standalone/caller-verification-session.js", emitted).href) as typeof import("../../src/standalone/caller-verification-session.ts");
 
-for (const outcome of ["accepted", "nativePermissionWithdrawn"] as const)
-test(`actual emitted signed related then native-self booking: ${outcome}`, { timeout: 240_000 }, async context => {
+for (const { outcome, callerFirst } of [
+  { outcome: "accepted", callerFirst: false },
+  { outcome: "nativePermissionWithdrawn", callerFirst: false },
+  { outcome: "accepted", callerFirst: true },
+] as const)
+test(`actual emitted signed ${callerFirst ? "native-self then related" : "related then native-self"} booking: ${outcome}`, { timeout: 240_000 }, async context => {
   const admin = connectPostgres(adminUrl), name = `abby_test_related_self_${randomUUID().replaceAll("-", "").slice(0, 24)}`;
   const restoreName = `${name}_restored`, target = new URL(adminUrl), restoreTarget = new URL(adminUrl);
   target.pathname = `/${name}`; restoreTarget.pathname = `/${restoreName}`;
@@ -58,19 +62,34 @@ test(`actual emitted signed related then native-self booking: ${outcome}`, { tim
     const serving = call, sessionId = (await serving.state()).sessionLease?.sessionId; assert.ok(sessionId);
     const excludePriorPublicNumbers = async () => canary!.excludePreexistingPublicText(JSON.stringify([serving.modelTurns, serving.transcripts,
       commandProgress(await serving.state(), "related-self"), await serving.flow.publicIntentContext()]));
-    await serving.turn("Book an appointment for my partner"); await serving.mark(); await excludePriorPublicNumbers();
-    const firstOwner = serving.flow.representativeInputOwner; assert.ok(firstOwner);
-    await serving.privateDigit("1"); await serving.mark(); await f.base.waitForMail(1);
-    for (const digit of `${f.base.mail[0]!.code}#`) serving.sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
-    await voiceUntil(() => serving.spoken.at(-1) === "Please say the patient's first name.", "private related subject"); await serving.mark();
-    for (const field of [f.base.r.identity.firstName, f.base.r.identity.lastName, "5 March 1982"]) { await serving.privateField(field); await serving.mark(); }
-    await excludePriorPublicNumbers(); await serving.privateDigit("1"); await serving.mark(); await f.base.waitForMail(2);
-    await serving.verify(f.base.mail[1]!.code);
+    const verifyRelated = async (priorMail: number) => {
+      await excludePriorPublicNumbers(); await serving.turn("Book an appointment for my partner"); await serving.mark();
+      const owner = serving.flow.representativeInputOwner; assert.ok(owner);
+      await serving.privateDigit("1"); await serving.mark(); await fixture.base.waitForMail(priorMail + 1);
+      for (const digit of `${fixture.base.mail[priorMail]!.code}#`) serving.sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+      await voiceUntil(() => serving.spoken.at(-1) === "Please say the patient's first name.", "private related subject"); await serving.mark();
+      for (const field of [fixture.base.r.identity.firstName, fixture.base.r.identity.lastName, "5 March 1982"]) { await serving.privateField(field); await serving.mark(); }
+      await excludePriorPublicNumbers(); await serving.privateDigit("1"); await serving.mark(); await fixture.base.waitForMail(priorMail + 2);
+      await serving.verify(fixture.base.mail[priorMail + 1]!.code); return owner;
+    };
+    const verifyCaller = async (priorMail: number) => {
+      const previousWrites = serving.writes.length;
+      await excludePriorPublicNumbers(); await serving.turn("Book an appointment for myself");
+      assert.equal(serving.flow.representativeInputOwner, undefined); assert.equal(serving.flow.verificationRequired, true);
+      assert.equal(serving.writes.length, previousWrites);
+      await serving.mark(); await fixture.base.waitForMail(priorMail + 1); assert.equal(fixture.base.mail[priorMail]!.email, verificationCanaries[0]);
+      const asrCount = serving.transcriptionFrames, privateCount = serving.privateTranscripts.length;
+      for (let n = 0; n < 7; n++) serving.media(n < 2);
+      await serving.verify(fixture.base.mail[priorMail]!.code);
+      assert.equal(serving.transcriptionFrames, asrCount); assert.equal(serving.privateTranscripts.length, privateCount);
+    };
+    if (callerFirst) await verifyCaller(0);
+    const firstOwner = callerFirst ? undefined : await verifyRelated(0);
     const book = async (beforeConsent?: () => void) => { await serving.turn("Times"); await serving.mark(); await serving.turn("First option");
       const action = Object.values((await serving.state()).actions).at(-1)!; assert.equal(action.status, "awaitingConfirmation");
       await serving.mark(); beforeConsent?.(); await serving.turn("Yes"); await serving.mark(); return (await serving.state()).actions[action.key]!; };
     const first = await book(); assert.equal(first.status, "committed"); const receipt = structuredClone(first);
-    assert.equal(serving.writes.length, 1); assert.equal(serving.writeRequests[0]!.body.patient_id, f.base.r.subjectIds[0]);
+    assert.equal(serving.writes.length, 1); assert.equal(serving.writeRequests[0]!.body.patient_id, callerFirst ? verificationCanaries[2] : f.base.r.subjectIds[0]);
     // Real elapsed native quota window with ordinary hold/presence turns, as in
     // the existing signed two-patient cases. No lease or quota limit changes.
     const beganPause = performance.now(), quiet = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -79,21 +98,15 @@ test(`actual emitted signed related then native-self booking: ${outcome}`, { tim
     await serving.turn("Are you still there?"); await serving.mark(); await quiet(5000);
     assert.ok(performance.now() - beganPause >= 61_000);
     assert.equal((await serving.flow.publicIntentContext())?.nextTaskAvailable, true);
-    await excludePriorPublicNumbers(); await serving.turn("Book an appointment for myself");
-    assert.equal(firstOwner.closed, true); assert.equal(serving.flow.representativeInputOwner, undefined);
-    assert.equal(serving.flow.verificationRequired, true); assert.equal(serving.writes.length, 1);
-    await serving.mark(); await f.base.waitForMail(3); assert.equal(f.base.mail[2]!.email, verificationCanaries[0]);
-    const asrCount = serving.transcriptionFrames, privateCount = serving.privateTranscripts.length;
-    for (let n = 0; n < 7; n++) serving.media(n < 2);
-    await serving.verify(f.base.mail[2]!.code);
-    assert.equal(serving.transcriptionFrames, asrCount); assert.equal(serving.privateTranscripts.length, privateCount);
+    if (callerFirst) await verifyRelated(1);
+    else { await verifyCaller(2); assert.equal(firstOwner!.closed, true); }
     if (first.mutation.request.kind !== "book") throw Error("wrong original operation");
     assert.equal((await serving.flow.resolveBooking(f.base.f.scope, first.mutation.request.patient.verificationRef,
       first.mutation.request.offer.offerRef, clock())).ok, false);
     const second = await book(outcome === "nativePermissionWithdrawn" ? () => fixture.denySelf() : undefined);
     if (outcome === "accepted") {
       assert.equal(second.status, "committed"); assert.equal(serving.writes.length, 2);
-      assert.equal(serving.writeRequests[1]!.body.patient_id, verificationCanaries[2]);
+      assert.equal(serving.writeRequests[1]!.body.patient_id, callerFirst ? f.base.r.subjectIds[0] : verificationCanaries[2]);
       assert.notEqual(first.key, second.key); assert.notEqual(first.hostRef, second.hostRef);
     } else { assert.notEqual(second.status, "committed"); assert.equal(serving.writes.length, 1); }
     assert.deepEqual((await serving.state()).actions[first.key], receipt);

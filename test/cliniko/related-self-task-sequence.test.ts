@@ -47,6 +47,29 @@ test("a settled related booking can explicitly return to the pinned native calle
   } finally { await f.close(); }
 });
 
+test("a caller booking followed by a related-patient booking requires new actor and subject proofs and separate receipts", async () => {
+  const f = await fixture();
+  try {
+    await f.verifySelf(false); const first = await f.book(); assert.equal(first.status, "committed"); await f.nextWindow();
+    const owner = await f.prepareRelated(); assert.equal(owner.closed, false);
+    assert.equal((await owner.submitCallerCode(f.base.mail[0]!.code)).verified, false, "the prior native proof cannot activate an unchallenged related workflow");
+    assert.equal(owner.beginCallerVerification(), true); await f.base.waitForMail(2);
+    assert.equal((await owner.submitCallerCode(f.base.mail[1]!.code)).verified, true);
+    resultValue(await owner.selectPatient(f.base.r.identity)); assert.equal(owner.beginPatientVerification(), true); await f.base.waitForMail(3);
+    assert.equal((await f.flow.submitCode(f.base.mail[2]!.code)).verified, true);
+    assert.equal(f.native.requests.length, 1);
+    if (first.mutation.request.kind !== "book") throw Error("wrong original operation");
+    assert.equal((await f.flow.resolveBooking(f.base.f.scope, first.mutation.request.patient.verificationRef,
+      first.mutation.request.offer.offerRef, f.now())).ok, false);
+    const second = await f.book(); assert.equal(second.status, "committed");
+    assert.deepEqual(f.native.requests.map(row => row.patient_id), [verificationCanaries[2], f.base.r.subjectIds[0]]);
+    assert.notEqual(first.key, second.key); assert.notEqual(first.hostRef, second.hostRef);
+    assert.deepEqual((await f.base.f.state()).actions[first.key], first);
+    assert.deepEqual(await f.flow.reconcile(first.mutation), { kind: "exactCommit", actionKey: first.key, hostRef: first.hostRef });
+    assert.deepEqual(await f.flow.write(first.mutation, f.now()), { kind: "rejected", actionKey: first.key, reason: "forbidden" });
+  } finally { await f.close(); }
+});
+
 test("an ordinary next-task request cannot silently leave a related subject", async () => {
   const f = await fixture();
   try {

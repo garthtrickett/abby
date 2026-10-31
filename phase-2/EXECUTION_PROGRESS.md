@@ -8235,3 +8235,24 @@ native owner; this grants no activation, authority or proof. Whole strict, the
 fresh 758-output graph and both emitted signed SQL/privacy/restore cases pass
 again. All prior failures, frozen reviews and interim artifacts are retained.
 This remains local qualification pending the new exact-head review and delivery.
+
+
+## Native caller first, then related booking, 31 October 2026
+
+The selected gap-9 self/related booking composition now has signed evidence in
+both subject orders. The added caller-first source case passes, obtains new
+actor and subject proofs, preserves separate patient IDs and receipts, and
+rejects an obsolete proof on an unchallenged related owner. The prior 24 source
+controls retain exact bodies: removing the single new AST test recovers the
+original file bytes, and the other control files remain exact. This establishes
+25 controls across retained evidence and one new run, not a fresh 25-case run.
+
+Whole strict passes for the two changed non-emitted test files. All 758 runtime
+outputs and every compiled input remain exact, so no new runtime build is
+claimed. All three current emitted signed clinical-host SQL cases pass with zero
+skips: both booking orders and native caller permission withdrawal before the
+second consent. Native180, real hold/presence pacing and deadlines remain.
+The complete public/all-column/unfiltered-backup/restore/owned-cleanup assertion
+tail is byte-identical. Owned containers, volumes and socket parents are absent.
+Broader operation/catalogue cohorts, full-call and actual clinic/carrier/staff
+acceptance remain open, with normal review and delivery still required.
