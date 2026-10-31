@@ -117,8 +117,8 @@ Unplayed/failed reads and withdrawn task approval refuse advancement. The next
 owner needs fresh independent actor/patient proof, current permission and played
 booking consent; a read receipt or old code cannot authorize the booking.
 
-Seven new controls pass with the 27 existing caller/private-input controls
-(34 current source tests, zero skips). Whole strict, an actual 760-output serving
+The earlier enquiry checkpoint passed seven new controls with the 27 existing
+caller/private-input controls (34 source tests, zero skips). Whole strict, an actual 760-output serving
 build and final driver strict/graph checks pass. Only the test fixture output
 changes from the reviewed parent; all production and the other 759 outputs are
 exact. The driver edit is outside that graph, so all 760 outputs were reused.
@@ -133,6 +133,25 @@ native-patient related process. Guardian-contact channels, other operation
 orders/catalogues, full-call/real-clinic/carrier acceptance and activation retain
 their separate limits. Final review, qualified-parent integration, own/main CI
 and independent delivery remain gates for this test-only refinement.
+
+## Maintained subject-ambiguity controls, 31 October 2026
+
+Two maintained source controls exercise the original R04 acceptance: related
+patients have the same full name and phone, then the next task omits its subject
+or exact native identity matches two independently approved adults. A fresh actor
+proof does not select either patient. No next subject challenge, booking or recall
+is sent; the earlier receipt is immutable and its offer/proof cannot authorize
+the new task. Public projections retain no private identity, email or code.
+
+The current combined source cohort passes 36 controls: the earlier 34 plus these
+two controls using the native 180-request budget. Whole-project strict types
+and the actual 760-input serving graph pass. The new test is outside that graph;
+all 760 compiled inputs and outputs, the signed driver and its six earlier
+passing cases remain exact. No new emission or SQL replay is claimed.
+
+These two ambiguity cases are source evidence only. They add no representative
+or guardian grant, signed ambiguity call, real clinic acceptance or activation.
+Final review, qualified-parent integration and own/main CI remain separate.
 
 ## Remaining scope
 

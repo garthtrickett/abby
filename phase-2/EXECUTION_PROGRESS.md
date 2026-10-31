@@ -8361,3 +8361,20 @@ planned full-call status remain. Actual normal parent/main qualification,
 independent review and own/main delivery CI remain separate. No production
 behavior, authority or activation changes. Other operation/cohort combinations,
 real clinic/staff/mail, speech/carrier and the full original goal remain open.
+
+## Maintained same-name subject ambiguity, 31 October 2026
+
+The explicit R04 same-name/shared-phone acceptance now has two maintained source
+controls. After one exact booking, a new task with an omitted patient or two
+independently approved exact native matches cannot inherit the first proof or
+receipt. Fresh actor proof grants no patient choice; no second subject challenge,
+booking or recall occurs, and public output excludes private fields and codes.
+
+All 36 enquiry/caller/ambiguity source controls pass together without skips.
+The two new controls use native 180. Whole-project strict and the actual 760-input
+serving graph pass; the test is outside emission, so all 760 inputs and outputs
+are reused exactly. The earlier six emitted signed SQL cases retain identical
+driver/compiled inputs and their original passing evidence; they were not rerun.
+No signed ambiguity or full-call/clinic acceptance is inferred. Current review,
+qualified normal-parent integration, own/main CI and all original execution-plan
+and external acceptance gates remain separate.
