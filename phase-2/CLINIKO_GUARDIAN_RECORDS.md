@@ -98,7 +98,7 @@ approval records.
 
 ## Local qualification, 31 October 2026
 
-The current uncommitted component has passed 203 source controls across 22
+The local component has passed 203 source controls across 22
 files, including preserved patient/native representative, private input,
 verification, renewal and canary controls. Whole strict TypeScript and the
 actual serving graph/build passed. All 746 inherited serving outputs remain
@@ -106,6 +106,10 @@ present: 738 are unchanged, eight change for the shared/private composition and
 eleven new outputs bring the graph to 757. A later SQL test-driver-only
 correction also passed whole strict TypeScript; it did not rebuild or change
 the emitted production/helper bytes.
+
+The eight shared registered-email challenge controls live under `test/contract`,
+so both normal text and PostgreSQL CI selectors include them. Their executable
+bytes are unchanged from the original source cohort.
 
 Three unchanged signed native-patient guardian/shared-email cases also passed
 on the same outputs: accepted two-child booking, missing second-child authority
