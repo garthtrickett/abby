@@ -1,0 +1,222 @@
+{
+  "schema": "abby.deepgram-noise.aggregate.v1",
+  "date": "2026-10-31",
+  "patientFree": true,
+  "runAt": "2026-10-31T12:42:20.584Z",
+  "profile": {
+    "profile": "ffmpeg-afftdn-fixed-clinic-v1",
+    "provider": "deepgram-streaming",
+    "model": "nova-3",
+    "language": "en",
+    "keyterms": [
+      "reschedule",
+      "physiotherapy",
+      "physio",
+      "pain",
+      "back",
+      "neck",
+      "pilates",
+      "pelvic",
+      "shockwave",
+      "rehab",
+      "dry needling",
+      "sciatica",
+      "women's health",
+      "rotator cuff",
+      "frozen shoulder",
+      "tennis elbow",
+      "tendonitis",
+      "vertigo",
+      "vestibular",
+      "ACL",
+      "meniscus",
+      "disc bulge",
+      "hamstring",
+      "reformer",
+      "hydrotherapy"
+    ],
+    "denoising": {
+      "provider": "local-ffmpeg-afftdn",
+      "filter": "highpass=f=80,lowpass=f=3400,afftdn=nr=12:nf=-35:tn=1",
+      "ffmpegSha256": "ed16af623947494a72e284b6eb8ff225f2da22b38b5d5069c2fd4b4ba3384e41",
+      "transport": {
+        "addedTailSamples": 400,
+        "droppedPrimingSamples": 400,
+        "exactOutputCountRequired": true,
+        "tailAndProcessingInsideExistingSharedFlush": true
+      },
+      "sourceProtocolSha256": "bd19e65eef4ad6688a9a89e1af352808b06a5e4d95e74c218db71ece00d92b17",
+      "streamedDuringMeasuredPlayback": true,
+      "sharedFlushDeadlineMs": 2000,
+      "equivalenceToKrispOrVapi": "notEstablished"
+    },
+    "corpusVersion": "transcription-noise-v1",
+    "corpusSha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+    "repeats": 3,
+    "concurrency": 2,
+    "paceMs": 20,
+    "turnClosure": "per-turn-close-stream-summary-normal-close",
+    "endpointing": false,
+    "mipOptOut": true,
+    "smartFormat": false,
+    "numerals": false,
+    "audioFormat": "mono-pcm16le-16000",
+    "nodeVersion": "v22.23.0"
+  },
+  "corpus": {
+    "version": "transcription-noise-v1",
+    "sha256": "ec91091d0a6e7ff8766bf9a3209cd653fd13f291bf55745b20640f3766fd4ab2",
+    "cases": 6,
+    "repeats": 3,
+    "runs": 18,
+    "originalCasesAndAudioUnchanged": true
+  },
+  "counts": {
+    "match": 9,
+    "mismatch": 3,
+    "critical": 6,
+    "providerFailure": 0
+  },
+  "metrics": {
+    "cases": 6,
+    "runs": 18,
+    "critical": 6,
+    "providerFailures": 0,
+    "empty": 0,
+    "truncated": 0,
+    "delayed": 0,
+    "wordErrorRate": 0.22727272727272727,
+    "finalP95Ms": 263,
+    "missingRepeats": []
+  },
+  "gate": {
+    "status": "fail",
+    "failures": [
+      "critical",
+      "wordErrorRate"
+    ],
+    "thresholds": {
+      "version": "transcription-synthetic-gate-v1",
+      "minRepeatsPerCase": 3,
+      "maxCritical": 0,
+      "maxProviderFailures": 0,
+      "maxEmpty": 0,
+      "maxTruncated": 0,
+      "maxWordErrorRate": 0.1,
+      "maxFinalP95Ms": 2500,
+      "maxIndividualFinalMs": 5000
+    }
+  },
+  "caseVerdicts": [
+    {
+      "caseId": "NS-001",
+      "verdicts": [
+        "match",
+        "match",
+        "match"
+      ]
+    },
+    {
+      "caseId": "NS-002",
+      "verdicts": [
+        "match",
+        "match",
+        "match"
+      ]
+    },
+    {
+      "caseId": "NS-003",
+      "verdicts": [
+        "match",
+        "match",
+        "match"
+      ]
+    },
+    {
+      "caseId": "NS-004",
+      "verdicts": [
+        "mismatch",
+        "mismatch",
+        "mismatch"
+      ]
+    },
+    {
+      "caseId": "NS-005",
+      "verdicts": [
+        "critical",
+        "critical",
+        "critical"
+      ]
+    },
+    {
+      "caseId": "NS-006",
+      "verdicts": [
+        "critical",
+        "critical",
+        "critical"
+      ]
+    }
+  ],
+  "privateReport": "/home/gust/.local/state/abby-afftdn-clinic-comparison/provider-result-v1.json",
+  "privateReportSha256": "3865b847fab0385dafcd05dbe5c02551b83157326e21533256e3e7a2f3035c4c",
+  "privateInputs": "/home/gust/.local/state/abby-afftdn-clinic-comparison/provider-inputs-v1.json",
+  "privateInputsSha256": "1e61bf8e7b0c2115e7439e124224c7a4679a04188195c4e40f28f8126a8ad215",
+  "privateRootAudit": "/home/gust/.local/state/abby-afftdn-clinic-comparison/root-provider-assessment-v3.json",
+  "privateRootAuditSha256": "d21ea61d74b851c8d150b995bc9f45c6d32a48c757baf6414f7e64b5dccbaf0b",
+  "sourceFiles": [
+    {
+      "path": "src/voice/deepgram-streaming-transcription.ts",
+      "sha256": "1e96324d241c7fbd99079fe298561fd05e8d914e0e7c666282bd8529dd6b82df"
+    },
+    {
+      "path": "scripts/lib/deepgram-clinic-vocabulary.ts",
+      "sha256": "4e1407969f853faee6c59d028804f0ecffa7d3cfef5720034d3b73873f69528d"
+    },
+    {
+      "path": "src/voice/transcription-evaluation.ts",
+      "sha256": "3ea30413b80cd28ecf337aaf9ad156dc6d5fd946ee74f81678654f9f2a41943d"
+    },
+    {
+      "path": "src/voice/transcription-evaluation-gate.ts",
+      "sha256": "44f7973d65f8de8261db8030bfbb14ce827a0c14b9b35756c2640133c956357c"
+    }
+  ],
+  "transportQualification": {
+    "offlineTestsPassed": 17,
+    "skipped": 0,
+    "exactOriginalFrames": 2679,
+    "all18NativeSampleAccountsExact": true,
+    "allOwnedChildrenReaped": true,
+    "measuredPrimingSamples": 400,
+    "compensatingTailSamples": 400,
+    "residualDelaySamples": 0,
+    "calibrationCorrelation": 0.9961438695953378,
+    "sharedFlushDeadlineMs": 2000,
+    "streamedDuringMeasuredPlayback": true
+  },
+  "historicalFailuresRetained": {
+    "initialOfflinePass": 16,
+    "initialOfflineTotal": 17,
+    "initialUnaccountedDelaySamples": 400,
+    "firstVerifierMissingUserBus": true,
+    "secondVerifierWrapperMissingImport": true,
+    "noneRelabelledAsPassed": true,
+    "providerCohortNeverReplayed": true
+  },
+  "scope": {
+    "memoryMax": 536870912,
+    "peakBytes": 212418560,
+    "swapMax": 0,
+    "cpuQuota": "100%",
+    "allOwnedChildrenReaped": true,
+    "oomEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0"
+  },
+  "selectedForRuntime": false,
+  "cleanSafetyAndRepresentativeQualification": "notRun; noisy gate failed",
+  "productionDefaultsChanged": false,
+  "releaseGate": "unverified",
+  "wholeGoalComplete": false,
+  "selectedKrispComparison": "notRun; known developer Voice Isolation key unavailable",
+  "equivalenceToKrispOrVapi": "notEstablished",
+  "separateCohortNotStatisticalSignificance": true
+}

@@ -1,5 +1,11 @@
 # Execution progress and evidence
 
+## Separate streamed fixed FFT speech comparison, 31 October 2026
+
+One fixed external FFT + unchanged Nova-3/public-vocabulary cohort completed all eighteen original noisy recognitions and fails the unchanged gate: six critical misses, 22.73% WER and 263 ms final p95, with no provider failures, empty/truncated output or delayed finals. NS-005 and NS-006 remain critical in every repeat. Separate cohorts do not establish statistical significance or equivalence to Krisp/Vapi.
+
+The initial actual 16/17 local run exposed 400 samples (25 ms) of unaccounted filter delay. A fixed priming/tail alignment correction then passes the same seventeen transport/finality/calibration controls; residual measured delay is zero. Independent recomputation verifies all eighteen verdicts, all 2,280 frozen inputs and 2,679 original input/forwarded frames. Original calibration and verifier failures remain preserved; no provider cohort was replayed. No clean/safety follow-on, supported serving profile, default change, clinic acceptance or activation follows. The selected Krisp comparison retains its known missing-key dependency. See [the exact configuration and result](../eval/NOVA3_CLINIC_PROFILE.md#separate-streamed-fixed-fft-comparison-31-october-2026).
+
 ## Non-patient guardian records, 31 October 2026
 
 The owner-selected route supports a caller with no Cliniko patient record. A

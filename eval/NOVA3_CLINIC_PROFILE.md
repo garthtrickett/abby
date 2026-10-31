@@ -16,6 +16,7 @@ profiles, using the original noisy corpus and assessor:
 | `krisp-clinic-v1` | Krisp Voice Isolation, `VIVA-tel`, suppression 100 | Same fixed pack |
 | `rnnoise-v02-clinic-v1` | Separately declared local RNNoise v0.2/default model, external evaluation harness | Same fixed pack |
 | `deepfilter3-056-clinic-v1` | Separately declared synchronous DeepFilterNet3 v0.5.6 standard model, external evaluation harness | Same fixed pack |
+| `ffmpeg-afftdn-fixed-clinic-v1` | Separately declared streamed fixed FFmpeg FFT filter, external evaluation harness | Same fixed pack |
 
 The baseline's historical failure is not erased or rerun just to obtain a better
 sample. Run one bounded cohort for each new profile: six noisy fixtures, three
@@ -218,3 +219,14 @@ children are reaped. The provider scope peaked at 234,528,768 bytes under its
 This remains an external evaluation artifact; the repository CLI and serving
 profiles gain no DeepFilterNet selection. Production defaults, full-call evidence,
 clinic/provider acceptance and activation requirements remain unchanged.
+
+
+## Separate streamed fixed FFT comparison, 31 October 2026
+
+The [patient-free aggregate](baselines/deepgram-afftdn-clinic-noise-20261031-v1.json) records one fixed external comparison that streamed the historical `highpass=f=80,lowpass=f=3400,afftdn=nr=12:nf=-35:tn=1` filter before unchanged Nova-3 and the same public clinic vocabulary. The six original noisy fixtures, three repeats and concurrency two produced all eighteen results: nine matches, three ordinary mismatches, six critical misses and zero provider failures. WER was **22.73%** and final p95 **263 ms**. NS-005 and NS-006 each remained critical in all three repeats. The existing zero-critical and 10% WER gate fails; no clean/safety follow-on, supported serving profile or activation follows. Separate historical cohorts do not establish statistical significance or a causal ranking of filters.
+
+The first local control run retained its actual 16/17 failure: deterministic synthetic calibration measured 400 samples (25 ms at 16 kHz) of unaccounted filter delay. A transport-only successor discards those 400 priming samples and supplies an equal filter-only zero tail. The fixed filter, source corpus, expected text, vocabulary and thresholds remain unchanged. The same seventeen transport, finality and timing controls then passed; residual measured delay was zero samples, with 0.99614 correlation. Processing and tail remain inside playback and the existing shared two-second flush deadline. Source audio was never overwritten or preprocessed outside measurement.
+
+Independent assessment rehashed all 2,280 frozen inputs, recomputed all eighteen verdicts and the unchanged assessor, and reconciled all 2,679 input/forwarded frames and eighteen exact native sample accounts. All owned children were reaped. The provider scope peaked at 212,418,560 bytes under 512 MiB/CPU100%/Swap0, with no OOM events. Two verifier-environment/wrapper failures remain separate failed evidence; verification was corrected without another provider request.
+
+This is an external evaluation artifact, not a new repository CLI or serving profile. The selected Krisp comparison remains unrun for the known missing developer key; this FFT result supplies no equivalence to Krisp or Vapi.
