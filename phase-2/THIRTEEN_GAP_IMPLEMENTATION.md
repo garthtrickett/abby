@@ -1,5 +1,25 @@
 # Cliniko integration: thirteen-gap implementation order
 
+**R02 review correction, 27 October 2026:** Five actual emitted signed SQL cases
+now pass, including a return to the original practitioner followed by an explicit
+approved duration or service correction. Each correction cancels the old proposal,
+obtains fresh private verification and confirms only the final exact type/interval.
+Current whole strict types pass; 746 serving outputs retain all 745 prior bytes.
+The original 20 source checks and four earlier search/deadline cases retain their original
+evidence. Failed fixture/wrapper attempts remain recorded, with independent
+reconciliation of successful original compiler and SQL phases. Review and normal
+delivery remain separate; no clinic, acoustic or activation acceptance is claimed.
+See [the correction and evidence](EXECUTION_PROGRESS.md#composed-r02-service-and-duration-correction-27-october-2026).
+
+**Approved practitioner comparison, 27 October 2026:** A locally qualified
+R02 candidate retains the original approved practitioner when an earlier
+alternative is shown, and an explicit return fetches fresh original times.
+Equal starts keep the existing member order; failed original reads remain
+unknown. 20 source checks, whole strict types, 745 serving outputs and three actual emitted
+signed SQL calls pass. Four existing signed search/deadline checks also passed.
+This is local engineering; independent review, normal delivery and clinic/voice
+acceptance remain separate. See [scope and results](EXECUTION_PROGRESS.md#approved-practitioner-comparison-27-october-2026).
+
 **Acknowledged booking result-failure preservation, 27 October 2026:** A new actual admitted booking case fails its SAM result
 playback and report reader after exact acknowledgement, retaining the receipt,
 one review/create and no compensating/replayed writes. All33 complete source

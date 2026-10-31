@@ -35,6 +35,8 @@
     "test/support/outbound-contact-process.ts",
     "test/support/start-synthetic-voice-runner.ts",
     "test/support/start-synthetic-clinical-runner.ts",
+    "test/support/cliniko-booking-catalogue.ts",
+    "test/support/service-practitioner-preference.ts",
     "test/support/start-synthetic-class-runner.ts",
     "test/support/start-synthetic-resend-runner.ts",
     "test/support/standalone-cancellation-worker.ts",

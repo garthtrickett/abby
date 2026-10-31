@@ -1,5 +1,22 @@
 # Scenario manifest, version 1.250
 
+**R02 review correction, 27 October 2026:** Five actual emitted signed SQL cases
+now pass, including a return to the original practitioner followed by an explicit
+approved duration or service correction. Each correction cancels the old proposal,
+obtains fresh private verification and confirms only the final exact type/interval.
+Current whole strict types pass; 746 serving outputs retain all 745 prior bytes.
+The original 20 source checks and four earlier search/deadline cases retain their original
+evidence. Failed fixture/wrapper attempts remain recorded, with independent
+reconciliation of successful original compiler and SQL phases. Review and normal
+delivery remain separate; no clinic, acoustic or activation acceptance is claimed.
+See [the correction and evidence](../phase-2/EXECUTION_PROGRESS.md#composed-r02-service-and-duration-correction-27-october-2026).
+
+**Approved practitioner comparison, 27 October 2026:** E2E-313 gains three
+actual emitted signed SQL cases for original return, unavailable original and
+withdrawn alternative. 20 source checks, current strict types and a serving build with 745 outputs and four existing signed
+search/deadline checks pass. Full-call evidence and all scenario tiers remain
+unchanged. See [qualification and retained failures](../phase-2/EXECUTION_PROGRESS.md#approved-practitioner-comparison-27-october-2026).
+
 **Acknowledged booking result-failure preservation, 27 October 2026:** E2E-284 directly preserves an exactly acknowledged booking
 through failed result presentation and report storage failure. Source33 and whole
 strict pass; serving744 and their source graph remain exact. Evidence levels are

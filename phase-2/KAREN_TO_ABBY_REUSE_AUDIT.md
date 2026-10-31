@@ -62,6 +62,28 @@ Abby already supports approved practitioner choices, destination authority, priv
 
 **Acceptance:** after hearing the comparison, the caller asks again about the original and selects it; only that exact original writes. Repeat with unknown original availability, an alternative missing the requested day, different duration/service/practitioner, and withdrawal after hearing the substitute.
 
+**Local R02 candidate, 27 October 2026:** The approved single-service booking
+catalogue now has 20 source checks and three emitted signed SQL passes for original versus
+earlier/equal/empty comparison, fresh original return and refusal boundaries.
+Four existing signed search/deadline checks also pass. The original failure is
+retained; only the new SQL test's exact canary registration was added. Existing
+tie order, the native limit of 180 requests per minute, real deadlines and full SQL/backup privacy remain. Service
+substitution retains its separate approval/selection path; no original cached
+time becomes a selectable offer. Current strict types and a serving build with 745 outputs emission passes. Review,
+normal delivery and real clinic/voice acceptance remain separate. See the
+[qualification and retained failures](EXECUTION_PROGRESS.md#approved-practitioner-comparison-27-october-2026).
+
+**R02 review correction, 27 October 2026:** Five actual emitted signed SQL cases
+now pass, including a return to the original practitioner followed by an explicit
+approved duration or service correction. Each correction cancels the old proposal,
+obtains fresh private verification and confirms only the final exact type/interval.
+Current whole strict types pass; 746 serving outputs retain all 745 prior bytes.
+The original 20 source checks and four earlier search/deadline cases retain their original
+evidence. Failed fixture/wrapper attempts remain recorded, with independent
+reconciliation of successful original compiler and SQL phases. Review and normal
+delivery remain separate; no clinic, acoustic or activation acceptance is claimed.
+See [the correction and evidence](EXECUTION_PROGRESS.md#composed-r02-service-and-duration-correction-27-october-2026).
+
 **Karen witnesses:** `server/src/__tests__/e2e/alternativeSuggestionsCrossLayer.test.ts`. [Alternative context source](/home/gust/code/karen-website-dev/server/src/services/pms/formatting/alternativeContext.ts).
 
 ### R03 Preserve the correction regression corpus

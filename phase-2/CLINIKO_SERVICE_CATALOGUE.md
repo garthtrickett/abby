@@ -582,3 +582,40 @@ registration/process-loss suites passed. No workers, deadlines, permissions or
 assertions were weakened. Earlier failure logs remain:
 `4590eee3-1791887686038.log` and `4590eee3-1791888184505.log`.
 Manifest version1.160 tracks353 scenarios; E2E-353 remains synthetic evidence.
+
+## Original and alternative practitioner comparison
+
+The locally qualified R02 candidate keeps one original public practitioner
+while an explicit any-practitioner search checks the complete approved member
+set. Comparison uses the same completed reads, current clinic-local search
+bounds and exact service/location. It names the original time and duration,
+explains an earlier or equal-time alternative, and distinguishes a complete
+empty original from an unreadable original. Existing deterministic member
+ordering remains unchanged. Both displayed intervals remain provisional.
+
+The original is the current named preference or initial approved clinic member,
+not an inferred last visit. “Check my original practitioner again” requests a
+fresh normal menu for that member. Selecting its current time still requires
+played menu/confirmation, fresh authority and the existing final send checks.
+An interrupted menu or withdrawn member cannot authorize a write. A different
+service/duration selection retains its existing explicit dialogue and approval;
+the comparison value cannot silently substitute a service.
+
+20 source checks, current strict types and a serving build with 745 outputs serving and three emitted signed SQL cases pass
+locally; four prior signed search/deadline controls also passed. The initial
+source omission and test setup/type failures retain their actual outcomes.
+Independent review, normal delivery and clinic/acoustic acceptance remain
+separate. See [current evidence](EXECUTION_PROGRESS.md#approved-practitioner-comparison-27-october-2026).
+
+### Explicit service and duration corrections after comparison
+
+The review-corrected candidate now has five actual emitted signed SQL passes.
+After returning to the original practitioner, a caller can explicitly request
+a separately approved 45-minute Physiotherapy type or Massage service. The old
+proposal is canceled; fresh private verification, menu, played selection and
+confirmation bind the exact final type and interval. Private keypad-gate audio
+does not reach the public classifier. No different service is inferred from
+comparison evidence. Current whole strict types and the unchanged prior 745
+outputs plus one emitted existing fixture (746 total) are qualified. Original
+failed attempts remain recorded; refreshed review, normal delivery and real
+acceptance remain separate. See [the composed evidence](EXECUTION_PROGRESS.md#composed-r02-service-and-duration-correction-27-october-2026).

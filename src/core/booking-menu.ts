@@ -1,13 +1,13 @@
 import type { BookingSearchScope } from "./booking-search-preference.ts";
 import { normalizedSpokenName } from "./pending-location.ts";
-import { bookingSearchWindowText, matchesBookingSearchWindow, validBookingSearchWindow } from "./booking-search-window.ts";
+import { bookingSearchWindowText, matchesBookingSearchWindow, sameBookingSearchWindow, validBookingSearchWindow } from "./booking-search-window.ts";
 import type { BookingSearchWindow } from "./booking-search-window.ts";
 import { err, ok } from "./model.ts";
 import type { BookableOffer, LocationScope, Result } from "./model.ts";
 import { supportedVoiceLocale } from "./voice-presentation.ts";
 
 /** Caller-facing evidence only. Opaque selections, proof and patient/provider IDs remain in the owning host. */
-export type BookingMenuRead = Readonly<{
+type BookingMenuEvidence = Readonly<{
   scope: LocationScope; callId: string; sessionId: string; policyVersion: string; observedAt: string; timeZone: string;
   practitionerName: string; appointmentTypeName: string; reservable: false;
   locationName?: string; searchScope?: BookingSearchScope;
@@ -15,6 +15,10 @@ export type BookingMenuRead = Readonly<{
   maxSearchDays?: number;
   window?: BookingSearchWindow;
   choices: readonly Readonly<{ startsAt: string; endsAt: string; expiresAt: string }>[];
+}>;
+export type BookingMenuRead = BookingMenuEvidence & Readonly<{
+  /** Fresh public evidence for the original member, never a selectable cached offer. */
+  comparison?: Readonly<{ original: BookingMenuEvidence }>;
 }>;
 const name = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 120 &&
   value.trim() === value && /^[\p{L}\p{M}\p{N} .,'()&/-]+$/u.test(value);
@@ -59,8 +63,39 @@ export function bookingMenuPresentation(read: BookingMenuRead, binding: Readonly
       prior = start;
       choices.push(`option ${["one", "two", "three"][choices.length]}, ${clock.format(new Date(start))}, for ${(end-start)/60_000} minutes`);
     }
+    let comparison = "";
+    if (read.comparison !== undefined) {
+      const original = read.comparison?.original, searched = read.searchScope;
+      if (!original || Array.isArray(read.comparison) || Object.keys(read.comparison).join(",") !== "original" || "comparison" in original ||
+          !searched || searched.selection !== "earliestApproved" || !read.choices.length ||
+          original.practitionerName === read.practitionerName || !searched.practitioners.includes(original.practitionerName) ||
+          original.appointmentTypeName !== read.appointmentTypeName || original.locationName !== read.locationName || original.timeZone !== read.timeZone ||
+          original.searchScope?.selection !== "preferred" || original.searchScope.practitioners.length !== 1 ||
+          original.searchScope.practitioners[0] !== original.practitionerName ||
+          original.searchScope.from !== searched.from || original.searchScope.to !== searched.to ||
+          !(original.window === undefined && read.window === undefined || sameBookingSearchWindow(original.window, read.window)) ||
+          !bookingMenuPresentation(original, binding, now, locale).ok) return err({ kind: "invalidEvidence" });
+      const inSearch = (startsAt: string) => {
+        const parts = new Intl.DateTimeFormat("en", { timeZone: read.timeZone, year: "numeric", month: "2-digit", day: "2-digit" })
+          .formatToParts(new Date(startsAt));
+        const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(value => value.type === type)!.value;
+        const date = `${part("year")}-${part("month")}-${part("day")}`;
+        return date >= searched.from && date <= searched.to;
+      };
+      if (!read.choices.every(choice => inSearch(choice.startsAt)) || !original.choices.every(choice => inSearch(choice.startsAt)))
+        return err({ kind: "invalidEvidence" });
+      const first = original.choices[0], offered = read.choices[0]!;
+      const description = `${original.appointmentTypeName} with ${original.practitionerName} at ${original.locationName}`;
+      if (first) {
+        if (Date.parse(first.startsAt) < Date.parse(offered.startsAt)) return err({ kind: "invalidEvidence" });
+        comparison = `Your original choice, ${description}, has an eligible start on ${clock.format(new Date(first.startsAt))}, for ${(Date.parse(first.endsAt) - Date.parse(first.startsAt)) / 60_000} minutes. ` +
+          (first.startsAt === offered.startsAt ? `${read.practitionerName} has an eligible start at the same time in this search. ` :
+            `${read.practitionerName} has an earlier eligible start in this search. `);
+      } else comparison = `For your original choice, ${description}, I couldn't find an eligible start in these searched dates. ${read.practitionerName} has an eligible start in this search. `;
+      comparison += "You can ask to check your original practitioner again before choosing. ";
+    }
     const constraint = read.window ? `I checked appointment start times ${bookingSearchWindowText(read.window)} in the clinic local time. ` : "";
-    return ok(search + constraint + (choices.length ? `For ${read.appointmentTypeName} with ${read.practitionerName}${read.locationName ? ` at ${read.locationName}` : ""}, I can check ${choices.join("; ")}. `+
+    return ok(search + comparison + constraint + (choices.length ? `For ${read.appointmentTypeName} with ${read.practitionerName}${read.locationName ? ` at ${read.locationName}` : ""}, I can check ${choices.join("; ")}. `+
       `Which option would you like? These times may change and are not reserved.` : "I couldn't find an eligible booking time for those dates. Please contact the clinic directly."));
   } catch { return err({ kind: "invalidEvidence" }); }
 }
