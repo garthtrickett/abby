@@ -230,7 +230,7 @@ consent. They use the real file ports, native180 and separate guardian/patient
 verification, preserve every-column scans and the unchanged unfiltered logical
 backup/restore/cleanup assertions, retain an unrelated row, and additionally
 check that private file paths do not enter public state or SQL. The Node scope
-peaked at 265,023,488 bytes and PostgreSQL at 168,464,384 bytes, with no OOM events.
+peaked at 276,979,712 bytes and PostgreSQL at 165,482,496 bytes, with no OOM events.
 Owned container, anonymous volume and socket-directory absence were independently
 verified. The inherited signed four-operation cohort is separate evidence; the
 new file-source signed cohort covers booking.
@@ -243,3 +243,12 @@ provisioning/withdrawal owners, access, retention and recovery; this local trial
 does not back up or approve clinic file storage. The original clinic/carrier/staff
 acceptance requirements above remain. No real guardian record, native write,
 call, deployment or runtime activation follows from these synthetic results.
+
+
+The signed file-source driver was narrowed after review to the four booking
+outcomes it actually executes. Fresh whole strict TypeScript and the four signed
+cases passed again, preserving the exact all-column, complete unfiltered
+backup/restore and cleanup assertions. All 760 serving artifacts and compiled
+inputs remain unchanged; the 84 source-control bodies are retained rather than
+claimed as a new replay. Earlier results and the metadata-label failure remain
+available in the private evidence directory.

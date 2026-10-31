@@ -8279,7 +8279,7 @@ and two additions. Four actual emitted signed PostgreSQL booking cases pass:
 accepted, missing identity, missing authority and withdrawal before consent.
 They retain native180, separate private proofs, unchanged all-column and complete
 unfiltered backup/restore/cleanup assertions, an unrelated retained row and new
-private-path canaries. Node/PG peaks were 265,023,488/168,464,384 bytes, no OOM;
+private-path canaries. Node/PG peaks were 276,979,712/165,482,496 bytes, no OOM;
 owned container, anonymous volume and socket parents are independently absent.
 
 This is local synthetic qualification. The new file-source signed cohort covers
@@ -8290,3 +8290,12 @@ fourteen booking verification rows, nine commands, thirteen gaps and twenty-eigh
 scoped reuse selections retain their requirements, including carrier/acoustic,
 clinic/staff/provider/source/access/retention/restore acceptance. No real clinic
 records, call, deployment, default activation or full-roadmap completion follows.
+
+
+Review removed unused enquiry, cancellation and rescheduling branches from the
+new booking-only signed file-source driver. Its four titles and original 240s
+case deadlines remain; fresh whole strict and all four signed cases pass, with
+independent owned-database cleanup. Production code, all 760 serving inputs and
+artifacts, and all 84 qualified source-control bodies remain unchanged. Earlier
+qualification and the one nonblocking review judgement remain preserved; final
+review and normal delivery are still separate gates.

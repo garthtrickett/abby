@@ -30,14 +30,9 @@ const { GuardianVerificationSession } = await import(new URL("src/standalone/gua
 const { CallerVerificationSession } = await import(new URL("src/standalone/caller-verification-session.js", emitted).href) as typeof import("../../src/standalone/caller-verification-session.ts");
 const { PrivateRepresentativeVoiceInput } = await import(new URL("src/standalone/private-representative-voice-input.js", emitted).href) as typeof import("../../src/standalone/private-representative-voice-input.ts");
 
-const scenarios: readonly Readonly<{ operation: "book" | "appointments.read" | "cancel" | "reschedule";
-  outcome: "accepted" | "missingIdentity" | "missingAuthority" | "withdrawnBeforeConsent" }>[] = [
-  { operation: "book", outcome: "accepted" },
-  { operation: "book", outcome: "missingIdentity" }, { operation: "book", outcome: "missingAuthority" },
-  { operation: "book", outcome: "withdrawnBeforeConsent" },
-] as const;
-for (const { operation, outcome } of scenarios)
-test(`actual emitted signed guardian file records ${operation}: ${outcome}`, { timeout: 240_000 }, async context => {
+const outcomes = ["accepted", "missingIdentity", "missingAuthority", "withdrawnBeforeConsent"] as const;
+for (const outcome of outcomes)
+test(`actual emitted signed guardian file records book: ${outcome}`, { timeout: 240_000 }, async context => {
   const admin = connectPostgres(adminUrl), name = `abby_test_guardian_files_${randomUUID().replaceAll("-", "").slice(0, 24)}`;
   const restoreName = `${name}_restored`, target = new URL(adminUrl), restoreTarget = new URL(adminUrl);
   target.pathname = `/${name}`; restoreTarget.pathname = `/${restoreName}`;
@@ -52,7 +47,7 @@ test(`actual emitted signed guardian file records ${operation}: ${outcome}`, { t
     const original = await db.selectFrom("outbound_effect_barriers").selectAll().execute();
     canary = await captureScopedSqlVerificationCanaryWindow(db, target.toString());
     const budget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-session-au5", maxPerMinute: 180 });
-    f = await guardianFileRecordFixture({ operation, both: true, budget, subjectIds: ["583746192837465", "683746192837465"] }); f.flow.dispose();
+    f = await guardianFileRecordFixture({ operation: "book", both: true, budget, subjectIds: ["583746192837465", "683746192837465"] }); f.flow.dispose();
     const proofRefs = new Set<string>(), guardianProof = GuardianVerificationSession.prototype.verifiedGuardian, patientProof = CallerVerificationSession.prototype.verifiedSubject;
     context.mock.method(GuardianVerificationSession.prototype, "verifiedGuardian", async function(this: GuardianSession, ...args: Parameters<typeof guardianProof>) {
       const proof = await guardianProof.apply(this, args); if (proof) proofRefs.add(proof.verificationRef); return proof;
@@ -69,23 +64,12 @@ test(`actual emitted signed guardian file records ${operation}: ${outcome}`, { t
         if (turn.text === "Yes") return ok({ kind: "affirm" });
         if (turn.text === "Times") return ok({ kind: "bookingMenu", from: "2026-10-08", to: "2026-10-08" });
         if (turn.text === "First option") return ok({ kind: "bookingChoice", choice: 1 });
-        if (turn.text === "Check appointments") return ok({ kind: "appointmentEnquiry", from: verificationNow, to: "2026-10-09T06:00:00.000Z" });
-        if (turn.text === "Cancellation appointments" || turn.text === "Cancel it") {
-          const grant = await flow.cancellationProof(); assert.ok(grant);
-          return turn.text === "Cancellation appointments" ? ok({ kind: "appointments", verificationRef: grant.verificationRef, from: verificationNow, to: "2026-10-09T06:00:00.000Z" })
-            : ok({ kind: "cancel", verificationRef: grant.verificationRef, targetRef: "selected" });
-        }
-        if (turn.text === "Move targets" || turn.text === "Move offers") return ok({ kind: "reschedulingMenu", stage: turn.text === "Move targets" ? "targets" : "offers",
-          from: turn.text === "Move targets" ? verificationNow : "2026-10-08", to: turn.text === "Move targets" ? "2026-10-09T06:00:00.000Z" : "2026-10-08" });
-        if (turn.text === "Select target" || turn.text === "Select offer") return ok({ kind: "reschedulingChoice", stage: turn.text === "Select target" ? "targets" : "offers", choice: 1 });
         return ordinary(turn, signal);
       };
-    }, { clinicalHost: true, steadyMedia: true, ...(operation === "cancel" || operation === "reschedule" ? { nativeIndividualChanges: true } : {}) });
+    }, { clinicalHost: true, steadyMedia: true });
     const serving = call;
     const callSessionId = (await serving.state()).sessionLease?.sessionId; assert.ok(callSessionId);
-    const request = operation === "book" ? "Book an appointment for my daughter" : operation === "cancel" ? "Cancel an appointment for my daughter"
-      : operation === "reschedule" ? "Move an appointment for my daughter" : "Check the appointment time for my daughter";
-    await serving.turn(request); assert.ok(serving.flow.representativeInputOwner); await serving.mark();
+    await serving.turn("Book an appointment for my daughter"); assert.ok(serving.flow.representativeInputOwner); await serving.mark();
     await serving.privateDigit("1"); assert.match(serving.spoken.at(-1)!, /press one if you are a patient.*two.*not a patient/);
     assert.equal(f.base.mail.length, 0); assert.equal(f.counts.identities, 0); await serving.mark();
     await serving.privateDigit("2"); assert.match(serving.spoken.at(-1)!, /First verify yourself/); assert.equal(f.base.mail.length, 0);
@@ -122,23 +106,16 @@ test(`actual emitted signed guardian file records ${operation}: ${outcome}`, { t
         const privateCount = serving.privateTranscripts.length, asrCount = serving.transcriptionFrames;
         for (let n = 0; n < 7; n++) serving.media(n < 2);
         await serving.verify(f.base.mail[1]!.code); assert.equal(serving.privateTranscripts.length, privateCount); assert.equal(serving.transcriptionFrames, asrCount);
-        if (operation === "appointments.read") {
-          await serving.turn("Check appointments"); assert.equal((await serving.state()).appointmentReads.at(-1)!.status, "shown"); await serving.mark();
-        } else {
-          if (operation === "book") { await serving.turn("Times"); await serving.mark(); await serving.turn("First option"); }
-          else if (operation === "cancel") { await serving.turn("Cancellation appointments"); await serving.mark(); await serving.turn("Cancel it"); }
-          else { await serving.turn("Move targets"); await serving.mark(); await serving.turn("Select target"); await serving.mark();
-            await serving.turn("Move offers"); await serving.mark(); await serving.turn("Select offer"); }
-          const action = Object.values((await serving.state()).actions).at(-1)!; assert.ok(action); assert.equal(action.status, "awaitingConfirmation");
-          assert.equal(serving.writes.length, 0); await serving.mark();
-          if (outcome === "withdrawnBeforeConsent") await f.writeAuthorities({ ...f.authorityDocument, entries: [{ ...f.authorityDocument.entries[0]!, record: { ...f.state.authority!, enabled: false } }] });
-          await serving.turn("Yes");
-          const after = (await serving.state()).actions[action.key]!;
-          if (outcome === "withdrawnBeforeConsent") { assert.notEqual(after.status, "committed"); assert.equal(serving.writes.length, 0); }
-          else { assert.equal(after.status, "committed"); assert.equal(serving.writes.length, 1);
-            assert.equal(serving.writeRequests[0]!.path, operation === "book" ? "/v1/individual_appointments" : operation === "cancel" ? "/v1/individual_appointments/91/cancel" : "/v1/individual_appointments/91");
-            if (operation === "book") assert.equal(serving.writeRequests[0]!.body.patient_id, authorityRecord.subjectPatientId);
-          }
+        await serving.turn("Times"); await serving.mark(); await serving.turn("First option");
+        const action = Object.values((await serving.state()).actions).at(-1)!; assert.ok(action); assert.equal(action.status, "awaitingConfirmation");
+        assert.equal(serving.writes.length, 0); await serving.mark();
+        if (outcome === "withdrawnBeforeConsent") await f.writeAuthorities({ ...f.authorityDocument, entries: [{ ...f.authorityDocument.entries[0]!, record: { ...f.state.authority!, enabled: false } }] });
+        await serving.turn("Yes");
+        const after = (await serving.state()).actions[action.key]!;
+        if (outcome === "withdrawnBeforeConsent") { assert.notEqual(after.status, "committed"); assert.equal(serving.writes.length, 0); }
+        else { assert.equal(after.status, "committed"); assert.equal(serving.writes.length, 1);
+          assert.equal(serving.writeRequests[0]!.path, "/v1/individual_appointments");
+          assert.equal(serving.writeRequests[0]!.body.patient_id, authorityRecord.subjectPatientId);
         }
       }
     }
