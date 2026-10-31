@@ -8198,7 +8198,7 @@ permission, fresh registered-email proof and new played consent remain required.
 The first receipt stays exact and reconcilable without replay. Non-patient
 guardian records gain no caller-patient identity or other workflow authority.
 
-Current local qualification passes 22 focused controls with zero skips, whole
+Current local qualification passes 24 focused controls with zero skips, whole
 strict TypeScript and the 758-output serving graph. Two actual emitted signed
 HTTP/media, real clinical-host SQL cases pass: related then native-self booking,
 and native permission withdrawn after second readback but before consent. They
@@ -8222,3 +8222,16 @@ acceptance, deployment and the original full execution goal remain open. See
 [the contract, evidence and limits](CLINIKO_RELATED_SELF_TASKS.md). Review,
 normal qualified-parent integration, exact-head CI and actual-main/root delivery
 are separate from these local results.
+
+
+The independent review of the local caller-return change found one concrete
+recovery defect: accepted-but-failed activation retired the related root, then
+private input closed the call before a fresh request. The new actual transport
+regression first failed; the corrected 24 focused controls now pass with zero
+skips, including recovery before and after the next idle observation. Failure
+itself issues no challenge or write, and old digits cannot verify an empty task.
+Only the exact retired private root may release routing to idle or the fresh
+native owner; this grants no activation, authority or proof. Whole strict, the
+fresh 758-output graph and both emitted signed SQL/privacy/restore cases pass
+again. All prior failures, frozen reviews and interim artifacts are retained.
+This remains local qualification pending the new exact-head review and delivery.

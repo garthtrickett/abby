@@ -25,12 +25,14 @@ non-patient guardian record cannot become a native caller-patient identity.
 Preparation leaves the previous owner intact until the workflow event commits.
 Activation rechecks cancellation and ownership after its last awaited approval.
 An unaccepted abort preserves the prior task; an accepted event with failed
-activation reserves its slot, retires obsolete authority and requires fresh
-verification. The existing task limit and unresolved-action refusal remain.
+activation reserves its slot, retires obsolete authority and requires a fresh
+explicit request and verification. The existing task limit and unresolved-action refusal remain.
 
 The private representative input delegates back to its original caller keypad
 only when CallFlow identifies that exact retired representative root and its
-currently activated native successor. Missing or negative handoff approval,
+current native input owner or an idle recovery state after accepted-but-failed
+activation. Idle recovery grants no activation or proof, and a fresh native request
+can be prepared before private input next observes idle. Missing or negative approval,
 unrelated disappearance and closure remain failures. The handoff clears the
 private field buffers and stops their transcription; native code entry opens
 neither private-field nor ordinary transcription. Patient verification and
@@ -38,8 +40,8 @@ permission still belong to the current native workflow.
 
 ## Local qualification and retained failures
 
-The current 22 focused controls pass with zero skips: 14 caller-task controls,
-three new private handoff controls and five inherited private-input controls.
+The current 24 focused controls pass with zero skips: 14 caller-task controls,
+five new private handoff controls and five inherited private-input controls.
 They cover fresh proof and separate native subjects/receipts, ambiguous requests,
 forged model markers, withdrawn approval/membership/permission, changed caller
 candidates, task limits, unresolved actions, aborted preparation, failed activation,
@@ -65,7 +67,12 @@ removing the completed related owner stopped the underlying keypad and entire
 call. A separate direct private-input witness reproduced that failure. Both
 failed runs and the failed witness remain retained; the explicit activated-owner
 handoff fixes the observed defect. Interim artifacts and source snapshots remain
-preserved. The direct-SQL sampler registers only this new exact test filename;
+preserved. Independent Spec review then exposed the same call closure after an
+accepted event with failed activation. A new actual private-input control failed
+before correction. Recovery now retires only the exact old private input and
+requires a fresh explicit request and caller proof, preserving the call whether
+the adapter observes idle before or after that request. Failure itself issues no
+challenge or write; obsolete digits cannot verify the empty task. The direct-SQL sampler registers only this new exact test filename;
 its isolation guards, pre-issue sampling and all privacy assertions remain.
 
 ## Remaining scope

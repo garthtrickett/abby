@@ -66,6 +66,33 @@ test("private representative transport releases only an activated explicit nativ
   } finally { await f.close(); }
 });
 
+for (const observeIdle of [true, false])
+test(`private transport keeps failed caller activation available for a fresh explicit workflow${observeIdle ? " without obsolete proof" : " before its next idle observation"}`, async () => {
+  const f = await fixture();
+  try {
+    const { owner, first } = await f.related(), privateCount = f.transcripts.length;
+    const complete = f.flow.completeWorkflowStart.bind(f.flow); f.flow.completeWorkflowStart = async () => false;
+    assert.equal((await f.startSelf()).ok, false); await f.play();
+    assert.equal(owner.closed, true); assert.equal(f.flow.representativeInputOwner, undefined);
+    assert.equal(f.base.mail.length, 2, "unactivated owner must not issue a caller challenge");
+    assert.equal(f.flow.closed, false); assert.equal(f.flow.verificationRequired, false);
+    if (observeIdle) {
+      assert.equal(f.input.blocked(), false, "idle caller input must permit a fresh explicit workflow");
+      for (const digit of f.base.mail[1]!.code) assert.equal(await f.input.accept(digit), "pending");
+      assert.equal(await f.input.accept("#"), "pending", "retired proof cannot verify the empty task");
+    }
+    assert.equal(f.native.requests.length, 1); assert.deepEqual((await f.base.f.state()).actions[first.key], first);
+    f.flow.completeWorkflowStart = complete;
+    resultValue(await f.startSelf(false)); await f.play(); assert.equal(f.input.blocked(), true);
+    await f.base.waitForMail(3);
+    for (const digit of f.base.mail[2]!.code) assert.equal(await f.input.accept(digit), "pending");
+    assert.equal(await f.input.accept("#"), "verified"); assert.equal(f.input.blocked(), false);
+    assert.equal(f.transcripts.length, privateCount, "recovery must not open private ASR");
+    assert.equal((await f.book()).status, "committed"); assert.equal(f.native.requests.length, 2);
+    assert.deepEqual((await f.base.f.state()).actions[first.key], first);
+  } finally { await f.close(); }
+});
+
 for (const approval of ["missing", "denied"] as const)
 test(`private transport without ${approval === "missing" ? "an installed" : "a positive"} caller-return decision fails closed`, async () => {
   const f = await fixture(approval);

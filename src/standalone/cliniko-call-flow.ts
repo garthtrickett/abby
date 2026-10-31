@@ -119,7 +119,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   #owner: Owner | undefined;
   #representative: RepresentativeWorkflowSelection | undefined;
   #representativeCall: ClinikoRepresentativeCallOwner | undefined;
-  #callerInputReturn: Readonly<{ from: ClinikoRepresentativeCallOwner; to: Owner }> | undefined;
+  #callerInputReturn: Readonly<{ from: ClinikoRepresentativeCallOwner; to: Owner | undefined }> | undefined;
   #pendingRepresentative: Readonly<{ owner: ClinikoRepresentativeCallOwner; operation: "book" | "cancel" | "reschedule" | "appointments.read";
     revision: number; before: CallState; advancing: boolean }> | undefined;
   #pendingTask: Readonly<{ owner: Owner; previous: Owner; operation: ClinikoWorkflow; before: CallState;
@@ -263,8 +263,9 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   get representativeInputOwner(): ClinikoRepresentativeCallOwner | undefined {
     return !this.closed && !this.patientAccessDenied ? this.#representativeCall : undefined;
   }
-  /** Private transport routing only. The exact activated successor still owns
-   * fresh caller verification; retiring a representative grants no patient proof. */
+  /** Private transport routing only: discard the exact retired private owner
+   * for a selected native owner, or for idle recovery after failed activation.
+   * This grants no activation or proof; every fresh owner retains verification. */
   canUseCallerInputAfter(previous: ClinikoRepresentativeCallOwner): boolean {
     const returned = this.#callerInputReturn;
     return !!returned && returned.from === previous && returned.to === this.#owner && previous.closed &&
@@ -778,12 +779,17 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       if (pending.previousRepresentativeRoot) {
         pending.previousRepresentativeRoot.dispose(); this.#representativeCall = undefined;
         this.#representative?.owner.dispose(); this.#representative = undefined;
+        this.#callerInputReturn = { from: pending.previousRepresentativeRoot, to: undefined };
       }
       this.#workflow = undefined; this.#verificationRequired = false; this.#classMovementVerification = false; this.#serviceChoice = undefined; this.#bookingConfig = undefined;
     }
   }
   #installOwner(owner: Owner, previous: Owner | undefined, operation: ClinikoWorkflow, selectedConfig: FlowConfig, serviceChoice: BookingServiceChoice | undefined, representative?: RepresentativeWorkflowSelection): void {
-    this.#callerInputReturn = undefined;
+    // A fresh native selection may complete before the transport observes idle
+    // recovery. Preserve only that exact retired-root routing relationship.
+    const returning = this.#callerInputReturn;
+    this.#callerInputReturn = returning && !returning.to && !previous && !representative && !this.#representativeCall
+      ? { from: returning.from, to: owner } : undefined;
     if (this.#representative?.owner !== representative?.owner) this.#representative?.owner.dispose();
     this.#representative = representative;
     previous?.dispose(); this.#intakeDraftRef = undefined; this.#patientCorrectionRef = undefined; this.#confirmationResendRef = undefined; this.#publicMenu = undefined;
