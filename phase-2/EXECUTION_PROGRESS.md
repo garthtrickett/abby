@@ -50,6 +50,47 @@ carrier/acoustic and deployment gates remain. Fixed-head reviews, this feature's
 own CI, normal merge and independent actual-main qualification are still future.
 The full original execution objective remains; no live traffic or activation.
 
+## Catalogue refresh and stale setup qualification, 27 October 2026
+
+This scoped R15/R16 addition changes tests only. All 26 complete catalogue,
+setup and command-gateway source cases pass, including four new witnesses:
+
+- Short second pages, duplicate members and inconsistent totals fail both
+  approval refresh and call-time validation while leaving the exact saved
+  selection, ordered alternatives and approval version unchanged. Restoring a
+  complete provider view permits a subsequent explicit administrator reapproval.
+- A complete relationship removal is ineligible rather than unreadable. A newly
+  discovered 101st member changes discovery only; it neither edits the saved
+  approval nor joins the explicitly selected primary and alternatives.
+- Revocation while an older approval worker is held on the native practitioner
+  relationship page commits a newer null approval. Releasing the older page
+  yields version conflict; neither route reader restores the old approval.
+- A newly credential-bound setup owner explicitly reapproves while the old
+  worker is held on that page. The late old completion loses its compare-and-swap;
+  the old credential refuses before further native reads and the new reader sees
+  the exact new committed selection. Patient request/action modes remain unavailable.
+
+Current whole strict TypeScript and the actual serving-source graph pass without
+emission. The 746 serving sources match the already qualified parent exactly,
+and all 746 reused runtime outputs remain byte-identical. The changed setup test
+is outside that emitted graph. The earlier successful candidate paused a business
+detail read; its original results are retained, while the final stronger witness
+pauses an actual relationship page. No deadlines, native limits or production
+behavior changed and no live provider credentials or patient data were used.
+
+Existing actual guardian-parent PostgreSQL cases retain their original evidence
+for approval-store reload, clinic isolation, version races, ordered alternatives,
+revocation, migration reapproval and signed credential-rotation refusal. Their
+six selected source files still match that qualification. This is inherited
+coverage, not freshly executed PostgreSQL or a new whole-serving-path proof.
+
+This verifies the existing API-key read-only setup/approval boundary. It does not
+create OAuth, new provider support, custom service/price/exclusion ingestion or
+clinical authority. Those independent metadata owners keep their own evidence.
+The fixture administrator is a synthetic host actor; production authentication,
+clinic rules and acceptance are not inferred. Independent review and normal
+parent/child delivery remain required; no activation or source deletion is claimed.
+
 ## Composed R02 service and duration correction, 27 October 2026
 
 Independent review of the original comparison candidate found no documented
