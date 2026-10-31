@@ -216,6 +216,14 @@ Abby already has membership-bound magic links, origin/CSRF controls, secure cook
 
 ### R15 Preserve approval through incomplete catalogue refreshes
 
+**Local R15/R16 evidence, 27 October 2026:** Four additional witnesses, within
+26 passing catalogue/setup/gateway controls, exercise exact saved-approval
+preservation, discovery without automatic approval and revocation/rotation while an
+actual native relationship page is held. Current strict types and the reused
+746-output serving graph pass with no production change. Independent custom
+service metadata and authenticated clinic acceptance remain separate; this does
+not close every R15/R16 acceptance item. See [qualification and limits](EXECUTION_PROGRESS.md#catalogue-refresh-and-stale-setup-qualification-27-october-2026).
+
 **Extend upkeep under gaps 5 and 6.** Karen's `nookalCatalogSyncGuard.ts` captures credential/selection versions before native fetching and rechecks them at commit. `pms/data/pmsIngestionService.ts` performs update-only ingestion that keeps unseen entities out of approved mappings. Provider sync readers distinguish unknown relationships/prices from complete absence. Formatting rebuilds and cache invalidation are separate downstream steps whose actual consumers need qualification; the source does not establish uniformly consistent invalidation.
 
 Abby already has complete bounded reads, explicit catalogue approval, credential binding and compare-and-swap. Add only missing refresh witnesses: partial native reads cannot erase approved choices; new members cannot auto-enable themselves; existing custom names, prices and operator exclusions survive. Keep the fresh serving version aligned with the approved catalogue. Do not inherit Karen's parallel legacy/standardized table models or a helper that stops at a page cap and reports success.

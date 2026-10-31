@@ -100,7 +100,7 @@ E2E-187 records the synthetic PostgreSQL phone-index lifecycle for changed, arch
 
 E2E-190 runs a signed local keypad call against an incomplete Cliniko available-time page. The adapter refuses the short page, and the standalone runner speaks the generic unavailable fallback without an appointment write or patient-data persistence. Carrier behavior remains unverified.
 
-E2E-191 checks that an incomplete Cliniko relationship page cannot produce a new clinic approval or pass the provider recheck for an existing approval. It uses a synthetic catalogue and host admin; production clinic identity and selection remain open.
+E2E-191 checks that an incomplete Cliniko relationship page cannot produce a new clinic approval or pass the provider recheck for an existing approval. It uses a synthetic catalogue and host admin; production clinic identity and selection remain open. The additional R15/R16 source witnesses preserve exact saved approvals across short/duplicate/inconsistent refreshes, distinguish complete removal and discovery, and defeat stale workers held on an actual relationship page through revocation or rotated-key reapproval. Full-call evidence remains planned; this adds no production authentication or clinical authority.
 
 E2E-192 runs signed synthetic standalone and embedded voice calls through the Sydney daylight-saving rollback. The two 2:30 am instants have distinct spoken time-zone names, remain provisional, and cause no appointment write or patient-data persistence. Real carrier playback remains unverified.
 
