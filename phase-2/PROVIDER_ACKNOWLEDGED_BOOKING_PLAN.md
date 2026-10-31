@@ -1,5 +1,17 @@
 # Plan for provider acknowledged booking
 
+**Local non-patient guardian qualification, 31 October 2026:** The owner-selected
+optional route now composes a distinct registered-contact caller proof, separate
+current clinic patient/action authority and an independently verified patient
+with the existing enquiry/book/cancel/reschedule owners. All 203 source controls,
+whole strict types, 757 actual serving outputs and seven new emitted signed
+SQL/privacy/full-restore cases pass. Three unchanged native-patient guardian
+shared-email cases also pass on these outputs. Missing/revoked approvals cannot
+switch methods or grant patient access. Final review, own-head/main delivery,
+production record provisioning and clinic/provider acceptance remain separate;
+all eleven stages, thirteen gaps and twenty-eight reuse placements remain.
+See [contracts, evidence and limits](CLINIKO_GUARDIAN_RECORDS.md).
+
 **Original proposal:** Planning only on 16 October 2026. **Source reviewed:** `codex/abby-integrated-runner` at `4e19e1783e2324480c9e0d0923eeaf825e04692e`, whose main ancestor is `9a29e51e7f7e0a765db7674c6c75ff2087260473`. **Date:** 16 October 2026.
 
 **Execution update:** The owner subsequently instructed work through [the execution order](EXECUTION_ORDER.md), including this prerequisite. [Progress](EXECUTION_PROGRESS.md) records staged implementation and actual checks. The original planning-only boundary below describes preparation of this proposal; it is not a new permission prompt after that instruction. The exact provider-acknowledgement policy for individual and native class creation has since been implemented and exercised through actual host/serving paths. Remaining composed qualification and real activation retain their separate requirements; the original planning-only wording below does not request another implementation approval.

@@ -1,5 +1,17 @@
 # Karen designs and lessons to preserve for Abby
 
+**Local non-patient guardian qualification, 31 October 2026:** The owner-selected
+optional route now composes a distinct registered-contact caller proof, separate
+current clinic patient/action authority and an independently verified patient
+with the existing enquiry/book/cancel/reschedule owners. All 203 source controls,
+whole strict types, 757 actual serving outputs and seven new emitted signed
+SQL/privacy/full-restore cases pass. Three unchanged native-patient guardian
+shared-email cases also pass on these outputs. Missing/revoked approvals cannot
+switch methods or grant patient access. Final review, own-head/main delivery,
+production record provisioning and clinic/provider acceptance remain separate;
+all eleven stages, thirteen gaps and twenty-eight reuse placements remain.
+See [contracts, evidence and limits](CLINIKO_GUARDIAN_RECORDS.md).
+
 **Source navigation:** Karen source links in this document open the current owner-supplied local reference snapshot. Recorded inspection dates and historical commit IDs remain historical evidence; the uploaded snapshot has no verified commit identity and is not asserted to match those revisions. A historical path absent from the upload links to the reference root for investigation.
 
 **Status:** Proposed reuse inventory, documentation only. **Audit date:** 16 October 2026.

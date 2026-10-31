@@ -9,7 +9,7 @@ import { privateIntakeField } from "./private-intake-field.ts";
 import type { RepresentativeIdentity } from "./cliniko-representative-selection.ts";
 
 const fields = ["firstName", "lastName", "dateOfBirth"] as const;
-type Stage = "routing" | "start" | "prompt" | "actorCode" | "field" | "readback" | "subjectCode" | "ready" | "closed";
+type Stage = "routing" | "start" | "prompt" | "actorMethod" | "actorCode" | "field" | "readback" | "subjectCode" | "ready" | "closed";
 type Config = Readonly<{ callId: string; sessionId: string; input: PrivateKeypadInput;
   owner: () => ClinikoRepresentativeCallOwner | undefined;
   present(text: string, signal: AbortSignal): Promise<boolean>;
@@ -76,6 +76,11 @@ export class PrivateRepresentativeVoiceInput implements PrivateKeypadInput {
   #beginActor(): void {
     this.#stage = "prompt";
     this.#launch(async () => {
+      if (this.#owner!.callerMethodChoiceRequired) {
+        if (!await this.#config.present("To verify yourself as the caller, press one if you are a patient at this clinic, or two if you are calling for someone else and are not a patient here. Press star to stop.", this.#lifetime.signal) ||
+            this.#lifetime.signal.aborted) { this.stop(); return; }
+        this.#stage = "actorMethod"; return;
+      }
       if (!await this.#config.present("First verify yourself as the caller. If you receive a registered email code, enter its six digits and press pound. Star clears the code. Do not say the code aloud.", this.#lifetime.signal) ||
           this.#lifetime.signal.aborted || !this.#owner!.beginCallerVerification()) { this.stop(); return; }
       this.#stage = "actorCode";
@@ -115,6 +120,12 @@ export class PrivateRepresentativeVoiceInput implements PrivateKeypadInput {
     this.blocked(); if (this.#stage === "closed") return "failed";
     if (!this.#owner) return this.#config.input.accept(digit);
     if (this.#working) return "pending";
+    if (this.#stage === "actorMethod") {
+      if (digit === "*") { this.stop(); return "failed"; }
+      if (digit !== "1" && digit !== "2") return "pending";
+      if (!this.#owner.chooseCallerMethod(digit === "1" ? "clinicPatient" : "guardianRecord")) { this.stop(); return "failed"; }
+      this.#beginActor(); return "pending";
+    }
     if (this.#stage === "start") {
       if (digit === "*") { this.stop(); return "failed"; }
       if (digit !== "1") return "pending";

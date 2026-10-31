@@ -1,5 +1,17 @@
 # Cliniko integration: thirteen-gap implementation order
 
+**Local non-patient guardian qualification, 31 October 2026:** The owner-selected
+optional route now composes a distinct registered-contact caller proof, separate
+current clinic patient/action authority and an independently verified patient
+with the existing enquiry/book/cancel/reschedule owners. All 203 source controls,
+whole strict types, 757 actual serving outputs and seven new emitted signed
+SQL/privacy/full-restore cases pass. Three unchanged native-patient guardian
+shared-email cases also pass on these outputs. Missing/revoked approvals cannot
+switch methods or grant patient access. Final review, own-head/main delivery,
+production record provisioning and clinic/provider acceptance remain separate;
+all eleven stages, thirteen gaps and twenty-eight reuse placements remain.
+See [contracts, evidence and limits](CLINIKO_GUARDIAN_RECORDS.md).
+
 **R02 review correction, 27 October 2026:** Five actual emitted signed SQL cases
 now pass, including a return to the original practitioner followed by an explicit
 approved duration or service correction. Each correction cancels the old proposal,

@@ -1,5 +1,55 @@
 # Execution progress and evidence
 
+## Non-patient guardian records, 31 October 2026
+
+The owner-selected route supports a caller with no Cliniko patient record. A
+separately approved Standard contact and fresh registered-email code establish
+only guardian identity. Independent current clinic authority names the exact
+patient, operation, record versions and purposes before protected native patient
+identity is read. The selected patient still needs a separate registered-email
+proof, workflow permission and played consent. Explicitly approved adult
+representation remains distinct from guardian/minor approval. Existing native
+patient representatives remain selectable. When both methods are configured,
+played private keypad choice precedes either code; failed verification cannot
+fall back to the other source. Private fields and codes stay outside ordinary
+ASR/model turns and durable call state.
+
+The current cohort passes 203/203 source controls across 22 files, including
+preserved native/patient/private/cold-worker controls. Whole strict TypeScript,
+the actual serving graph and fresh emission pass: all 746 inherited outputs
+remain, with 738 exact, eight changed shared/private outputs and eleven new
+outputs, totalling 757. The SQL refusal test-driver correction separately passed
+whole strict without changing production or helper emission.
+
+All seven new actual emitted clinical-host signed HTTP/media/PostgreSQL cases
+pass with zero skips: enquiry, booking, cancellation, rescheduling, missing
+guardian identity, missing patient authority and withdrawal before consent.
+Each retains all-column privacy, complete unfiltered dump/restore checks and an
+unrelated exclusion row. The Node scope peaked at 270,274,560 bytes and external
+PostgreSQL at 143,437,824 bytes, with no OOM events. The three unchanged signed
+native-patient guardian/shared-email cases also pass, preserving separate child
+proof, task ownership and recipient/authority denials under the existing 180
+native budget, SQL privacy and raw backup checks. They are separate evidence,
+not three additional new guardian-record cases or a full restore qualification.
+Owned case/outer databases, containers and anonymous volumes were removed.
+
+Earlier failures remain retained: the all-operation move exceeded the unchanged
+180 budget due to a duplicate full guardian channel read; the correction removes
+that duplicate while requiring fresh native channel evidence for every protected
+read. The first seven-case SQL run passed six and failed its intended final
+refusal through a strict helper. The corrected test observes the real refusal
+and closure without altering the emitted input implementation or weakening any
+privacy assertion. Original native diagnostic-hook and cold-worker prerequisite
+failures likewise retain their original verdicts; current controls now pass.
+
+The [guardian contract](CLINIKO_GUARDIAN_RECORDS.md) identifies the three approval
+owners and trusted host interfaces. Synthetic identity/authority sources do not
+constitute a production storage adapter or clinic approval. Provisioning,
+access/retention/withdrawal, registered-mail and human staff acceptance,
+carrier/acoustic and deployment gates remain. Fixed-head reviews, this feature's
+own CI, normal merge and independent actual-main qualification are still future.
+The full original execution objective remains; no live traffic or activation.
+
 ## Composed R02 service and duration correction, 27 October 2026
 
 Independent review of the original comparison candidate found no documented
