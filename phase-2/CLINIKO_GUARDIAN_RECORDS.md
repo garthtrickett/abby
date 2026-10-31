@@ -217,11 +217,11 @@ observed at the next fresh boundary. Aborted lookups suppress late results. The
 file callbacks declare zero native requests only for the exact configured
 account/budget; contact/patient I/O and all other costs still consume native180.
 
-The current local cohort passed 84 source controls across seven files (13 new
+The initial file-source cohort passed 84 source controls across seven files (13 new
 file-source controls and 71 inherited guardian controls). It exercises native
 proof composition for all four existing administrative operations. Whole strict
 TypeScript and the actual serving graph/emission passed: all 758 inherited
-outputs remain, 755 are identical, three change for the shared identity comparator
+outputs remained, 755 were identical, three changed for the shared identity comparator
 and registered SQL fixture, and two additions bring the graph to 760.
 
 Four actual emitted signed media/PostgreSQL booking cases also passed with zero
@@ -248,7 +248,23 @@ call, deployment or runtime activation follows from these synthetic results.
 The signed file-source driver was narrowed after review to the four booking
 outcomes it actually executes. Fresh whole strict TypeScript and the four signed
 cases passed again, preserving the exact all-column, complete unfiltered
-backup/restore and cleanup assertions. All 760 serving artifacts and compiled
-inputs remain unchanged; the 84 source-control bodies are retained rather than
+backup/restore and cleanup assertions. For that driver refinement, all 760 serving artifacts and compiled
+inputs remained unchanged; the 84 source-control bodies were retained rather than
 claimed as a new replay. Earlier results and the metadata-label failure remain
 available in the private evidence directory.
+
+
+## Current caller/file-source composition, 31 October 2026
+
+The corrected combined caller/guardian candidate freshly passes all 84 controls
+above together with 27 caller/private-input controls (111 total, zero skips),
+whole strict TypeScript, a 760-output serving build and seven emitted signed
+PostgreSQL/privacy/full-restore cases. The four file-source booking outcomes run
+again on that graph. A review-found final related-task activation race is now
+fenced after its last approval; both query-abort and pending-abandonment controls
+pass. Only the workflow-owner output differs from the initial file-source build;
+its other 759 outputs are exact. Prior failed evidence remains preserved.
+See [the combined contract and limits](CLINIKO_RELATED_SELF_TASKS.md#current-combined-qualification-31-october-2026).
+Real clinic records, grants, provisioning, access/retention/recovery and activation
+remain separate. Final review, parent integration, exact-head and resulting-main
+CI remain engineering delivery gates.

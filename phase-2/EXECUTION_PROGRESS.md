@@ -8299,3 +8299,33 @@ independent owned-database cleanup. Production code, all 760 serving inputs and
 artifacts, and all 84 qualified source-control bodies remain unchanged. Earlier
 qualification and the one nonblocking review judgement remain preserved; final
 review and normal delivery are still separate gates.
+
+
+## Combined caller/guardian activation correction, 31 October 2026
+
+The complete combined review found an asymmetric final-approval race in the
+caller-first related-task branch. A private baseline against the unchanged
+candidate reproduced incorrect successful activation after query cancellation.
+The correction records the exact prior owner/root and fences cancellation,
+closure and current pending/owner identities after the last awaited approval.
+Two new controls cover query abort and pending abandonment; failed activation
+issues no challenge or write and retains the accepted-event recovery boundary.
+
+Fresh combined qualification passes 111 source controls (27 caller/private-input
+and 84 guardian/file-source), whole strict TypeScript, an actual 760-output graph
+and seven emitted signed PostgreSQL cases, all with zero skips. The two booking
+orders, native permission withdrawal and four guardian-file outcomes preserve
+separate proofs/consent/receipts, native180, every-column and complete unfiltered
+backup/restore privacy checks, retained unrelated rows and all owned cleanup.
+Only the workflow-owner artifact changes from the initial guardian-file graph;
+759 outputs remain exact. All original failed tests, prior outputs and receipts
+are preserved. The two additional source controls must join the existing33
+source and7 compiled additions in future exact-head/main CI (35 source,7 compiled).
+
+The speech comparison remains disabled after its failed safety gate. Actual
+qualified-parent integration, final independent review, own and resulting-main
+CI remain delivery gates for the combined change. No real clinic approval
+records, grants, provisioning, staff/carrier/acoustic acceptance or deployment
+are inferred. All original eleven execution stages, four booking steps, fourteen
+rows, nine commands, thirteen gaps and twenty-eight reuse placements remain in
+scope; this does not complete the goal.

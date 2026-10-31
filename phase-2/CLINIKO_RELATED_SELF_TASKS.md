@@ -39,7 +39,7 @@ private field buffers and stops their transcription; native code entry opens
 neither private-field nor ordinary transcription. Patient verification and
 permission still belong to the current native workflow.
 
-## Local qualification and retained failures
+## Original caller-component qualification and retained failures
 
 Source qualification covers 25 controls: 15 caller-task controls, five private
 handoff controls and five inherited private-input controls. The prior 24 passed
@@ -52,8 +52,8 @@ candidates, task limits, unresolved actions, aborted preparation, failed activat
 guardian refusal and ordinary same-caller progression. A final-approval abort
 control first failed and then passed after the actual activation correction.
 
-Whole strict TypeScript passes again. All 758 serving outputs and their compiled
-inputs are exact; the two changed tests are outside that emission graph, so no
+For that original caller component, whole strict TypeScript passed again. All 758 serving outputs and their compiled
+inputs were exact; the two changed tests are outside that emission graph, so no
 runtime rebuild was needed. Three actual emitted, signed HTTP/media, real
 clinical-host PostgreSQL cases pass: related then native-self booking, native
 caller permission withdrawn after the second readback but before consent, and
@@ -80,6 +80,33 @@ requires a fresh explicit request and caller proof, preserving the call whether
 the adapter observes idle before or after that request. Failure itself issues no
 challenge or write; obsolete digits cannot verify the empty task. The direct-SQL sampler registers only this new exact test filename;
 its isolation guards, pre-issue sampling and all privacy assertions remain.
+
+## Current combined qualification, 31 October 2026
+
+Review of the complete caller/guardian change found the caller-first related-task
+activation branch lacked the same final cancellation and ownership fence as the
+return-to-caller branch. A query abort during its last task-approval read first
+reproduced an incorrect successful activation. The correction binds the pending
+selection to its exact previous native owner and representative root, then checks
+those identities, pending ownership, closure and cancellation after the last
+awaited approval. Cancellation and pending abandonment each refuse activation,
+issue no challenge or write and preserve the first receipt. An already accepted
+workflow event retains the existing reserved-slot recovery rule.
+
+Fresh combined qualification passes 111 source controls across eleven files:
+27 caller/private-input controls and 84 guardian/file-source controls, with zero
+skips. Whole strict TypeScript and an actual 760-output serving build pass. Only
+`cliniko-call-flow.js` differs from the initial file-source build; the other 759
+outputs remain exact. All seven signed PostgreSQL cases pass on that corrected
+graph: both booking orders, native permission withdrawn before the second consent,
+and the four file-source accepted/missing/withdrawn-authority booking outcomes.
+Every-column scans, complete unfiltered backup and restore, unrelated retained
+rows and owned database/container/volume/socket cleanup remain required and pass.
+The original failed reproduction and prior source/runtime evidence are preserved.
+
+This combines local engineering evidence. Actual parent integration, final review,
+exact-head CI and resulting-main qualification remain delivery gates. The clinic,
+carrier/acoustic and broader workflow limits below remain open.
 
 ## Remaining scope
 

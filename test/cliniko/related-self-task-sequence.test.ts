@@ -167,6 +167,36 @@ test("an abort during final caller-task approval cannot activate or issue a chal
   } finally { await f.close(); }
 });
 
+for (const fault of ["queryAbort", "pendingAbandoned"] as const) {
+  test(`a ${fault} during final related-task approval cannot activate or issue a challenge`, async t => {
+    const f = await fixture();
+    try {
+      await f.verifySelf(false); const first = await f.book(); assert.equal(first.status, "committed"); await f.nextWindow();
+      const stop = new AbortController(), complete = f.flow.completeWorkflowStart.bind(f.flow);
+      let activating: Parameters<typeof complete>[0] | undefined, changed = false;
+      t.mock.method(f.flow, "completeWorkflowStart", async (...args: Parameters<typeof complete>) => {
+        activating = args[0]; try { return await complete(...args); } finally { activating = undefined; }
+      });
+      const find = f.base.f.directory.findByRef.bind(f.base.f.directory);
+      t.mock.method(f.base.f.directory, "findByRef", async (...args: Parameters<typeof find>) => {
+        const result = await find(...args);
+        if (activating && !changed) {
+          changed = true;
+          if (fault === "queryAbort") stop.abort();
+          else await f.flow.abandonWorkflowStart(activating);
+        }
+        return result;
+      });
+      assert.equal((await f.reception.startWorkflow(f.base.f.scope, f.turn("Book an appointment for another person"), "book", f.now(),
+        (await f.base.f.state()).conversationRevision, stop.signal, false, undefined, true)).ok, false);
+      assert.equal(changed, true); assert.equal(f.flow.representativeInputOwner, undefined);
+      assert.equal(f.base.mail.length, 1, "failed activation must not begin related caller verification");
+      assert.equal(f.native.requests.length, 1); assert.deepEqual((await f.base.f.state()).actions[first.key], first);
+      assert.deepEqual((await f.base.f.state()).previousTaskActionKeys, [first.key]);
+    } finally { await f.close(); }
+  });
+}
+
 test("caller markers cannot mix subjects or extend a related task to other workflow families", async () => {
   const f = await fixture();
   try {

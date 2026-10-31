@@ -121,7 +121,8 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   #representativeCall: ClinikoRepresentativeCallOwner | undefined;
   #callerInputReturn: Readonly<{ from: ClinikoRepresentativeCallOwner; to: Owner | undefined }> | undefined;
   #pendingRepresentative: Readonly<{ owner: ClinikoRepresentativeCallOwner; operation: "book" | "cancel" | "reschedule" | "appointments.read";
-    revision: number; before: CallState; advancing: boolean }> | undefined;
+    revision: number; before: CallState; advancing: boolean; previous: Owner | undefined;
+    previousRepresentativeRoot: ClinikoRepresentativeCallOwner | undefined }> | undefined;
   #pendingTask: Readonly<{ owner: Owner; previous: Owner; operation: ClinikoWorkflow; before: CallState;
     selectedConfig: FlowConfig; serviceChoice: BookingServiceChoice | undefined; representative: RepresentativeWorkflowSelection | undefined;
     previousRepresentativeRoot?: ClinikoRepresentativeCallOwner; forCaller?: true }> | undefined;
@@ -724,6 +725,8 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
           state.value.lastWorkflowStart.next !== "representativeRequired" || !await this.#active(pending.operation, query.signal)) return false;
       if (pending.advancing && JSON.stringify(state.value.previousTaskActionKeys) !== JSON.stringify(Object.keys(pending.before.actions)) ||
           this.#tasks && !await this.#tasks.allowsRepresentative(pending.before, pending.operation, pending.advancing)) return false;
+      if (query.signal.aborted || this.closed || this.#pendingRepresentative !== pending || this.#owner !== pending.previous ||
+          this.#representativeCall !== pending.previousRepresentativeRoot) return false;
       this.#tasks?.publishRepresentative(pending.before, pending.advancing);
       this.#callerInputReturn = undefined;
       this.#owner?.dispose(); this.#owner = undefined; this.#representative?.owner.dispose(); this.#representative = undefined;
@@ -860,7 +863,8 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
       const after = await awaitUntilAbort(c.ledger.read(c.receipt.callId, c.receipt.scope), signal);
       if (signal.aborted || !after?.ok || after.value.conversationRevision !== state.value.conversationRevision || this.#owner !== previousOwner || this.#representativeCall !== previousRoot ||
           this.#tasks && !await this.#tasks.allowsRepresentative(after.value, operation, advancing) || !await this.#active(operation, signal)) return unavailable();
-      this.#pendingRepresentative = { owner: created, operation, revision: state.value.conversationRevision, before: structuredClone(state.value), advancing }; created = undefined; published = true;
+      this.#pendingRepresentative = { owner: created, operation, revision: state.value.conversationRevision, before: structuredClone(state.value), advancing,
+        previous: previousOwner, previousRepresentativeRoot: previousRoot }; created = undefined; published = true;
       return ok({ kind: "representativeRequired", ...(advancing ? { advanceTask: true as const } : {}) });
     } catch { return unavailable(); }
     finally {
