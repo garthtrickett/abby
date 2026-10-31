@@ -68,6 +68,7 @@
     "test/support/outbound-memo.ts",
     "test/support/representative-call-owner.ts",
     "test/support/guardian-call-owner.ts",
+    "test/support/related-self-task-sequence.ts",
     "test/support/representative-change-call.ts",
     "test/support/incoming-clinical-call-flow.ts",
     "test/support/twilio-outbound-unanswered-producer.ts",

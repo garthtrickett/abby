@@ -10,3 +10,12 @@ export function representativeRequestLanguage(text: string): "book" | "cancel" |
   if (/\b(?:when|time|confirm|check)\b/i.test(text) && /\bappointment\b/i.test(text)) return "appointments.read";
   return undefined;
 }
+
+/** An explicit caller subject, never an identity or permission grant. Keep the
+ * whole utterance bounded so another person's request cannot become a return. */
+export function callerRequestLanguage(text: string): "book" | "cancel" | "reschedule" | "appointments.read" | undefined {
+  if (typeof text !== "string" || text.length > 4000) return undefined;
+  const match = /^(?:please |i would like to |i want to )?(book (?:an?|another) appointment|cancel (?:an?|another|my) appointment|reschedule (?:an?|another|my) appointment|check (?:my )?appointments?) for (?:me|myself)[.!?]?$/i.exec(text.trim());
+  if (!match) return undefined;
+  return /^book/i.test(match[1]!) ? "book" : /^cancel/i.test(match[1]!) ? "cancel" : /^reschedule/i.test(match[1]!) ? "reschedule" : "appointments.read";
+}

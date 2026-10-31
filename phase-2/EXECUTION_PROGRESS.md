@@ -8186,3 +8186,39 @@ record provisioning, clinic acceptance, speech quality or activation. The
 corrected head still needs full review, original own-head CI, normal merge and
 independent actual-main qualification. All original execution stages, gaps and
 reuse placements remain in scope.
+
+
+## Explicit native caller return after a related task, 31 October 2026
+
+A verified native patient caller can explicitly return to booking for themselves
+after a settled related-person booking. Ordinary requests keep their subject;
+the bounded trusted caller marker cannot come from the model schema. Current
+sequence/clinic/member approval, pinned caller identity, independent native
+permission, fresh registered-email proof and new played consent remain required.
+The first receipt stays exact and reconcilable without replay. Non-patient
+guardian records gain no caller-patient identity or other workflow authority.
+
+Current local qualification passes 22 focused controls with zero skips, whole
+strict TypeScript and the 758-output serving graph. Two actual emitted signed
+HTTP/media, real clinical-host SQL cases pass: related then native-self booking,
+and native permission withdrawn after second readback but before consent. They
+retain native180, shared SQL verification limits, real hold/presence quota pacing,
+full public/every-column/unfiltered-backup scans and complete restore checks.
+Owned databases, container, anonymous volume and socket parent are absent.
+
+The adversarial final-approval abort first failed and then passed with a final
+cancellation/ownership check. The first signed rehearsal failed after silence;
+the revised hold/presence rehearsal exposed actual privateInputUnavailable.
+A direct actual-input witness reproduced the underlying keypad closing the whole
+call when the related owner disappeared. Exact activated-owner handoff now
+preserves the native keypad and fresh private verification; missing or negative
+approval still fails closed. Original failures and interim artifacts remain.
+No deadline, quota, privacy scan or assertion was weakened.
+
+Stable E2E-387 gains the selected source/private/signed witnesses; all426 scenario
+IDs and version1.251 remain, with full-call evidence still planned. Broader
+catalogue and cross-operation combinations, real clinic/provider/carrier/staff
+acceptance, deployment and the original full execution goal remain open. See
+[the contract, evidence and limits](CLINIKO_RELATED_SELF_TASKS.md). Review,
+normal qualified-parent integration, exact-head CI and actual-main/root delivery
+are separate from these local results.
