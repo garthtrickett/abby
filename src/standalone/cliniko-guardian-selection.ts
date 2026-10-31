@@ -14,7 +14,7 @@ import type { GuardianAuthorityPurpose, GuardianPatientAuthorization } from "./g
 import { GuardianVerificationSession } from "./guardian-verification-session.ts";
 import { guardianOperations, OwnerFileGuardianPolicy } from "./owner-file-guardian-policy.ts";
 import type { GuardianOperation } from "./owner-file-guardian-policy.ts";
-import { representativeSubjectEligible, validRepresentativeIdentity } from "./representative-identity.ts";
+import { representativeSubjectEligible, sameRepresentativeIdentity, validRepresentativeIdentity } from "./representative-identity.ts";
 import type { RepresentativeIdentity } from "./representative-identity.ts";
 import { createRepresentativeSubjectVerifier } from "./representative-subject-verification.ts";
 import type { AdditionalRepresentativeVerification } from "./representative-subject-verification.ts";
@@ -27,7 +27,6 @@ type Subject = RepresentativeIdentity & Readonly<{ patientId: string; email: str
 type Selection = Readonly<{ ref: string; identity: RepresentativeIdentity; operation: GuardianOperation; authorization: GuardianPatientAuthorization; subject: Subject }>;
 const fail = <T>(): Result<T, Readonly<{ kind: "representativeUnavailable" }>> => err({ kind: "representativeUnavailable" });
 const row = (value: unknown): Record<string, unknown> | undefined => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-const name = (value: string) => value.normalize("NFKC").toLocaleLowerCase("en");
 
 /** Private non-patient actor selection. Clinic authority identifies the subject;
  * native exact identity/age and the patient's own registered channel follow. */
@@ -110,7 +109,7 @@ export class ClinikoGuardianSelection {
         const authorization = await this.#config.authority.read(wanted, selectedOperation, "identify", bound);
         if (!authorization.ok || bound.aborted) return undefined;
         const subject = await this.#subject(authorization.value.record.subjectPatientId, bound);
-        if (!subject || name(subject.firstName) !== name(wanted.firstName) || name(subject.lastName) !== name(wanted.lastName) || subject.dateOfBirth !== wanted.dateOfBirth ||
+        if (!subject || !sameRepresentativeIdentity(subject, wanted) ||
             !await this.#eligible(subject, authorization.value, bound)) return undefined;
         const selection = { ref: randomUUID(), identity: wanted, operation: selectedOperation, authorization: authorization.value, subject };
         this.#selection = selection;

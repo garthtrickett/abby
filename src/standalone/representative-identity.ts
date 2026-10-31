@@ -2,6 +2,12 @@ import { clinicDateAt } from "./clinic-clock.ts";
 
 export type RepresentativeIdentity = Readonly<{ firstName: string; lastName: string; dateOfBirth: string }>;
 
+/** Complete private identity comparison, shared by native selection and its index. */
+export function sameRepresentativeIdentity(left: RepresentativeIdentity, right: RepresentativeIdentity): boolean {
+  const name = (value: string) => value.normalize("NFKC").toLocaleLowerCase("en");
+  return name(left.firstName) === name(right.firstName) && name(left.lastName) === name(right.lastName) && left.dateOfBirth === right.dateOfBirth;
+}
+
 /** Private selection fields only; never a clinic authority or patient proof. */
 export function validRepresentativeIdentity(value: unknown): value is RepresentativeIdentity {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;

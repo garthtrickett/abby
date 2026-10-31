@@ -24,7 +24,7 @@ export type VoiceIntent =
   | Readonly<{ kind: "requestBoundary"; reason: import("../core/request-boundary.ts").RequestBoundary }>
   | Readonly<{ kind: "callerIdentityDenied"; reason: import("../core/caller-identity.ts").CallerIdentityDenial }>
   | Readonly<{ kind: "clarify"; reason?: MenuClarificationReason; approvedLocation?: string }>
-  | Readonly<{ kind: "workflow"; operation: import("../core/model.ts").WorkflowOperation; replaceCanceledChange?: true; serviceChoice?: import("../core/booking-service-choice.ts").BookingServiceChoice; forAnotherPerson?: true; classAttendance?: true; classSelectionRef?: string }>
+  | Readonly<{ kind: "workflow"; operation: import("../core/model.ts").WorkflowOperation; replaceCanceledChange?: true; serviceChoice?: import("../core/booking-service-choice.ts").BookingServiceChoice; forAnotherPerson?: true; forCaller?: true; classAttendance?: true; classSelectionRef?: string }>
   | Readonly<{ kind: "outcome" }>
   | Readonly<{ kind: "notificationOutcome" }>
   | Readonly<{ kind: "staffOutcome" }>
@@ -441,7 +441,7 @@ export class VoiceSession {
       const controller = new AbortController(), pending = { cancel: () => controller.abort() };
       this.pendingIntent = pending;
       try { result = await this.reception.startWorkflow(this.scope, turn, this.cachedIntent.operation, now, existing.value.conversationRevision,
-        controller.signal, this.cachedIntent.replaceCanceledChange, this.cachedIntent.serviceChoice, this.cachedIntent.forAnotherPerson, this.cachedIntent.classAttendance, this.cachedIntent.classSelectionRef); }
+        controller.signal, this.cachedIntent.replaceCanceledChange, this.cachedIntent.serviceChoice, this.cachedIntent.forAnotherPerson, this.cachedIntent.classAttendance, this.cachedIntent.classSelectionRef, this.cachedIntent.forCaller); }
       finally { if (this.pendingIntent === pending) this.pendingIntent = undefined; }
     } else if (this.cachedIntent.kind === "continueClassMovement") {
       result = await this.withPendingIntent(signal => this.reception.continueClassMovement(this.scope, turn, existing.value.conversationRevision, signal));

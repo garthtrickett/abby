@@ -164,7 +164,7 @@ export interface BookingEvidenceHost {
 
 export type WorkflowQuery = Readonly<{ scope: LocationScope; callId: string; sessionId: string; policyVersion: string;
   operation: import("./model.ts").WorkflowOperation; signal: AbortSignal; replaceCanceledChange?: true; expectedConversationRevision?: number;
-  serviceChoice?: import("./booking-service-choice.ts").BookingServiceChoice; forAnotherPerson?: true; classAttendance?: true; classSelectionRef?: string; turnId?: string }>;
+  serviceChoice?: import("./booking-service-choice.ts").BookingServiceChoice; forAnotherPerson?: true; forCaller?: true; classAttendance?: true; classSelectionRef?: string; turnId?: string }>;
 /** Trusted workflow routing issues neither patient proof nor a clinical action. */
 export interface WorkflowHost {
   completeWorkflowStart?(query: WorkflowQuery & Readonly<{ turnId: string; advanceTask?: true }>): Promise<boolean>;

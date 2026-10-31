@@ -175,6 +175,7 @@ export async function createStandaloneTransientVoiceCall(config: TransientVoiceC
       ...(config.mediaOptions ? { mediaOptions: config.mediaOptions } : {}) })) : ordinaryPrivateInput;
   const representativeInput = config.clinicalWorkflow?.privateRepresentativeTranscription && patientInput
     ? new PrivateRepresentativeVoiceInput({ ...privateBinding, input: patientInput, owner: () => workflow?.representativeInputOwner,
+      canUseCallerInput: previous => workflow?.canUseCallerInputAfter(previous) === true,
       waitForStartKey: true, signal: lifetime.signal,
       present: (text, signal) => {
         const owner = workflow?.representativeInputOwner;

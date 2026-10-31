@@ -12,6 +12,7 @@ const fields = ["firstName", "lastName", "dateOfBirth"] as const;
 type Stage = "routing" | "start" | "prompt" | "actorMethod" | "actorCode" | "field" | "readback" | "subjectCode" | "ready" | "closed";
 type Config = Readonly<{ callId: string; sessionId: string; input: PrivateKeypadInput;
   owner: () => ClinikoRepresentativeCallOwner | undefined;
+  canUseCallerInput?: (previous: ClinikoRepresentativeCallOwner) => boolean;
   present(text: string, signal: AbortSignal): Promise<boolean>;
   transcriptionFactory(sessionId: string): TranscriptionPort; signal: AbortSignal; mediaOptions?: MediaTurnOptions; waitForStartKey?: true }>;
 
@@ -37,7 +38,8 @@ export class PrivateRepresentativeVoiceInput implements PrivateKeypadInput {
   #attempts = 0;
   constructor(config: Config) {
     if (!(config.signal instanceof AbortSignal) || !config.callId || !config.sessionId || typeof config.owner !== "function" ||
-        typeof config.present !== "function" || typeof config.transcriptionFactory !== "function") throw new TypeError("invalid private representative input");
+        typeof config.present !== "function" || typeof config.transcriptionFactory !== "function" ||
+        config.canUseCallerInput !== undefined && typeof config.canUseCallerInput !== "function") throw new TypeError("invalid private representative input");
     this.#config = Object.freeze({ ...config }); config.signal.addEventListener("abort", this.#onClose, { once: true });
     if (config.signal.aborted) this.stop();
   }
@@ -54,16 +56,24 @@ export class PrivateRepresentativeVoiceInput implements PrivateKeypadInput {
     if (this.#working || this.#lifetime.signal.aborted) return;
     this.#working = true; void run().catch(() => this.stop()).finally(() => { this.#working = false; });
   }
+  #retireReadyOwner(): void {
+    const retired = this.#media; this.#media = undefined;
+    void retired?.stop().catch(() => this.stop());
+    this.#owner = undefined; this.#stage = "routing"; this.#draft = {}; this.#field = 0; this.#digits = ""; this.#overflow = false; this.#attempts = 0;
+  }
   blocked(): boolean {
     if (this.#stage === "closed" || !this.#started) return true;
     const owner = this.#config.owner();
     if (!owner && !this.#owner) return this.#config.input.blocked();
+    if (!owner && this.#owner?.closed && this.#stage === "ready" && !this.#working) {
+      let approved = false;
+      try { approved = this.#config.canUseCallerInput?.(this.#owner) === true; } catch { /* Fail closed below. */ }
+      if (approved) { this.#retireReadyOwner(); return this.#config.input.blocked(); }
+    }
     const binding = owner?.binding();
     if (owner instanceof ClinikoRepresentativeCallOwner && this.#owner && owner !== this.#owner && this.#owner.closed &&
         this.#stage === "ready" && !this.#working && !owner.closed && binding?.callId === this.#config.callId && binding.sessionId === this.#config.sessionId) {
-      const retired = this.#media; this.#media = undefined;
-      void retired?.stop().catch(() => this.stop());
-      this.#owner = undefined; this.#stage = "routing"; this.#draft = {}; this.#field = 0; this.#digits = ""; this.#overflow = false; this.#attempts = 0;
+      this.#retireReadyOwner();
     }
     if (!(owner instanceof ClinikoRepresentativeCallOwner) || owner.closed || this.#owner && this.#owner !== owner ||
         binding?.callId !== this.#config.callId || binding.sessionId !== this.#config.sessionId) { this.stop(); return true; }

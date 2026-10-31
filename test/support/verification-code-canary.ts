@@ -100,6 +100,8 @@ export function assertDirectSqlVerificationCanaryContext(): void {
     "postgres-representative-cross-operation-tasks.test.ts",
     "postgres-guardian-registered-email.test.ts",
     "postgres-guardian-records.test.ts",
+    "postgres-guardian-file-records.test.ts",
+    "postgres-related-self-tasks.test.ts",
     "postgres-booking-comparison.test.ts",
     "postgres-guardian-booking-memo.test.ts",
     "postgres-guardian-change-memo.test.ts",

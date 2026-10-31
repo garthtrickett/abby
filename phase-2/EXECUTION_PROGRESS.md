@@ -8192,3 +8192,146 @@ record provisioning, clinic acceptance, speech quality or activation. The
 corrected head still needs full review, original own-head CI, normal merge and
 independent actual-main qualification. All original execution stages, gaps and
 reuse placements remain in scope.
+
+
+## Explicit native caller return after a related task, 31 October 2026
+
+A verified native patient caller can explicitly return to booking for themselves
+after a settled related-person booking. Ordinary requests keep their subject;
+the bounded trusted caller marker cannot come from the model schema. Current
+sequence/clinic/member approval, pinned caller identity, independent native
+permission, fresh registered-email proof and new played consent remain required.
+The first receipt stays exact and reconcilable without replay. Non-patient
+guardian records gain no caller-patient identity or other workflow authority.
+
+Current local qualification passes 24 focused controls with zero skips, whole
+strict TypeScript and the 758-output serving graph. Two actual emitted signed
+HTTP/media, real clinical-host SQL cases pass: related then native-self booking,
+and native permission withdrawn after second readback but before consent. They
+retain native180, shared SQL verification limits, real hold/presence quota pacing,
+full public/every-column/unfiltered-backup scans and complete restore checks.
+Owned databases, container, anonymous volume and socket parent are absent.
+
+The adversarial final-approval abort first failed and then passed with a final
+cancellation/ownership check. The first signed rehearsal failed after silence;
+the revised hold/presence rehearsal exposed actual privateInputUnavailable.
+A direct actual-input witness reproduced the underlying keypad closing the whole
+call when the related owner disappeared. Exact activated-owner handoff now
+preserves the native keypad and fresh private verification; missing or negative
+approval still fails closed. Original failures and interim artifacts remain.
+No deadline, quota, privacy scan or assertion was weakened.
+
+Stable E2E-387 gains the selected source/private/signed witnesses; all426 scenario
+IDs and version1.251 remain, with full-call evidence still planned. Broader
+catalogue and cross-operation combinations, real clinic/provider/carrier/staff
+acceptance, deployment and the original full execution goal remain open. See
+[the contract, evidence and limits](CLINIKO_RELATED_SELF_TASKS.md). Review,
+normal qualified-parent integration, exact-head CI and actual-main/root delivery
+are separate from these local results.
+
+
+The independent review of the local caller-return change found one concrete
+recovery defect: accepted-but-failed activation retired the related root, then
+private input closed the call before a fresh request. The new actual transport
+regression first failed; the corrected 24 focused controls now pass with zero
+skips, including recovery before and after the next idle observation. Failure
+itself issues no challenge or write, and old digits cannot verify an empty task.
+Only the exact retired private root may release routing to idle or the fresh
+native owner; this grants no activation, authority or proof. Whole strict, the
+fresh 758-output graph and both emitted signed SQL/privacy/restore cases pass
+again. All prior failures, frozen reviews and interim artifacts are retained.
+This remains local qualification pending the new exact-head review and delivery.
+
+
+## Native caller first, then related booking, 31 October 2026
+
+The selected gap-9 self/related booking composition now has signed evidence in
+both subject orders. The added caller-first source case passes, obtains new
+actor and subject proofs, preserves separate patient IDs and receipts, and
+rejects an obsolete proof on an unchallenged related owner. The prior 24 source
+controls retain exact bodies: removing the single new AST test recovers the
+original file bytes, and the other control files remain exact. This establishes
+25 controls across retained evidence and one new run, not a fresh 25-case run.
+
+Whole strict passes for the two changed non-emitted test files. All 758 runtime
+outputs and every compiled input remain exact, so no new runtime build is
+claimed. All three current emitted signed clinical-host SQL cases pass with zero
+skips: both booking orders and native caller permission withdrawal before the
+second consent. Native180, real hold/presence pacing and deadlines remain.
+The complete public/all-column/unfiltered-backup/restore/owned-cleanup assertion
+tail is byte-identical. Owned containers, volumes and socket parents are absent.
+Broader operation/catalogue cohorts, full-call and actual clinic/carrier/staff
+acceptance remain open, with normal review and delivery still required.
+
+
+## Optional guardian-file sources, 31 October 2026
+
+The selected non-patient guardian feature now has an optional trusted-host
+private-file adapter behind the existing identity and authority ports. It reads
+bounded current owner-only collections, refuses unsafe/ambiguous/wrong-binding
+lookups, preserves independent clinic-admin approval and native verification, and
+adds no application database, cache, remote write or runtime default. Existing
+native full-name/date matching is shared with the file index without changing
+its semantics. The owner selected restricted clinic-owned approval files as the
+first adapter. Actual clinic file provisioning, access, retention, withdrawal/
+recovery and legal authority remain unapproved.
+
+The current 84 source controls pass (13 new and 71 inherited across seven files),
+including all four administrative operations' native proof composition. The
+initial 83-control/strict run remains separate retained evidence, not an added
+cohort total. Whole strict TypeScript and actual graph/emission pass with 760
+outputs: all 758 parent outputs remain, 755 exact, three expected modifications
+and two additions. Four actual emitted signed PostgreSQL booking cases pass:
+accepted, missing identity, missing authority and withdrawal before consent.
+They retain native180, separate private proofs, unchanged all-column and complete
+unfiltered backup/restore/cleanup assertions, an unrelated retained row and new
+private-path canaries. Node/PG peaks were 276,979,712/165,482,496 bytes, no OOM;
+owned container, anonymous volume and socket parents are independently absent.
+
+This is local synthetic qualification. The new file-source signed cohort covers
+booking; the inherited four-operation guardian qualification remains separate.
+Final review, own-head CI, normal parent delivery and independently qualified
+actual main remain. The original eleven execution stages, four booking steps,
+fourteen booking verification rows, nine commands, thirteen gaps and twenty-eight
+scoped reuse selections retain their requirements, including carrier/acoustic,
+clinic/staff/provider/source/access/retention/restore acceptance. No real clinic
+records, call, deployment, default activation or full-roadmap completion follows.
+
+
+Review removed unused enquiry, cancellation and rescheduling branches from the
+new booking-only signed file-source driver. Its four titles and original 240s
+case deadlines remain; fresh whole strict and all four signed cases pass, with
+independent owned-database cleanup. Production code, all 760 serving inputs and
+artifacts, and all 84 qualified source-control bodies remain unchanged. Earlier
+qualification and the one nonblocking review judgement remain preserved; final
+review and normal delivery are still separate gates.
+
+
+## Combined caller/guardian activation correction, 31 October 2026
+
+The complete combined review found an asymmetric final-approval race in the
+caller-first related-task branch. A private baseline against the unchanged
+candidate reproduced incorrect successful activation after query cancellation.
+The correction records the exact prior owner/root and fences cancellation,
+closure and current pending/owner identities after the last awaited approval.
+Two new controls cover query abort and pending abandonment; failed activation
+issues no challenge or write and retains the accepted-event recovery boundary.
+
+Fresh combined qualification passes 111 source controls (27 caller/private-input
+and 84 guardian/file-source), whole strict TypeScript, an actual 760-output graph
+and seven emitted signed PostgreSQL cases, all with zero skips. The two booking
+orders, native permission withdrawal and four guardian-file outcomes preserve
+separate proofs/consent/receipts, native180, every-column and complete unfiltered
+backup/restore privacy checks, retained unrelated rows and all owned cleanup.
+Only the workflow-owner artifact changes from the initial guardian-file graph;
+759 outputs remain exact. All original failed tests, prior outputs and receipts
+are preserved. The two additional source controls must join the existing33
+source and7 compiled additions in future exact-head/main CI (35 source,7 compiled).
+
+The speech comparison remains disabled after its failed safety gate. Actual
+qualified-parent integration, final independent review, own and resulting-main
+CI remain delivery gates for the combined change. No real clinic approval
+records, grants, provisioning, staff/carrier/acoustic acceptance or deployment
+are inferred. All original eleven execution stages, four booking steps, fourteen
+rows, nine commands, thirteen gaps and twenty-eight reuse placements remain in
+scope; this does not complete the goal.

@@ -1,5 +1,5 @@
 import { confirmationResendLanguage } from "./confirmation-resend-language.ts";
-import { representativeRequestLanguage } from "./representative-request-language.ts";
+import { callerRequestLanguage, representativeRequestLanguage } from "./representative-request-language.ts";
 import { specialServiceLanguage } from "./special-service-language.ts";
 import { serviceConstraintLanguage } from "./service-constraint-language.ts";
 import { arrivalInformationLanguage } from "./arrival-information-language.ts";
@@ -31,7 +31,7 @@ import { staffRequestLanguage } from "./staff-request-language.ts";
 const endpoint = "https://api.openai.com/v1/responses";
 const unavailable = { kind: "intentUnavailable" } as const;
 const maxBytes = 16 * 1024;
-export const clinicalIntentPromptVersion = "clinical-intent-v31";
+export const clinicalIntentPromptVersion = "clinical-intent-v32";
 
 const schema = { type: "object", additionalProperties: false,
   properties: {
@@ -236,6 +236,11 @@ export function createOpenAIClinicalIntentResolver(config: OpenAIClinicalIntentC
     const identity = callerIdentityLanguage(turn.text);
     if (identity) return ok({ kind: "callerIdentityDenied", reason: identity });
     if (explicitUrgentRequest(turn.text)) return ok({ kind: "handoff", reason: "potentiallyUrgent", staffWorkUnavailable: true, checkedAt: before.now });
+    const caller = callerRequestLanguage(turn.text);
+    if (caller && !before.callerIdentityDenied && !before.staffRequestActive) {
+      if (before.nextTaskAvailable) return ok({ kind: "workflow", operation: caller, forCaller: true });
+      return before.workflow === null ? ok({ kind: "workflow", operation: caller }) : ok({ kind: "clarify", reason: "menuUnavailable" });
+    }
     const representative = representativeRequestLanguage(turn.text);
     if (representative && !before.callerIdentityDenied) {
       const staff = staffRequestLanguage(turn.text);
