@@ -1,19 +1,17 @@
 import assert from "node:assert/strict";
-import test, { after } from "node:test";
+import test from "node:test";
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { sql } from "kysely";
 import { connectPostgres } from "../../src/storage/connect.ts";
 import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
-import { captureSqlVerificationCanaryWindow, assertSqlVerificationCodeCanary } from "./sql-verification-canary.ts";
+import { captureScopedSqlVerificationCanaryWindow, assertSqlVerificationCodeCanary } from "./sql-verification-canary.ts";
 import { verificationNow, verificationCanaries } from "./caller-verification.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
 
 if (!process.env.DATABASE_URL) throw Error("DATABASE_URL required");
-const adminUrl = process.env.DATABASE_URL, baseline = connectPostgres(adminUrl);
-after(() => baseline.destroy());
-const canaryWindow = await captureSqlVerificationCanaryWindow(baseline, adminUrl);
+const adminUrl = process.env.DATABASE_URL;
 const emitted = new URL("../../dist/runtime/", import.meta.url);
 const { representativeCallOwnerFixture, representativeInputOptions } = await import(new URL("test/support/representative-call-owner.js", emitted).href) as typeof import("./representative-call-owner.ts");
 const { subjectMemoFixture } = await import(new URL("test/support/subject-memo.js", emitted).href) as typeof import("./subject-memo.ts");
@@ -41,6 +39,7 @@ export function registerMultiplePatientMemoCases(cohort: "sequential" | "pending
     const target = new URL(adminUrl); target.pathname = `/${databaseName}`;
     let created = false, db: ReturnType<typeof connectPostgres> | undefined;
     let f: Awaited<ReturnType<typeof representativeCallOwnerFixture>> | undefined;
+    let canary: Awaited<ReturnType<typeof captureScopedSqlVerificationCanaryWindow>> | undefined;
     let call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined, memo: ReturnType<typeof subjectMemoFixture> | undefined;
     let release: () => void = () => {};
     try {
@@ -52,6 +51,7 @@ export function registerMultiplePatientMemoCases(cohort: "sequential" | "pending
       const scans = new PostgresPatientPhoneScan(db), staged = { ...unrelated, clinicId: "staged" }, begun = resultValue(await scans.begin(staged, "61", fingerprint));
       assert.ok((await scans.append(staged, begun.scanRef, { page: 1, totalEntries: 1, patientIds: ["101"], links })).ok);
       const retainedRef = randomUUID(); assert.ok((await new PostgresOutboundEffectBarrier(db, unrelated, fingerprint).claimOnce(retainedRef)).ok);
+      canary = await captureScopedSqlVerificationCanaryWindow(db, target.toString());
       const subjects = ["583746192837465", "683746192837465"] as const;
       const budget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-session-au5", maxPerMinute: 180 });
       f = await representativeCallOwnerFixture({ multiplePatients: true, subjectIds: subjects, budget }); f.flow.dispose();
@@ -94,17 +94,22 @@ export function registerMultiplePatientMemoCases(cohort: "sequential" | "pending
           : turn.text === "Did it finish" ? ok({ kind: "outcome" }) : turn.text === "Are you still there?" ? ok({ kind: "presence" }) : ordinary(turn, signal);
       }, { clinicalHost: true, maximumWrites: 2, ...(mode === "firstClinicalUncertain" ? { lostWrite: true } : {}) });
       const serving = call;
+      const excludePriorPublicNumbers = async () => {
+        canary!.excludePreexistingPublicText(JSON.stringify([serving.modelTurns, serving.transcripts,
+          commandProgress(await serving.state(), "multiple-patient-memo"), await serving.flow.publicIntentContext()]));
+      };
       const verify = async (index: 0 | 1) => {
         await serving.turn(index === 0 ? "Book an appointment for my partner" : "Book an appointment for my child");
         assert.ok(serving.flow.representativeInputOwner); assert.equal(fixture.mail.length, index * 2);
-        await serving.mark(); await serving.privateDigit("1"); await serving.mark(); await fixture.waitForMail(index * 2 + 1);
+        await serving.mark(); await excludePriorPublicNumbers();
+        await serving.privateDigit("1"); await serving.mark(); await fixture.waitForMail(index * 2 + 1);
         for (const digit of `${fixture.mail.at(-1)!.code}#`) serving.sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
         await voiceUntil(() => serving.spoken.at(-1) === "Please say the patient's first name.", "fresh private selected patient"); await serving.mark();
         const patient = fixture.r.patients.get(subjects[index])!;
         for (const field of [patient.first_name, patient.last_name, index === 0 ? "5 March 1982" : "28 February 2014"]) {
           await serving.privateField(field); await serving.mark();
         }
-        await serving.privateDigit("1"); await serving.mark(); await fixture.waitForMail(index * 2 + 2);
+        await excludePriorPublicNumbers(); await serving.privateDigit("1"); await serving.mark(); await fixture.waitForMail(index * 2 + 2);
         assert.equal(fixture.mail.at(-1)!.email, patient.email); await serving.verify(fixture.mail.at(-1)!.code);
       };
       const book = async (index: 0 | 1) => {
@@ -181,7 +186,7 @@ export function registerMultiplePatientMemoCases(cohort: "sequential" | "pending
       const publicData = JSON.stringify([serving.modelTurns, serving.transcripts, commandProgress(state, "multiple-patient-memo"), await serving.flow.publicIntentContext()]);
       for (const [index, value] of privateValues.entries()) assert.equal(publicData.includes(value), false, `private canary index ${index}`);
       await serving.close();
-      for (const message of f.mail) await assertSqlVerificationCodeCanary(db, message.code, canaryWindow);
+      for (const message of f.mail) await assertSqlVerificationCodeCanary(db, message.code, canary.window);
       const canaries = [...privateValues, serving.callId, state.sessionLease!.sessionId].filter(value => value.length >= 4);
       const probes = canaries.flatMap((value, i) => Array.from({ length: Math.ceil(value.length / 256) }, (_, n) => ({ label: `multi_memo_${i}_${n}`,
         value: value.slice(n * 256, (n + 1) * 256).length < 4 ? value.slice(-4) : value.slice(n * 256, (n + 1) * 256) })));
@@ -193,7 +198,7 @@ export function registerMultiplePatientMemoCases(cohort: "sequential" | "pending
       assert.equal((await scans.verifyPage(staged, begun.scanRef, { page: 1, totalEntries: 1, patientIds: ["101"], links })).ok, true);
     } finally {
       release(); try { await call?.close(); } finally { memo?.close(); try { await f?.close(); } finally {
-        await db?.destroy(); try { if (created) await sql.raw(`drop database "${databaseName}" with (force)`).execute(admin); } finally { await admin.destroy(); }
+        try { canary?.close(); } finally { await db?.destroy(); try { if (created) await sql.raw(`drop database "${databaseName}" with (force)`).execute(admin); } finally { await admin.destroy(); } }
       } }
     }
   });

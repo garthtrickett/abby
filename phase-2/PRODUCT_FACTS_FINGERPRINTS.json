@@ -1,7 +1,7 @@
 {
   "verifiedDate": "2026-10-31",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "66cf444bfac984186f87d4c43bb10b0ac1efde8b26853ac72b12002ab0206b54",
+  "factsSha256": "7766ad91921f29931bff612d5890a6873d559da3a8b77f2e38f8e75acf3cfaaf",
   "sources": {
     ".github/workflows/text-contract.yml": "20f47909d711b7a7d2b3916a8ef0756345b414dff225184989cd8056b5b6179b",
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
@@ -21,10 +21,10 @@
     "phase-1/DEEPGRAM_TRANSCRIPTION.md": "412156102fd03217736bc06b72a58bfbd6bcbd34ea5ecf34aa3bd103363d9170",
     "phase-1/OPENAI_REALTIME_TRANSCRIPTION.md": "49651d21fa207fb842c36b54ebd7d9d82052ef197c1105a3e280f67b000bde59",
     "phase-2/CLINIC_SETUP_AND_REHEARSAL.md": "295df507f0d91fb800a3e3f9ee41d0720cb7a8d6d86629e4cf3fa5608d3158e5",
-    "phase-2/CLINIKO_GUARDIAN_RECORDS.md": "0a5edde67885bc048bbc44441f06b26b3e13bc04bc9c72e2fde12863ae669ab8",
+    "phase-2/CLINIKO_GUARDIAN_RECORDS.md": "11fd8744bdc1389a41b68086ee8c9c2f21fc14ab8369d4d801448e874ae8278f",
     "phase-2/COMMUNICATION_MEMOS.md": "94abcfb3bb1c0dc2299165dfd7ef998519a641ea72b773090a534068f1ac0f16",
     "phase-2/EXECUTION_ORDER.md": "2b40bb14703dbbbaa0649e61a19ec4c300faa777acd2226b57cb4f99761ba156",
-    "phase-2/EXECUTION_PROGRESS.md": "35927e9771c7d093eefc4298cffba75062cc623d688a367f7e6626e34d488d9c",
+    "phase-2/EXECUTION_PROGRESS.md": "83a380e2fa747fc53072819a8b655d959aefebfaa7d93b3cdf7e11a554102214",
     "phase-2/INCOMING_MISSED_CALL_CONTEXT.md": "ddb16adc7208a97c1e2711fc823e50ac825be0e74e45459beda31b275cbe1ab7",
     "phase-2/KAREN_TO_ABBY_REUSE_AUDIT.md": "25e97a1cddac4320fd0c45348c337ee8e048937b7f45187585fd2bc84b8a82d2",
     "phase-2/OUTBOUND_CALL_ADMISSION.md": "93edc93d8868e17133055771c98176af0d6fa13385adbf4f3700069f5d22df2f",
@@ -597,7 +597,7 @@
     "test/support/financial-settlement-native.ts": "0ec33aecfd8c11761af4394c7e93d6d2b531a3773da2a9812cf12375c1f99f74",
     "test/support/force-verifier-prefix.mjs": "b7b387fd574bc8b218eaed36bffc1d76c43e2949a6b16f685650e60d717805ae",
     "test/support/mixed-class-tasks.ts": "6bb48f0b8d0943d85a6a974b4ebeb25d85cfe86a59a73d579a0a3bc9f3656382",
-    "test/support/multiple-patient-memo-sql.ts": "445cf381fbc3ab2e314762f81af9e01c5df17102c9532989d7fb554c49f08cf5",
+    "test/support/multiple-patient-memo-sql.ts": "1b88b916f4d8447d67ed9b380be1e588f1155ea9107ae9c157c24d667dcb8c21",
     "test/support/observe-financial-expiry.ts": "f5075b28bc5d0da415af874f5b963fd7cd0e1ceb6c446e31a4e24fc23a626b9a",
     "test/support/outbound-clinical-rescheduling.ts": "f31b37becdb6b1c3a5985f6477e4639321098f87195ee72ce758e8f69a0ca976",
     "test/support/outbound-clinical-voice.ts": "24ab953cab5a36624c2365696252d195746815c0676e31c374879de667a85ed2",
@@ -639,7 +639,7 @@
     "test/support/synthetic-media-timeline.ts": "da5985153a34b822c7d29f3d4fafe9968977121a0dab1109adb76f87e989b35c",
     "test/support/twilio-outbound-conversation.ts": "a962f03483baa47a01f67834324eb0e54cfd8c8e9b75962713e6e730706ad14d",
     "test/support/twilio-outbound-finality-worker.mjs": "b6502925cdd06ca4b2f5ccbbbb3653408a064630175fc3aadfc73baf5d838783",
-    "test/support/verification-code-canary.ts": "96ac28f899d62ddccddb9cc45720798d892964e6c78d99c5c7ff08b5a26a2162",
+    "test/support/verification-code-canary.ts": "0b335997468e3779a154948b9ef2b1c73af1ddce1727377350f2b26619c98105",
     "test/text/booking-menu-deadline.test.ts": "cf2c6f24a08c0846e65fbc9be9a4646b18a0f734b6fe0dd9cf1c2da2e7fcc022",
     "test/text/class-movement-consent.test.ts": "1ff94adb26665cb9d686c0efa99d40864b8fd54e3436d41026e0f9cf2a6317af",
     "test/text/class-movement-receipt.test.ts": "663c5de1ba65b9a2032481080a54fe59a2f92d454e5ef87b30932f9fc7af7491",
@@ -704,6 +704,6 @@
     "test/voice/twilio-outbound-stop-receiver.test.ts": "8c36bed64ad31a312fa678754b7368ef703f3e5dca011c698d4df7670d98bd16",
     "test/voice/twilio-outbound-stop-speech.test.ts": "d0cb417f573f625abf1598f1ac9555fca03f7f04fcca0b75a54e51e3420a846d",
     "test/voice/twilio-renewal-during-turn.test.ts": "f7b2e52b2822899e66c82150125e580ab6b0574535526a03f3d0116f89997cd6",
-    "test/voice/verification-code-canary.test.ts": "982ae656566016669bdb3942cb7f99fda64f54ca349ece8f645117fe4ec64b9f"
+    "test/voice/verification-code-canary.test.ts": "04c0f9b7d2ab43390c53953db8995ec794ff104457b0ccc97db547d7193ed0fa"
   }
 }
