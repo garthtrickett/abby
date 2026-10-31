@@ -15,8 +15,8 @@ import { TransientPatientProofHost } from "./transient-patient-proof.ts";
 import { clinikoRequestCeiling, inheritClinikoRequestCost } from "../cliniko/request-cost.ts";
 import type { ClinikoCostBinding } from "../cliniko/request-cost.ts";
 import type { PatientOperation, VerificationPolicyGate } from "./transient-patient-proof.ts";
-import { isDeepStrictEqual } from "node:util";
 import { ClinikoOutboundClinicalContext } from "./cliniko-outbound-clinical-context.ts";
+import { activePrivateVerificationCall } from "./private-verification-call.ts";
 
 type Config = Readonly<{
   receipt: AdmissionReceipt; inbound: AuthenticatedInboundCall; sessionId: string; policyVersion: string;
@@ -108,25 +108,11 @@ export class CallerVerificationSession {
   }
 
   async #active(): Promise<boolean> {
-    const { receipt, outbound, sessionId, policyVersion, operation, ledger, policyStore } = this.#config;
+    const { outbound, operation } = this.#config;
     if (this.#closed || outbound && !outbound.current(operation)) return false;
-    const current = await policyStore.read(receipt.scope);
-    if (!current.ok || !sameScope(current.value.scope, receipt.scope) || current.value.automationEnabled !== true ||
-        current.value.policyVersion !== policyVersion) return false;
-    if (operation !== "appointments.read") {
-      const stop = await ledger.readWriteStop(receipt.scope);
-      if (!stop.ok || stop.value.stopped) return false;
-    }
-    // Read call ownership last, after any asynchronous policy/stop reads.
-    const state = await ledger.read(receipt.callId, receipt.scope);
-    if (!state.ok || state.value.callId !== receipt.callId || state.value.lifecycle !== "active" || state.value.callerIdentityDenied !== undefined ||
-        !sameScope(state.value.policy.scope, receipt.scope) || state.value.policy.automationEnabled !== true ||
-        state.value.policy.policyVersion !== policyVersion || !state.value.sessionLease ||
-        state.value.sessionLease.sessionId !== sessionId ||
-        Date.parse(state.value.sessionLease.expiresAt) <= Date.parse(this.#now()) ||
-        !state.value.admission || !isDeepStrictEqual(state.value.admission, receipt.admission)) return false;
-    return !this.#closed && (!outbound || outbound.matchesAdmission(receipt) && outbound.current(operation)) &&
-      Date.parse(state.value.sessionLease.expiresAt) > Date.parse(this.#now());
+    const active = await activePrivateVerificationCall(this.#config, operation !== "appointments.read", () => this.#now());
+    return !!active && !this.#closed && (!outbound || outbound.matchesAdmission(this.#config.receipt) && outbound.current(operation)) &&
+      Date.parse(active.expiresAt) > Date.parse(this.#now());
   }
 
   /** Trusted transport binding only; no patient, contact, code or proof. */

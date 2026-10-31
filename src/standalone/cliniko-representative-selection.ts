@@ -1,24 +1,23 @@
-import { clinicDateAt } from "./clinic-clock.ts";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import type { LocationScope, Result, VerifiedPatient } from "../core/model.ts";
 import { err, ok } from "../core/model.ts";
 import { boundedClinikoJson } from "../cliniko/bounded-json.ts";
 import { claimClinikoBudget, clinikoCredentialFingerprint, isClinikoRequestBudget, observeCliniko429 } from "../cliniko/read-budget.ts";
-import { ClinikoRepresentativeContactReader } from "../cliniko/representative-contact.ts";
 import { normalizeEmailAddress } from "../shared/email-address.ts";
 import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { CallerVerificationSession } from "./caller-verification-session.ts";
+import { createRepresentativeSubjectVerifier } from "./representative-subject-verification.ts";
+import type { AdditionalRepresentativeVerification } from "./representative-subject-verification.ts";
 import type { ClinikoBookingSessionConfig } from "./cliniko-booking-session.ts";
-import { OwnerFileCallerPolicy } from "./owner-file-caller-policy.ts";
 import { OwnerFileRepresentativePolicy } from "./owner-file-representative-policy.ts";
 import { sameScope, validClinikoId } from "./appointment-change-authority.ts";
-import type { VerificationPolicyGate } from "./transient-patient-proof.ts";
 import type { PatientOperation } from "./transient-patient-proof.ts";
-import type { PatientVerificationPermission } from "./email-patient-authority.ts";
 import type { VerificationContactFailure } from "../cliniko/verification-contact.ts";
+import { representativeSubjectEligible, validRepresentativeIdentity as identity } from "./representative-identity.ts";
+import type { RepresentativeIdentity } from "./representative-identity.ts";
 
-export type RepresentativeIdentity = Readonly<{ firstName: string; lastName: string; dateOfBirth: string }>;
+export type { RepresentativeIdentity } from "./representative-identity.ts";
 export type RepresentativeAuthorization = Readonly<{ authorityRef: string; version: string; expiresAt: string;
   authorityKind: "adultRepresentative" | "guardian"; subjectKind: "adult" | "minor" }>;
 type ActorQuery = Readonly<{ scope: LocationScope; callId: string; sessionId: string; caller: VerifiedPatient;
@@ -39,10 +38,6 @@ const fail = <T>(): Result<T, Readonly<{ kind: "representativeUnavailable" }>> =
 const record = (value: unknown) => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 const label = (value: unknown): value is string => typeof value === "string" && value === value.trim() && value.length > 0 && value.length <= 255 && !/[\p{Cc}\p{Cf}]/u.test(value);
 const instant = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value) && Number.isFinite(Date.parse(value));
-const identity = (value: unknown): value is RepresentativeIdentity => {
-  const row = record(value); return !!row && Object.keys(row).sort().join(",") === "dateOfBirth,firstName,lastName" && label(row.firstName) && row.firstName.length <= 50 && label(row.lastName) &&
-    typeof row.dateOfBirth === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.dateOfBirth) && Number.isFinite(Date.parse(row.dateOfBirth)) && new Date(row.dateOfBirth).toISOString().slice(0, 10) === row.dateOfBirth;
-};
 const name = (value: string) => value.normalize("NFKC").toLocaleLowerCase("en");
 
 /** Private per-person selection. Related-patient records supply identity evidence;
@@ -56,7 +51,6 @@ export class ClinikoRepresentativeSelection {
   #verification: CallerVerificationSession | undefined;
   #busy = false;
   #subjectAttempted = false;
-  #channelContexts = new WeakMap<AbortSignal, Selection>();
   readonly #onClose = () => this.dispose();
   constructor(config: Config) {
     const fp = clinikoCredentialFingerprint(config.cliniko.apiKey), binding = config.actor?.binding();
@@ -134,12 +128,7 @@ export class ClinikoRepresentativeSelection {
   async #eligible(subject: Subject, authorization: RepresentativeAuthorization, signal: AbortSignal): Promise<boolean> {
     const approval = await this.#config.policy.current(this.#config.receipt.scope);
     if (!approval.ok || signal.aborted) return false;
-    const today = clinicDateAt(approval.value.timeZone, new Date(this.#now())), born = subject.dateOfBirth;
-    if (born > today) return false;
-    // Lexical month/day comparison treats Feb 29 as March 1 in non-leap years.
-    const age = Number(today.slice(0, 4)) - Number(born.slice(0, 4)) - (today.slice(5) < born.slice(5) ? 1 : 0);
-    return age >= approval.value.adultAgeYears ? authorization.subjectKind === "adult" && authorization.authorityKind === "adultRepresentative"
-      : authorization.subjectKind === "minor" && authorization.authorityKind === "guardian";
+    return representativeSubjectEligible(subject.dateOfBirth, authorization, approval.value, this.#now());
   }
   async #bounded<T>(signal: AbortSignal, run: (bound: AbortSignal) => Promise<T>): Promise<T | undefined> {
     const bound = AbortSignal.any([signal, this.#config.signal, this.#lifetime.signal, AbortSignal.timeout(20_000)]);
@@ -204,59 +193,38 @@ export class ClinikoRepresentativeSelection {
       query.inbound.dialedNumber === c.inbound.dialedNumber && query.inbound.presentedCallerNumber === c.inbound.presentedCallerNumber &&
       query.credentialFingerprint === this.#fingerprint && query.businessId === c.cliniko.businessId && query.timeZone === c.cliniko.timeZone;
   }
-  async verifier(selectionRef: string, signal: AbortSignal, additional?: Readonly<{
-    policy: VerificationPolicyGate & Readonly<{ operation: PatientOperation }>; permission: PatientVerificationPermission }>) {
+  async verifier(selectionRef: string, signal: AbortSignal, additional?: AdditionalRepresentativeVerification) {
     const selected = this.#selection, c = this.#config;
     if (this.#busy || this.#subjectAttempted || !selected || selected.ref !== selectionRef || additional && (additional.policy?.operation !== selected.operation ||
         typeof additional.policy?.current !== "function" || typeof additional.permission?.allows !== "function")) return fail<CallerVerificationSession>();
     this.#subjectAttempted = true;
     const verifier = await this.#bounded(signal, async bound => {
       if (!await this.#current(selected, "channel", bound)) return undefined;
-      const caller = await OwnerFileCallerPolicy.capture({ path: c.representativeCallerApprovalPath, scope: c.receipt.scope, policyVersion: c.policyVersion,
-        operation: selected.operation, directory: c.directory, clock: () => this.#now() });
-      if (!caller.ok || !await caller.value.allowsRepresentative(c.receipt.scope)) return undefined;
-      // Each recheck has its own signal; the constructor transaction's deadline cannot own a live proof.
-      const policy = { operation: selected.operation, current: async (scope: LocationScope) => {
-        const read = await caller.value.current(scope), extra = additional ? await additional.policy.current(scope) : undefined;
-        return read.ok ? ok({ ...read.value, enabled: read.value.enabled && (!additional || !!extra?.ok && extra.value.enabled &&
-          sameScope(extra.value.scope, scope) && extra.value.version === c.policyVersion) && await caller.value.allowsRepresentative(scope) &&
-          await this.#bounded(c.signal, live => this.#authorized(selected, live)) === true }) : read;
-      } };
-      const permission: PatientVerificationPermission = { allows: async (scope, id, operation, version, request) => {
-        // EmailPatientAuthority validates contact and permission in one bounded
-        // transaction with the same signal. Consume native channel evidence once;
-        // every new verification/read/write validation obtains fresh evidence.
-        const channel = this.#channelContexts.get(request); this.#channelContexts.delete(request);
-        if (!sameScope(scope, c.receipt.scope) || id !== selected.subject.patientId || operation !== selected.operation || version !== c.policyVersion || request.aborted ||
-            additional && await additional.permission.allows(scope, id, operation, version, request) !== true) return false;
-        if (channel !== selected) return !!await this.#bounded(request, live => this.#current(selected, "operation", live));
-        return await this.#bounded(request, async live => {
-          if (!await this.#authorized(selected, live)) return false;
-          const actor: ActorQuery = { scope, callId: c.receipt.callId, sessionId: c.sessionId, caller: structuredClone(selected.caller),
-            operation, policyVersion: version, signal: live };
-          const authority = await this.#authorize(actor, selected.relation, "operation");
-          return !!authority && isDeepStrictEqual(authority, selected.authorization) && this.#selection === selected && !live.aborted;
-        }) === true;
-      } };
-      const created = CallerVerificationSession.create({ ...c, operation: selected.operation, policyStore: c.policies, policy, permission,
-        lookup: { candidates: async scope => scope.tenantId === c.receipt.scope.tenantId && scope.clinicId === c.receipt.scope.clinicId &&
-          await this.#bounded(c.signal, live => this.#authorized(selected, live)) === true ? ok({ kind: "one", candidateIds: [selected.subject.patientId] }) : err({ kind: "denied" }) },
-        contact: new ClinikoRepresentativeContactReader({ ...c.cliniko, scope: c.receipt.scope }, this, c.fetchPort), budget: c.verificationBudget });
+      const created = await createRepresentativeSubjectVerifier({ ...c, patientId: selected.subject.patientId, operation: selected.operation,
+        subjectApprovalPath: c.representativeCallerApprovalPath, contactAuthority: this, ...(additional ? { additional } : {}), authority: {
+          authorized: async request => await this.#bounded(request, live => this.#authorized(selected, live)) === true,
+          current: async (purpose, request) => (await this.#bounded(request, live => this.#current(selected, purpose, live)))?.email,
+          operation: async request => await this.#bounded(request, async live => {
+            const actor: ActorQuery = { scope: c.receipt.scope, callId: c.receipt.callId, sessionId: c.sessionId, caller: structuredClone(selected.caller),
+              operation: selected.operation, policyVersion: c.policyVersion, signal: live };
+            const authority = await this.#authorize(actor, selected.relation, "operation");
+            return !!authority && isDeepStrictEqual(authority, selected.authorization) && this.#selection === selected && !live.aborted;
+          }) === true,
+        } }, bound);
       return created.ok && !bound.aborted ? created.value : undefined;
     });
     if (!verifier || signal.aborted) { verifier?.dispose(); return fail<CallerVerificationSession>(); }
     this.#verification = verifier; return ok(verifier);
   }
   matchesContact(scope: Pick<LocationScope, "tenantId" | "clinicId">, fingerprint: string): boolean {
-    const c = this.#config; return !c.signal.aborted && !this.#lifetime.signal.aborted && scope.tenantId === c.receipt.scope.tenantId && scope.clinicId === c.receipt.scope.clinicId && fingerprint === this.#fingerprint;
+    const c = this.#config; return !c.signal.aborted && !this.#lifetime.signal.aborted && scope.tenantId === c.receipt.scope.tenantId &&
+      scope.clinicId === c.receipt.scope.clinicId && fingerprint === this.#fingerprint;
   }
   async registeredRecipient(scope: LocationScope, patientId: string, phone: string, signal: AbortSignal): Promise<Result<string, VerificationContactFailure>> {
     const selected = this.#selection, c = this.#config;
     if (!selected || !sameScope(scope, c.receipt.scope) || patientId !== selected.subject.patientId || phone !== c.inbound.presentedCallerNumber) return err({ kind: "denied" });
-    this.#channelContexts.delete(signal);
     const subject = await this.#bounded(signal, bound => this.#current(selected, "channel", bound));
-    if (!subject || signal.aborted || this.#selection !== selected) return err({ kind: "denied" });
-    this.#channelContexts.set(signal, selected); return ok(subject.email);
+    return subject && !signal.aborted && this.#selection === selected ? ok(subject.email) : err({ kind: "denied" });
   }
-  dispose(): void { this.#config.signal.removeEventListener("abort", this.#onClose); this.#lifetime.abort(); this.#verification?.dispose(); this.#verification = undefined; this.#selection = undefined; this.#channelContexts = new WeakMap(); }
+  dispose(): void { this.#config.signal.removeEventListener("abort", this.#onClose); this.#lifetime.abort(); this.#verification?.dispose(); this.#verification = undefined; this.#selection = undefined; }
 }

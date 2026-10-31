@@ -12,7 +12,8 @@ import { inheritClinikoRequestCost } from "../cliniko/request-cost.ts";
 import { ClinikoPhoneLookup } from "./cliniko-phone-lookup.ts";
 import { ClinikoCallTasks } from "./cliniko-call-tasks.ts";
 import { ClinikoRepresentativeCallOwner } from "./cliniko-representative-call-owner.ts";
-import { ClinikoRepresentativeSelection } from "./cliniko-representative-selection.ts";
+import type { RepresentativeInputConfig } from "./representative-caller-sources.ts";
+import { isRepresentativeSelection } from "./workflow-caller-verification.ts";
 import type { RepresentativeWorkflowSelection } from "./workflow-caller-verification.ts";
 import { ClinikoConfirmationResendWorkflow } from "./cliniko-confirmation-resend-workflow.ts";
 import type { ConfirmationResendWorkflowConfig, ConfirmationResendMenuProgress } from "./cliniko-confirmation-resend-workflow.ts";
@@ -82,7 +83,7 @@ export type ClinikoCallFlowConfig = Omit<ClinikoBookingSessionConfig, "callerApp
   correction?: PatientCorrectionWorkflowConfig;
   resend?: ConfirmationResendWorkflowConfig;
   taskSequence?: Readonly<{ approvalPath: string }>;
-  representativeInput?: Omit<Parameters<typeof ClinikoRepresentativeCallOwner.create>[0], "context" | "flow" | "operation" | "serviceChoice">;
+  representativeInput?: RepresentativeInputConfig;
   reschedulingDestination?: Readonly<{ practitionerId: string; bookingApprovalPath: string }>;
   reschedulingPractitioners?: readonly Readonly<{ practitionerId: string; bookingApprovalPath: string }>[];
 }>;
@@ -838,7 +839,7 @@ export class ClinikoCallFlow extends NoStoredKnowledge {
   async chooseRepresentative(operation: "book" | "cancel" | "reschedule" | "appointments.read", incoming: RepresentativeWorkflowSelection,
     external?: AbortSignal, expectedRevision?: number, serviceChoice?: BookingServiceChoice): Promise<Result<Readonly<{ kind: "codeRequired" | "intakeRequired"; advanceTask?: true }>, Failure>> {
     const representative = incoming && Object.freeze({ ...incoming });
-    if (!(representative?.owner instanceof ClinikoRepresentativeSelection)) return unavailable();
+    if (!isRepresentativeSelection(representative?.owner)) return unavailable();
     return this.#choose(operation, external, false, expectedRevision, serviceChoice, false, representative);
   }
   async #choose(operation: ClinikoWorkflow, external: AbortSignal | undefined, replaceCanceledChange: boolean, expectedRevision: number | undefined,
