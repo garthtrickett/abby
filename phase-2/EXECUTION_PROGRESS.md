@@ -8140,3 +8140,49 @@ existing evidence tiers remain; full-call acceptance remains planned.
 This is a local candidate, not a delivered clinic feature or acoustic proof.
 Full fixed-diff review, qualified-parent integration, original exact-head CI,
 normal merge and actual-main qualification remain separate delivery gates.
+
+
+## Guardian CI public-code canary refinement, 31 October 2026
+
+PR #617's original push database run finished with 7,271 tests: 7,269 passed,
+one failed and one existing skip. Its two-patient memo `secondDenied` case found
+private canary index 30 in public output. The separate original PR database
+run passed all 7,270 executable tests plus six ordered controls on the exact
+same head. Both raw logs remain retained. Neither that pass nor a later local
+pass reconstructs the original matching value, which was not logged.
+
+A deterministic witness using the actual SQL code selector and public command
+projection demonstrates a fixture ambiguity: a public hash can predate a
+six-digit challenge whose raw substring happens to match it. The scoped direct
+SQL fixture now captures existing public numeric substrings before each code
+issue and rejects those prospective draws. It uses the actual issuer, salt,
+hash, delivery and verification. Each case owns its migrated and seeded database
+snapshot, bounded clock window and sampler lifetime. A snapshot containing an
+already issued code fails immediately and cannot become an exclusion; rejected,
+oversized and excessive snapshots add no partial exclusions. Closed/replaced
+scopes cannot change the next sampler, and closure restores the exact issuer.
+Production code and crypto remain unchanged.
+
+All 13 code-sampling/clock/isolation/lifetime controls pass, including the new
+deterministic hash-collision and actual-disclosure controls. The first wrapper
+incorrectly expected 15 by also counting two test statements inside fixture
+strings; its failed verdict remains. Independent TypeScript top-level syntax
+and the completed raw TAP prove 13 exact tests, zero failures or skips, without
+replaying the cohort. Whole strict TypeScript and fresh 757-output serving pass;
+only the existing test helper changes and all other 756 outputs are exact.
+All six original signed multiple-patient SQL cases pass with zero skips,
+including accepted/first-denied/second-denied/lost-stored and pending/uncertain
+prior tasks. Existing native 180 limits, per-case deadlines, original subjects,
+separate permissions, immutable receipts, every-column scans, complete raw
+logical backups and unrelated retained rows remain. Public, SQL and backup
+canary assertions are unchanged and unfiltered. Owned database cleanup is
+verified separately.
+
+Evidence is private under `~/.local/state/abby-guardian-ci-canary/`: original
+failed and independent green CI evidence stays under
+`~/.local/state/abby-outbound-stop-speech/guardian-records/`. This is a scoped
+fixture correction, not proof of the exact original CI cause, production
+record provisioning, clinic acceptance, speech quality or activation. The
+corrected head still needs full review, original own-head CI, normal merge and
+independent actual-main qualification. All original execution stages, gaps and
+reuse placements remain in scope.

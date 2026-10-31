@@ -156,3 +156,24 @@ The original [execution order](EXECUTION_ORDER.md),
 [booking plan](PROVIDER_ACKNOWLEDGED_BOOKING_PLAN.md) and
 [reuse audit](KAREN_TO_ABBY_REUSE_AUDIT.md) retain their full scope and remaining
 acceptance gates.
+
+
+## Original CI and synthetic-code refinement
+
+The original PR #617 push had one existing two-patient memo privacy-canary
+failure; its independent PR run passed that case and the complete database
+suite on the same head. The failed verdict remains and its exact matching
+value is unavailable. A deterministic preexisting-public-hash collision is
+separately demonstrated. The direct SQL fixture now excludes existing public
+numeric substrings before the next synthetic challenge, with a fresh owned
+snapshot/window and exact restoration per case. It refuses any snapshot that
+already contains an issued code; no privacy scan is filtered or exempted.
+
+Thirteen source controls, whole strict/757 serving and all six affected signed
+SQL cases pass locally. Only the shared test helper's emitted bytes change;
+756 other outputs stay exact. Production modules and guardian semantics stay
+unchanged. The wrapper's incorrect expected test count is independently
+reconciled against the 13-test source syntax and completed TAP, preserving its
+failed verdict. See [failure, correction and limits](EXECUTION_PROGRESS.md#guardian-ci-public-code-canary-refinement-31-october-2026).
+Current exact-head review, own CI, normal delivery and clinic/provider
+acceptance remain separate gates.
