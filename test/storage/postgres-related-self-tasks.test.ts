@@ -1,4 +1,4 @@
-// E2E-387: explicit native caller task after an independently approved related-person task.
+// E2E-387/E2E-388: independent caller/related booking tasks and played-enquiry succession.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
@@ -24,12 +24,15 @@ const { commandProgress } = await import(new URL("src/reference/command-progress
 const { ok } = await import(new URL("src/core/model.js", emitted).href) as typeof import("../../src/core/model.ts");
 const { CallerVerificationSession } = await import(new URL("src/standalone/caller-verification-session.js", emitted).href) as typeof import("../../src/standalone/caller-verification-session.ts");
 
-for (const { outcome, callerFirst } of [
-  { outcome: "accepted", callerFirst: false },
-  { outcome: "nativePermissionWithdrawn", callerFirst: false },
-  { outcome: "accepted", callerFirst: true },
+for (const { outcome, callerFirst, enquiryFirst } of [
+  { outcome: "accepted", callerFirst: false, enquiryFirst: false },
+  { outcome: "nativePermissionWithdrawn", callerFirst: false, enquiryFirst: false },
+  { outcome: "accepted", callerFirst: true, enquiryFirst: false },
+  { outcome: "accepted", callerFirst: false, enquiryFirst: true },
+  { outcome: "nativePermissionWithdrawn", callerFirst: false, enquiryFirst: true },
+  { outcome: "accepted", callerFirst: true, enquiryFirst: true },
 ] as const)
-test(`actual emitted signed ${callerFirst ? "native-self then related" : "related then native-self"} booking: ${outcome}`, { timeout: 240_000 }, async context => {
+test(`actual emitted signed ${callerFirst ? "native-self" : "related"}${enquiryFirst ? " enquiry" : ""} then ${callerFirst ? "related" : "native-self"} booking: ${outcome}`, { timeout: 240_000 }, async context => {
   const admin = connectPostgres(adminUrl), name = `abby_test_related_self_${randomUUID().replaceAll("-", "").slice(0, 24)}`;
   const restoreName = `${name}_restored`, target = new URL(adminUrl), restoreTarget = new URL(adminUrl);
   target.pathname = `/${name}`; restoreTarget.pathname = `/${restoreName}`;
@@ -44,7 +47,7 @@ test(`actual emitted signed ${callerFirst ? "native-self then related" : "relate
     const original = await db.selectFrom("outbound_effect_barriers").selectAll().execute();
     canary = await captureScopedSqlVerificationCanaryWindow(db, target.toString());
     const budget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-session-au5", maxPerMinute: 180 });
-    f = await relatedSelfTaskSequenceFixture({ budget, subjectIds: ["583746192837465", "683746192837465"] }); f.flow.dispose();
+    f = await relatedSelfTaskSequenceFixture({ budget, subjectIds: ["583746192837465", "683746192837465"], ...(enquiryFirst ? { enquiry: true as const } : {}) }); f.flow.dispose();
     const proofRefs = new Set<string>(), verified = CallerVerificationSession.prototype.verifiedSubject;
     context.mock.method(CallerVerificationSession.prototype, "verifiedSubject", async function(this: CallerSession, ...args: Parameters<typeof verified>) {
       const proof = await verified.apply(this, args); if (proof) proofRefs.add(proof.verificationRef); return proof;
@@ -57,13 +60,14 @@ test(`actual emitted signed ${callerFirst ? "native-self then related" : "relate
         fetch: async () => { throw Error("explicit subject requests and private patient fields cannot require the model"); } });
       return async (turn, signal) => turn.text === "Times" ? ok({ kind: "bookingMenu", from: "2026-10-08", to: "2026-10-08" })
         : turn.text === "First option" ? ok({ kind: "bookingChoice", choice: 1 }) : turn.text === "Yes" ? ok({ kind: "affirm" })
-          : turn.text === "Did it finish" ? ok({ kind: "outcome" }) : ordinary(turn, signal);
+          : turn.text === "Appointments" ? ok({ kind: "appointmentEnquiry", from: clock(), to: "2026-10-09T06:00:00.000Z" })
+            : turn.text === "Did it finish" ? ok({ kind: "outcome" }) : ordinary(turn, signal);
     }, { clinicalHost: true, nativeIndividualChanges: true, maximumWrites: 2, steadyMedia: true });
     const serving = call, sessionId = (await serving.state()).sessionLease?.sessionId; assert.ok(sessionId);
     const excludePriorPublicNumbers = async () => canary!.excludePreexistingPublicText(JSON.stringify([serving.modelTurns, serving.transcripts,
       commandProgress(await serving.state(), "related-self"), await serving.flow.publicIntentContext()]));
-    const verifyRelated = async (priorMail: number) => {
-      await excludePriorPublicNumbers(); await serving.turn("Book an appointment for my partner"); await serving.mark();
+    const verifyRelated = async (priorMail: number, operation: "book" | "appointments.read" = "book") => {
+      await excludePriorPublicNumbers(); await serving.turn(operation === "book" ? "Book an appointment for my partner" : "Check the appointment time for my husband"); await serving.mark();
       const owner = serving.flow.representativeInputOwner; assert.ok(owner);
       await serving.privateDigit("1"); await serving.mark(); await fixture.base.waitForMail(priorMail + 1);
       for (const digit of `${fixture.base.mail[priorMail]!.code}#`) serving.sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
@@ -72,9 +76,9 @@ test(`actual emitted signed ${callerFirst ? "native-self then related" : "relate
       await excludePriorPublicNumbers(); await serving.privateDigit("1"); await serving.mark(); await fixture.base.waitForMail(priorMail + 2);
       await serving.verify(fixture.base.mail[priorMail + 1]!.code); return owner;
     };
-    const verifyCaller = async (priorMail: number) => {
+    const verifyCaller = async (priorMail: number, operation: "book" | "appointments.read" = "book") => {
       const previousWrites = serving.writes.length;
-      await excludePriorPublicNumbers(); await serving.turn("Book an appointment for myself");
+      await excludePriorPublicNumbers(); await serving.turn(operation === "book" ? "Book an appointment for myself" : "Check my appointments for myself");
       assert.equal(serving.flow.representativeInputOwner, undefined); assert.equal(serving.flow.verificationRequired, true);
       assert.equal(serving.writes.length, previousWrites);
       await serving.mark(); await fixture.base.waitForMail(priorMail + 1); assert.equal(fixture.base.mail[priorMail]!.email, verificationCanaries[0]);
@@ -83,13 +87,27 @@ test(`actual emitted signed ${callerFirst ? "native-self then related" : "relate
       await serving.verify(fixture.base.mail[priorMail]!.code);
       assert.equal(serving.transcriptionFrames, asrCount); assert.equal(serving.privateTranscripts.length, privateCount);
     };
-    if (callerFirst) await verifyCaller(0);
-    const firstOwner = callerFirst ? undefined : await verifyRelated(0);
+    const firstOperation = enquiryFirst ? "appointments.read" : "book";
+    if (callerFirst) await verifyCaller(0, firstOperation);
+    const firstOwner = callerFirst ? undefined : await verifyRelated(0, firstOperation);
     const book = async (beforeConsent?: () => void) => { await serving.turn("Times"); await serving.mark(); await serving.turn("First option");
       const action = Object.values((await serving.state()).actions).at(-1)!; assert.equal(action.status, "awaitingConfirmation");
       await serving.mark(); beforeConsent?.(); await serving.turn("Yes"); await serving.mark(); return (await serving.state()).actions[action.key]!; };
-    const first = await book(); assert.equal(first.status, "committed"); const receipt = structuredClone(first);
-    assert.equal(serving.writes.length, 1); assert.equal(serving.writeRequests[0]!.body.patient_id, callerFirst ? verificationCanaries[2] : f.base.r.subjectIds[0]);
+    let first: import("../../src/core/model.ts").ActionState | undefined;
+    let firstRead: import("../../src/core/model.ts").CallState["appointmentReads"][number] | undefined;
+    if (enquiryFirst) {
+      await serving.turn("Appointments");
+      const read = (await serving.state()).appointmentReads.at(-1); assert.ok(read); assert.equal(read.status, "shown");
+      assert.equal((await serving.flow.publicIntentContext())?.nextTaskAvailable, undefined, "unplayed enquiry is not a completed task");
+      firstRead = structuredClone(read); await serving.mark();
+      assert.equal(serving.writes.length, 0); assert.equal(fixture.base.f.recalls.length, 0);
+      assert.equal(Object.keys((await serving.state()).actions).length, 0);
+    } else {
+      first = await book(); assert.equal(first.status, "committed");
+      assert.equal(serving.writes.length, 1); assert.equal(serving.writeRequests[0]!.body.patient_id, callerFirst ? verificationCanaries[2] : f.base.r.subjectIds[0]);
+    }
+    const receipt = first ? structuredClone(first) : firstRead;
+    const priorWrites = enquiryFirst ? 0 : 1;
     // Real elapsed native quota window with ordinary hold/presence turns, as in
     // the existing signed two-patient cases. No lease or quota limit changes.
     const beganPause = performance.now(), quiet = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -100,18 +118,28 @@ test(`actual emitted signed ${callerFirst ? "native-self then related" : "relate
     assert.equal((await serving.flow.publicIntentContext())?.nextTaskAvailable, true);
     if (callerFirst) await verifyRelated(1);
     else { await verifyCaller(2); assert.equal(firstOwner!.closed, true); }
-    if (first.mutation.request.kind !== "book") throw Error("wrong original operation");
-    assert.equal((await serving.flow.resolveBooking(f.base.f.scope, first.mutation.request.patient.verificationRef,
-      first.mutation.request.offer.offerRef, clock())).ok, false);
+    if (first) {
+      if (first.mutation.request.kind !== "book") throw Error("wrong original operation");
+      assert.equal((await serving.flow.resolveBooking(f.base.f.scope, first.mutation.request.patient.verificationRef,
+        first.mutation.request.offer.offerRef, clock())).ok, false);
+    } else {
+      assert.ok(firstRead); assert.equal((await serving.flow.publicIntentContext())?.lastAction, null);
+      assert.equal(serving.writes.length, 0);
+    }
     const second = await book(outcome === "nativePermissionWithdrawn" ? () => fixture.denySelf() : undefined);
     if (outcome === "accepted") {
-      assert.equal(second.status, "committed"); assert.equal(serving.writes.length, 2);
-      assert.equal(serving.writeRequests[1]!.body.patient_id, callerFirst ? f.base.r.subjectIds[0] : verificationCanaries[2]);
-      assert.notEqual(first.key, second.key); assert.notEqual(first.hostRef, second.hostRef);
-    } else { assert.notEqual(second.status, "committed"); assert.equal(serving.writes.length, 1); }
-    assert.deepEqual((await serving.state()).actions[first.key], receipt);
-    assert.deepEqual(await serving.flow.reconcile(first.mutation), { kind: "exactCommit", actionKey: first.key, hostRef: first.hostRef });
-    assert.deepEqual(await serving.flow.write(first.mutation, clock()), { kind: "rejected", actionKey: first.key, reason: "forbidden" });
+      assert.equal(second.status, "committed"); assert.equal(serving.writes.length, priorWrites + 1);
+      assert.equal(serving.writeRequests[priorWrites]!.body.patient_id, callerFirst ? f.base.r.subjectIds[0] : verificationCanaries[2]);
+      if (first) { assert.notEqual(first.key, second.key); assert.notEqual(first.hostRef, second.hostRef); }
+    } else { assert.notEqual(second.status, "committed"); assert.equal(serving.writes.length, priorWrites); }
+    if (first) {
+      assert.deepEqual((await serving.state()).actions[first.key], receipt);
+      assert.deepEqual(await serving.flow.reconcile(first.mutation), { kind: "exactCommit", actionKey: first.key, hostRef: first.hostRef });
+      assert.deepEqual(await serving.flow.write(first.mutation, clock()), { kind: "rejected", actionKey: first.key, reason: "forbidden" });
+    } else {
+      assert.deepEqual((await serving.state()).appointmentReads[0], receipt);
+      assert.equal(Object.keys((await serving.state()).actions).length, 1);
+    }
     const state = await serving.state();
     assert.equal((await serving.flow.publicIntentContext())?.nextTaskAvailable, undefined);
     const values = [...verificationCanaries, f.source.config.cliniko.apiKey, ...f.base.r.subjectIds,
