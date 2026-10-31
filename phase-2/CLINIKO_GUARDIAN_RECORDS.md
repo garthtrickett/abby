@@ -89,9 +89,11 @@ selection. Their shared selected-patient verifier preserves separate current
 registered-channel and workflow permission checks. Native-patient-only callers
 retain their existing method and prompts.
 
-These interfaces do **not** yet specify an accepted production storage adapter
-for private guardian approvals. The local tests inject explicit synthetic
-clinic sources. A Standard contact is native Cliniko identity evidence; it is
+The optional `ownerFileGuardianRecords` adapter supplies these ports from
+restricted clinic-owned files. The owner selected restricted clinic-owned
+approval files as the first adapter. Actual clinic records and production
+acceptance remain separate. The original qualification below
+uses injected synthetic clinic sources; the file-source qualification is separate. A Standard contact is native Cliniko identity evidence; it is
 not a native guardian-authority record. Abby does not create fake patient
 records, infer approvals from contact notes or automatically provision private
 approval records.
@@ -177,3 +179,67 @@ reconciled against the 13-test source syntax and completed TAP, preserving its
 failed verdict. See [failure, correction and limits](EXECUTION_PROGRESS.md#guardian-ci-public-code-canary-refinement-31-october-2026).
 Current exact-head review, own CI, normal delivery and clinic/provider
 acceptance remain separate gates.
+
+
+## Optional clinic-owned file sources, 31 October 2026
+
+A trusted host can construct `ownerFileGuardianRecords` and pass its `identities`
+and `authorities` into the existing `guardian` configuration. The host supplies
+fixed absolute `identityPath` and `authorityPath`, clinic/location, policy,
+Cliniko business/credential fingerprint and the actual shared native budget.
+Caller turns and model tools cannot select a path or construct this configuration.
+The adapter provisions no records, writes no file and enables no runtime default.
+
+Each private JSON file has exactly `schemaVersion` (1), `kind`, `scope`,
+`policyVersion`, `businessId`, `credentialFingerprint` and `entries`. The identity
+kind is `guardianIdentities`; each entry has an E.164 `normalizedPhone` and one
+complete `ClinicGuardianIdentityRecord` under `record`. The authority kind is
+`guardianAuthorities`; each entry has the complete private patient `identity`
+(first name, last name and date of birth) and one complete
+`ClinicGuardianPatientAuthorityRecord` under `record`. An empty collection denies.
+
+The source rereads regular files owned by the service's OS user, with no group or
+other permissions; final-file symlinks are refused. Each file is limited to
+65,536 bytes and 64 entries. A malformed collection, wrong scope/account/policy,
+missing or ambiguous index and aborted lookup produce generic failure. Index
+matching uses complete NFKC/case-normalized names and exact birth date, matching
+the existing native selection. Exact current guardian contact, record/version/
+revision and requested action identify the authority candidate. Disabled, expired
+or partial-purpose duplicates are not filtered into apparent uniqueness, and
+multiple grants cannot be combined. Returned records are independent copies;
+there is no cached approval snapshot.
+
+An index is not authority. The existing concrete owners still validate the one
+record's approval, current clinic-admin membership, expiry, policy, native
+contact/channel, subject identity/age and per-action permissions. Guardian and
+patient codes remain separate. Editing, deleting or withdrawing a record is
+observed at the next fresh boundary. Aborted lookups suppress late results. The
+file callbacks declare zero native requests only for the exact configured
+account/budget; contact/patient I/O and all other costs still consume native180.
+
+The current local cohort passed 84 source controls across seven files (13 new
+file-source controls and 71 inherited guardian controls). It exercises native
+proof composition for all four existing administrative operations. Whole strict
+TypeScript and the actual serving graph/emission passed: all 758 inherited
+outputs remain, 755 are identical, three change for the shared identity comparator
+and registered SQL fixture, and two additions bring the graph to 760.
+
+Four actual emitted signed media/PostgreSQL booking cases also passed with zero
+skips: accepted, missing identity, missing authority and withdrawal before
+consent. They use the real file ports, native180 and separate guardian/patient
+verification, preserve every-column scans and the unchanged unfiltered logical
+backup/restore/cleanup assertions, retain an unrelated row, and additionally
+check that private file paths do not enter public state or SQL. The Node scope
+peaked at 265,023,488 bytes and PostgreSQL at 168,464,384 bytes, with no OOM events.
+Owned container, anonymous volume and socket-directory absence were independently
+verified. The inherited signed four-operation cohort is separate evidence; the
+new file-source signed cohort covers booking.
+
+Evidence is private under `~/.local/state/abby-outbound-stop-speech/guardian-file-records/`.
+The initial 83-control/strict cohort is retained and is not added to the final
+84-control total. Review, publication and resulting-main CI remain engineering
+gates. The clinic must still approve and provision its actual record files,
+provisioning/withdrawal owners, access, retention and recovery; this local trial
+does not back up or approve clinic file storage. The original clinic/carrier/staff
+acceptance requirements above remain. No real guardian record, native write,
+call, deployment or runtime activation follows from these synthetic results.

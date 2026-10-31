@@ -8256,3 +8256,37 @@ The complete public/all-column/unfiltered-backup/restore/owned-cleanup assertion
 tail is byte-identical. Owned containers, volumes and socket parents are absent.
 Broader operation/catalogue cohorts, full-call and actual clinic/carrier/staff
 acceptance remain open, with normal review and delivery still required.
+
+
+## Optional guardian-file sources, 31 October 2026
+
+The selected non-patient guardian feature now has an optional trusted-host
+private-file adapter behind the existing identity and authority ports. It reads
+bounded current owner-only collections, refuses unsafe/ambiguous/wrong-binding
+lookups, preserves independent clinic-admin approval and native verification, and
+adds no application database, cache, remote write or runtime default. Existing
+native full-name/date matching is shared with the file index without changing
+its semantics. The owner selected restricted clinic-owned approval files as the
+first adapter. Actual clinic file provisioning, access, retention, withdrawal/
+recovery and legal authority remain unapproved.
+
+The current 84 source controls pass (13 new and 71 inherited across seven files),
+including all four administrative operations' native proof composition. The
+initial 83-control/strict run remains separate retained evidence, not an added
+cohort total. Whole strict TypeScript and actual graph/emission pass with 760
+outputs: all 758 parent outputs remain, 755 exact, three expected modifications
+and two additions. Four actual emitted signed PostgreSQL booking cases pass:
+accepted, missing identity, missing authority and withdrawal before consent.
+They retain native180, separate private proofs, unchanged all-column and complete
+unfiltered backup/restore/cleanup assertions, an unrelated retained row and new
+private-path canaries. Node/PG peaks were 265,023,488/168,464,384 bytes, no OOM;
+owned container, anonymous volume and socket parents are independently absent.
+
+This is local synthetic qualification. The new file-source signed cohort covers
+booking; the inherited four-operation guardian qualification remains separate.
+Final review, own-head CI, normal parent delivery and independently qualified
+actual main remain. The original eleven execution stages, four booking steps,
+fourteen booking verification rows, nine commands, thirteen gaps and twenty-eight
+scoped reuse selections retain their requirements, including carrier/acoustic,
+clinic/staff/provider/source/access/retention/restore acceptance. No real clinic
+records, call, deployment, default activation or full-roadmap completion follows.
