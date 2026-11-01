@@ -8378,3 +8378,28 @@ driver/compiled inputs and their original passing evidence; they were not rerun.
 No signed ambiguity or full-call/clinic acceptance is inferred. Current review,
 qualified normal-parent integration, own/main CI and all original execution-plan
 and external acceptance gates remain separate.
+
+## Fixed-clinic interpretation-failure qualification, 1 November 2026
+
+The original R03 audit located location-isolation and generic supersession
+evidence but no exact same-clock clinic-correction witness. A local test-only
+extension now passes four compiled separate-process cases across both locations,
+before and after a committed booking. Its synthetic classifier intentionally
+fails for the correction, so a later affirmative cannot revive old consent,
+repeat an acknowledged write or retarget patient traffic. This is a fallback
+boundary, not successful clinic-change interpretation or a new switch feature.
+
+All nine SQL-driver cases pass, including the five unchanged R02 comparison
+cases. Whole strict types pass; all 760 serving artifacts and compiled inputs
+are reused exactly. Full unfiltered backup/canary checks and independently
+verified owned database/container/anonymous-volume/socket cleanup pass. There is
+no fresh backup restore, broader source replay or production change.
+
+Strict work1793498960796 and SQL work1793499230462, with actual zero exits,
+complete logs and cleanup evidence, are retained under
+`~/.local/state/abby-clinic-correction-regression/`. See
+[the contract and limits](CLINIKO_SERVICE_CATALOGUE.md#fixed-clinic-interpretation-failure-qualification-1-november-2026).
+Final metadata/review, qualified-parent integration and ordinary own/main
+delivery remain separate. The full R03 corpus is not certified. All eleven
+execution stages, thirteen gaps and twenty-eight reuse placements remain;
+clinic, provider, human duty, speech and activation gates stay explicit.

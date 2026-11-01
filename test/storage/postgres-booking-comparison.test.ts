@@ -11,6 +11,7 @@ import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-s
 import { captureScopedSqlVerificationCanaryWindow, assertSqlVerificationCodeCanary } from "../support/sql-verification-canary.ts";
 import { resultValue } from "../support/agent-appointment-proposals.ts";
 import { verificationCanaries, verificationNow } from "../support/caller-verification.ts";
+import { withClinicalRunner } from "../support/clinical-runner-call.ts";
 
 if (!process.env.DATABASE_URL) throw Error("DATABASE_URL required");
 const adminUrl = process.env.DATABASE_URL;
@@ -154,4 +155,68 @@ test(`actual emitted signed booking comparison preserves original choice: ${outc
       }
     }
   }
+});
+
+// R03: this call's clinic binding is fixed. An uninterpretable request for the
+// other clinic cannot preserve old unsent consent or retarget a completed write.
+// The existing fixture deliberately fails classification for the new request;
+// these cases qualify that failure boundary, not live model interpretation.
+for (const chosen of ["North", "South"] as const) for (const prior of ["proposed", "committed"] as const)
+test(`actual compiled same-clock clinic correction preserves fixed scope: ${chosen} ${prior}`, { timeout: 120_000 }, async () => {
+  await withClinicalRunner("book", async call => {
+    const play = async (text: string) => { await call.say(text); await call.mark(); };
+    const other = chosen === "North" ? "South" : "North";
+    const selected = call.locations.find(row => row.scope.locationId === (chosen === "North" ? "main" : "south"));
+    assert.ok(selected); assert.equal(call.locations.length, 2);
+    await play(chosen);
+    await play("Book a 60-minute initial Physiotherapy appointment.");
+    await call.verify();
+    const mail = call.messages.find(row => row.kind === "verificationEmail");
+    assert.ok(mail?.code && mail.email); assert.deepEqual(mail.scope, selected.scope);
+    const delivery = call.messages.find(row => row.kind === "smtpDelivery");
+    assert.ok(delivery?.accepted && delivery.envelopeMatches && delivery.codeMatches);
+    await play("Show times on October 8."); await play("The first time, please.");
+    assert.equal(call.mutations.length, 0);
+    const confirmation = call.spoken.at(-1)!;
+    assert.match(confirmation, /Physiotherapy.*60 minutes/s);
+    if (prior === "committed") {
+      await play("Yes."); assert.equal(call.spoken.at(-1), "Your booking is confirmed.");
+      assert.equal(call.mutations.filter(row => row.path === "/v1/individual_appointments").length, 1);
+    }
+    const originalWrites = structuredClone(call.mutations);
+    const correction = `Please change the clinic to ${other} at the same time instead.`;
+    const modelTurnsBefore = call.messages.filter(row => row.kind === "modelTurn").length;
+    await play(correction);
+    assert.equal(call.messages.filter(row => row.kind === "modelTurn").length, modelTurnsBefore + 1);
+    assert.equal(call.messages.filter(row => row.kind === "modelTurn").at(-1)?.text, correction,
+      "the actual correction must reach the fixture's unavailable classifier");
+    assert.doesNotMatch(call.spoken.at(-1)!, /Your booking is confirmed|has been moved|is now at/);
+    assert.deepEqual(call.mutations, originalWrites);
+    await play("Yes.");
+    assert.deepEqual(call.mutations, originalWrites, "a later yes cannot revive the old offer or repeat a completed write");
+    assert.equal(call.messages.filter(row => row.kind === "verificationEmail").length, 1);
+    assert.equal(call.messages.filter(row => row.kind === "verificationResult" && row.verified).length, 1);
+    for (const message of call.messages.filter(row => ["providerRequest", "permissionDecision", "verificationEmail"].includes(row.kind))) {
+      assert.deepEqual(message.scope, selected.scope, "no patient lookup, grant or write may fall back to the other clinic");
+    }
+    const appointments = call.mutations.filter(row => row.path === "/v1/individual_appointments");
+    assert.equal(appointments.length, prior === "committed" ? 1 : 0);
+    if (prior === "committed") {
+      assert.equal(appointments[0]!.body?.business_id, selected.businessId);
+      assert.equal(appointments[0]!.body?.appointment_type_id, "34");
+      assert.equal(appointments[0]!.body?.starts_at, "2026-10-08T04:00:00.000Z",
+        "both independently approved clinic fixtures use this exact clock time");
+      assert.equal(call.spoken.filter(text => text === "Your booking is confirmed.").length, 1);
+    }
+    const privateValues = [...verificationCanaries, "south-registered@example.test", mail.code, mail.email];
+    for (const text of call.messages.filter(row => row.kind === "modelTurn").map(row => row.text!)) {
+      for (const value of privateValues) assert.equal(text.includes(value), false);
+    }
+    await call.scan(privateValues);
+    const dump = execFileSync("pg_dump", [call.connectionString, "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 8_000_000 }).toString();
+    const copy = (value: string) => value.replaceAll("\\", "\\\\").replaceAll("\n", "\\n").replaceAll("\r", "\\r").replaceAll("\t", "\\t");
+    for (const raw of privateValues) for (const value of [raw, copy(raw), JSON.stringify(raw).slice(1, -1), copy(JSON.stringify(raw).slice(1, -1))]) {
+      assert.equal(dump.includes(value), false);
+    }
+  }, { services: true, smtp: true, locations: true });
 });

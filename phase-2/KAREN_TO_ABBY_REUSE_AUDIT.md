@@ -108,6 +108,20 @@ Do not transplant Karen's collapse key based on practitioner/type/business/day o
 
 **Karen witnesses:** `server/src/__tests__/postcall/appointmentTypeChangeMidCall.test.ts`, `server/src/__tests__/postcall/bookingRevisionCollapse.test.ts`; maps `docs/flows/appointment-type-change-midcall.md` and `clinic-switch-midcall.md`. [Revision collapse source](/home/gust/code/karen-website-dev/server/src/services/postcall/handlers/bookingRevisionCollapse.ts).
 
+
+**Local fallback-boundary qualification, 1 November 2026:** Four compiled
+separate-process SQL cases cover an explicit same-clock other-clinic request
+before or after booking, in both location directions, with deliberately
+unavailable classification. A later affirmative cannot revive an old proposal,
+repeat an acknowledged write or retarget protected traffic. The existing five
+comparison cases also pass, with whole strict types and exact reuse of all 760
+serving artifacts/inputs. Private canary/full-backup and owned cleanup checks
+pass; no fresh restore or broad source replay is claimed. This is not successful
+semantic clinic-change recognition, clinic-switch authority or completion of the
+whole R03 corpus. Review and normal own/main delivery remain separate.
+[Cases](../test/storage/postgres-booking-comparison.test.ts),
+[scope and evidence](CLINIKO_SERVICE_CATALOGUE.md#fixed-clinic-interpretation-failure-qualification-1-november-2026).
+
 ### R04 Keep caller identity separate from every action subject
 
 **Preserve gap 9.** Karen's `multiAction/bookPatientResolver.ts` maps each leg, but also contains unresolved-slot fallback to the phone-primary and same-first-name heuristics. The manage-target and caller-attribution maps expose mutable selected-appointment state crossing actions.
