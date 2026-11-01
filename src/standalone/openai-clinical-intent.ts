@@ -57,6 +57,10 @@ function dateMillis(value: unknown): number | undefined {
   return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value ? time : undefined;
 }
 
+function completedActionNeedsNextTask(context: Context): boolean {
+  return context.lastAction?.status === "committed" && context.lastAction.kind !== "intake";
+}
+
 function publicPhase(context: Context): string {
   if (context.callerIdentityDenied) return "patientAccessDenied";
   if (context.staffRequestActive) return context.verificationRequired ? "privateVerification" : "staffRequest";
@@ -78,7 +82,7 @@ function publicPhase(context: Context): string {
 
 function schemaFor(context: Context, hasPublicFacts: boolean) {
   const phase = publicPhase(context);
-  const kinds = context.callerIdentityDenied ? ["unsupported"] : context.nextTaskAvailable ? ["workflow", "outcome", "unsupported"] : context.workflow === null ? ["workflow", "outcome", "unsupported"] : context.verificationRequired
+  const kinds = context.callerIdentityDenied ? ["unsupported"] : context.nextTaskAvailable ? ["workflow", "outcome", "unsupported"] : completedActionNeedsNextTask(context) ? ["outcome", "unsupported"] : context.workflow === null ? ["workflow", "outcome", "unsupported"] : context.verificationRequired
     ? ["outcome", "unsupported"] : phase === "listExistingAppointments" || phase === "listNewTimes"
       ? ["menu", "outcome", "unsupported"] : phase === "chooseExistingAppointment" || phase === "chooseNewTime" || phase === "choosePractitioner"
         ? ["choice", "menu", "outcome", "unsupported"] : context.workflow === "appointments.read"
@@ -169,7 +173,9 @@ async function mapDecision(decision: Decision, context: Context, today: number, 
   if (decision.kind === "workflow" && (context.workflow === null || context.workflow === "appointments.read" || context.nextTaskAvailable === true) && !context.verificationRequired &&
       decision.operation !== null && decision.stage === null && decision.from === null && decision.to === null && decision.choice === null)
     return ok({ kind: "workflow", operation: decision.operation });
-  if (context.workflow === null || context.verificationRequired || context.lastAction?.status === "uncertain") {
+  // Completed actions retain receipts rather than reopening operation menus.
+  // Approved next workflows are handled above; registration keeps its separate booking transition.
+  if (context.workflow === null || context.verificationRequired || context.lastAction?.status === "uncertain" || completedActionNeedsNextTask(context)) {
     return decision.kind === "outcome" && none
       ? ok({ kind: "outcome" }) : err(unavailable);
   }

@@ -81,3 +81,63 @@ test("E2E-394 actual signed class booking and cancellation use normal clinical c
     assert.deepEqual(resultValue(await scanPatientDataCanaries(db, verificationCanaries.map((value, index) => ({ label: `class_${index}`, value })))), []);
   });
 });
+
+test("E2E-394 actual emitted signed class read cannot publish after verified call retirement", { timeout: 30_000 }, async () => {
+  const emitted = new URL("../../dist/runtime/", import.meta.url);
+  const { classCallFlowFixture: emittedClassFixture } = await import(new URL("test/support/class-call-flow.js", emitted).href) as typeof import("../support/class-call-flow.ts");
+  const { clinikoWorkflowVoiceFixture: emittedVoiceFixture } = await import(new URL("test/support/cliniko-workflow-voice.js", emitted).href) as typeof import("../support/cliniko-workflow-voice.ts");
+  const { createOpenAIClinicalIntentResolver: emittedResolver } = await import(new URL("src/standalone/openai-clinical-intent.js", emitted).href) as typeof import("../../src/standalone/openai-clinical-intent.ts");
+  await withDisposablePostgres(async db => {
+    const f = await emittedClassFixture("cancel"); f.flow.dispose();
+    let call: Awaited<ReturnType<typeof emittedVoiceFixture>> | undefined;
+    let armed = false, held = false, returned = false, release = () => {};
+    const waiting = new Promise<void>(resolve => { release = resolve; });
+    try {
+      const original = f.flowConfig.fetchPort!;
+      const config = { ...f.flowConfig, fetchPort: async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        const response = await original(input, init);
+        if (armed && !held && (init?.method ?? "GET") === "GET" && new URL(String(input)).pathname === "/v1/group_appointments") {
+          assert.equal(response.status, 200);
+          held = true; await waiting; returned = true;
+        }
+        return response;
+      } };
+      const start = "I would like to withdraw from Mat Pilates.";
+      call = await emittedVoiceFixture(db, config, owner => emittedResolver({ owner,
+        apiKey: "synthetic-class-retirement", model: "synthetic-model", clinicDate: () => "2026-10-04",
+        fetch: async (_input, init) => {
+          const text = JSON.parse(JSON.parse(String(init?.body)).input[1].content).callerText;
+          assert.ok([start, "Show my class bookings from October 4 through October 9."].includes(text));
+          const begin = text === start;
+          const decision = { kind: begin ? "classWorkflow" : "appointments", operation: begin ? "cancel" : null,
+            stage: null, from: begin ? null : "2026-10-04", to: begin ? null : "2026-10-09", choice: null };
+          return Response.json({ status: "completed", output: [{ type: "message", status: "completed", content: [{ type: "output_text", text: JSON.stringify(decision) }] }] });
+        } }));
+      await call.turn(start); await call.mark();
+      await voiceUntil(() => f.mail.length === 1, "class retirement private verification email");
+      await call.verify(f.mail[0]!.code);
+      assert.equal(call.flow.verificationRequired, false);
+      assert.equal(call.writeRequests.length, 0);
+      armed = true;
+      const pending = call.turn("Show my class bookings from October 4 through October 9.").then(() => undefined, error => error);
+      await voiceUntil(() => held, "held successful native class appointment response");
+      call.flow.dispose(); await pending;
+      const beforeLate = await call.state(), spokenBeforeLate = [...call.spoken];
+      assert.ok(beforeLate.appointmentReads.some(read => read.status === "failed"));
+      assert.deepEqual(beforeLate.actions, {});
+      assert.equal(call.writeRequests.length, 0);
+      release(); await voiceUntil(() => returned, "late successful native class appointment response");
+      await new Promise<void>(resolve => setImmediate(resolve));
+      assert.deepEqual(await call.state(), beforeLate);
+      assert.deepEqual(call.spoken, spokenBeforeLate);
+      assert.doesNotMatch(call.spoken.join(" "), /I found an appointment|couldn't find an appointment|booking is confirmed/i);
+      assert.equal(call.writeRequests.length, 0);
+      assert.deepEqual([f.writes.length, f.recalls.length], [0, 0]);
+      await call.close(); call = undefined;
+      assert.deepEqual(resultValue(await scanPatientDataCanaries(db, verificationCanaries.map((value, index) => ({ label: `class_retirement_${index}`, value })))), []);
+    } finally {
+      release();
+      try { await call?.close(); } finally { await f.close(); }
+    }
+  });
+});

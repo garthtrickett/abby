@@ -11,6 +11,62 @@ const decision = (kind: string, patch: Record<string, unknown> = {}) =>
 const completed = (value: unknown) => Response.json({ status: "completed", output: [{ type: "message", status: "completed",
   content: [{ type: "output_text", text: JSON.stringify(value) }] }] });
 
+test("E2E-304 completed booking model menus cannot reopen its receipt", async () => {
+  const f = await bookingCallFlowFixture();
+  try {
+    const context = await f.flow.publicIntentContext(); assert.ok(context);
+    f.flow.publicIntentContext = async () => ({ ...context, workflow: "book", verificationRequired: false,
+      lastAction: { kind: "book", status: "committed", confirmationPlayed: true } });
+    let kinds: string[] = [];
+    const resolver = createOpenAIClinicalIntentResolver({ owner: f.flow, apiKey: "synthetic-model-key", model: "synthetic-model",
+      clinicDate: () => "2026-10-04", fetch: async (_input, init) => {
+        kinds = JSON.parse(String(init?.body)).text.format.schema.properties.kind.enum;
+        return completed(decision("menu", { from: "2026-10-08", to: "2026-10-08" }));
+      } });
+    assert.deepEqual(await resolver(f.turn("receipt-menu", "Please reconsider the offered time.")), unavail);
+    assert.ok(kinds.includes("outcome")); assert.equal(kinds.includes("menu") || kinds.includes("choice"), false);
+    assert.equal(f.mail.length, 0); assert.equal(f.posts, 0);
+  } finally { f.flow.dispose(); await f.close(); }
+});
+
+test("E2E-304 completed registration retains its separate booking menu transition", async () => {
+  const f = await bookingCallFlowFixture();
+  try {
+    const context = await f.flow.publicIntentContext(); assert.ok(context);
+    f.flow.publicIntentContext = async () => ({ ...context, workflow: "intake", verificationRequired: false,
+      lastAction: { kind: "intake", status: "committed", confirmationPlayed: true } });
+    let kinds: string[] = [];
+    const resolver = createOpenAIClinicalIntentResolver({ owner: f.flow, apiKey: "synthetic-model-key", model: "synthetic-model",
+      clinicDate: () => "2026-10-04", fetch: async (_input, init) => {
+        kinds = JSON.parse(String(init?.body)).text.format.schema.properties.kind.enum;
+        return completed(decision("menu", { from: "2026-10-08", to: "2026-10-08" }));
+      } });
+    assert.deepEqual(await resolver(f.turn("registration-menu", "Please reconsider the offered time.")),
+      { ok: true, value: { kind: "bookingMenu", from: "2026-10-08", to: "2026-10-08" } });
+    assert.ok(kinds.includes("menu"));
+    assert.equal(f.mail.length, 0); assert.equal(f.posts, 0);
+  } finally { f.flow.dispose(); await f.close(); }
+});
+
+test("E2E-304 completed booking retains an independently approved next model workflow", async () => {
+  const f = await bookingCallFlowFixture();
+  try {
+    const context = await f.flow.publicIntentContext(); assert.ok(context);
+    f.flow.publicIntentContext = async () => ({ ...context, workflow: "book", verificationRequired: false, nextTaskAvailable: true,
+      lastAction: { kind: "book", status: "committed", confirmationPlayed: true } });
+    let kinds: string[] = [];
+    const resolver = createOpenAIClinicalIntentResolver({ owner: f.flow, apiKey: "synthetic-model-key", model: "synthetic-model",
+      clinicDate: () => "2026-10-04", fetch: async (_input, init) => {
+        kinds = JSON.parse(String(init?.body)).text.format.schema.properties.kind.enum;
+        return completed(decision("workflow", { operation: "book" }));
+      } });
+    assert.deepEqual(await resolver(f.turn("approved-next-workflow", "Please consider this next request.")),
+      { ok: true, value: { kind: "workflow", operation: "book" } });
+    assert.ok(kinds.includes("workflow"));
+    assert.equal(f.mail.length, 0); assert.equal(f.posts, 0);
+  } finally { f.flow.dispose(); await f.close(); }
+});
+
 test("clinic date range boundaries honor Sydney daylight saving transitions", () => {
   assert.equal(clinicDayStartUtc("Australia/Sydney", "2026-10-04"), "2026-10-03T14:00:00.000Z");
   assert.equal(clinicDayStartUtc("Australia/Sydney", "2026-10-05"), "2026-10-04T13:00:00.000Z");

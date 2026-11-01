@@ -8400,3 +8400,97 @@ Review and ordinary own/main delivery remain separate. All eleven execution
 stages, thirteen gaps and twenty-eight reuse placements retain their original
 scope and clinic/provider/staff/retention/restore/acoustic acceptance. No live
 call, deployment or default activation follows.
+
+## Fixed-clinic interpretation-failure qualification, 1 November 2026
+
+The original R03 audit located location-isolation and generic supersession
+evidence but no exact same-clock clinic-correction witness. A local test-only
+extension now passes four compiled separate-process cases across both locations,
+before and after a committed booking. Its synthetic classifier intentionally
+fails for the correction, so a later affirmative cannot revive old consent,
+repeat an acknowledged write or retarget patient traffic. This is a fallback
+boundary, not successful clinic-change interpretation or a new switch feature.
+
+All nine SQL-driver cases pass, including the five unchanged R02 comparison
+cases. Whole strict types pass; all 760 serving artifacts and compiled inputs
+are reused exactly. Full unfiltered backup/canary checks and independently
+verified owned database/container/anonymous-volume/socket cleanup pass. There is
+no fresh backup restore, broader source replay or production change.
+
+Strict work1793498960796 and SQL work1793499230462, with actual zero exits,
+complete logs and cleanup evidence, are retained under
+`~/.local/state/abby-clinic-correction-regression/`. See
+[the contract and limits](CLINIKO_SERVICE_CATALOGUE.md#fixed-clinic-interpretation-failure-qualification-1-november-2026).
+Final metadata/review, qualified-parent integration and ordinary own/main
+delivery remain separate. The full R03 corpus is not certified. All eleven
+execution stages, thirteen gaps and twenty-eight reuse placements remain;
+clinic, provider, human duty, speech and activation gates stay explicit.
+
+## Verified class-read retirement qualification, 1 November 2026
+
+The R05 coverage assessment found the individual and class failed-versus-empty
+serving contrasts already delivered. A further control now holds a valid native
+class appointment response after private verification, retires the call flow,
+then releases that result. It uses the unchanged emitted class/native/voice
+modules through signed in-process serving and real isolated PostgreSQL. The late
+response cannot alter state or speech, propose an action or dispatch a write.
+Patient SQL canaries and owned container/volume/socket cleanup pass.
+
+All six cases in the selected file pass, including its four unchanged original
+native-outcome subcases. Whole strict types pass; all 760 serving inputs and
+artifacts remain exact, with no production edit or new emission. There is no
+fresh full-backup restore, broader source regression, separate class subprocess,
+provider/carrier acceptance or full R05 completion claim.
+
+Strict work1793501230669 and SQL work1793501569918 have actual zero exits;
+complete logs and cleanup evidence are retained under
+`~/.local/state/abby-class-read-retirement/`. Final review, qualified-parent
+integration and ordinary own/main delivery remain separate. All eleven stages,
+four booking steps, thirteen gaps and twenty-eight reuse placements remain in
+scope; clinic, human duty, speech and activation gates are unchanged.
+
+## Completed-action model boundary, 1 November 2026
+
+A stronger local R03 diagnostic returned structured menu, choice and outcome
+responses to the same-clock other-clinic request. Before this correction, a
+model menu after an acknowledged booking reached an invalid call transition.
+The acknowledged native booking was not replayed or retargeted. The failed
+signed run and source reproduction remain negative evidence.
+
+The structured schema and trusted response mapper now limit a completed
+non-registration action to outcome/unsupported unless the owner independently
+admits a next workflow. Registration retains its separately authorized booking
+continuation. Three maintained E2E-304 controls cover refusal of the old booking
+menu and preservation of those two legitimate transitions. All eight source
+controls pass. The unchanged generic speech owner still retires an unsent
+proposal before classification.
+
+Whole strict TypeScript and fresh serving emission pass: 760 compiled inputs
+and 760 outputs are bound, with only openai-clinical-intent.js changed and the
+other 759 outputs byte-identical. Six actual signed in-process SQL cases pass
+across proposed/committed state and structured menu/choice/outcome responses.
+After commitment, deliberately out-of-schema menu/choice replies test trusted
+rejection; they do not establish successful clinic-switch interpretation or
+live model accuracy. A later affirmative cannot add a write or send protected
+traffic to the other clinic. The original native receipt remains exact.
+
+The nine maintained comparison cases also pass on the corrected runtime. A
+private harness initially omitted its dependency link and stopped before the
+subject cases loaded; its failed parent result remains failed, while the
+completed comparison child is independently qualified without replay.
+All eight subject/task cases and all six class cases also pass on this graph,
+including the maintained class late-read control. One selected compiled
+registration-to-booking case passes through its independent private proof and
+confirmation. The rest of that registration file was not qualified by this
+local selection. Every owned database/container/anonymous-volume/socket is
+independently verified absent after the successful terminal. Current
+preservation work1793504609214, fresh-serving work1793503347777 and signed
+diagnostic work1793503761647 retain their raw logs and terminal receipts under
+`~/.local/state/abby-clinic-correction-regression/settled-intent-v1/` and
+`~/.local/state/abby-clinic-correction-regression/valid-model-v2/`. Final
+combined strict/metadata checks, independent review and delivery remain gates. The fresh-build source snapshot
+and historical exact-reuse snapshots retain their separate original inputs.
+No real provider requests, clinic-switch authority, acoustic acceptance,
+deployment or activation are inferred. All eleven stages, four booking steps,
+fourteen booking verification rows, nine commands, thirteen gaps and
+twenty-eight reuse placements retain their original scope.

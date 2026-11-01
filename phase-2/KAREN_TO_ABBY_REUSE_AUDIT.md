@@ -108,6 +108,35 @@ Do not transplant Karen's collapse key based on practitioner/type/business/day o
 
 **Karen witnesses:** `server/src/__tests__/postcall/appointmentTypeChangeMidCall.test.ts`, `server/src/__tests__/postcall/bookingRevisionCollapse.test.ts`; maps `docs/flows/appointment-type-change-midcall.md` and `clinic-switch-midcall.md`. [Revision collapse source](/home/gust/code/karen-website-dev/server/src/services/postcall/handlers/bookingRevisionCollapse.ts).
 
+
+**Local fallback-boundary qualification, 1 November 2026:** Four compiled
+separate-process SQL cases cover an explicit same-clock other-clinic request
+before or after booking, in both location directions, with deliberately
+unavailable classification. A later affirmative cannot revive an old proposal,
+repeat an acknowledged write or retarget protected traffic. The existing five
+comparison cases also pass, with whole strict types and exact reuse of all 760
+serving artifacts/inputs. Private canary/full-backup and owned cleanup checks
+pass; no fresh restore or broad source replay is claimed. This is not successful
+semantic clinic-change recognition, clinic-switch authority or completion of the
+whole R03 corpus. Review and normal own/main delivery remain separate.
+[Cases](../test/storage/postgres-booking-comparison.test.ts),
+[scope and evidence](CLINIKO_SERVICE_CATALOGUE.md#fixed-clinic-interpretation-failure-qualification-1-november-2026).
+
+
+**Completed-action boundary, 1 November 2026:** A structured model menu after
+an acknowledged booking reproduced an invalid call transition. The schema and
+trusted mapper now preserve completed non-registration receipts instead of
+reopening their menus, while independently approved next tasks and registration's
+separate booking continuation remain available. All eight source controls,
+whole strict/fresh 760-output serving emission and six signed synthetic-model
+SQL cases pass; only the resolver output differs from the earlier graph. The
+nine maintained comparison cases also pass on that current graph. Private
+out-of-schema responses test backend rejection, not semantic clinic-switch
+recognition, cross-clinic authority or live model/provider acceptance. Earlier
+failed evidence remains negative; final preservation, review and normal delivery
+remain gates. [Source controls](../test/voice/openai-clinical-intent.test.ts) and
+[current local scope](EXECUTION_PROGRESS.md#completed-action-model-boundary-1-november-2026).
+
 ### R04 Keep caller identity separate from every action subject
 
 **Preserve gap 9.** Karen's `multiAction/bookPatientResolver.ts` maps each leg, but also contains unresolved-slot fallback to the phone-primary and same-first-name heuristics. The manage-target and caller-attribution maps expose mutable selected-appointment state crossing actions.
@@ -137,6 +166,19 @@ no new emission, SQL replay, representative grant or clinic/full-call acceptance
 **Local read-failure wording, 25 October 2026:** Existing typed failed/empty states were distinct, but a disabled staff route replaced the appointment-read explanation with a no-staff-work notice. A revised standalone voice assertion reproduced that missing explanation on synthetic 503. The correction retains the public inability-to-check/verify prefix and appends the existing staff suffix; staff availability, effects, booking authority and deadlines remain unchanged. Seventeen [source controls](../test/voice/standalone-verified-appointment-read.test.ts), including [both staff modes and failed/empty evidence](../test/text/read-failure.test.ts) and [scoped appointment readers](../test/voice/appointment-read.test.ts), and seven selected SQL-ledger controls pass. Whole strict TypeScript and 744-output serving emission pass with only the transition changed from reviewed local parent `6fe1524a`; 743 outputs remain exact. Additional emitted signed/SQL individual and class cases contrast unavailable and complete empty reads; the class case then retains its original played consent and exact cancellation. Nine signed outgoing cancellation controls include native failure, complete empty and actual shared cooldown with no extra provider GET or clinical action. Two signed/SQL controls retain fresh operation verification and exact confirmation before an independent booking after a failed read, and prove a retired enquiry cannot publish a held late successful response. Whole strict and the final 744-output graph pass; only the production transition and three synthetic fixture modules differ from reviewed local `6fe1524a`, with 740 exact. The earlier graph is separately retained through explicit path mapping. See the [combined local evidence](EXECUTION_PROGRESS.md#appointment-read-explanations-when-staff-work-is-unavailable-25-october-2026). Parent integration, own CI/delivery and real-provider/carrier/clinic acceptance remain separate; no permission, booking authority or runtime default is enabled by these fixtures.
 
 **Karen witnesses:** `server/src/__tests__/transient/unknownAppointmentsClinikoCrossLayer.test.ts`. [Lookup source](/home/gust/code/karen-website-dev/server/src/services/transient/dataFetchers/patientLookupFetcher.ts).
+
+
+**Local class-read retirement qualification, 1 November 2026:** A new
+[signed class control](../test/voice/class-workflow-call.test.ts) uses the
+unchanged emitted class/native/voice modules and real isolated PostgreSQL.
+After private verification, it holds a successful native class appointment
+response, retires the flow, then releases the late result. State and speech
+remain fixed, no proposal or write appears, and patient canaries remain absent
+from SQL. The four original native-outcome cases also pass. Whole strict types
+and exact reuse of all 760 compiled inputs and artifacts pass locally. This is
+an in-process emitted route, not a separate class subprocess, real provider or
+carrier trial. No fresh backup restore, whole R05 acceptance or activation is
+claimed. Final review, qualified-parent integration and delivery remain separate.
 
 ### R06 Keep per-action outcomes and notification results independent
 
