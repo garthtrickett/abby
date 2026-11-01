@@ -31,8 +31,11 @@ for (const { outcome, callerFirst, enquiryFirst } of [
   { outcome: "accepted", callerFirst: false, enquiryFirst: true },
   { outcome: "nativePermissionWithdrawn", callerFirst: false, enquiryFirst: true },
   { outcome: "accepted", callerFirst: true, enquiryFirst: true },
+  { outcome: "subjectOmitted", callerFirst: false, enquiryFirst: false },
+  { outcome: "subjectAmbiguous", callerFirst: false, enquiryFirst: false },
 ] as const)
-test(`actual emitted signed ${callerFirst ? "native-self" : "related"}${enquiryFirst ? " enquiry" : ""} then ${callerFirst ? "related" : "native-self"} booking: ${outcome}`, { timeout: 240_000 }, async context => {
+test(`actual emitted signed ${callerFirst ? "native-self" : "related"}${enquiryFirst ? " enquiry" : ""} then ${outcome.startsWith("subject") ? "unresolved-related" : callerFirst ? "related" : "native-self"} booking: ${outcome}`, { timeout: 240_000 }, async context => {
+  const subjectFault = outcome === "subjectOmitted" || outcome === "subjectAmbiguous";
   const admin = connectPostgres(adminUrl), name = `abby_test_related_self_${randomUUID().replaceAll("-", "").slice(0, 24)}`;
   const restoreName = `${name}_restored`, target = new URL(adminUrl), restoreTarget = new URL(adminUrl);
   target.pathname = `/${name}`; restoreTarget.pathname = `/${restoreName}`;
@@ -48,6 +51,13 @@ test(`actual emitted signed ${callerFirst ? "native-self" : "related"}${enquiryF
     canary = await captureScopedSqlVerificationCanaryWindow(db, target.toString());
     const budget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-session-au5", maxPerMinute: 180 });
     f = await relatedSelfTaskSequenceFixture({ budget, subjectIds: ["583746192837465", "683746192837465"], ...(enquiryFirst ? { enquiry: true as const } : {}) }); f.flow.dispose();
+    if (subjectFault) {
+      const first = f.base.r.patients.get(f.base.r.subjectIds[0])!, second = f.base.r.patients.get(f.base.r.subjectIds[1])!;
+      second.first_name = first.first_name; second.last_name = first.last_name;
+      second.patient_phone_numbers = structuredClone(first.patient_phone_numbers);
+      assert.equal(second.first_name, first.first_name); assert.equal(second.last_name, first.last_name);
+      assert.deepEqual(second.patient_phone_numbers, first.patient_phone_numbers);
+    }
     const proofRefs = new Set<string>(), verified = CallerVerificationSession.prototype.verifiedSubject;
     context.mock.method(CallerVerificationSession.prototype, "verifiedSubject", async function(this: CallerSession, ...args: Parameters<typeof verified>) {
       const proof = await verified.apply(this, args); if (proof) proofRefs.add(proof.verificationRef); return proof;
@@ -116,25 +126,62 @@ test(`actual emitted signed ${callerFirst ? "native-self" : "related"}${enquiryF
     await serving.turn("Are you still there?"); await serving.mark(); await quiet(5000);
     assert.ok(performance.now() - beganPause >= 61_000);
     assert.equal((await serving.flow.publicIntentContext())?.nextTaskAvailable, true);
-    if (callerFirst) await verifyRelated(1);
-    else { await verifyCaller(2); assert.equal(firstOwner!.closed, true); }
-    if (first) {
-      if (first.mutation.request.kind !== "book") throw Error("wrong original operation");
-      assert.equal((await serving.flow.resolveBooking(f.base.f.scope, first.mutation.request.patient.verificationRef,
+    if (subjectFault) {
+      assert.ok(first && first.mutation.request.kind === "book");
+      if (outcome === "subjectAmbiguous") {
+        const original = fixture.base.r.patients.get(fixture.base.r.subjectIds[0])!, other = fixture.base.r.patients.get(fixture.base.r.subjectIds[1])!;
+        other.date_of_birth = original.date_of_birth;
+        fixture.base.r.authorizations.set(fixture.base.r.subjectIds[1], {
+          ...fixture.base.r.authorizations.get(fixture.base.r.subjectIds[0])!, authorityRef: "independently-approved-second-adult" });
+      }
+      await excludePriorPublicNumbers(); await serving.turn("Book an appointment for another person"); await serving.mark();
+      const owner = serving.flow.representativeInputOwner; assert.ok(owner); assert.notEqual(owner, firstOwner);
+      assert.equal(firstOwner!.closed, true); assert.equal(fixture.base.mail.length, 2);
+      await serving.privateDigit("1"); await serving.mark(); await fixture.base.waitForMail(3);
+      for (const digit of `${fixture.base.mail[2]!.code}#`) serving.sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+      await voiceUntil(() => serving.spoken.at(-1) === "Please say the patient's first name.", "new private subject after fresh actor proof"); await serving.mark();
+      // A new actor code still grants no subject and cannot reuse the first offer.
+      assert.equal((await serving.flow.resolveBooking(fixture.base.f.scope, first.mutation.request.patient.verificationRef,
         first.mutation.request.offer.offerRef, clock())).ok, false);
+      assert.equal((await serving.flow.publicIntentContext())?.lastAction, null);
+      if (outcome === "subjectAmbiguous") {
+        for (const field of [fixture.base.r.identity.firstName, fixture.base.r.identity.lastName, "5 March 1982"]) {
+          await serving.privateField(field); await serving.mark();
+        }
+        // No new prompt or code is expected when the exact native identity is
+        // ambiguous. Observe the processed key and retirement of this owner.
+        await serving.privateKey("1"); await voiceUntil(() => owner.closed, "ambiguous subject refusal");
+      } else {
+        // Leave the requested subject absent at the real private-media seam.
+        // Old subject digits cannot supply the missing private identity.
+        for (const digit of `${fixture.base.mail[1]!.code}#`) await serving.privateKey(digit);
+        assert.equal(owner.closed, false); assert.equal(serving.closed, false);
+        assert.equal(owner.beginPatientVerification(), false);
+      }
+      assert.equal(fixture.base.mail.length, 3); assert.equal(serving.writes.length, 1);
+      assert.equal(serving.writeRequests.length, 1); assert.equal(fixture.base.f.recalls.length, 1);
+      assert.equal(Object.keys((await serving.state()).actions).length, 1);
     } else {
-      assert.ok(firstRead); assert.equal((await serving.flow.publicIntentContext())?.lastAction, null);
-      assert.equal(serving.writes.length, 0);
+      if (callerFirst) await verifyRelated(1);
+      else { await verifyCaller(2); assert.equal(firstOwner!.closed, true); }
+      if (first) {
+        if (first.mutation.request.kind !== "book") throw Error("wrong original operation");
+        assert.equal((await serving.flow.resolveBooking(f.base.f.scope, first.mutation.request.patient.verificationRef,
+          first.mutation.request.offer.offerRef, clock())).ok, false);
+      } else {
+        assert.ok(firstRead); assert.equal((await serving.flow.publicIntentContext())?.lastAction, null);
+        assert.equal(serving.writes.length, 0);
+      }
+      const second = await book(outcome === "nativePermissionWithdrawn" ? () => fixture.denySelf() : undefined);
+      if (outcome === "accepted") {
+        assert.equal(second.status, "committed"); assert.equal(serving.writes.length, priorWrites + 1);
+        assert.equal(serving.writeRequests[priorWrites]!.body.patient_id, callerFirst ? f.base.r.subjectIds[0] : verificationCanaries[2]);
+        if (first) { assert.notEqual(first.key, second.key); assert.notEqual(first.hostRef, second.hostRef); }
+      } else { assert.notEqual(second.status, "committed"); assert.equal(serving.writes.length, priorWrites); }
     }
-    const second = await book(outcome === "nativePermissionWithdrawn" ? () => fixture.denySelf() : undefined);
-    if (outcome === "accepted") {
-      assert.equal(second.status, "committed"); assert.equal(serving.writes.length, priorWrites + 1);
-      assert.equal(serving.writeRequests[priorWrites]!.body.patient_id, callerFirst ? f.base.r.subjectIds[0] : verificationCanaries[2]);
-      if (first) { assert.notEqual(first.key, second.key); assert.notEqual(first.hostRef, second.hostRef); }
-    } else { assert.notEqual(second.status, "committed"); assert.equal(serving.writes.length, priorWrites); }
     if (first) {
       assert.deepEqual((await serving.state()).actions[first.key], receipt);
-      assert.deepEqual(await serving.flow.reconcile(first.mutation), { kind: "exactCommit", actionKey: first.key, hostRef: first.hostRef });
+      if (!subjectFault) assert.deepEqual(await serving.flow.reconcile(first.mutation), { kind: "exactCommit", actionKey: first.key, hostRef: first.hostRef });
       assert.deepEqual(await serving.flow.write(first.mutation, clock()), { kind: "rejected", actionKey: first.key, reason: "forbidden" });
     } else {
       assert.deepEqual((await serving.state()).appointmentReads[0], receipt);
