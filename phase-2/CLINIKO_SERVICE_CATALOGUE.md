@@ -619,3 +619,53 @@ comparison evidence. Current whole strict types and the unchanged prior 745
 outputs plus one emitted existing fixture (746 total) are qualified. Original
 failed attempts remain recorded; refreshed review, normal delivery and real
 acceptance remain separate. See [the composed evidence](EXECUTION_PROGRESS.md#composed-r02-service-and-duration-correction-27-october-2026).
+
+## Fixed-clinic interpretation-failure qualification, 1 November 2026
+
+Four separate-process compiled PostgreSQL cases exercise an explicit request to
+change clinic at the same clock time after a proposal or an acknowledged booking,
+in both North-to-South and South-to-North directions. The existing synthetic
+classifier deliberately fails for that request. This qualifies the unavailable-
+interpretation fallback, not successful recognition or a clinic-switch workflow.
+
+A later affirmative cannot revive the unconfirmed proposal, repeat the completed
+write or send patient/provider traffic to the other location. The completed
+payload retains the selected native business, 60-minute type and exact start;
+only its original confirmation is spoken. Registered TLS mail and private proof
+remain scoped to the chosen location, with no second challenge. The separate
+receipt-level invariants retain their earlier evidence; these cases do not inspect
+or certify every internal receipt field.
+
+All nine cases in the SQL driver pass: the five existing R02 comparison cases,
+whose bodies remain unchanged, and these four failure-boundary cases. Whole
+strict TypeScript passes. All 760 serving artifacts and their compiled inputs
+match the parent graph exactly; no production change or new emission is needed.
+Every-column canary scans, complete unfiltered SQL backups and owned database,
+container, anonymous-volume and socket cleanup pass. This adds no fresh backup-
+restore or broader source-control replay. Existing quotas and deadlines remain.
+
+Evidence: `~/.local/state/abby-clinic-correction-regression/`, strict work
+1793498960796 and PostgreSQL work1793499230462. Metadata, independent review,
+qualified-parent integration, own/main CI and normal delivery remain gates.
+The original R03 correction corpus, clinic/provider/acoustic acceptance and all
+other execution-plan requirements retain their scope. These tests establish no
+cross-clinic authority, semantic model acceptance, deployment or activation.
+
+## Completed-action model boundary, 1 November 2026
+
+The earlier four cases above intentionally exercise unavailable interpretation
+and retain their original unchanged-runtime proof. A stronger six-case local
+signed SQL diagnostic tests structured menu, choice and outcome responses before
+and after commitment. It reproduced an invalid call transition when a model menu
+tried to reopen an acknowledged booking; no extra or other-clinic write occurred.
+The model schema and trusted mapper now retain the receipt instead of reopening
+its operation menu. An independently approved next workflow and registration's
+separate booking transition remain allowed. The resolver is the sole changed
+output in a fresh 760-file serving build; all eight source controls and the
+nine-case maintained comparison file pass on that graph.
+
+For completed actions, deliberately out-of-schema menu/choice replies test the
+backend boundary. These diagnostics do not establish live model recognition of
+clinic changes, a newly approved clinic switch, provider/acoustic acceptance or
+full R03 completion. Historical failures, source snapshots and cleanup evidence
+remain separate. See [the current correction](EXECUTION_PROGRESS.md#completed-action-model-boundary-1-november-2026).
