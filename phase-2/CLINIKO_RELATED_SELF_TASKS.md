@@ -167,3 +167,31 @@ access/retention, carrier/acoustic acceptance and deployment remain separate.
 Local results do not complete the original execution plan. Independent review,
 normal parent integration, exact-head CI and actual-main qualification are still
 required before delivery.
+
+## Signed omitted and ambiguous subject qualification, 1 November 2026
+
+The maintained R04 refusal cases now also run through the actual emitted signed
+HTTP/media and native clinical-host route with real isolated PostgreSQL. Both
+patients have the same full name and phone. After the first separately verified
+booking and played receipt, a new related-person task obtains fresh caller proof.
+An omitted subject cannot inherit the first patient's code, proof or offer. An
+exact name/birth-date match for two independently approved adults retires the
+ambiguous owner without issuing another subject challenge or native mutation.
+The first committed receipt remains immutable in both cases.
+
+All eight signed cases pass with zero skips: the six earlier booking/enquiry
+cases run again, followed by the two R04 refusals. The existing 180-request
+native budget, real 61-second hold/presence window and 240-second case deadline remain unchanged.
+Every-column scans, complete unfiltered SQL backup and restore, unrelated
+retained rows and owned database/container/anonymous-volume/socket cleanup pass.
+Whole-project strict TypeScript passes. All 760 compiled inputs and serving
+outputs are exact copies of the parent graph; there is no new emission or
+production change. The 36 earlier source controls retain their earlier evidence
+and are not counted as a fresh replay.
+
+Private evidence is retained under
+`~/.local/state/abby-signed-subject-ambiguity/`. These are synthetic signed
+refusal journeys, not full-call acoustic/carrier or real clinic acceptance.
+Other operations, guardian/contact grants, classes, financial and outbound
+authority retain their separate scope. Final metadata/review, own exact-head CI,
+normal delivery and independent resulting-main qualification remain gates.
