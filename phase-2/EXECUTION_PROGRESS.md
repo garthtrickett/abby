@@ -8378,3 +8378,25 @@ driver/compiled inputs and their original passing evidence; they were not rerun.
 No signed ambiguity or full-call/clinic acceptance is inferred. Current review,
 qualified normal-parent integration, own/main CI and all original execution-plan
 and external acceptance gates remain separate.
+
+## Signed omitted and ambiguous subject qualification, 1 November 2026
+
+The local R04 driver adds omitted/ambiguous same-name shared-phone subjects
+after a committed first booking. It requires fresh actor proof, issues no
+unapproved second subject challenge or write, rejects the first offer/proof and
+preserves its receipt. All eight actual emitted signed SQL cases pass, including
+the six retained caller/related booking and enquiry cases. The existing
+180-request native budget, real 61-second pacing, 240-second deadlines,
+all-column privacy, complete unfiltered backup/restore, unrelated rows and
+owned cleanup retain their assertions. Whole strict types pass; all 760 compiled
+inputs and outputs are reused exactly, with no production change or emission.
+The 36 earlier source controls retain their original qualification.
+
+Tracked work1793496027030 qualifies strict/reuse; work1793496278237 qualifies the
+eight signed cases. Their actual zero exits, complete logs and cleanup receipts
+are retained under `~/.local/state/abby-signed-subject-ambiguity/`. See
+[the current contract and limits](CLINIKO_RELATED_SELF_TASKS.md#signed-omitted-and-ambiguous-subject-qualification-1-november-2026).
+Review and ordinary own/main delivery remain separate. All eleven execution
+stages, thirteen gaps and twenty-eight reuse placements retain their original
+scope and clinic/provider/staff/retention/restore/acoustic acceptance. No live
+call, deployment or default activation follows.

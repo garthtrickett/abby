@@ -478,3 +478,19 @@ Client application paths use the `/home/gust/code/karen-client` alias; other pat
 | `34a642be8da7884b924eb02e7ccae731bd428276` | `server/src/services/demoSiteBrief/siteCrawlService.ts` | Present |
 | `34a642be8da7884b924eb02e7ccae731bd428276` | `server/src/services/lifecycle/companyLifecycleService.ts` | Present |
 | `34a642be8da7884b924eb02e7ccae731bd428276` | `src/utils/appTrackingBoundary.ts` | Present |
+
+## R04 signed refusal refinement, 1 November 2026
+
+The two maintained same-name/shared-phone source controls now have additional
+actual emitted signed HTTP/media/PostgreSQL refusal journeys: omitted next
+subject and ambiguous exact native identity. Fresh caller proof cannot choose a
+patient or reuse the first booking's offer/proof; the first receipt remains
+immutable and neither case issues a second subject code or mutation. All eight
+signed cases pass, including the six retained caller/related booking/enquiry
+journeys, with the existing 180-request native budget, real 61-second pacing,
+all-column privacy and complete unfiltered backup/restore. Whole strict types
+and exact reuse of all 760 compiled inputs and outputs pass;
+there is no production change or new emission. The 36 earlier source controls retain
+their evidence. These are local synthetic refusal results; fixed-head review,
+own/main delivery, full-call/clinic/carrier acceptance and the original R04
+authority limits remain separate. See [the exact scope](CLINIKO_RELATED_SELF_TASKS.md#signed-omitted-and-ambiguous-subject-qualification-1-november-2026).
