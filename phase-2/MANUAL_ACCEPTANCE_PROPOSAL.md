@@ -2,7 +2,7 @@
 
 The [clinic setup and rehearsal command](CLINIC_SETUP_AND_REHEARSAL.md) supplies a twelve-scenario local worksheet pinned to the current committed source and six owner configuration areas. It records self-reported staff observations only; missing configuration, failed/unrun scenarios and source drift remain visible. It neither replaces the observations below nor supplies activation authority.
 
-Status: proposal only, updated25October2026. Full current-candidate acceptance
+Status: proposal only, updated 1 November 2026. Full current-candidate acceptance
 has not been executed. Earlier scoped demo rehearsals are recorded below.
 This supplies the manual-test proposal required by [execution stage11](EXECUTION_ORDER.md).
 It does not activate a clinic or authorize provider mutations, real mail,
@@ -159,6 +159,49 @@ path, not actual staff approval, complete financial decisions, cash/bank invoice
 mapping or any other operator row. Keep the observations below open until their
 actual scoped evidence exists. See [the exact candidate, hashes and limits](STRIPE_PROVIDER_REHEARSAL.md#delivered-waiver-sdk-and-native-demo-observation-25-october-2026).
 
+## Non-patient guardian rehearsal
+
+The owner selected restricted clinic-owned approval files for the optional
+[guardian record route](CLINIKO_GUARDIAN_RECORDS.md#optional-clinic-owned-file-sources-31-october-2026).
+This permits a separately approved guardian who is a Cliniko contact without
+requiring that guardian to have a patient record. It does not provision records
+or approve a real guardian, patient, channel or operation. The existing native-
+patient guardian route remains a separate selection.
+
+Before a separately authorized clinic rehearsal:
+
+1. Record which guardian route is selected. For the file route, the clinic must
+   approve the private identity and authority files, their provisioning and
+   withdrawal owner, access, retention and recovery. Bind the actual clinic,
+   location, account and policy, exact Cliniko contact and patient IDs and each
+   permitted operation. Use the file contract above; keep private contents and
+   paths out of this repository and public evidence.
+2. Use an approved test guardian with no Cliniko patient record. Observe the
+   current native contact and registered channel independently from the file
+   approval, then complete separate guardian and patient verification. A shared
+   channel does not combine their proof. Current native patient identity and
+   per-action permissions must still pass before protected work.
+3. Exercise the selected individual appointment enquiry, booking, cancellation
+   or rescheduling journey
+   against its exact approved patient and target, with the applicable fresh
+   selection and played consent. An enquiry must not write. Each mutation must
+   retain its exact outcome and must not derive authority from the caller's
+   phone number, spoken relationship or earlier patient's proof.
+4. With the clinic's approval, exercise missing, ambiguous and withdrawn records,
+   including withdrawal after verification but before final consent. Changed
+   native contact/channel or patient/action permission must also refuse the
+   affected access or write. A refused file route must not silently fall back to
+   another identity method. Record unsupported follow-on tasks as open; do not
+   infer a second patient's authority from the first task or alter its receipt.
+
+Retain the exact source/build and configuration versions, fixed observations,
+remaining obligations and cleanup result in the approved private evidence
+location. Keep an unrun or failed operation open. These are proposed clinic
+observations; earlier synthetic passes and the storage choice do not execute
+this rehearsal or establish human, carrier or acoustic acceptance. Class,
+financial, memo and general representative authority retain their separate
+contracts.
+
 ## Operator observations
 
 Run only the rows supported by that exact candidate and separately authorized
@@ -176,7 +219,7 @@ without replaying the original action.
 | 6 | Longer/approved offline calendar search; incomplete page and late conflict | A complete approved source supports the actual chosen interval. Incomplete reads deny a complete availability answer. Native dated recurrence is observed, never extrapolated. |
 | 7 | Explicit different practitioner at retained and changed time | Independent destination approval, exact original and fresh destination are shown. The original remains protected until the operation-specific reschedule contract succeeds. |
 | 8 | Private correction and resend, with an unplayed choice, interrupted readback and revoked recipient permission | Private values stay out of model/public output. An unplayed choice cannot gain authority later. Resend needs its own exact appointment/recipient and played approval; accepted mail is distinct from mailbox receipt. |
-| 9 | Two independently verified subjects and mixed read/write tasks | Each action retains its own subject, permission, confirmation and immutable result. Changing task cannot borrow the prior patient's private proof or turn an enquiry into a write. |
+| 9 | Two independently verified subjects and mixed read/write tasks | Each action retains its own subject, permission, confirmation and immutable result. Changing task cannot borrow the prior patient's private proof or turn an enquiry into a write. For a guardian without a patient record, follow the [non-patient guardian rehearsal](#non-patient-guardian-rehearsal), including current contact verification and independently approved file records. |
 | 10a | Ordinary and approved-pass class creation; inspect native outcome after the caller result | The validated exact provider acknowledgement establishes creation. Manual readback records outcome without becoming a runtime success veto. Capacity/pass races remain explicit; creation proves neither payment nor an entire move. |
 | 10b | Ordinary/pass movement, quota wait, renewal and corrected date/service | Each current phase is separately presented, actually played and confirmed. Wait/renewal cannot revive an old selection or approval. Inspect original, replacement and any case effects jointly; replacement creation alone is partial progress. |
 | 10c | Lost movement result followed by authenticated cold staff observation | Independently establish sender quiescence and current staff permission. Unknown/contradictory state stays for review; a recalled review is not completion. Observation grants no new mutation or caller success. A restoration observation requires the exact cancelled/unlinked replacement and unchanged original case use where applicable. |
