@@ -93,7 +93,7 @@ awaited approval. Cancellation and pending abandonment each refuse activation,
 issue no challenge or write and preserve the first receipt. An already accepted
 workflow event retains the existing reserved-slot recovery rule.
 
-Fresh combined qualification passes 111 source controls across eleven files:
+At the caller/guardian parent checkpoint, combined qualification passed 111 source controls across eleven files:
 27 caller/private-input controls and 84 guardian/file-source controls, with zero
 skips. Whole strict TypeScript and an actual 760-output serving build pass. Only
 `cliniko-call-flow.js` differs from the initial file-source build; the other 759
@@ -108,12 +108,57 @@ This combines local engineering evidence. Actual parent integration, final revie
 exact-head CI and resulting-main qualification remain delivery gates. The clinic,
 carrier/acoustic and broader workflow limits below remain open.
 
+## Enquiry then booking, 31 October 2026
+
+An approved native patient caller can complete an enquiry for a related patient
+and then book for themselves, or finish their own enquiry and then book for the
+approved related patient. A played enquiry settles its task without mutation.
+Unplayed/failed reads and withdrawn task approval refuse advancement. The next
+owner needs fresh independent actor/patient proof, current permission and played
+booking consent; a read receipt or old code cannot authorize the booking.
+
+The earlier enquiry checkpoint passed seven new controls with the 27 existing
+caller/private-input controls (34 source tests, zero skips). Whole strict, an actual 760-output serving
+build and final driver strict/graph checks pass. Only the test fixture output
+changes from the reviewed parent; all production and the other 759 outputs are
+exact. The driver edit is outside that graph, so all 760 outputs were reused.
+Six actual emitted signed HTTP/media/PostgreSQL cases pass: the original three
+booking cases plus enquiry then booking in both subject orders and native
+permission withdrawn after the second readback. Native 180, the real 61s quota
+pause and 240s case deadline remain. Every-column scans, full unfiltered backup,
+restore, unrelated retained rows and owned cleanup keep their exact assertions.
+
+This qualifies those enquiry-before-booking combinations under the existing
+native-patient related process. Guardian-contact channels, other operation
+orders/catalogues, full-call/real-clinic/carrier acceptance and activation retain
+their separate limits. Final review, qualified-parent integration, own/main CI
+and independent delivery remain gates for this test-only refinement.
+
+## Maintained subject-ambiguity controls, 31 October 2026
+
+Two maintained source controls exercise the original R04 acceptance: related
+patients have the same full name and phone, then the next task omits its subject
+or exact native identity matches two independently approved adults. A fresh actor
+proof does not select either patient. No next subject challenge, booking or recall
+is sent; the earlier receipt is immutable and its offer/proof cannot authorize
+the new task. Public projections retain no private identity, email or code.
+
+The current combined source cohort passes 36 controls: the earlier 34 plus these
+two controls using the native 180-request budget. Whole-project strict types
+and the actual 760-input serving graph pass. The new test is outside that graph;
+all 760 compiled inputs and outputs, the signed driver and its six earlier
+passing cases remain exact. No new emission or SQL replay is claimed.
+
+These two ambiguity cases are source evidence only. They add no representative
+or guardian grant, signed ambiguity call, real clinic acceptance or activation.
+Final review, qualified-parent integration and own/main CI remain separate.
+
 ## Remaining scope
 
-The positive signed evidence covers one fixed, approved individual-service booking
-composition in both subject orders. Caller routing also recognises the existing individual cancel, move
-and enquiry operations, but their related-to-self compositions and broader
-catalogue combinations are not established by these three cases. Classes, financial
+The positive signed evidence covers selected individual bookings in both subject
+orders, and enquiry then booking for the other subject in both orders under the
+native-patient related process. Other operation orders, cancel/move compositions
+and broader catalogue combinations remain outside these selected cases. Classes, financial
 work, registration, corrections and resends gain no representative authority.
 Outbound task sequencing remains outside this inbound configuration.
 

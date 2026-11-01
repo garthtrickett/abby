@@ -116,6 +116,16 @@ Abby's `src/standalone/cliniko-call-tasks.ts` pins the root caller, requires fre
 
 **Acceptance:** two same-named people share a phone; the second task omits its target. Refuse ambiguity without changing the first task's receipt or using its proof for the second patient. Retain Abby's `test/cliniko/representative-task-sequence.test.ts` witnesses.
 
+**Maintained source qualification, 31 October 2026:** Two
+[subject-ambiguity controls](../test/cliniko/representative-task-ambiguity.test.ts)
+use native 180 after an exact first booking. Same full names and a shared phone
+cannot supply an omitted next subject; two independently approved exact native
+matches also refuse selection. Fresh actor proof grants no patient choice,
+the previous receipt stays immutable, and its proof/offer cannot authorize a
+second write. The current 36-control source cohort, whole strict and unchanged
+760-input serving graph pass. These are source-only ambiguity witnesses, with
+no new emission, SQL replay, representative grant or clinic/full-call acceptance.
+
 **Karen pointers:** `docs/flows/manage-target-resolution.md`, `postcall-caller-identity-attribution.md`; [patient resolver](/home/gust/code/karen-website-dev/server/src/services/postcall/multiAction/bookPatientResolver.ts).
 
 ### R05 Keep unknown reads distinct from successfully empty reads

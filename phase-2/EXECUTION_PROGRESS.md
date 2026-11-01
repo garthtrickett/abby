@@ -8335,3 +8335,46 @@ records, grants, provisioning, staff/carrier/acoustic acceptance or deployment
 are inferred. All original eleven execution stages, four booking steps, fourteen
 rows, nine commands, thirteen gaps and twenty-eight reuse placements remain in
 scope; this does not complete the goal.
+
+
+## Enquiry-to-other-subject booking qualification, 31 October 2026
+
+A test-only stage6/gap9 refinement qualifies a played enquiry then booking for
+the other subject in both orders under the existing native-patient related
+process. Two external probes passed first on the unchanged reviewed parent.
+The maintained fixture adds opt-in enquiry while retaining booking/guardian
+defaults. Seven new source controls and 27 existing caller/private controls pass
+together (34/34): fresh proofs/immutable reads, unplayed/failed-read refusal,
+withdrawn sequence approval and independent native/actor/subject permissions.
+
+Whole strict/actual 760 serving and final signed-driver strict/graph pass. Only
+the fixture output changes; all production and 759 other parent outputs are exact.
+Six emitted signed HTTP/media/PostgreSQL cases pass together: three inherited
+booking cases and three enquiry-first cases, including late native permission
+withdrawal. Native 180, real 61s pause, 240s deadline and the entire all-column/full
+backup/restore/retained-row/cleanup tail remain unchanged. Owned databases,
+container, anonymous volume and socket parent are absent. Driver-only changes
+reuse all 760 outputs; the 34 source bodies stay exact.
+
+E2E-387/388 gain scoped source/synthetic witnesses; 426 IDs/version 1.251 and
+planned full-call status remain. Actual normal parent/main qualification,
+independent review and own/main delivery CI remain separate. No production
+behavior, authority or activation changes. Other operation/cohort combinations,
+real clinic/staff/mail, speech/carrier and the full original goal remain open.
+
+## Maintained same-name subject ambiguity, 31 October 2026
+
+The explicit R04 same-name/shared-phone acceptance now has two maintained source
+controls. After one exact booking, a new task with an omitted patient or two
+independently approved exact native matches cannot inherit the first proof or
+receipt. Fresh actor proof grants no patient choice; no second subject challenge,
+booking or recall occurs, and public output excludes private fields and codes.
+
+All 36 enquiry/caller/ambiguity source controls pass together without skips.
+The two new controls use native 180. Whole-project strict and the actual 760-input
+serving graph pass; the test is outside emission, so all 760 inputs and outputs
+are reused exactly. The earlier six emitted signed SQL cases retain identical
+driver/compiled inputs and their original passing evidence; they were not rerun.
+No signed ambiguity or full-call/clinic acceptance is inferred. Current review,
+qualified normal-parent integration, own/main CI and all original execution-plan
+and external acceptance gates remain separate.
