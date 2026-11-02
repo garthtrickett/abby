@@ -222,13 +222,13 @@ test("E2E-138, E2E-139, and E2E-140 local standalone server reads keypad availab
     assert.deepEqual(sent.map(item => item.event), ["media", "mark"]);
     assert.equal(synthesisCalls, 1);
     caller.send(JSON.stringify({ event: "dtmf", sequenceNumber: "2", streamSid,
-      dtmf: { track: "inbound_track", digit: "2" } }));
+      dtmf: { track: "inbound", digit: "2" } }));
     caller.send(JSON.stringify({ event: "mark", sequenceNumber: "3", streamSid,
       mark: { name: (sent[1]?.mark as { name: string }).name } }));
     caller.send(JSON.stringify({ event: "dtmf", sequenceNumber: "4", streamSid,
-      dtmf: { track: "inbound_track", digit: "9" } }));
+      dtmf: { track: "inbound", digit: "9" } }));
     caller.send(JSON.stringify({ event: "dtmf", sequenceNumber: "5", streamSid,
-      dtmf: { track: "inbound_track", digit: "2" } }));
+      dtmf: { track: "inbound", digit: "2" } }));
     await availabilitySpoken;
     assert.equal(synthesisCalls, 2);
     assert.equal(modelCalls, 0);
@@ -241,7 +241,7 @@ test("E2E-138, E2E-139, and E2E-140 local standalone server reads keypad availab
     const closed = once(caller, "close");
     for (let index = 0; index < 7; index += 1) {
       if (index === 1) caller.send(JSON.stringify({ event: "dtmf", sequenceNumber: "8", streamSid,
-        dtmf: { track: "inbound_track", digit: "1" } }));
+        dtmf: { track: "inbound", digit: "1" } }));
       caller.send(JSON.stringify({ event: "media",
         sequenceNumber: String(index === 0 ? 7 : index + 8), streamSid,
         media: { track: "inbound", chunk: String(index + 1),

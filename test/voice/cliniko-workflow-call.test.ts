@@ -143,7 +143,7 @@ test("E2E-302 private registration rejects premature consent and cleans up decli
         await call.turn("I am a new patient"); await call.mark(); await call.privateDigit("1");
         assert.equal(call.privateTranscripts.length, 0);
         // Neither a premature digit nor speech can acknowledge unplayed recovery terms.
-        call.sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit: "1" } });
+        call.sendEvent({ event: "dtmf", dtmf: { track: "inbound", digit: "1" } });
         for (let frame = 0; frame < 7; frame++) call.media(frame < 2);
         await call.mark();
         await voiceUntil(() => call!.spoken.at(-1)!.includes("Press one to acknowledge"), "explicit private consent still required");
@@ -151,7 +151,7 @@ test("E2E-302 private registration rejects premature consent and cleans up decli
         assert.equal(call.privateTranscripts.length, 0); assert.equal(f.mail.length, 0);
         const owner = call.flow;
         if (cause === "decline") {
-          await call.mark(); call.sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit: "*" } });
+          await call.mark(); call.sendEvent({ event: "dtmf", dtmf: { track: "inbound", digit: "*" } });
           await voiceUntil(() => owner.closed, "declined private owner closed");
         } else { await call.close(); call = undefined; }
         assert.equal(owner.closed, true); assert.equal(owner.intakeDraftRef, undefined);

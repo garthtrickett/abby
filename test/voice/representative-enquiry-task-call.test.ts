@@ -31,7 +31,7 @@ test("E2E-388 signed call checks two patients appointments with separate private
         const owner = call.flow.representativeInputOwner; assert.ok(owner); if (index === 0) firstOwner = owner;
         assert.equal(f.mail.length, index * 2); await call.mark(); await call.privateDigit("1");
         await call.mark(); await f.waitForMail(index * 2 + 1);
-        for (const digit of `${f.mail.at(-1)!.code}#`) call.sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+        for (const digit of `${f.mail.at(-1)!.code}#`) call.sendEvent({ event: "dtmf", dtmf: { track: "inbound", digit } });
         await voiceUntil(() => call!.spoken.at(-1) === "Please say the patient's first name.", "private next patient field"); await call.mark();
         for (const field of [patient.first_name, patient.last_name, index === 0 ? "5 March 1982" : "28 February 2014"]) { await call.privateField(field); await call.mark(); }
         await call.privateDigit("1"); await call.mark(); await f.waitForMail(index * 2 + 2); assert.equal(f.mail.at(-1)!.email, patient.email);

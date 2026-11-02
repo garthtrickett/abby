@@ -109,7 +109,7 @@ test("E2E-299 standalone server runs an approved clinical booking through signed
         for (let i = 0; i < 7; i++) send({ event: "media", media: { track: "inbound", chunk: String(++chunk), timestamp: String((chunk - 1) * 20), payload: Buffer.alloc(160, i < 2 ? 0x9f : 0xff).toString("base64") } });
         await voiceUntil(() => spoken.length > before, "clinical response", 20_000); };
       await mark(); await turn("Start"); await mark(); await voiceUntil(() => f.mail.length === 1, "private verification delivery");
-      for (const digit of `${f.mail[0]!.code}#`) send({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+      for (const digit of `${f.mail[0]!.code}#`) send({ event: "dtmf", dtmf: { track: "inbound", digit } });
       await voiceUntil(() => flow !== undefined && !flow.verificationRequired, "private verification result");
       const beforeQuiet = ordinaryFrames;
       // Packets arriving while the private fence is draining must stay private,

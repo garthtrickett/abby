@@ -144,7 +144,7 @@ test("E2E-215 rotated Cliniko credential blocks signed calls until a clinic admi
       socket.send(JSON.stringify({ event: "mark", sequenceNumber: "2", streamSid,
         mark: { name: (messages[1]!.mark as { name: string }).name } }));
       socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid,
-        dtmf: { track: "inbound_track", digit: "2" } }));
+        dtmf: { track: "inbound", digit: "2" } }));
       await waitFor(() => messages.length >= 4 && speech.length >= speechBefore + 2, "provisional availability");
       assert.match(speech.at(-1)!, /possible times/);
       assert.match(speech.at(-1)!, /can't reserve or confirm/);

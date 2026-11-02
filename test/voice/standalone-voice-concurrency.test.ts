@@ -262,7 +262,7 @@ test("E2E-198 eight parallel signed calls isolate tenants and exhaust one Clinik
       call.socket.send(JSON.stringify({ event: "mark", sequenceNumber: "2", streamSid: call.streamSid,
         mark: { name: (call.messages[1]!.mark as { name: string }).name } }));
       call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
-        dtmf: { track: "inbound_track", digit: "1" } }));
+        dtmf: { track: "inbound", digit: "1" } }));
     }
     assert.notEqual(greetingMedia.get("east-tenant"), greetingMedia.get("west-tenant"));
     await Promise.all(calls.map(call => waitForMessages(call, 4)));
@@ -294,7 +294,7 @@ test("E2E-198 eight parallel signed calls isolate tenants and exhaust one Clinik
     overBudget.socket.send(JSON.stringify({ event: "mark", sequenceNumber: "2", streamSid: overBudget.streamSid,
       mark: { name: (overBudget.messages[1]!.mark as { name: string }).name } }));
     overBudget.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: overBudget.streamSid,
-      dtmf: { track: "inbound_track", digit: "1" } }));
+      dtmf: { track: "inbound", digit: "1" } }));
     await waitForMessages(overBudget, 4);
     assert.deepEqual(overBudget.messages.map(message => message.event), ["media", "mark", "media", "mark"]);
     assert.equal(spoken.at(-1), noStaffNotice);
