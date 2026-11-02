@@ -1,7 +1,7 @@
 {
   "verifiedDate": "2026-11-02",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "5f506edae5b4ff92d3eae7882292791feab4e79f1a38c8f916da6a48eef2068b",
+  "factsSha256": "80fb18612ff373901f13498d4f589a803d12095d8cef9b98d0ea9787838036eb",
   "sources": {
     ".github/workflows/text-contract.yml": "20f47909d711b7a7d2b3916a8ef0756345b414dff225184989cd8056b5b6179b",
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
@@ -20,6 +20,7 @@
     "eval/baselines/synthetic-speech-current-20261023-v1.json": "580a8a0ce39ec937a490a495022ba88fd2d7f3a4def0250c761d1f491dd71140",
     "phase-1/CARRIER_WIRE_FINDINGS.md": "726559e6f19b9050d8022feda248b9bb68501e440613066ff0b75e2b5467ca0e",
     "phase-1/DEEPGRAM_TRANSCRIPTION.md": "412156102fd03217736bc06b72a58bfbd6bcbd34ea5ecf34aa3bd103363d9170",
+    "phase-1/MEDIA_STARTUP_BURSTS.md": "736701834c3e2f5e5c8211c37f0cab00f33cd464d9985a48c245e489b457862c",
     "phase-1/OPENAI_REALTIME_TRANSCRIPTION.md": "49651d21fa207fb842c36b54ebd7d9d82052ef197c1105a3e280f67b000bde59",
     "phase-2/CLINIC_SETUP_AND_REHEARSAL.md": "295df507f0d91fb800a3e3f9ee41d0720cb7a8d6d86629e4cf3fa5608d3158e5",
     "phase-2/CLINIKO_GUARDIAN_RECORDS.md": "30c5722e7e89eef7d619c91d82299a0703e2c44e625ff966beea892753d9f593",
@@ -295,7 +296,7 @@
     "src/voice/connected-voice-call.ts": "0b5c225cdcd1a3846cbcb020c601f0e64a64adfe5983f20fb8d63cc9f634e36f",
     "src/voice/deepgram-streaming-transcription.ts": "1e96324d241c7fbd99079fe298561fd05e8d914e0e7c666282bd8529dd6b82df",
     "src/voice/internal/twilio-single-root-read.ts": "7c47e62377e88e3f09d46a8e1131fb19f1b5017b7d84cd25d65c676ed36defdf",
-    "src/voice/media-turn-controller.ts": "984e45207a00c8449a67a2283019d950e1d4d192f429d53df80af6cc72fc932e",
+    "src/voice/media-turn-controller.ts": "0b124afcc5fa7abc728222ed7b717a246c5c7dfd9a362dbff5dcee2f60e6d673",
     "src/voice/openai-realtime-transcription.ts": "716883cd1ee873010cb39f60102d2a575c9943d25fcb344b75a96835f80cea0e",
     "src/voice/operational-counts.ts": "0b4b2e8485e2cbe6b7309f9f39eefb1a62c4ea9988119458152a6808a06b841a",
     "src/voice/outbound-original-send.ts": "7867f918e27e230d43c7f142f158656fdb4119a3dffaa58a58cd1c1b2ee72ba2",
@@ -688,6 +689,7 @@
     "test/voice/intake-service-catalogue.test.ts": "da5c5e02ca4613134c167855c8b0e3000173fa639b35393dd5abfc49e398a5d9",
     "test/voice/integrated-clinical-runner.test.ts": "ddd9760abe21a404671f365780d3d0f7660bea86c505d7bbd0eb822753165a73",
     "test/voice/krisp-evaluation-transcription.test.ts": "38d4368bba64f27a9335d4a859c1c9883b54d0f1cf0c11fd58867a6c085f493e",
+    "test/voice/media-turn-controller.test.ts": "f7691d7ab404b39a855ed3495641cf15ff28a2a391dbccc530792847831f4cd3",
     "test/voice/mixed-class-task-call.test.ts": "f6aac39c218669b9f7c6b28641f44b310348ec34db974999cf0322e99a6156e1",
     "test/voice/openai-realtime-transcription.test.ts": "0f62fd04f658d8ca8ac5ed449d820744b4934d310153c6c5155aed4b51b0090b",
     "test/voice/outbound-clinical-call.test.ts": "ccd549e8196e102680112f6833e29d2722c496e392f0ccf9ecd8254492bd4dee",
