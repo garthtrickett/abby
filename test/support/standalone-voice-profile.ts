@@ -138,7 +138,7 @@ async function fixture(db: ReturnType<typeof connectPostgres>, connectionString:
     }, async availability() {
       assert.equal(socket.readyState, WebSocket.OPEN);
       const prior = messages.filter(message => message.event === "mark").length;
-      send({ event: "dtmf", dtmf: { track: "inbound_track", digit: "2" } });
+      send({ event: "dtmf", dtmf: { track: "inbound", digit: "2" } });
       await waitFor(() => messages.filter(message => message.event === "mark").length > prior || socket.readyState === WebSocket.CLOSED);
       assert.equal(socket.readyState, WebSocket.OPEN);
       const mark = messages.filter(message => message.event === "mark").at(-1)?.mark; assert.ok(mark); await acknowledge(mark);

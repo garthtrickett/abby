@@ -71,7 +71,7 @@ test(`actual emitted signed ${guardian ? "guardian" : "representative"} booking 
     }, { clinicalHost: true, beforeWriteResponse: async () => { if (mode === "withdrawn") retention.control.permitted = false; } });
     await call.turn(guardian ? "Book an appointment for my daughter" : "Book an appointment for my partner"); assert.ok(call.flow.representativeInputOwner); assert.equal(f.mail.length, 0);
     await call.mark(); await call.privateDigit("1"); await call.mark(); await f.waitForMail(1);
-    for (const digit of `${f.mail[0]!.code}#`) call.sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+    for (const digit of `${f.mail[0]!.code}#`) call.sendEvent({ event: "dtmf", dtmf: { track: "inbound", digit } });
     await voiceUntil(() => call!.spoken.at(-1) === "Please say the patient's first name.", "private representative patient field"); await call.mark();
     for (const field of [f.r.identity.firstName, f.r.identity.lastName, guardian ? "5 March 2014" : "5 March 1982"]) { await call.privateField(field); await call.mark(); }
     await call.privateDigit("1"); await call.mark(); await f.waitForMail(2);

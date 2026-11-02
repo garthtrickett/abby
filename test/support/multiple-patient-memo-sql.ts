@@ -103,7 +103,7 @@ export function registerMultiplePatientMemoCases(cohort: "sequential" | "pending
         assert.ok(serving.flow.representativeInputOwner); assert.equal(fixture.mail.length, index * 2);
         await serving.mark(); await excludePriorPublicNumbers();
         await serving.privateDigit("1"); await serving.mark(); await fixture.waitForMail(index * 2 + 1);
-        for (const digit of `${fixture.mail.at(-1)!.code}#`) serving.sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+        for (const digit of `${fixture.mail.at(-1)!.code}#`) serving.sendEvent({ event: "dtmf", dtmf: { track: "inbound", digit } });
         await voiceUntil(() => serving.spoken.at(-1) === "Please say the patient's first name.", "fresh private selected patient"); await serving.mark();
         const patient = fixture.r.patients.get(subjects[index])!;
         for (const field of [patient.first_name, patient.last_name, index === 0 ? "5 March 1982" : "28 February 2014"]) {

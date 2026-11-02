@@ -234,11 +234,11 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
         assert.equal(options.classColdRecovery, true); const before = count("coldReviewAcknowledged"); child.send({ kind: "acknowledgeColdReview" });
         await voiceUntil(() => count("coldReviewAcknowledged") > before, "independent synthetic provider review acknowledgement");
       },
-      async keypad(entry: string) { for (const digit of entry) send({ event: "dtmf", dtmf: { track: "inbound_track", digit } }); },
+      async keypad(entry: string) { for (const digit of entry) send({ event: "dtmf", dtmf: { track: "inbound", digit } }); },
       async quietAfterPrivateInput() { for (let i = 0; i < 40; i++) { media(false); await new Promise<void>(resolve => setTimeout(resolve, 20)); } },
       get spoken() { return messages.filter(m => m.kind === "speech").map(m => m.text!); },
       get mutations() { return messages.filter(m => m.kind === "providerMutation"); },
-      async digit(digit: string) { const before = count("speech"), marks = playback.count; send({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+      async digit(digit: string) { const before = count("speech"), marks = playback.count; send({ event: "dtmf", dtmf: { track: "inbound", digit } });
         try { await voiceUntil(() => count("speech") > before && playback.hasPendingAfter(marks), "private runner prompt"); }
         catch (error) {
           if (operation === "confirmationResend" && child.connected) {
@@ -251,7 +251,7 @@ async function start(operation: ClinicalRunnerOperation, connectionString: strin
           throw new Error("Private response unavailable: " + JSON.stringify(wireDiagnostic()), { cause: error });
         } },
       async verify(expected = true) { const resultsBefore = count("verificationResult"); await voiceUntil(() => count("verificationEmail") > 0, "runner verification mail"); const mail = messages.filter(m => m.kind === "verificationEmail").at(-1)!;
-        assert.ok(mail.code); for (const digit of `${mail.code}#`) send({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+        assert.ok(mail.code); for (const digit of `${mail.code}#`) send({ event: "dtmf", dtmf: { track: "inbound", digit } });
         await voiceUntil(() => count("verificationResult") > resultsBefore, "completed private runner verification");
         assert.equal(messages.filter(m => m.kind === "verificationResult").at(-1)!.verified, expected);
         // Actual media pacing keeps post-code speech from arriving inside the

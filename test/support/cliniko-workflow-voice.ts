@@ -395,13 +395,13 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
       },
       async privateDigit(digit: string) {
         const marks = sent.filter(item => item.event === "mark").length;
-        sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+        sendEvent({ event: "dtmf", dtmf: { track: "inbound", digit } });
         await voiceUntil(() => playback.hasReplyAfter(marks) || failures.length > 0, "private registration prompt");
         assert.deepEqual(failures, []);
       },
       async privateKey(digit: string) {
         const keySequence = sequence;
-        sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+        sendEvent({ event: "dtmf", dtmf: { track: "inbound", digit } });
         await voiceUntil(() => completedControls.has(keySequence) || closed, "processed private keypad event");
         completedControls.delete(keySequence);
         assert.deepEqual(failures, []);
@@ -480,7 +480,7 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
           stages: stages.map(stage => ({ name: stage.name, pending: stage.settled === undefined, elapsedMs: Math.round((stage.settled ?? performance.now()) - stage.started) })),
         }) : ""}`);
         await voiceUntil(() => processedChunk >= finalChunk, "completed caller media turn"); },
-      async verify(code: string) { for (const digit of `${code}#`) sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+      async verify(code: string) { for (const digit of `${code}#`) sendEvent({ event: "dtmf", dtmf: { track: "inbound", digit } });
         await voiceUntil(() => !flow!.verificationRequired, "private code verification");
         await privateQuiet(); },
     };

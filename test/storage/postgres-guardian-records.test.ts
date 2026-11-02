@@ -103,13 +103,13 @@ test(`actual emitted signed non-patient guardian records ${operation}: ${outcome
       // The last rejected answer intentionally returns failed. The ordinary
       // privateKey helper requires no ingress failure, so observe this exact
       // refusal at its real input method and send only this final key directly.
-      serving.sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit: "#" } });
+      serving.sendEvent({ event: "dtmf", dtmf: { track: "inbound", digit: "#" } });
       await voiceUntil(() => owner.closed && refusals === 1, "missing guardian identity returns one explicit private refusal without native fallback");
       assert.equal(refusals, 1); assert.equal(owner.chooseCallerMethod("clinicPatient"), false); assert.equal(owner.beginPatientVerification(), false);
       assert.equal(f.base.mail.length, 0); assert.equal(f.counts.authorities, 0); assert.equal(f.reads.length, 0);
     } else {
       await f.base.waitForMail(1); assert.equal(f.base.mail[0]!.email, f.state.guardianEmail);
-      for (const digit of `${f.base.mail[0]!.code}#`) serving.sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+      for (const digit of `${f.base.mail[0]!.code}#`) serving.sendEvent({ event: "dtmf", dtmf: { track: "inbound", digit } });
       await voiceUntil(() => serving.spoken.at(-1) === "Please say the patient's first name.", "fresh private guardian patient fields"); await serving.mark();
       for (const field of [f.base.r.identity.firstName, f.base.r.identity.lastName, "5 March 2014"]) { await serving.privateField(field); await serving.mark(); }
       const owner = serving.flow.representativeInputOwner!;
