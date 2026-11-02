@@ -118,8 +118,10 @@ export class ClinikoOutboundScheduler {
         if (!current()) return summary(active() ? "blocked" : "interrupted");
         let available = await wait(checkClinikoHeadroom(this.#budget, this.#config.launch.maximumNativeRequests));
         if (available?.kind === "rateLimited") {
-          const reset = available.resetAt ? Date.parse(available.resetAt) - Date.parse(now()) : 0;
-          const ms = Math.max(reset, available.retryAfterMs ?? 0);
+          // Relative headroom belongs to the budget's clock (SQL may use a
+          // different clock from the clinic workflow). Use absolute reset only
+          // when no relative wait is supplied; physical capacity is rechecked.
+          const ms = available.retryAfterMs ?? (available.resetAt ? Date.parse(available.resetAt) - Date.parse(now()) : 0);
           const remaining = this.#config.tickDeadlineMs - (performance.now() - began);
           if (!Number.isFinite(ms) || ms < 1 || ms >= remaining) return summary("quotaWaiting");
           // Only an explicit pre-dispatch headroom denial may wait. After one
