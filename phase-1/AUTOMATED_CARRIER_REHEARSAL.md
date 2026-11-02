@@ -85,3 +85,8 @@ Primary protocol references: [Calls API](https://www.twilio.com/docs/voice/api/c
 [Gather](https://www.twilio.com/docs/voice/twiml/gather),
 [Say](https://www.twilio.com/docs/voice/twiml/say),
 [Play digits](https://www.twilio.com/docs/voice/twiml/play#digits).
+
+Cancellation is rechecked after caller eligibility and after writing launch intent,
+before any physical call is created. A cancellation received while reading the
+exact call's terminal status invalidates the run and cleans up that owned leg;
+a matched dialogue cannot become a passing result after cancellation.

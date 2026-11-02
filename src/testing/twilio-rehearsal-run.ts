@@ -47,11 +47,15 @@ export async function runRehearsal(rehearsal: TwilioVoiceRehearsal, carrier: Reh
   save: (receipt: RehearsalReceipt) => void, options: Readonly<{
     signal: AbortSignal; now?: () => number; wait?: () => Promise<void>;
   }>): Promise<ReturnType<TwilioVoiceRehearsal["summary"]>> {
-  if (options.signal.aborted || !await carrier.eligibleCaller()) throw Error("Test caller is not eligible");
+  if (options.signal.aborted) throw Error("Test canceled before launch");
+  const eligible = await carrier.eligibleCaller();
+  if (options.signal.aborted) throw Error("Test canceled before launch");
+  if (!eligible) throw Error("Test caller is not eligible");
   const now = options.now ?? Date.now, wait = options.wait ?? (() => delay(1_000));
   const deadline = now() + 210_000;
   save({ phase: "launchIntent", summary: rehearsal.summary() });
   let callSid: string;
+  if (options.signal.aborted) throw Error("Test canceled before launch");
   try { callSid = await carrier.launch(rehearsal.initialTwiml()); }
   catch {
     save({ phase: "launchUnknown", summary: rehearsal.summary() });
@@ -63,6 +67,7 @@ export async function runRehearsal(rehearsal: TwilioVoiceRehearsal, carrier: Reh
     save({ phase: "bound", callSid, summary: rehearsal.summary() });
     while (now() < deadline && !options.signal.aborted) {
       const status = await carrier.status(callSid);
+      if (options.signal.aborted) break;
       if (terminal.has(status)) {
         rehearsal.observeTerminal(callSid, status);
         save({ phase: "terminal", callSid, summary: rehearsal.summary() });

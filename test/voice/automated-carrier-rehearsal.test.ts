@@ -178,3 +178,36 @@ test("automatic carrier caller: whole coordinator uses signed local HTTP callbac
     assert.equal(receipts.at(-1)?.phase, "terminal");
   } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
 });
+
+
+test("automatic carrier caller: cancellation during eligibility or intent never launches a physical call", async () => {
+  for (const during of ["eligibility", "intent"]) {
+    const { rehearsal } = fixture(); const stop = new AbortController(); let launches = 0;
+    const receipts: RehearsalReceipt[] = [];
+    await assert.rejects(runRehearsal(rehearsal, carrier({
+      eligibleCaller: async () => { await Promise.resolve(); if (during === "eligibility") stop.abort(); return true; },
+      launch: async () => { launches++; return callSid; },
+    }), receipt => { receipts.push(receipt); if (during === "intent") stop.abort(); }, { signal: stop.signal }),
+    /Test canceled before launch/);
+    assert.equal(launches, 0);
+    assert.deepEqual(receipts.map(receipt => receipt.phase), during === "intent" ? ["launchIntent"] : []);
+  }
+});
+
+test("automatic carrier caller: cancellation during terminal read invalidates even a fully matched dialogue", async () => {
+  const { rehearsal, request } = fixture(); const stop = new AbortController(); const ended: string[] = [];
+  const receipts: RehearsalReceipt[] = []; let reads = 0;
+  const result = await runRehearsal(rehearsal, carrier({
+    status: async sid => {
+      assert.equal(sid, callSid);
+      if (++reads === 1) {
+        for (const [step, reply] of replies.entries()) assert.equal(rehearsal.accept(request(step, reply)).status, 200);
+        await Promise.resolve(); stop.abort();
+      }
+      return "completed";
+    }, end: async sid => { ended.push(sid); },
+  }), receipt => receipts.push(receipt), { signal: stop.signal });
+  assert.equal(result.matchedSteps.length, 4); assert.equal(result.providerTerminal, "completed");
+  assert.equal(result.failed, true); assert.equal(result.carrierDialoguePassed, false);
+  assert.deepEqual(ended, [callSid]); assert.equal(receipts.at(-1)?.summary.carrierDialoguePassed, false);
+});
