@@ -282,3 +282,21 @@ The earlier engineering checkpoint retains its original source and runner status
 ## Shared database budget assertion correction, 22 October 2026
 
 All four actual-main jobs for parent PR584 and their raw logs passed. Original PR585 at f9112b9 push CI failed ten new SQL assertions because they inspected every credential budget in the shared database; its production-result and privacy assertions passed before that check. The corrected tests select the scheduler credential’s exact hashed row, keep its 180 limit and preserve a separately seeded unrelated limit-1 row. The original all-row assertion reproduced locally before correction; all 28 SQL cases and fresh whole strict TypeScript now pass, with all 726 existing serving bytes unchanged. Current exact-head review, own CI, ordinary delivery and real clinic/provider/source/retention/restore/acoustic acceptance remain gates. No runtime limit, production code, assertion deadline, privacy scan, source behaviour, skip or serving artifact is changed. The unrelated budget row must remain byte-for-byte equivalent in the SQL result. The original failed CI and owning local failure remain preserved; a fresh corrected-head CI pass is required before ordinary delivery.
+
+
+## Quota clock correction, 2 November 2026
+
+A physical SQL budget can report an absolute reset on a different clock from
+an injected clinic workflow clock. When the budget supplies `retryAfterMs`,
+the finite scheduler now uses that relative duration. An absolute `resetAt`
+is a fallback only when no relative duration is available. The existing
+single-wait and tick-deadline bounds remain; after waiting, current physical
+headroom and every scheduling/native/target grant are checked again before
+any dispatch. A short or stale duration cannot grant capacity by itself.
+
+The regression is reproduced with a budget clock two hours ahead of the
+workflow clock. Controls cover both offset directions, absolute-only budgets
+and an underreported relative wait that must still refuse dispatch. Existing
+real PostgreSQL quota-window and sick-day target-withdrawal tests retain their
+180-request budget, real elapsed-time assertions, privacy scans and deadlines.
+This correction supplies no live-call or clinic activation authority.

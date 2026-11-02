@@ -85,3 +85,33 @@ test("concurrent independent ticks use actual one-use exclusions, not a private 
   const results = await Promise.all([f.tick(), f.makeScheduler().tick(new AbortController().signal)]);
   assert.equal(results.reduce((n, r) => n + r.accepted, 0), 1); assert.equal(f.calls.length, 1); assert.equal(f.posts, 1);
 });
+
+
+for (const clock of ["futureBudget", "pastBudget", "absoluteOnly"] as const)
+  test(`scheduler quota wait respects the budget clock: ${clock}`, async t => {
+    const f = await outboundSchedulerFixture(); t.after(f.close);
+    for (let n = 0; n < 100; n++) assert.equal(f.budget.claim(), null);
+    const budget = f.config.requests.rateBudget, headroom = budget.checkHeadroom!;
+    Object.assign(budget, { checkHeadroom: async (requests: number) => {
+      const denial = await headroom(requests);
+      if (denial?.kind !== "rateLimited") return denial;
+      if (clock === "absoluteOnly") return { kind: "rateLimited" as const, resetAt: denial.resetAt };
+      return { ...denial, resetAt: new Date(Date.parse(denial.resetAt!) + (clock === "futureBudget" ? 1 : -1) * 7_200_000).toISOString() };
+    } });
+    const result = await f.makeScheduler().tick(new AbortController().signal);
+    assert.equal(result.accepted, 1); assert.equal(f.scheduleState.waits, 1);
+    assert.equal(f.calls.length, 1); assert.equal(f.posts, 1); assert.ok(f.claims <= 180);
+  });
+
+test("relative quota wait never substitutes for a fresh physical headroom check", async t => {
+  const f = await outboundSchedulerFixture(); t.after(f.close);
+  for (let n = 0; n < 100; n++) assert.equal(f.budget.claim(), null);
+  const budget = f.config.requests.rateBudget, headroom = budget.checkHeadroom!;
+  Object.assign(budget, { checkHeadroom: async (requests: number) => {
+    const denial = await headroom(requests);
+    return denial?.kind === "rateLimited" ? { ...denial, retryAfterMs: 1 } : denial;
+  } });
+  const result = await f.makeScheduler().tick(new AbortController().signal);
+  assert.equal(result.kind, "quotaWaiting"); assert.equal(f.scheduleState.waits, 1);
+  assert.equal(result.accepted, 0); assert.equal(f.calls.length, 0); assert.equal(f.posts, 0);
+});
