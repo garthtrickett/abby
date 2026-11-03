@@ -3,6 +3,7 @@
   "files": [
     "scripts/serve-cliniko-voice.ts",
     "scripts/serve-twilio-rehearsal.ts",
+    "scripts/serve-twilio-rehearsal-gateway.ts",
     "scripts/rehearse-twilio-probe.ts",
     "scripts/set-voice-test-automation.ts",
     "scripts/serve-voice-operational-alert-receiver.ts",
