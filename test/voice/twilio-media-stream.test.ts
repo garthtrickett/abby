@@ -120,3 +120,27 @@ test("E2E-130 synthetic Twilio: identity, sequence, codec and missing clear evid
   assert.equal(await noFence.adapter.clear("notice:playback"), false);
   assert.equal(await noFence.adapter.queueChunk("next:playback", 0, pcm(1_200), new AbortController().signal), "notSent");
 });
+
+// Provider contract: https://www.twilio.com/docs/voice/media-streams/websocket-messages#dtmf-message
+// The documented DTMF track is "inbound", matching live carrier messages.
+test("E2E-130 synthetic Twilio: documented inbound DTMF preserves media ordering and rejects invalid tracks", () => {
+  const { adapter } = fixture();
+  assert.deepEqual(value(adapter.receive(JSON.stringify({ event: "dtmf", sequenceNumber: "2", streamSid,
+    dtmf: { track: "inbound", digit: "9" } }))), { kind: "dtmf", digit: "9" });
+  assert.equal(value(adapter.receive(JSON.stringify({ event: "media", sequenceNumber: "3", streamSid,
+    media: { track: "inbound", chunk: "1", timestamp: "20", payload: Buffer.alloc(160, 0xff).toString("base64") } }))).kind, "media");
+  for (const dtmf of [{ track: "inbound_track", digit: "9" }, { track: "outbound", digit: "9" },
+    { digit: "9" }, { track: "inbound", digit: "99" }, { track: "inbound", digit: 9 }]) {
+    const invalid = fixture();
+    assert.deepEqual(invalid.adapter.receive(JSON.stringify({ event: "dtmf", sequenceNumber: "2", streamSid, dtmf })),
+      { ok: false, error: { kind: "invalidMedia" } });
+    assert.deepEqual(invalid.adapter.receive("{}"), { ok: false, error: { kind: "streamClosed" } });
+  }
+  const wrongStream = fixture();
+  assert.deepEqual(wrongStream.adapter.receive(JSON.stringify({ event: "dtmf", sequenceNumber: "2",
+    streamSid: `MZ${"4".repeat(32)}`, dtmf: { track: "inbound", digit: "9" } })),
+    { ok: false, error: { kind: "invalidMedia" } });
+  const gap = fixture();
+  assert.deepEqual(gap.adapter.receive(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid,
+    dtmf: { track: "inbound", digit: "9" } })), { ok: false, error: { kind: "invalidMedia" } });
+});

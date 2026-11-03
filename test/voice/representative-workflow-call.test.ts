@@ -25,7 +25,7 @@ test("E2E-386 signed ordinary representative booking privately verifies caller a
       await call.mark(); await call.privateDigit("1");
       assert.match(call.spoken.at(-1)!, /First verify yourself/); assert.equal(f.mail.length, 0);
       await call.mark(); await f.waitForMail(1);
-      for (const digit of `${f.mail[0]!.code}#`) call.sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+      for (const digit of `${f.mail[0]!.code}#`) call.sendEvent({ event: "dtmf", dtmf: { track: "inbound", digit } });
       await voiceUntil(() => call!.spoken.at(-1) === "Please say the patient's first name.", "private first patient field"); await call.mark();
       for (const field of [f.r.identity.firstName, f.r.identity.lastName, "5 March 1982"]) { await call.privateField(field); await call.mark(); }
       assert.match(call.spoken.at(-1)!, /Synthetic Subject Canaries/); assert.equal(f.mail.length, 1);

@@ -160,7 +160,7 @@ export class TwilioMediaStream implements AudioOutputPort {
       return ok({ kind: "stopped" });
     }
     if (event.event === "dtmf") {
-      if (!record(event.dtmf) || event.dtmf.track !== "inbound_track" ||
+      if (!record(event.dtmf) || event.dtmf.track !== "inbound" ||
           typeof event.dtmf.digit !== "string" || !/^[0-9*#ABCD]$/.test(event.dtmf.digit)) return this.fail();
       return ok({ kind: "dtmf", digit: event.dtmf.digit });
     }

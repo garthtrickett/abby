@@ -134,7 +134,7 @@ test("E2E-153 signed keypad call refuses availability when Cliniko business is n
     const fallbackMark = waitForMark();
     caller.send(JSON.stringify({ event: "mark", sequenceNumber: "2", streamSid, mark: { name: firstMark } }));
     caller.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid,
-      dtmf: { track: "inbound_track", digit: "1" } }));
+      dtmf: { track: "inbound", digit: "1" } }));
     const secondMark = await fallbackMark;
     assert.equal(markCount, 2);
     assert.equal(businessReads, 1);

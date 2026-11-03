@@ -103,7 +103,7 @@ test(`actual emitted signed cross-patient ${order[0]} then ${order[1]} retains e
       await serving.turn(operation === "cancel" ? index === 0 ? "Cancel an appointment for my partner" : "Cancel an appointment for my son"
         : index === 0 ? "Move an appointment for my partner" : "Move an appointment for my son");
       await serving.mark(); await serving.privateDigit("1"); await serving.mark(); await f.waitForMail(index * 2 + 1);
-      for (const digit of `${f.mail.at(-1)!.code}#`) serving.sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+      for (const digit of `${f.mail.at(-1)!.code}#`) serving.sendEvent({ event: "dtmf", dtmf: { track: "inbound", digit } });
       await voiceUntil(() => serving.spoken.at(-1) === "Please say the patient's first name.", "fresh patient field"); await serving.mark();
       for (const field of [patient.first_name, patient.last_name, index === 0 ? "5 March 1982" : "28 February 2014"]) { await serving.privateField(field); await serving.mark(); }
       await serving.privateDigit("1"); await serving.mark(); await f.waitForMail(index * 2 + 2);

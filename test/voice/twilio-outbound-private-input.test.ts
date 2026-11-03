@@ -66,7 +66,7 @@ test("signed outgoing prepared input owns wire digits and discards secret audio 
   send({ event: "mark", mark: marker });
   for (let i = 0; i < 7; i++) send({ event: "media", media: { track: "inbound", chunk: String(i + 1), timestamp: String(i * 20),
     payload: Buffer.alloc(160, i < 2 ? 0x9f : 0xff).toString("base64") } });
-  for (const digit of "527419#") send({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+  for (const digit of "527419#") send({ event: "dtmf", dtmf: { track: "inbound", digit } });
   await input.accepted.promise;
   assert.equal(input.digits, "527419"); assert.deepEqual(f.acceptedTranscripts, []); assert.deepEqual(f.turns, []);
   // Finish the actual fresh quiet-drain interval before starting ordinary speech.

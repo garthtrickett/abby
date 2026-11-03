@@ -246,7 +246,7 @@ test("E2E-212 E2E-246 E2E-248 E2E-249 durable admin settings pin a signed call a
       await closeAdmin();
       const methodsBeforeKeypad = methods.length;
       socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid,
-        dtmf: { track: "inbound_track", digit: "2" } }));
+        dtmf: { track: "inbound", digit: "2" } }));
       await waitFor(() => messages.length >= 4 && speech.length >= 2, "approved availability");
       assert.match(speech[1]!, /possible times/);
       assert.match(speech[1]!, /can't reserve or confirm/);
