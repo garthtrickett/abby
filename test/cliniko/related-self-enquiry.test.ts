@@ -70,6 +70,7 @@ test("a related-patient booking can precede a caller enquiry without transferrin
     assert.equal(f.base.mail[2]!.email, verificationCanaries[0]);
     assert.equal(f.native.requests.length, 1);
     const read = await f.readEnquiry(); assert.equal(read.status, "shown"); await f.play();
+    assert.equal(f.enquiryPatientIds.at(-1), verificationCanaries[2]);
     assert.deepEqual((await f.base.f.state()).actions[first.key], receipt);
     assert.deepEqual((await f.base.f.state()).appointmentReads, [read]);
     assert.deepEqual(f.native.requests.map(row => row.patient_id), [f.base.r.subjectIds[0]]);
@@ -87,6 +88,7 @@ test("a caller booking can precede a related-patient enquiry with independent ac
     assert.equal((await f.flow.submitCode(f.base.mail[0]!.code)).verified, false);
     assert.equal(f.base.mail.length, 3);
     const read = await f.readEnquiry(); assert.equal(read.status, "shown"); await f.play();
+    assert.equal(f.enquiryPatientIds.at(-1), f.base.r.subjectIds[0]);
     assert.deepEqual((await f.base.f.state()).actions[first.key], receipt);
     assert.deepEqual((await f.base.f.state()).appointmentReads, [read]);
     assert.deepEqual(f.native.requests.map(row => row.patient_id), [verificationCanaries[2]]);

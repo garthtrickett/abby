@@ -12,6 +12,7 @@ import { verificationCanaries, verificationNow } from "./caller-verification.ts"
 export async function relatedSelfTaskSequenceFixture(options: Readonly<{ guardian?: true; enquiry?: true; budget?: ClinikoRequestBudget; subjectIds?: readonly [string, string] }> = {}) {
   assert.ok(!options.enquiry || !options.guardian, "mixed enquiry controls use the native-patient related-caller process");
   let current = verificationNow, sequence = 0, selfAllowed = true;
+  const enquiryPatientIds: string[] = [];
   const sourceBudget = new ClinikoReadBudget(180, () => Date.parse(current)), budget = options.budget ?? sourceBudget;
   const selected = { budget, ...(options.subjectIds ? { subjectIds: options.subjectIds } : {}) };
   const guardian = options.guardian ? await guardianCallOwnerFixture(selected) : undefined;
@@ -31,6 +32,10 @@ export async function relatedSelfTaskSequenceFixture(options: Readonly<{ guardia
       // The original representative fixture permits only related subjects on
       // recall writes. Its original native-self transport supplies self recalls.
       const url = new URL(String(value));
+      if (options.enquiry && url.pathname === "/v1/individual_appointments" && (init?.method ?? "GET") === "GET") {
+        const patientId = url.searchParams.getAll("q[]").map(filter => /^patient_id:=([0-9]+)$/.exec(filter)?.[1]).find(Boolean);
+        if (patientId) enquiryPatientIds.push(patientId);
+      }
       if (url.pathname === "/v1/recalls" && init?.method === "POST" && JSON.parse(String(init.body)).patient_id === verificationCanaries[2])
         return base.f.ownerPorts.fetchPort(value, init);
       if (options.enquiry && url.pathname === "/v1/individual_appointments" && (init?.method ?? "GET") === "GET" &&
@@ -109,6 +114,6 @@ export async function relatedSelfTaskSequenceFixture(options: Readonly<{ guardia
     assert.equal(sourceBudget.checkHeadroom(180), null);
   };
   return { base, guardian, source, native, flow, reception, turn, play, query, prepareRelated, startRelated, startSelf, verifySelf,
-    verifyCallerEnquiry, startRelatedEnquiry, readEnquiry, book, nextWindow,
+    verifyCallerEnquiry, startRelatedEnquiry, readEnquiry, book, nextWindow, enquiryPatientIds,
     now: () => current, denySelf: () => { selfAllowed = false; }, close: async () => { flow.dispose(); await (guardian ? guardian.close() : base.close()); } };
 }
