@@ -1,5 +1,28 @@
 # Abby execution order
 
+## Restricted carrier test scope, 3 November 2026
+
+The owner subsequently authorized an isolated Abby Twilio number, a dedicated
+temporary HTTPS test endpoint and one dedicated US originating test number for
+automated rehearsals. This supersedes the earlier blanket carrier/no-number
+deferral for restricted testing. It does not authorize general outbound contact,
+clinic traffic or production activation.
+
+The approved carrier rehearsal uses allowlisted test callers and fixed public,
+non-clinical dialogue. Record intent before each physical launch; a successful
+test result requires exact provider-leg observation. Reconcile an uncertain
+launch rather than repeating it. Credentials, audio and recognized speech stay out of the repository
+and Abby's database. The [voice runbook](../phase-1/VOICE_TEST_RUNBOOK.md) retains
+its independent fallback, interruption and hangup observations. A diagnostic
+success does not establish repeated reliability on another source version.
+
+Clinical workflow/provider rehearsals retain their own existing authority and
+patient/privacy boundaries. Acoustic gates, verified contact consent, clinic
+policies, staff acceptance, access/retention and deployment remain independent.
+Earlier dated entries retain their then-current decisions; they do not reinstate
+the superseded blanket test deferral. The full eleven stages, thirteen gaps and
+applicable reuse requirements below remain in scope.
+
 **Local non-patient guardian qualification, 31 October 2026:** The owner-selected
 optional route now composes a distinct registered-contact caller proof, separate
 current clinic patient/action authority and an independently verified patient
@@ -310,7 +333,7 @@ Check every earlier roadmap gap against the current combined candidate. Preserve
 | 1 | Running receptionist composition and exact-head qualification of booking, enquiry, cancellation, rescheduling and intake. |
 | 2 | Verification/permission integration, exact subject authority and auth regressions. Keep clinic policy and real delivery acceptance explicit. |
 | 3 | Recovery/operator routes, message outcomes and monitoring ownership. Evaluate independent missing-completion detection using only permitted operational data. |
-| 4 | Repeated synthetic speech, safety and usable public-transport qualification. Retain failing noisy-speech evidence and thresholds; carrier work remains deferred. |
+| 4 | Repeated synthetic speech, safety and usable public-transport qualification. Retain failing noisy-speech evidence and thresholds; restricted carrier rehearsals follow the owner-approved scope above, with clinic acceptance still separate. |
 | 5 | Approved catalogue, duration, location and initial/follow-up rules; incomplete refresh must preserve approvals. |
 | 6 | Final availability for longer searches and explicitly approved offline/recurring calendars, including complete-source and bounds refusal. |
 | 7 | Practitioner-change regression, retained original choice, explicit alternatives and operation-specific reschedule semantics. |
@@ -368,7 +391,7 @@ Establish clinic-owned content, storage, exact subject/target and permission sep
 
 Every capability stage needs focused checks before publication and the required review/CI before landing, following the repository process. After the core sequence, run the appropriate full regression against the actual combined source/build candidate, including real PostgreSQL/process/backup privacy evidence where required. Record exact commands, completed results, skipped/killed work, unresolved failures and the manual-test proposal. Historical passes cannot satisfy this gate.
 
-Keep external readiness visible from stage 2 onward: actual clinic verification/consent/fees policy, deploying-host permission sources, sender/mailbox delivery, staff recovery ownership, deployed monitoring receiver and fresh work evidence, native-provider acceptance, model/acoustic/public-route qualification and any later authorized carrier tests. Obtain these as dependencies become available; stage 11 is the final reconciliation, not the first time to investigate them. Existing real-email and Twilio deferrals remain in force until changed by their owner.
+Keep external readiness visible from stage 2 onward: actual clinic verification/consent/fees policy, deploying-host permission sources, sender/mailbox delivery, staff recovery ownership, deployed monitoring receiver and fresh work evidence, native-provider acceptance, model/acoustic/public-route qualification and any later authorized carrier tests. Obtain these as dependencies become available; stage 11 is the final reconciliation, not the first time to investigate them. The real-email deferral and clinic/provider acceptance remain explicit; restricted Twilio testing follows the owner-approved scope above and does not authorize clinic traffic.
 
 **Exit:** Each of the thirteen gaps has current engineering evidence and an explicit acceptance status. Deployment, configuration/content activation and human acceptance are separately evidenced before relevant patient traffic. If an external gate remains blocked, report engineering progress and that blocked acceptance accurately; do not declare the entire integration complete.
 
