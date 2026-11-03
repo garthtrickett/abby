@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { withClinicalRunner } from "../support/clinical-runner-call.ts";
 import { voiceUntil } from "../support/cliniko-workflow-voice.ts";
 import { verificationCanaries } from "../support/caller-verification.ts";
+import { clinicDateAt } from "../../src/standalone/clinic-clock.ts";
 import { sql } from "kysely";
 
 for (const scenario of ["success", "unknownSecond"] as const) test(`E2E-381 signed compiled two-task ${scenario} keeps each verification, confirmation and outcome independent`,
@@ -25,6 +26,11 @@ for (const scenario of ["success", "unknownSecond"] as const) test(`E2E-381 sign
       await call.say("Yes."); await call.mark();
       const bookings = call.mutations.filter(m => m.path === "/v1/individual_appointments"); assert.equal(bookings.length, 2);
       assert.notEqual(bookings[0]!.body!.starts_at, bookings[1]!.body!.starts_at);
+      for (const booking of bookings) {
+        assert.equal(booking.body!.appointment_type_id, "33", "similar authorized appointments retain the same service type");
+        assert.equal(booking.body!.business_id, "11"); assert.equal(booking.body!.practitioner_id, "22");
+        assert.equal(clinicDateAt("Australia/Sydney", new Date(String(booking.body!.starts_at))), "2026-10-08");
+      }
       assert.equal(call.mutations.filter(m => m.path === "/v1/recalls").length, 2);
       if (scenario === "success") assert.equal(call.spoken.at(-1), "Your booking is confirmed.");
       else assert.match(call.spoken.at(-1)!, /can't confirm.*pending review/i);
