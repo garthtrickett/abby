@@ -1,7 +1,7 @@
 {
-  "verifiedDate": "2026-11-02",
+  "verifiedDate": "2026-11-03",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "1b184c6f7fb5c0edc8a4a777c2a0f7f599a5aca794a394dbed9d02a26036c895",
+  "factsSha256": "db3dc1d4837e2efba204ac3009fc5e26881e85bc230478454b1caf536b5d61a6",
   "sources": {
     ".github/workflows/text-contract.yml": "20f47909d711b7a7d2b3916a8ef0756345b414dff225184989cd8056b5b6179b",
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
@@ -662,7 +662,7 @@
     "test/text/class-movement-turns.test.ts": "3ffdd5721585d43852837312768b4c801eedeef1b56daf4e3768611378baf56e",
     "test/text/effect-deadline.test.ts": "a3e025c4a5c52bb6d352be5157eed12cd0628a5a2689b73eb41298667f787e6f",
     "test/text/readiness-message.test.ts": "168c7f794330b4114120de998df7d5f02f44bd60b808f6c90c7a9eb3cb32ce65",
-    "test/voice/call-task-sequence-runner.test.ts": "67ab656c8d2cf366283d8fce1efaad55972923425154419a63177508d539b389",
+    "test/voice/call-task-sequence-runner.test.ts": "f2211152febdc13df61c1386f238c70d5e8aa8b1ee5ec581b8f5f50ac46311c2",
     "test/voice/class-financial-voice.test.ts": "802011d99b6557b706e5292654e25cb1005c44a8cce7129c7f6fee082bb1e8dd",
     "test/voice/class-move-signed-staff-recovery.test.ts": "2dda810ec8f32026c810d5115975bdd17c0ec4e34f11b14c62fe9ca5ee1bd4be",
     "test/voice/class-move-staged-concurrent-budget.test.ts": "4721f93c2e15765da8ad7f8db88791981640d3b29d5d28da769162d2a5cf724b",
@@ -707,7 +707,7 @@
     "test/voice/private-resend-finalization.test.ts": "8a8160a983a7990a1cf754c33abd03f6b0d9f11b461b7ea2cb00b0b0865a6649",
     "test/voice/related-self-private-input.test.ts": "d5c89253c27e00ac9e9428d01b7e395df763a78f6453c5f2348a173f4ad770ae",
     "test/voice/resend-task-sequence-runner.test.ts": "4a7e876b2313e1e95904cdc37c1706db4bd61f3b7376b1171608c1e65bc08301",
-    "test/voice/service-catalogue-booking.test.ts": "acb592a72b3b45fb27881ae3cd581b7880708ab366bb46212c6fc25326442599",
+    "test/voice/service-catalogue-booking.test.ts": "147a58a7f5ea3477c155f17e36e5d28b3ef4310ab889d46699092df591072841",
     "test/voice/service-practitioner-preference.test.ts": "9320b676b56b5fbb571d47c39faf8def329e5e98f54e6cc512dc6cb402a2ce04",
     "test/voice/standalone-clinical-host.test.ts": "22b85736a652c75e7076bf75d43a55fa551acec08fd818cd76e5a5f3cfde5b4f",
     "test/voice/standalone-schema-readiness.test.ts": "2108c692e1905d08a269b8eedd9fc042636d7dc3de94db7c3b3f3dedf542389e",

@@ -49,8 +49,12 @@ test("E2E-346 signed multi-service calls bind exact type/duration, reject stale 
           action = Object.values((await call.state()).actions).at(-1)!;
           assert.match(call.spoken.at(-1)!, /Massage initial.*45 minutes/);
         }
+        let originalDurationStart: string | undefined;
         if (mode === "durationCorrection" || mode === "durationUnavailable") {
-          const old = action.key; await play(mode === "durationCorrection" ? "I want an hour appointment." : "I want an hour and a half appointment.");
+          if (action.mutation.request.kind !== "book") throw new Error("expected initial duration proposal");
+          const old = action.key, originalStart = action.mutation.request.offer.startsAt;
+          originalDurationStart = originalStart;
+          await play(mode === "durationCorrection" ? "I want an hour appointment." : "I want an hour and a half appointment.");
           assert.equal((await call.state()).actions[old]?.status, "canceled"); assert.equal(call.writeRequests.length, 0);
           if (mode === "durationUnavailable") {
             await play("Yes"); await play("Show times on October 8.");
@@ -61,6 +65,9 @@ test("E2E-346 signed multi-service calls bind exact type/duration, reject stale 
           await voiceUntil(() => f.mail.length === 2, "duration correction verification"); await call.verify(f.mail[1]!.code);
           await play("Show times on October 8."); await play("The first time, please.");
           action = Object.values((await call.state()).actions).at(-1)!; assert.match(call.spoken.at(-1)!, /Physiotherapy initial.*60 minutes/);
+          if (action.mutation.request.kind !== "book") throw new Error("expected corrected duration proposal");
+          assert.equal(action.mutation.request.offer.startsAt, originalStart, "longer service keeps the same selected clock time");
+          assert.notEqual(action.key, old, "corrected service requires a distinct action");
         }
         if (mode === "eligibilityChanged") {
           const old = action.key; await play("Actually, this is a new problem.");
@@ -83,6 +90,7 @@ test("E2E-346 signed multi-service calls bind exact type/duration, reject stale 
           const body = call.writeRequests[0]!.body;
           assert.equal(body.appointment_type_id, mode === "massage" || mode === "change" ? "35" : mode === "followUp" ? "33" : "34");
           assert.equal(body.business_id, "11"); assert.equal(body.practitioner_id, "22");
+          if (mode === "durationCorrection") assert.equal(body.starts_at, originalDurationStart, "the longer booking writes the original selected clock time");
           await play("Book a 45-minute initial Massage appointment."); assert.equal(call.writeRequests.length, 1); assert.equal(f.mail.length, ["change", "eligibilityChanged", "durationCorrection"].includes(mode) ? 2 : 1);
         }
         assert.ok(models.every(text => verificationCanaries.every(secret => !text.includes(secret))));
