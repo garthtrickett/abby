@@ -47,6 +47,10 @@ npm run voice:local
 
 Run `npm run voice:preflight -- --transport-only` once the tunnel and local runner are up; it needs only the two public URL values and checks that both public routes reject unsigned traffic. Run `npm run voice:preflight` after TLS, Function, and Twilio number configuration exist. The full check also verifies independent fallback TwiML and the Twilio number's exact primary/fallback URL and `POST` methods. Neither check proves that Twilio can connect a live call or dial the fallback.
 
+## Automated caller
+
+The [Twilio-only scripted caller](AUTOMATED_CARRIER_REHEARSAL.md) can perform the restricted greeting/hello/colour dialogue and hang up without an operator speaking. It needs an eligible separate originating caller ID and its own HTTPS callback route. Its report deliberately leaves interruption, fallback ringing and no-unexpected-fallback unqualified; no actual carrier pass is asserted by adding the harness.
+
 ## Carrier rehearsal
 
 Record a pass or failure for each case with the test number, route version, time, and Twilio call SID in a restricted test log outside Abby's database. Do not copy recordings, transcripts, patient data, or credentials into Abby. Stop after the first unsafe result and restore the independent fallback route.
