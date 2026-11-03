@@ -132,6 +132,9 @@ test(`actual emitted signed guardian file records ${operation}: ${outcome}`, { t
         await serving.verify(f.base.mail[1]!.code); assert.equal(serving.privateTranscripts.length, privateCount); assert.equal(serving.transcriptionFrames, asrCount);
         if (operation === "appointments.read") {
           await serving.turn("Check appointments"); assert.equal((await serving.state()).appointmentReads.at(-1)!.status, "shown"); await serving.mark();
+          const appointmentReads = f.reads.map(raw => new URL(raw)).filter(url => url.pathname === "/v1/individual_appointments");
+          assert.ok(appointmentReads.length > 0, "the verified subject must reach the native appointment reader");
+          for (const url of appointmentReads) assert.ok(url.searchParams.getAll("q[]").includes(`patient_id:=${authorityRecord.subjectPatientId}`));
           assert.equal(serving.writes.length, 0);
         } else {
           if (operation === "book") { await serving.turn("Times"); await serving.mark(); await serving.turn("First option"); }
@@ -150,6 +153,10 @@ test(`actual emitted signed guardian file records ${operation}: ${outcome}`, { t
           }
         }
       }
+    }
+    if (outcome === "missingIdentity" || outcome === "missingAuthority") {
+      assert.equal(f.reads.some(raw => new URL(raw).pathname === "/v1/individual_appointments"), false);
+      assert.equal(serving.writes.length, 0);
     }
     const state = await serving.state();
     assert.equal(f.reads.some(path => path.endsWith(`/patients/${verificationCanaries[2]}`)), false, "guardian caller never needs a patient identity");
