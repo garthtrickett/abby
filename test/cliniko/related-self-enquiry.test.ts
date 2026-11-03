@@ -58,6 +58,42 @@ test("a played native caller enquiry can precede related-patient booking with ne
   } finally { await f.close(); }
 });
 
+test("a related-patient booking can precede a caller enquiry without transferring its booking proof", async () => {
+  const f = await fixture({ enquiry: true });
+  try {
+    const owner = await f.startRelated(), first = await f.book(); assert.equal(first.status, "committed");
+    const receipt = structuredClone(first); await f.nextWindow();
+    await f.verifyCallerEnquiry(true);
+    assert.equal(owner.closed, true); assert.equal(f.flow.representativeInputOwner, undefined);
+    assert.equal((await owner.submitCallerCode(f.base.mail[0]!.code)).verified, false);
+    assert.equal((await f.flow.submitCode(f.base.mail[1]!.code)).verified, false);
+    assert.equal(f.base.mail[2]!.email, verificationCanaries[0]);
+    assert.equal(f.native.requests.length, 1);
+    const read = await f.readEnquiry(); assert.equal(read.status, "shown"); await f.play();
+    assert.deepEqual((await f.base.f.state()).actions[first.key], receipt);
+    assert.deepEqual((await f.base.f.state()).appointmentReads, [read]);
+    assert.deepEqual(f.native.requests.map(row => row.patient_id), [f.base.r.subjectIds[0]]);
+    assert.equal(f.base.f.recalls.length, 1); await assertPrivate(f);
+  } finally { await f.close(); }
+});
+
+test("a caller booking can precede a related-patient enquiry with independent actor and subject proofs", async () => {
+  const f = await fixture({ enquiry: true });
+  try {
+    await f.verifySelf(false); const first = await f.book(); assert.equal(first.status, "committed");
+    const receipt = structuredClone(first); await f.nextWindow();
+    const owner = await f.startRelatedEnquiry(); assert.equal(owner.closed, false);
+    assert.equal((await owner.submitCallerCode(f.base.mail[0]!.code)).verified, false);
+    assert.equal((await f.flow.submitCode(f.base.mail[0]!.code)).verified, false);
+    assert.equal(f.base.mail.length, 3);
+    const read = await f.readEnquiry(); assert.equal(read.status, "shown"); await f.play();
+    assert.deepEqual((await f.base.f.state()).actions[first.key], receipt);
+    assert.deepEqual((await f.base.f.state()).appointmentReads, [read]);
+    assert.deepEqual(f.native.requests.map(row => row.patient_id), [verificationCanaries[2]]);
+    assert.equal(f.base.f.recalls.length, 1); await assertPrivate(f);
+  } finally { await f.close(); }
+});
+
 test("a failed related-patient enquiry cannot establish a caller-booking task", async () => {
   const f = await fixture({ enquiry: true });
   try {

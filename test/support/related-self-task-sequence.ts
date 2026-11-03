@@ -82,7 +82,8 @@ export async function relatedSelfTaskSequenceFixture(options: Readonly<{ guardia
     assert.equal((await flow.submitCode(base.mail.at(-1)!.code)).verified, true);
   };
   const verifySelf = (returning = true) => verifyCaller(() => startSelf(returning));
-  const verifyCallerEnquiry = () => verifyCaller(() => startCaller({ operation: "appointments.read" }));
+  const verifyCallerEnquiry = (returning = false) => verifyCaller(() => startCaller({ operation: "appointments.read",
+    ...(returning ? { returning: true as const } : {}) }));
   const startRelatedEnquiry = () => startRelated("appointments.read");
   const readEnquiry = async () => {
     resultValue(await reception.enquireAppointments(base.f.scope, turn("Check the appointment"),
