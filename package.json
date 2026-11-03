@@ -57,7 +57,8 @@
     "eval:conversations": "node scripts/evaluate-clinic-conversations.ts",
     "build:runtime": "tsc --project tsconfig.runtime.json",
     "build:voice-tests": "tsc --project tsconfig.voice-test.json",
-    "voice:ops:queue-work": "node dist/runtime/scripts/check-cliniko-queue-work.js"
+    "voice:ops:queue-work": "node dist/runtime/scripts/check-cliniko-queue-work.js",
+    "voice:rehearse-carrier": "node scripts/rehearse-twilio-voice.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
