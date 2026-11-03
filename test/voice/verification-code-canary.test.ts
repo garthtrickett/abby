@@ -124,6 +124,36 @@ test("actual isolated SQL child canary lifetime", () => {
   finally { second.close(); }
   assert.equal(crypto.randomInt, original); assert.equal(randomInt, original);
 });
+test("pre-challenge public route digits cannot become a private verification canary", () => {
+  const descriptor = Object.getOwnPropertyDescriptor(crypto, "randomInt"), original = crypto.randomInt;
+  const previousRoute = process.env.ABBY_TWILIO_TEST_NUMBER;
+  const now = Date.now(), margin = { sinceMs: now - 65_000, throughMs: now + 605_000 };
+  const collision = Array.from({ length: 100000 }, (_, i) => i * 10).find(code => distinctFromClock(code, margin));
+  assert.ok(collision !== undefined);
+  const route = "+612" + String(collision).padStart(6, "0") + "99";
+  process.env.ABBY_TWILIO_TEST_NUMBER = route;
+  let draws = [], calls = 0;
+  Object.defineProperty(crypto, "randomInt", { ...descriptor, value: (...args) => args.length === 2 && args[0] === 0 && args[1] === 1000000
+    ? draws[Math.min(calls++, draws.length - 1)] : Reflect.apply(original, crypto, args) });
+  syncBuiltinESMExports();
+  let canary;
+  try {
+    canary = installScopedDirectSqlVerificationCanaries(new Set());
+    assert.ok(distinctFromClock(collision, canary.window));
+    const publicRouteText = JSON.stringify([process.env.ABBY_TWILIO_TEST_NUMBER,
+      process.env.ABBY_TWILIO_TEST_CALLER_NUMBER, process.env.ABBY_TWILIO_FALLBACK_NUMBER]);
+    const safe = Array.from({ length: 100000 }, (_, i) => i * 10).find(code =>
+      code !== collision && distinctFromClock(code, canary.window) &&
+      !publicRouteText.includes(String(code).padStart(6, "0")));
+    assert.ok(safe !== undefined); draws = [collision, safe];
+    assert.equal(randomInt(0, 1000000), safe); assert.equal(calls, 2);
+  } finally {
+    canary?.close(); Object.defineProperty(crypto, "randomInt", descriptor); syncBuiltinESMExports();
+    if (previousRoute === undefined) delete process.env.ABBY_TWILIO_TEST_NUMBER;
+    else process.env.ABBY_TWILIO_TEST_NUMBER = previousRoute;
+  }
+  assert.equal(crypto.randomInt, original); assert.equal(randomInt, original);
+});
 `);
     const env: NodeJS.ProcessEnv = { ...process.env, ABBY_ISOLATED_POSTGRES_PROBE: "1", DATABASE_URL: "postgresql://localhost/abby_test_canary_lifecycle" };
     delete env.NODE_TEST_CONTEXT;

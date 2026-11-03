@@ -168,7 +168,7 @@ function installSampler(excluded: ReadonlySet<string>): ScopedCanaries {
   Object.defineProperty(crypto, "randomInt", { ...descriptor, value: sampler });
   syncBuiltinESMExports(); installed = true;
   let closed = false;
-  return Object.freeze({ window,
+  const scope = Object.freeze({ window,
     /** A public hash may already contain a prospective six-digit code. Reject
      * that draw BEFORE issuing it; no existing secret or privacy probe is exempt.
      * A snapshot containing an already issued code is itself a failed canary. */
@@ -194,4 +194,15 @@ function installSampler(excluded: ReadonlySet<string>): ScopedCanaries {
     Object.defineProperty(crypto, "randomInt", descriptor);
     syncBuiltinESMExports(); installed = false; closed = true;
   } });
+  try {
+    // These fixture routes are public before a challenge is issued. A random
+    // six-digit code can otherwise occur inside a seeded dialed_number and
+    // make an unchanged all-column privacy scan report a false secret leak.
+    scope.excludePreexistingPublicText(JSON.stringify([
+      process.env.ABBY_TWILIO_TEST_NUMBER,
+      process.env.ABBY_TWILIO_TEST_CALLER_NUMBER,
+      process.env.ABBY_TWILIO_FALLBACK_NUMBER,
+    ]));
+  } catch (error) { scope.close(); throw error; }
+  return scope;
 }
