@@ -71,3 +71,10 @@ scripted dialogue. Portable interruption/fallback caller orchestration, repeated
 real-carrier qualification on one complete head, acoustic quality and clinic/staff
 acceptance keep their separate requirements. This target does not select a
 clinical speech profile or enable patient traffic.
+
+The additional test-only probe code provides explicit interruption and fallback
+scenarios, signed callback collection and exact parent/child readback. Its
+presence does not change this target's six-session limit or count as a carrier
+pass. The callback route must forward to the separate caller listener and be
+configured before the target window opens; see
+[the automated caller guide](../phase-1/AUTOMATED_CARRIER_REHEARSAL.md).

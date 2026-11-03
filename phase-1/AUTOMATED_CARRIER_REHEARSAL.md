@@ -81,6 +81,39 @@ ringing; and a normal hangup with no unexpected fallback leg. Twilio can emit
 DTMF with `Play digits` outside `Gather`; merely issuing that command does not
 prove ringing. None of those cases is silently counted as passed here.
 
+The optional `voice:rehearse-carrier-probe` command prepares separate
+`interruption` and `fallback` scenarios for this restricted target. Its
+interruption case requires the target's exact call statistics to show two
+recognized turns, two completed playbacks, one interruption and one acknowledged
+clear. Its fallback case requires a signed `ringing` callback for the exact
+child leg and a complete, independent Twilio readback of that child under the
+target call. Both require the exact caller to complete, a fresh same-run target
+report and the matching inbound leg. These checks are code paths, not a claim
+that either real-carrier case has passed. They do not qualify audio quality,
+ordinary clinic conversations or staff acceptance.
+
+For a fallback probe, configure the restricted target's
+`ABBY_REHEARSAL_FALLBACK_CALLBACK_URL` to a fresh HTTPS
+`/fallback-ringing/<32 lowercase hex>` route on the *caller's* dedicated public
+origin before starting the target. That route must forward unchanged to the
+caller loopback listener. Set `ABBY_TWILIO_FALLBACK_NUMBER` to a third, distinct
+approved number. The runner reuses the callback token, which binds the target's
+status events to that one test window. Use new absolute private journal and
+target-report paths for each execution:
+
+```sh
+npm run voice:rehearse-carrier-probe -- --dry-run interruption
+npm run voice:rehearse-carrier-probe -- --preflight interruption
+npm run voice:rehearse-carrier-probe -- --execute interruption /private/new-journal.json /private/target-report.json
+npm run voice:rehearse-carrier-probe -- --execute fallback /private/new-journal.json /private/target-report.json
+```
+
+The one-create intent journal, no-retry rule and separate isolated target setup
+still apply. A missing callback, partial child page, mismatched parent or stale
+target report yields `unverified`, never an inferred pass. The fixed 25-second
+lead-in and three-second interruption cadence may need measured tuning after a
+real call; do not count a synthetic script as carrier proof.
+
 Primary protocol references: [Calls API](https://www.twilio.com/docs/voice/api/call-resource),
 [Gather](https://www.twilio.com/docs/voice/twiml/gather),
 [Say](https://www.twilio.com/docs/voice/twiml/say),
