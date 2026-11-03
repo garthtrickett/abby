@@ -12,6 +12,9 @@ async function main() {
     target: Number(process.env.ABBY_REHEARSAL_TARGET_PORT ?? "3120"),
     caller: Number(process.env.ABBY_REHEARSAL_PORT ?? "3121"),
   });
+  if (port === Number(process.env.ABBY_REHEARSAL_TARGET_PORT ?? "3120") ||
+      port === Number(process.env.ABBY_REHEARSAL_PORT ?? "3121"))
+    throw new Error("Gateway must use a distinct loopback port");
   gateway.server.listen(port, "127.0.0.1");
   await once(gateway.server, "listening");
   let stopping: Promise<void> | undefined;

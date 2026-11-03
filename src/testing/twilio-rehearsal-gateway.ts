@@ -34,6 +34,7 @@ export function createTwilioRehearsalGateway(ports: Ports) {
       outgoing.end();
     });
     incoming.on("aborted", () => upstream.destroy());
+    outgoing.on("close", () => upstream.destroy());
     incoming.pipe(upstream);
   });
   server.on("upgrade", (incoming, client, head) => {
@@ -43,6 +44,7 @@ export function createTwilioRehearsalGateway(ports: Ports) {
     const upstream = connect(ports.target, "127.0.0.1");
     sockets.add(client); sockets.add(upstream);
     const close = () => { client.destroy(); upstream.destroy(); sockets.delete(client); sockets.delete(upstream); };
+    upstream.setTimeout(240_000, close);
     client.on("error", close); upstream.on("error", close);
     client.on("close", close); upstream.on("close", close);
     upstream.on("connect", () => {
@@ -58,9 +60,11 @@ export function createTwilioRehearsalGateway(ports: Ports) {
   let stopping: Promise<void> | undefined;
   return { server, stop(): Promise<void> {
     return stopping ??= (async () => {
+      const closed = new Promise<void>((resolve, reject) =>
+        server.close(error => error ? reject(error) : resolve()));
       server.closeAllConnections();
       for (const socket of sockets) socket.destroy();
-      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+      await closed;
     })();
   } };
 }
