@@ -3,7 +3,11 @@ import test from "node:test";
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import WebSocket, { WebSocketServer } from "ws";
+import { getExpectedTwilioSignature, validateRequest } from "twilio/lib/webhooks/webhooks.js";
 import { createTwilioRehearsalGateway } from "../../src/testing/twilio-rehearsal-gateway.ts";
+import { TwilioVoiceRehearsal } from "../../src/testing/twilio-voice-rehearsal.ts";
+import { TwilioRehearsalFallback } from "../../src/testing/twilio-rehearsal-fallback.ts";
+import { createRehearsalServer } from "../../src/testing/twilio-rehearsal-server.ts";
 
 async function listen(server: Server): Promise<number> {
   server.listen(0, "127.0.0.1"); await once(server, "listening");
@@ -54,6 +58,56 @@ test("rehearsal gateway forwards only exact public test routes, body and signatu
     `caller:POST:/voice-rehearsal/${token}/0:signed-callback:CallStatus=ringing`,
     `caller:POST:/fallback-ringing/${token}:signed-callback:CallStatus=ringing`,
   ]);
+});
+
+test("rehearsal gateway preserves real Twilio callback signatures across one public origin", async t => {
+  const accountSid = "AC" + "1".repeat(32), callerSid = "CA" + "2".repeat(32);
+  const parentSid = "CA" + "3".repeat(32), childSid = "CA" + "4".repeat(32);
+  const authToken = "synthetic-only", runId = "a".repeat(32);
+  const publicOrigin = "https://fresh-test.example";
+  const callbackUrl = `${publicOrigin}/fallback-ringing/${runId}`;
+  const from = "+15555550101", to = "+15555550102", fallback = "+15555550103";
+  const expiresAt = Date.now() + 300_000;
+  const rehearsal = new TwilioVoiceRehearsal({ accountSid, authToken, from, to,
+    callbackBase: publicOrigin, runId, expiresAt });
+  rehearsal.bindCall(callerSid);
+  const events = new TwilioRehearsalFallback({ accountSid, authToken, callbackUrl, fallback, expiresAt });
+  const target = createServer(async (request, response) => {
+    let body = ""; for await (const chunk of request) body += chunk.toString();
+    const fields = Object.fromEntries(new URLSearchParams(body));
+    const valid = validateRequest(authToken, String(request.headers["x-twilio-signature"] ?? ""),
+      `${publicOrigin}/twilio/inbound`, fields);
+    response.writeHead(valid ? 200 : 403); response.end();
+  });
+  const caller = createRehearsalServer(rehearsal, () => {}, runId,
+    { path: `/fallback-ringing/${runId}`, accept: request => events.accept(request) });
+  const targetPort = await listen(target), callerPort = await listen(caller);
+  const gateway = createTwilioRehearsalGateway({ target: targetPort, caller: callerPort });
+  const port = await listen(gateway.server);
+  t.after(async () => { await gateway.stop(); await close(target); await close(caller); });
+  const local = `http://127.0.0.1:${port}`;
+  const send = (path: string, fields: Record<string, string>, url: string) => fetch(local + path, {
+    method: "POST", headers: { "content-type": "application/x-www-form-urlencoded",
+      "x-twilio-signature": getExpectedTwilioSignature(authToken, url, fields) },
+    body: new URLSearchParams(fields),
+  });
+  const inbound = { AccountSid: accountSid, CallSid: parentSid, From: from, To: to };
+  assert.equal((await send("/twilio/inbound", inbound, `${publicOrigin}/twilio/inbound`)).status, 200);
+  const speech = { AccountSid: accountSid, CallSid: callerSid, From: from, To: to,
+    Direction: "outbound-api", CallStatus: "in-progress", SpeechResult: "Abby test" };
+  const answer = await send(`/voice-rehearsal/${runId}/0`, speech,
+    `${publicOrigin}/voice-rehearsal/${runId}/0`);
+  assert.equal(answer.status, 200); assert.match(await answer.text(), /<Gather/);
+  const ringing = { AccountSid: accountSid, CallSid: childSid, ParentCallSid: parentSid,
+    To: fallback, CallbackSource: "call-progress-events", Direction: "outbound-dial",
+    CallStatus: "ringing", SequenceNumber: "1" };
+  events.bindTarget(parentSid);
+  const forged = await fetch(local + `/fallback-ringing/${runId}`, { method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded", "x-twilio-signature": "forged" },
+    body: new URLSearchParams(ringing) });
+  assert.equal(forged.status, 403); assert.equal(events.ringing(childSid), false);
+  assert.equal((await send(`/fallback-ringing/${runId}`, ringing, callbackUrl)).status, 204);
+  assert.equal(events.ringing(childSid), true);
 });
 
 test("rehearsal gateway carries only the target media WebSocket and closes it on shutdown", async t => {
