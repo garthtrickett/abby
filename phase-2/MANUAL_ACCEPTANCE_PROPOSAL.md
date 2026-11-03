@@ -7,8 +7,8 @@ has not been executed. Earlier scoped demo rehearsals are recorded below.
 This supplies the manual-test proposal required by [execution stage11](EXECUTION_ORDER.md).
 It does not activate a clinic or authorize provider mutations, real mail,
 payments, deployment or clinic carrier traffic. Separately owner-authorized
-[restricted carrier test scope](EXECUTION_ORDER.md#restricted-carrier-test-scope-3-november-2026) remain restricted engineering exercises;
-this proposal does not expand that authorization.
+rehearsals under the [restricted carrier test scope](EXECUTION_ORDER.md#restricted-carrier-test-scope-3-november-2026)
+remain engineering exercises; this proposal does not expand that authorization.
 
 Use the existing [booking contract](../docs/adr/0002-provider-acknowledged-booking.md)
 and [staff observation contract](../docs/adr/0003-class-movement-staff-resolution.md).
