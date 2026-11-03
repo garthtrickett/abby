@@ -35,6 +35,8 @@ for (const { outcome, callerFirst, enquiryFirst, enquirySecond } of [
   { outcome: "subjectAmbiguous", callerFirst: false, enquiryFirst: false, enquirySecond: false },
   { outcome: "accepted", callerFirst: false, enquiryFirst: false, enquirySecond: true },
   { outcome: "accepted", callerFirst: true, enquiryFirst: false, enquirySecond: true },
+  { outcome: "nativePermissionWithdrawn", callerFirst: false, enquiryFirst: false, enquirySecond: true },
+  { outcome: "relatedPermissionWithdrawn", callerFirst: true, enquiryFirst: false, enquirySecond: true },
 ] as const)
 test(`actual emitted signed ${callerFirst ? "native-self" : "related"}${enquiryFirst ? " enquiry" : ""} then ${outcome.startsWith("subject") ? "unresolved-related" : callerFirst ? "related" : "native-self"} ${enquirySecond ? "enquiry" : "booking"}: ${outcome}`, { timeout: 240_000 }, async context => {
   const subjectFault = outcome === "subjectOmitted" || outcome === "subjectAmbiguous";
@@ -175,10 +177,18 @@ test(`actual emitted signed ${callerFirst ? "native-self" : "related"}${enquiryF
         assert.equal(serving.writes.length, 0);
       }
       if (enquirySecond) {
+        const priorReads = fixture.enquiryPatientIds.length;
+        if (outcome === "nativePermissionWithdrawn") fixture.denySelf();
+        if (outcome === "relatedPermissionWithdrawn") fixture.base.revokeSubject();
         await serving.turn("Appointments");
-        const read = (await serving.state()).appointmentReads.at(-1); assert.ok(read); assert.equal(read.status, "shown");
-        assert.equal(read.shownCount, 1);
-        assert.equal(fixture.enquiryPatientIds.at(-1), callerFirst ? fixture.base.r.subjectIds[0] : verificationCanaries[2]);
+        const read = (await serving.state()).appointmentReads.at(-1); assert.ok(read);
+        if (outcome === "accepted") {
+          assert.equal(read.status, "shown"); assert.equal(read.shownCount, 1);
+          assert.equal(fixture.enquiryPatientIds.at(-1), callerFirst ? fixture.base.r.subjectIds[0] : verificationCanaries[2]);
+        } else {
+          assert.equal(read.status, "failed");
+          assert.equal(fixture.enquiryPatientIds.length, priorReads, "withdrawn proof must not reach the appointment reader");
+        }
         await serving.mark();
         assert.equal(serving.writes.length, priorWrites); assert.equal(serving.writeRequests.length, priorWrites);
         assert.equal(Object.keys((await serving.state()).actions).length, 1);

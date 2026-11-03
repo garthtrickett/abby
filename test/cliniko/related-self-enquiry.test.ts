@@ -96,6 +96,36 @@ test("a caller booking can precede a related-patient enquiry with independent ac
   } finally { await f.close(); }
 });
 
+test("withdrawn caller permission after a related booking blocks the next self enquiry", async () => {
+  const f = await fixture({ enquiry: true });
+  try {
+    await f.startRelated(); const first = await f.book(); assert.equal(first.status, "committed");
+    await f.nextWindow(); await f.verifyCallerEnquiry(true);
+    const priorReads = f.enquiryPatientIds.length; f.denySelf();
+    const read = await f.readEnquiry(); assert.equal(read.status, "failed"); await f.play();
+    assert.equal(f.enquiryPatientIds.length, priorReads, "withdrawn proof must not reach the appointment reader");
+    assert.equal(completedAppointmentEnquiry(await f.base.f.state()), undefined);
+    assert.deepEqual((await f.base.f.state()).actions[first.key], first);
+    assert.deepEqual(f.native.requests.map(row => row.patient_id), [f.base.r.subjectIds[0]]);
+    assert.equal(f.base.f.recalls.length, 1); await assertPrivate(f);
+  } finally { await f.close(); }
+});
+
+test("withdrawn related-patient permission after caller booking blocks the next related enquiry", async () => {
+  const f = await fixture({ enquiry: true });
+  try {
+    await f.verifySelf(false); const first = await f.book(); assert.equal(first.status, "committed");
+    await f.nextWindow(); await f.startRelatedEnquiry();
+    const priorReads = f.enquiryPatientIds.length; f.base.revokeSubject();
+    const read = await f.readEnquiry(); assert.equal(read.status, "failed"); await f.play();
+    assert.equal(f.enquiryPatientIds.length, priorReads, "withdrawn proof must not reach the appointment reader");
+    assert.equal(completedAppointmentEnquiry(await f.base.f.state()), undefined);
+    assert.deepEqual((await f.base.f.state()).actions[first.key], first);
+    assert.deepEqual(f.native.requests.map(row => row.patient_id), [verificationCanaries[2]]);
+    assert.equal(f.base.f.recalls.length, 1); await assertPrivate(f);
+  } finally { await f.close(); }
+});
+
 test("a failed related-patient enquiry cannot establish a caller-booking task", async () => {
   const f = await fixture({ enquiry: true });
   try {
