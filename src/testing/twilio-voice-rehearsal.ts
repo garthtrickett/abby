@@ -23,6 +23,12 @@ const interruptionSteps: readonly Step[] = [{ id: "replacement", sayNext: undefi
   words: ["heard", "greeting"], prefix: "hello i heard your test greeting" }];
 const terminal = new Set(["completed", "busy", "failed", "no-answer", "canceled"]);
 const hangup = () => { const r = new VoiceResponse(); r.hangup(); return r.toString(); };
+const settleReplacement = () => {
+  const r = new VoiceResponse();
+  // The target's replacement audio must have time to finish after the caller's
+  // final recognition callback. The observation still requires its Twilio mark.
+  r.pause({ length: 20 }); r.hangup(); return r.toString();
+};
 
 /** Single scripted test call. Signed callbacks are bound to its exact API-created
  * leg, account, numbers, run and step. Speech exists only during matching; neither
@@ -113,7 +119,8 @@ export class TwilioVoiceRehearsal {
       (!step.prefix || normalized === step.prefix || normalized.startsWith(step.prefix + " "));
     this.failed = !matched;
     if (matched) this.next++;
-    const xml = matched && step.sayNext ? this.gather(index + 1, step.sayNext) : hangup();
+    const xml = matched && step.sayNext ? this.gather(index + 1, step.sayNext) :
+      matched && this.scenario === "interruption" ? settleReplacement() : hangup();
     this.replies.set(index, { digest, xml });
     return { status: 200, xml };
   }
