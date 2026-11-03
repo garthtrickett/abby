@@ -82,7 +82,10 @@ DTMF with `Play digits` outside `Gather`; merely issuing that command does not
 prove ringing. None of those cases is silently counted as passed here.
 
 The optional `voice:rehearse-carrier-probe` command prepares separate
-`interruption` and `fallback` scenarios for this restricted target. Its
+`dialogue`, `interruption` and `fallback` scenarios for this restricted target.
+The dialogue case requires the target's exact three turns and four completed
+playbacks, a completed inbound leg and a complete empty child-leg page. This
+qualifies normal hangup without an unexpected fallback leg on that call. Its
 interruption case requires the target's exact call statistics to show two
 recognized turns, two completed playbacks, one interruption and one acknowledged
 clear. Its fallback case requires a signed `ringing` callback for the exact
@@ -102,6 +105,8 @@ status events to that one test window. Use new absolute private journal and
 target-report paths for each execution:
 
 ```sh
+npm run voice:rehearse-carrier-probe -- --dry-run dialogue
+npm run voice:rehearse-carrier-probe -- --execute dialogue /private/new-journal.json /private/target-report.json
 npm run voice:rehearse-carrier-probe -- --dry-run interruption
 npm run voice:rehearse-carrier-probe -- --preflight interruption
 npm run voice:rehearse-carrier-probe -- --execute interruption /private/new-journal.json /private/target-report.json

@@ -10,13 +10,14 @@ import { TwilioRehearsalFallback } from "../src/testing/twilio-rehearsal-fallbac
 import { rehearsalLegObserver } from "../src/testing/twilio-rehearsal-legs.ts";
 import { qualifyRehearsalObservation, rehearsalTargetSnapshot } from "../src/testing/twilio-rehearsal-observation.ts";
 import { TwilioVoiceRehearsal } from "../src/testing/twilio-voice-rehearsal.ts";
+import type { RehearsalScenario } from "../src/testing/twilio-voice-rehearsal.ts";
 
 /** Restricted test-only runner. One create intent, one caller, one target session.
  * Report and REST reads may retry; an uncertain create never does. */
 async function main() {
   const [mode, scenario, journalName, reportName] = process.argv.slice(2);
   if (!["--dry-run", "--preflight", "--execute"].includes(mode ?? "") ||
-      !["interruption", "fallback"].includes(scenario ?? "") || process.argv.length > 6 ||
+      !["dialogue", "interruption", "fallback"].includes(scenario ?? "") || process.argv.length > 6 ||
       (mode === "--execute" && (!journalName || !reportName))) throw Error("Invalid probe arguments");
   const e = process.env;
   if (e.ABBY_VOICE_TEST_MODE !== "1") throw Error("Isolated voice test mode required");
@@ -37,7 +38,7 @@ async function main() {
     throw Error("Invalid fallback callback route");
   const expiresAt = Date.now() + 300_000;
   const rehearsal = new TwilioVoiceRehearsal({ accountSid, authToken, from: caller, to: number,
-    callbackBase, runId, expiresAt, scenario: scenario as "interruption" | "fallback" });
+    callbackBase, runId, expiresAt, scenario: scenario as RehearsalScenario });
   const fallbackEvents = configuredFallback && new TwilioRehearsalFallback({ accountSid, authToken,
     callbackUrl: configuredFallback.href, fallback: fallbackNumber, expiresAt });
   const plan = { mode, scenario, calls: 1, maxConnectedSeconds: 180,
@@ -105,7 +106,7 @@ async function main() {
         observation = { targetCallSid: target.sid, targetStatus: target.status,
           childrenComplete: children.complete, children: children.calls.map(child => ({ sid: child.sid, status: child.status })) };
         result = qualifyRehearsalObservation({ accountSid, caller, number, fallback: fallbackNumber,
-          scenario: scenario as "interruption" | "fallback" }, {
+          scenario: scenario as RehearsalScenario }, {
           callerSid: callSid, launchedAt, now: Date.now(), caller: callerSummary, before, after, target, children,
           ...(fallbackEvents ? { fallbackEvents } : {}) });
         if (result.carrierScenarioPassed) break;
