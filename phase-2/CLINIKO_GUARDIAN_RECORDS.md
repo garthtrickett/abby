@@ -271,10 +271,11 @@ CI remain engineering delivery gates.
 
 ## Signed file-source operation coverage candidate, 3 November 2026
 
-The existing emitted signed file-source driver now exercises twelve synthetic
-cases: the four retained booking outcomes, accepted and missing-authority
-appointment reads, and accepted, missing-authority and pre-consent withdrawal
-for both cancellation and rescheduling. The accepted read checks that native
+The existing emitted signed file-source driver now exercises thirteen synthetic
+cases: the four retained booking outcomes, accepted, missing-identity and
+missing-authority appointment reads, and accepted, missing-authority and
+pre-consent withdrawal for both cancellation and rescheduling. The accepted
+read checks that native
 appointment queries target the exact approved patient ID; missing identity or
 authority cannot reach that reader or write. The cases retain separate guardian
 and patient verification, the native request budget, private-media assertions,

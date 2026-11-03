@@ -36,6 +36,7 @@ const scenarios = [
   { operation: "book", outcome: "missingAuthority" },
   { operation: "book", outcome: "withdrawnBeforeConsent" },
   { operation: "appointments.read", outcome: "accepted" },
+  { operation: "appointments.read", outcome: "missingIdentity" },
   { operation: "appointments.read", outcome: "missingAuthority" },
   { operation: "cancel", outcome: "accepted" },
   { operation: "cancel", outcome: "missingAuthority" },
