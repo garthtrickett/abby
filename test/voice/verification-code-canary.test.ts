@@ -108,6 +108,7 @@ test("scoped SQL canaries restore named and default issuers without letting an o
     writeFileSync(entry, `import assert from "node:assert/strict";
 import test from "node:test";
 import crypto, { randomInt } from "node:crypto";
+import { syncBuiltinESMExports } from "node:module";
 import { installScopedDirectSqlVerificationCanaries, distinctFromClock } from ${JSON.stringify(source)};
 test("actual isolated SQL child canary lifetime", () => {
   const original = crypto.randomInt;

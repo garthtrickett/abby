@@ -722,6 +722,6 @@
     "test/voice/twilio-outbound-stop-receiver.test.ts": "8c36bed64ad31a312fa678754b7368ef703f3e5dca011c698d4df7670d98bd16",
     "test/voice/twilio-outbound-stop-speech.test.ts": "d0cb417f573f625abf1598f1ac9555fca03f7f04fcca0b75a54e51e3420a846d",
     "test/voice/twilio-renewal-during-turn.test.ts": "f7b2e52b2822899e66c82150125e580ab6b0574535526a03f3d0116f89997cd6",
-    "test/voice/verification-code-canary.test.ts": "55c1eb05160535ecf6c6efb4d568e0a60173e46d553066186e5a1427773e75df"
+    "test/voice/verification-code-canary.test.ts": "0e959cce61db7e1abf791e7ac110d1f062a635c2e5e2164eddfd2a5dd7c853f0"
   }
 }
