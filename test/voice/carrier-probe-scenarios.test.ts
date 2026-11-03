@@ -68,7 +68,10 @@ test("carrier probe: explicit fixed interruption script cannot turn reply recogn
   rehearsal.bindCall(callSid);
   const request = reply("Hello. I heard your test greeting.");
   assert.equal(rehearsal.accept({ ...request, signature: "bad" }).status, 403);
-  assert.equal(rehearsal.accept(request).status, 200);
+  const accepted = rehearsal.accept(request);
+  assert.equal(accepted.status, 200);
+  assert.match(accepted.xml!, /<Pause length="20"\/><Hangup\/>/);
+  assert.deepEqual(rehearsal.accept(request), accepted);
   rehearsal.observeTerminal(callSid, "completed");
   assert.equal(rehearsal.summary().scriptMatched, true);
   assert.equal(rehearsal.summary().interruption, "unverified");
@@ -79,7 +82,8 @@ test("carrier probe: explicit fixed interruption script cannot turn reply recogn
 test("carrier probe: missing or wrong replacement reply fails and never persists recognized words", () => {
   for (const text of ["", "Hello this is Abby in a test", "I did not hear your greeting", "private canary detail"]) {
     const rehearsal = new TwilioVoiceRehearsal({ ...config, scenario: "interruption" }); rehearsal.bindCall(callSid);
-    assert.match(rehearsal.accept(reply(text)).xml!, /<Hangup\/>/);
+    const xml = rehearsal.accept(reply(text)).xml!;
+    assert.match(xml, /<Hangup\/>/); assert.doesNotMatch(xml, /<Pause/);
     rehearsal.observeTerminal(callSid, "completed");
     assert.equal(rehearsal.summary().scriptMatched, false); assert.equal(rehearsal.summary().failed, true);
     assert(!JSON.stringify(rehearsal.summary()).includes("private canary"));
@@ -237,7 +241,7 @@ test("carrier observation: interruption requires same-run fresh target, exact na
     { ...evidence, children: { complete: false, calls: [] } },
     { ...evidence, children: { complete: true, calls: [childCall] } }];
   for (const item of wrong) assert.equal(qualifyRehearsalObservation(selected, item).carrierScenarioPassed, false);
-  for (const patch of [{ clearAcknowledged: 0 }, { interruptions: 0 }, { played: 3 }, { turns: 1 },
+  for (const patch of [{ clearAcknowledged: 0 }, { interruptions: 0 }, { played: 1 }, { played: 3 }, { turns: 1 },
     { failed: true }, { stopped: false }, { dtmfFallback: true }]) {
     const after = { ...evidence.after, latest: { ...evidence.after.latest!, ...patch } };
     assert.equal(qualifyRehearsalObservation(selected, { ...evidence, after }).carrierScenarioPassed, false);

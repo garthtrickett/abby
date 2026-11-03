@@ -91,9 +91,20 @@ recognized turns, two completed playbacks, one interruption and one acknowledged
 clear. Its fallback case requires a signed `ringing` callback for the exact
 child leg and a complete, independent Twilio readback of that child under the
 target call. Both require the exact caller to complete, a fresh same-run target
-report and the matching inbound leg. These checks are code paths, not a claim
-that either real-carrier case has passed. They do not qualify audio quality,
-ordinary clinic conversations or staff acceptance.
+report and the matching inbound leg. The code paths alone do not qualify audio
+quality, ordinary clinic conversations or staff acceptance.
+
+On 2026-11-03, the restricted real-carrier run against merged main `0aa4457c`
+passed dialogue and normal hangup (three turns, four completed playbacks, no
+child leg). The interruption call recorded two turns, one interruption and an
+acknowledged clear, but only one completed playback; it remains **unverified**
+under the two-playback requirement. A separate fresh fallback call passed with
+a signed ringing callback and one independently observed child leg. The test
+webhook was restored after both windows, and their temporary services and
+databases were removed. These results do not establish clinic acceptance or
+speech quality. The interruption caller now waits briefly after its matched
+final callback so the replacement playback can complete; it still needs a new
+real-carrier pass before interruption is claimed.
 
 For a fallback probe, configure the restricted target's
 `ABBY_REHEARSAL_FALLBACK_CALLBACK_URL` to a fresh HTTPS
