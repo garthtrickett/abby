@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { getExpectedTwilioSignature } from "twilio/lib/webhooks/webhooks.js";
 import { TwilioVoiceRehearsal } from "../../src/testing/twilio-voice-rehearsal.ts";
 import type { RehearsalConfig } from "../../src/testing/twilio-voice-rehearsal.ts";
@@ -15,6 +17,24 @@ const accountSid = "AC" + "1".repeat(32), callSid = "CA" + "2".repeat(32);
 const parent = "CA" + "4".repeat(32), child = "CA" + "5".repeat(32);
 const config = { accountSid, authToken: "synthetic-only", from: "+15555550101", to: "+15555550102",
   callbackBase: "https://tester.example", runId: "3".repeat(32), expiresAt: 300_000, now: () => 1_000 };
+
+test("carrier probe CLI exposes the normal dialogue scenario without contacting the provider", () => {
+  const script = fileURLToPath(new URL("../../dist/runtime/scripts/rehearse-twilio-probe.js", import.meta.url));
+  const env = { PATH: process.env.PATH, ABBY_VOICE_TEST_MODE: "1",
+    ABBY_TWILIO_ACCOUNT_SID: accountSid, ABBY_TWILIO_AUTH_TOKEN: "synthetic-only",
+    ABBY_TWILIO_TEST_CALLER_NUMBER: config.from, ABBY_TWILIO_TEST_NUMBER: config.to,
+    ABBY_TWILIO_FALLBACK_NUMBER: "+15555550103",
+    ABBY_REHEARSAL_CALLBACK_BASE: config.callbackBase } satisfies NodeJS.ProcessEnv;
+  const dryRun = spawnSync(process.execPath, [script, "--dry-run", "dialogue"],
+    { env, encoding: "utf8", timeout: 10_000 });
+  assert.equal(dryRun.status, 0, dryRun.stderr);
+  const plan = JSON.parse(dryRun.stdout) as Record<string, unknown>;
+  assert.equal(plan.scenario, "dialogue"); assert.equal(plan.calls, 1);
+  assert.equal(plan.clinicalAcceptance, false); assert.equal(plan.recordingEnabled, false);
+  const invalid = spawnSync(process.execPath, [script, "--dry-run", "unapproved"],
+    { env, encoding: "utf8", timeout: 10_000 });
+  assert.equal(invalid.status, 1);
+});
 function reply(text: string, step = 0) {
   const target = `/voice-rehearsal/${config.runId}/${step}`;
   const fields = { AccountSid: accountSid, CallSid: callSid, From: config.from, To: config.to,
