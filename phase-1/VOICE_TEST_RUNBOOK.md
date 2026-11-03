@@ -1,6 +1,8 @@
 # Isolated real-call rehearsal
 
-**State:** the local test-call path, synthetic process E2E, disposable public runner rehearsal, credential-free number dry-run, and local fallback Function test exist. No Twilio number route, deployed independent fallback Function, or carrier call has been verified yet. This runbook prepares a disposable test route; it is not clinic activation.
+**State, 3 November 2026:** the local test-call path, synthetic process E2E, disposable public runner rehearsal, credential-free number dry-run, and local fallback Function test exist. An isolated Twilio number is now approved and voice-enabled, with a separate eligible originating test number. Its saved webhook still points to an earlier test URL; no current public target, deployed independent fallback Function, or real carrier-call result has been verified. This runbook prepares a disposable test route; it is not clinic activation.
+
+The owner-authorized [restricted public target](../phase-2/TWILIO_REHEARSAL_TARGET.md) and [automated caller](AUTOMATED_CARRIER_REHEARSAL.md) use fixed non-clinical dialogue for the first real-carrier rehearsal. They do not connect the demo Cliniko account or satisfy the independent number-level Function, keypad/availability, staff fallback, and clinic-acceptance cases below. Keep those general receptionist checks separate until their actual route and provider observations exist.
 
 ## Boundaries
 
