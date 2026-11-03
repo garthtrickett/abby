@@ -1,7 +1,7 @@
 {
   "verifiedDate": "2026-11-03",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "db3dc1d4837e2efba204ac3009fc5e26881e85bc230478454b1caf536b5d61a6",
+  "factsSha256": "04727fb51b8822a102baa4f75be9dd99b866a2ab2757bd5394811ae2d8a3978e",
   "sources": {
     ".github/workflows/text-contract.yml": "20f47909d711b7a7d2b3916a8ef0756345b414dff225184989cd8056b5b6179b",
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
@@ -654,7 +654,7 @@
     "test/support/synthetic-media-timeline.ts": "da5985153a34b822c7d29f3d4fafe9968977121a0dab1109adb76f87e989b35c",
     "test/support/twilio-outbound-conversation.ts": "a962f03483baa47a01f67834324eb0e54cfd8c8e9b75962713e6e730706ad14d",
     "test/support/twilio-outbound-finality-worker.mjs": "b6502925cdd06ca4b2f5ccbbbb3653408a064630175fc3aadfc73baf5d838783",
-    "test/support/verification-code-canary.ts": "8fee97f7b78932f39c2baf3a37b9d09a173e298adc3dd08f3931ab830ec6aca7",
+    "test/support/verification-code-canary.ts": "36fa19794bccb7eee072bdf8d8f4957931ddaa3938081b0ee72f6e58b3fe7538",
     "test/text/booking-menu-deadline.test.ts": "cf2c6f24a08c0846e65fbc9be9a4646b18a0f734b6fe0dd9cf1c2da2e7fcc022",
     "test/text/class-movement-consent.test.ts": "1ff94adb26665cb9d686c0efa99d40864b8fd54e3436d41026e0f9cf2a6317af",
     "test/text/class-movement-receipt.test.ts": "663c5de1ba65b9a2032481080a54fe59a2f92d454e5ef87b30932f9fc7af7491",
@@ -722,6 +722,6 @@
     "test/voice/twilio-outbound-stop-receiver.test.ts": "8c36bed64ad31a312fa678754b7368ef703f3e5dca011c698d4df7670d98bd16",
     "test/voice/twilio-outbound-stop-speech.test.ts": "d0cb417f573f625abf1598f1ac9555fca03f7f04fcca0b75a54e51e3420a846d",
     "test/voice/twilio-renewal-during-turn.test.ts": "f7b2e52b2822899e66c82150125e580ab6b0574535526a03f3d0116f89997cd6",
-    "test/voice/verification-code-canary.test.ts": "04c0f9b7d2ab43390c53953db8995ec794ff104457b0ccc97db547d7193ed0fa"
+    "test/voice/verification-code-canary.test.ts": "55c1eb05160535ecf6c6efb4d568e0a60173e46d553066186e5a1427773e75df"
   }
 }
