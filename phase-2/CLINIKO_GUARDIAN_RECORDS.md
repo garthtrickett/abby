@@ -268,3 +268,21 @@ See [the combined contract and limits](CLINIKO_RELATED_SELF_TASKS.md#current-com
 Real clinic records, grants, provisioning, access/retention/recovery and activation
 remain separate. Final review, parent integration, exact-head and resulting-main
 CI remain engineering delivery gates.
+
+## Signed file-source operation coverage candidate, 3 November 2026
+
+The existing emitted signed file-source driver now exercises thirteen synthetic
+cases: the four retained booking outcomes, accepted, missing-identity and
+missing-authority appointment reads, and accepted, missing-authority and
+pre-consent withdrawal for both cancellation and rescheduling. The accepted
+read checks that native
+appointment queries target the exact approved patient ID; missing identity or
+authority cannot reach that reader or write. The cases retain separate guardian
+and patient verification, the native request budget, private-media assertions,
+every-column SQL scans, unfiltered logical backup and restore, unrelated-row
+preservation and owned cleanup. Production source and runtime defaults are
+unchanged.
+
+This is a test-only candidate pending its final exact-head PostgreSQL verdict,
+review and normal delivery. It does not provision clinic records or establish
+real clinic, provider, carrier, speech, staff, access or retention acceptance.
