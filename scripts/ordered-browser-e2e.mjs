@@ -170,6 +170,12 @@ export async function runOrderedBrowserE2E(files, { pattern, workers = 1, onEven
       } catch (error) { failed ??= error; }
     }
     fillSlots();
+    if (failed) throw failed;
+    // Starting the first short case before the second worker is ready can
+    // serialize both cases even when two workers were admitted. Warm the
+    // initial cohort before releasing its first permit.
+    await Promise.all(scheduled.map(task => task.readiness));
+    if (failed) throw failed;
     for (let index = 0; index < cases.length; index += 1) {
       if (failed) throw failed;
       while (!scheduled[index]) {
