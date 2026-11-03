@@ -304,7 +304,7 @@ test("E2E-128 runnable signed synthetic Realtime call uses the selected provider
     const mark = call.messages.find(m => m.event === "mark")!.mark;
     call.socket.send(JSON.stringify({ event: "mark", sequenceNumber: "2", streamSid: call.streamSid, mark }));
     call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
-      dtmf: { track: "inbound_track", digit: "2" } }));
+      dtmf: { track: "inbound", digit: "2" } }));
     await waitFor(() => call.messages.filter(m => m.event === "mark").length === 2, "Realtime public availability queue");
     assert.ok(fixture.clinikoPaths.some(path => path.endsWith("/available_times")));
     assert.ok(fixture.clinikoMethods.every(method => method === "GET"));
@@ -448,7 +448,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
           const call = await fixture.openCall();
           await markGreeting(call);
           call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
-            dtmf: { track: "inbound_track", digit: "2" } }));
+            dtmf: { track: "inbound", digit: "2" } }));
           await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "empty availability response");
           assert.deepEqual(call.messages.map(item => item.event), ["media", "mark", "media", "mark"]);
           assert.equal(fixture.speech[1],
@@ -467,7 +467,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         const call = await fixture.openCall();
         await markGreeting(call);
         call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
-          dtmf: { track: "inbound_track", digit: "1" } }));
+          dtmf: { track: "inbound", digit: "1" } }));
         await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2,
           "safe availability response", fault === "cliniko-slow-read" ? 25_000 : 8_000);
         assert.deepEqual(call.messages.slice(2, 4).map(item => item.event), ["media", "mark"]);
@@ -538,7 +538,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
           { model: "tts-1", text: greeting },
         ]);
         call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
-          dtmf: { track: "inbound_track", digit: "2" } }));
+          dtmf: { track: "inbound", digit: "2" } }));
         await waitFor(() => call.messages.length >= 4 && fixture.speechRequests.length >= 4,
           "fallback availability answer");
         assert.deepEqual(call.messages.map(item => item.event), ["media", "mark", "media", "mark"]);
@@ -635,7 +635,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         await markGreeting(call);
         for (const [digit, sequenceNumber] of [["3", "3"], ["9", "4"], ["1", "5"]]) {
           call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber, streamSid: call.streamSid,
-            dtmf: { track: "inbound_track", digit } }));
+            dtmf: { track: "inbound", digit } }));
         }
         await waitFor(() => call.messages.length >= 4 &&
           fixture.speech.some(text => /couldn't find a possible appointment time/.test(text)), "single-day response");
@@ -656,9 +656,9 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         await waitFor(() => fixture.speech.length > 0, "default greeting speech request");
         assert.ok(!fixture.speech[0]?.includes(weekInstruction));
         call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
-          dtmf: { track: "inbound_track", digit: "3" } }));
+          dtmf: { track: "inbound", digit: "3" } }));
         call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "4", streamSid: call.streamSid,
-          dtmf: { track: "inbound_track", digit: "1" } }));
+          dtmf: { track: "inbound", digit: "1" } }));
         await waitFor(() => call.messages.length >= 4 &&
           fixture.speech.some(text => /couldn't find a possible appointment time/.test(text)),
         "default one-day response");
@@ -679,7 +679,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         await waitFor(() => fixture.speech.length > 0, "approved week greeting speech request");
         assert.ok(fixture.speech[0]?.includes(weekInstruction));
         call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
-          dtmf: { track: "inbound_track", digit: "3" } }));
+          dtmf: { track: "inbound", digit: "3" } }));
         await waitFor(() => call.messages.length >= 4 &&
           fixture.speech.some(text => text.includes("These may change")), "week alternative response");
         assert.deepEqual(call.messages.map(item => item.event), ["media", "mark", "media", "mark"]);
@@ -707,7 +707,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         await waitFor(() => fixture.speech.length > 0, "rate-limit greeting speech request");
         assert.ok(fixture.speech[0]?.includes(weekInstruction));
         call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
-          dtmf: { track: "inbound_track", digit: "3" } }));
+          dtmf: { track: "inbound", digit: "3" } }));
         await waitFor(() => call.messages.length >= 4 && fixture.speech.includes(noStaffNotice),
           "week rate-limit fallback");
         assertResponseAudio(call);
@@ -720,7 +720,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         const call = await fixture.openCall();
         await markGreeting(call);
         call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
-          dtmf: { track: "inbound_track", digit: "2" } }));
+          dtmf: { track: "inbound", digit: "2" } }));
         await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "default availability response");
         assert.match(fixture.speech[1]!, /couldn't find a possible appointment time/);
         assert.equal(fixture.clinikoPaths.some(path => path.includes("/44") || path.includes("/55")), false);
@@ -732,7 +732,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         const call = await fixture.openCall();
         await markGreeting(call);
         call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
-          dtmf: { track: "inbound_track", digit: "2" } }));
+          dtmf: { track: "inbound", digit: "2" } }));
         await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "approved alternative response");
         assert.match(fixture.speech[1]!, /For Follow up with Dr Alternative, the clinic's schedule currently shows possible times/);
         assert.match(fixture.speech[1]!, /These may change. I can't reserve or confirm/);
@@ -747,7 +747,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         const call = await fixture.openCall();
         await markGreeting(call);
         call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
-          dtmf: { track: "inbound_track", digit: "2" } }));
+          dtmf: { track: "inbound", digit: "2" } }));
         await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "second alternative response");
         assert.match(fixture.speech[1]!, /For Review with Dr Third, the clinic's schedule currently shows possible times/);
         assert.match(fixture.speech[1]!, /can't reserve or confirm/);
@@ -762,7 +762,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         const call = await fixture.openCall();
         await markGreeting(call);
         call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
-          dtmf: { track: "inbound_track", digit: "2" } }));
+          dtmf: { track: "inbound", digit: "2" } }));
         await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "alternative failure response");
         assert.equal(fixture.speech[1], noStaffNotice);
         assert.ok(!fixture.speech.some(text => text.includes("Dr Alternative") || text.includes("Follow up")));
@@ -774,7 +774,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         const call = await fixture.openCall();
         await markGreeting(call);
         call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
-          dtmf: { track: "inbound_track", digit: "2" } }));
+          dtmf: { track: "inbound", digit: "2" } }));
         await waitFor(() => call.messages.length >= 4 && fixture.speech.length >= 2, "malformed alternative response");
         assert.equal(fixture.speech[1], noStaffNotice);
         assert.ok(!fixture.speech.some(text => text.includes("Dr Alternative") || text.includes("Follow up")));
@@ -786,7 +786,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         const first = await fixture.openCall();
         await markGreeting(first);
         first.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: first.streamSid,
-          dtmf: { track: "inbound_track", digit: "2" } }));
+          dtmf: { track: "inbound", digit: "2" } }));
         await waitFor(() => first.messages.length >= 4 && fixture.speech.length >= 2, "first primary response");
         assert.match(fixture.speech[1]!, /couldn't find a possible appointment time/);
         assert.deepEqual(fixture.clinikoPaths.filter(path => path.endsWith("/available_times"))
@@ -809,7 +809,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         const second = await fixture.openCall(secondCallSid);
         await markGreeting(second);
         second.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: second.streamSid,
-          dtmf: { track: "inbound_track", digit: "2" } }));
+          dtmf: { track: "inbound", digit: "2" } }));
         await waitFor(() => second.messages.length >= 4 && fixture.speech.length >= 4, "new primary response");
         assert.match(fixture.speech[3]!, /possible times/);
         assert.match(fixture.speech[3]!, /can't reserve or confirm/);
@@ -849,7 +849,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
         const call = await fixture.openCall();
         await markGreeting(call);
         call.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: call.streamSid,
-          dtmf: { track: "inbound_track", digit: "1" } }));
+          dtmf: { track: "inbound", digit: "1" } }));
         await waitFor(() => fixture.clinikoPaths.some(path => path.endsWith("/available_times")),
           "in-flight availability read");
         const disconnectedAt = Date.now();
@@ -904,7 +904,7 @@ test("isolated signed runner failure paths", { skip: process.env.ABBY_ISOLATED_P
       await markGreeting(second);
       assert.match(fixture.speech[priorSpeech] ?? "", /Press 1 for possible times today/);
       second.socket.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid: second.streamSid,
-        dtmf: { track: "inbound_track", digit: "2" } }));
+        dtmf: { track: "inbound", digit: "2" } }));
       await waitFor(() => second.messages.length >= 4 && fixture.speech.length >= priorSpeech + 2,
         "availability after restart");
       assert.match(fixture.speech[priorSpeech + 1]!, /possible times/);

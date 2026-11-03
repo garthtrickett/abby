@@ -357,3 +357,36 @@ test("pending model work cannot consume silence needed to separate or end a new 
     assert.equal(starts, 2);
   } finally { media.endPendingEffect(); await media.stop(); }
 });
+
+
+test("idle silent startup bursts preserve every sequence without consuming the asynchronous speech queue", async () => {
+  let starts = 0, finished = 0; const accepted: number[] = [];
+  const media = new MediaTurnController("session", {
+    async speechStarted() { return ok(++starts); }, acceptTranscript() { return ok(undefined); },
+    async finishTurn() { finished++; return ok("done"); },
+  }, { async accept(input) { accepted.push(input.sequence); return ok([]); }, async flush() { return ok([]); } },
+  { silenceMs: 100 });
+  const burst = Array.from({ length: 96 }, (_, sequence) => media.acceptMedia(frame(sequence, 0)));
+  for (const result of await Promise.all(burst)) assert.deepEqual(value(result), { kind: "listening" });
+  assert(media.idle()); assert.equal(starts, 0); assert.deepEqual(accepted, []);
+  value(await media.acceptMedia(frame(96, 2_000))); value(await media.acceptMedia(frame(97, 2_000)));
+  for (let sequence = 98; sequence <= 102; sequence++) value(await media.acceptMedia(frame(sequence, 0)));
+  assert.equal(starts, 1); assert.equal(finished, 1); assert.deepEqual(accepted, [96, 97, 98, 99, 100, 101, 102]);
+  await media.stop();
+});
+
+test("idle silence still validates session, sequence and time and never bypasses queued speech backpressure", async () => {
+  const target = { async speechStarted() { return ok(1); }, acceptTranscript() { return ok(undefined); },
+    async finishTurn() { return ok("done"); } };
+  const transcription = { async accept() { return ok([]); }, async flush() { return ok([]); } };
+  const media = new MediaTurnController("session", target, transcription, { maxQueuedFrames: 1 });
+  assert.deepEqual(await media.acceptMedia(frame(0, 0, "other")), { ok: false, error: { kind: "invalidMedia" } });
+  assert.deepEqual(await media.acceptMedia(frame(1, 0)), { ok: false, error: { kind: "mediaOutOfOrder" } });
+  value(await media.acceptMedia(frame(0, 0)));
+  assert.deepEqual(await media.acceptMedia({ ...frame(1, 0), capturedAt: new Date(start - 1).toISOString() }),
+    { ok: false, error: { kind: "mediaOutOfOrder" } });
+  const queued = media.acceptMedia(frame(1, 2_000));
+  assert.deepEqual(await media.acceptMedia(frame(2, 0)), { ok: false, error: { kind: "mediaOverloaded" } });
+  value(await queued); value(await media.acceptMedia(frame(2, 0))); await media.stop();
+  assert.deepEqual(await media.acceptMedia(frame(3, 0)), { ok: false, error: { kind: "mediaClosed" } });
+});

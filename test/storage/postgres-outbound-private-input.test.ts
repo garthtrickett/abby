@@ -53,7 +53,7 @@ test(`actual emitted prepared private input retains SQL session exclusion and co
     const mark = (output as { event?: string; mark?: unknown }[]).find(m => m.event === "mark")!.mark;
     wire.socket.send(JSON.stringify({ event: "mark", streamSid: f.streamSid, sequenceNumber: String(++sequence), mark }));
     for (const digit of privateDigits + "#") wire.socket.send(JSON.stringify({ event: "dtmf", streamSid: f.streamSid,
-      sequenceNumber: String(++sequence), dtmf: { track: "inbound_track", digit } }));
+      sequenceNumber: String(++sequence), dtmf: { track: "inbound", digit } }));
     await accepted.promise; assert.equal(digits, privateDigits);
     assert.deepEqual(f.acceptedTranscripts, []); assert.deepEqual(f.turns, []);
   }

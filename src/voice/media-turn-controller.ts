@@ -288,9 +288,13 @@ export class MediaTurnController<T, F> {
     if (frame.sequence !== this.nextSequence || capturedMs < this.lastCapturedMs) {
       return Promise.resolve(err({ kind: "mediaOutOfOrder" }));
     }
-    if (this.queuedFrames >= this.maxQueuedFrames) return Promise.resolve(err({ kind: "mediaOverloaded" }));
+    // Startup delivery can batch silent frames. With no queued work or speech
+    // candidate, silence has no asynchronous effect and need not occupy the queue.
+    const idleSilence = this.idle() && averageAmplitude(frame.bytes) < this.speechThreshold;
+    if (!idleSilence && this.queuedFrames >= this.maxQueuedFrames) return Promise.resolve(err({ kind: "mediaOverloaded" }));
     this.nextSequence += 1;
     this.lastCapturedMs = capturedMs;
+    if (idleSilence) return Promise.resolve(ok({ kind: "listening" }));
     this.queuedFrames += 1;
     const copy: MediaFrame = { ...frame, bytes: new Uint8Array(frame.bytes) };
     const processing = this.queue.then(() => this.closed

@@ -80,7 +80,7 @@ test(`actual emitted signed ${callerFirst ? "native-self" : "related"}${enquiryF
       await excludePriorPublicNumbers(); await serving.turn(operation === "book" ? "Book an appointment for my partner" : "Check the appointment time for my husband"); await serving.mark();
       const owner = serving.flow.representativeInputOwner; assert.ok(owner);
       await serving.privateDigit("1"); await serving.mark(); await fixture.base.waitForMail(priorMail + 1);
-      for (const digit of `${fixture.base.mail[priorMail]!.code}#`) serving.sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+      for (const digit of `${fixture.base.mail[priorMail]!.code}#`) serving.sendEvent({ event: "dtmf", dtmf: { track: "inbound", digit } });
       await voiceUntil(() => serving.spoken.at(-1) === "Please say the patient's first name.", "private related subject"); await serving.mark();
       for (const field of [fixture.base.r.identity.firstName, fixture.base.r.identity.lastName, "5 March 1982"]) { await serving.privateField(field); await serving.mark(); }
       await excludePriorPublicNumbers(); await serving.privateDigit("1"); await serving.mark(); await fixture.base.waitForMail(priorMail + 2);
@@ -138,7 +138,7 @@ test(`actual emitted signed ${callerFirst ? "native-self" : "related"}${enquiryF
       const owner = serving.flow.representativeInputOwner; assert.ok(owner); assert.notEqual(owner, firstOwner);
       assert.equal(firstOwner!.closed, true); assert.equal(fixture.base.mail.length, 2);
       await serving.privateDigit("1"); await serving.mark(); await fixture.base.waitForMail(3);
-      for (const digit of `${fixture.base.mail[2]!.code}#`) serving.sendEvent({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+      for (const digit of `${fixture.base.mail[2]!.code}#`) serving.sendEvent({ event: "dtmf", dtmf: { track: "inbound", digit } });
       await voiceUntil(() => serving.spoken.at(-1) === "Please say the patient's first name.", "new private subject after fresh actor proof"); await serving.mark();
       // A new actor code still grants no subject and cannot reuse the first offer.
       assert.equal((await serving.flow.resolveBooking(fixture.base.f.scope, first.mutation.request.patient.verificationRef,

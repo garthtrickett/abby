@@ -207,7 +207,7 @@ test("E2E-163 opt-in signed local call recovers uncertain speech and charges key
       });
     });
     caller.send(JSON.stringify({ event: "dtmf", sequenceNumber: String(inboundChunk + 4), streamSid,
-      dtmf: { track: "inbound_track", digit: "2" } }));
+      dtmf: { track: "inbound", digit: "2" } }));
     const thirdMark = await availabilityMark;
     assert.ok(thirdMark);
     assert.ok(mediaCount > afterClarificationMediaCount);

@@ -71,7 +71,7 @@ test("E2E-130 synthetic Twilio: ordered wire events start the call, prove greeti
   assert.equal(Object.values(after.value.presentations)[0]?.status, "played");
 
   const disabledKeypad = await call.receive(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid,
-    dtmf: { track: "inbound_track", digit: "2" } }));
+    dtmf: { track: "inbound", digit: "2" } }));
   assert.deepEqual(disabledKeypad, { ok: true, value: { kind: "ignored" } });
 
   for (let index = 0; index < 7; index += 1) {

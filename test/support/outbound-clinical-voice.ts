@@ -259,13 +259,13 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
       assert.ok(flow?.verificationRequired);
       const before = transcripts.length;
       for (let i = 0; i < 7; i++) media(i < 2);
-      for (const digit of code + "#") send({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+      for (const digit of code + "#") send({ event: "dtmf", dtmf: { track: "inbound", digit } });
       await until(() => flow!.verificationRequired === false || closed, "actual private verification"); assert.equal(closed, false);
       assert.equal(transcripts.length, before);
       for (let i = 0; i < 25; i++) media(false); await processedMedia();
     },
     async privateKey(digit: string) {
-      const keySequence = sequence + 1; send({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+      const keySequence = sequence + 1; send({ event: "dtmf", dtmf: { track: "inbound", digit } });
       await until(() => processedSequence >= keySequence, "processed private keypad event");
     },
     async privateNoise() { const count = transcripts.length; for (let i = 0; i < 7; i++) media(i < 2); await processedMedia(); assert.equal(transcripts.length, count); },
@@ -273,7 +273,7 @@ export async function outboundClinicalVoiceFixture(options: Readonly<{ budget?: 
     async rejectPrivateCode(code: string) {
       assert.ok(flow?.verificationRequired);
       for (let attempt = 0; attempt < 3; attempt++)
-        for (const digit of code + "#") send({ event: "dtmf", dtmf: { track: "inbound_track", digit } });
+        for (const digit of code + "#") send({ event: "dtmf", dtmf: { track: "inbound", digit } });
       await until(() => closed, "three private failures close actual call", 5000);
     },
     async waitForMail() { await until(() => f.mail.length > 0, "native registered-channel challenge", 5000); return f.mail.at(-1)!.code; },

@@ -93,8 +93,8 @@ export async function privateKeypadCallFixture(options: Parameters<typeof caller
     async start() { assert.ok((await call.receive(connected)).ok); assert.ok((await call.receive(start)).ok); },
     mark() { const marker = sent.find(value => value.event === "mark")?.mark as { name: string }; assert.ok(marker);
       return receive({ event: "mark", mark: { name: marker.name } }); },
-    digit(digit: string) { return receive({ event: "dtmf", dtmf: { track: "inbound_track", digit } }); },
-    async code(code: string) { for (const digit of `${code}#`) { const result = await receive({ event: "dtmf", dtmf: { track: "inbound_track", digit } }); if (!result.ok) return result; }
+    digit(digit: string) { return receive({ event: "dtmf", dtmf: { track: "inbound", digit } }); },
+    async code(code: string) { for (const digit of `${code}#`) { const result = await receive({ event: "dtmf", dtmf: { track: "inbound", digit } }); if (!result.ok) return result; }
       return ok({ kind: "privateInput" as const }); },
     media(voiced = true, gapMs = 0) { const current = chunk++; timestampOffset += gapMs; return receive({ event: "media", media: { track: "inbound", chunk: String(current + 1), timestamp: String(current * 20 + timestampOffset),
       payload: Buffer.alloc(160, voiced ? 0x9f : 0xff).toString("base64") } }); },

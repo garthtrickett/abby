@@ -298,7 +298,7 @@ async function main() {
     caller.send(JSON.stringify({ event: "mark", sequenceNumber: "2", streamSid,
       mark: { name: received[1].mark.name } }));
     caller.send(JSON.stringify({ event: "dtmf", sequenceNumber: "3", streamSid,
-      dtmf: { track: "inbound_track", digit: "1" } }));
+      dtmf: { track: "inbound", digit: "1" } }));
     await waitFor(4);
     assert.deepEqual(received.slice(2, 4).map(item => item.event), ["media", "mark"]);
     for (let index = 0; index < 2; index += 1) caller.send(JSON.stringify({ event: "media",
