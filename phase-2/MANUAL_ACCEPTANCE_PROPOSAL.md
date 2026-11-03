@@ -2,11 +2,13 @@
 
 The [clinic setup and rehearsal command](CLINIC_SETUP_AND_REHEARSAL.md) supplies a twelve-scenario local worksheet pinned to the current committed source and six owner configuration areas. It records self-reported staff observations only; missing configuration, failed/unrun scenarios and source drift remain visible. It neither replaces the observations below nor supplies activation authority.
 
-Status: proposal only, updated 1 November 2026. Full current-candidate acceptance
+Status: proposal only, updated 3 November 2026. Full current-candidate acceptance
 has not been executed. Earlier scoped demo rehearsals are recorded below.
 This supplies the manual-test proposal required by [execution stage11](EXECUTION_ORDER.md).
 It does not activate a clinic or authorize provider mutations, real mail,
-payments, deployment or the deferred carrier work.
+payments, deployment or clinic carrier traffic. Separately owner-authorized
+[restricted carrier test scope](EXECUTION_ORDER.md#restricted-carrier-test-scope-3-november-2026) remain restricted engineering exercises;
+this proposal does not expand that authorization.
 
 Use the existing [booking contract](../docs/adr/0002-provider-acknowledged-booking.md)
 and [staff observation contract](../docs/adr/0003-class-movement-staff-resolution.md).
@@ -214,7 +216,7 @@ without replaying the original action.
 | 1 | Booking, enquiry, cancellation, rescheduling and registration followed by separate booking | Actual admitted host composition reaches the intended workflow. Protected enquiry has no mutation; registration success does not itself book. A confirmation describes the exact current action. |
 | 2 | Wrong/expired code, revoked permission, changed subject and related-person task | Possession and current operation/subject permission are independent. Old proof cannot authorize another patient or operation. Successful renewal alone cannot replay a confirmation. |
 | 3 | Lost provider response and interrupted sender, then clinic staff investigation | The original call remains uncertain. The approved native review is independently discoverable, staff ownership is real, and a saved request/alert is never described as human receipt or resolution. No automatic replay. |
-| 4 | Repeated noisy/correction audio and public transport | Retain the unchanged source-matched speech gates and failure evidence. A usable route, provider latency, a model transcript or synthetic transport success does not satisfy the failing acoustic gate. Carrier work remains deferred. |
+| 4 | Repeated noisy/correction audio and public transport | Retain the unchanged source-matched speech gates and failure evidence. A usable route, provider latency, a model transcript or synthetic transport success does not satisfy the failing acoustic gate. Restricted carrier rehearsals are separately owner-authorized; clinic carrier acceptance remains open. |
 | 5 | Approved location/service, duration and initial/follow-up choice; withdraw approval before send | Exact current catalogue selection and named destination survive through confirmation. Missing/withdrawn approval denies. An incomplete refresh cannot silently remove or broaden clinic approvals. |
 | 6 | Longer/approved offline calendar search; incomplete page and late conflict | A complete approved source supports the actual chosen interval. Incomplete reads deny a complete availability answer. Native dated recurrence is observed, never extrapolated. |
 | 7 | Explicit different practitioner at retained and changed time | Independent destination approval, exact original and fresh destination are shown. The original remains protected until the operation-specific reschedule contract succeeds. |
@@ -245,8 +247,8 @@ Reconcile the eventual full local result, exact-head CI, independent review,
 all relevant operator rows and the still-open clinic/sender/speech/public-route
 requirements in [the progress ledger](EXECUTION_PROGRESS.md). A green local
 regression closes neither those acceptance gates nor the remaining thirteen-gap
-scope. Keep the selected Cliniko financial-work ownership, real-mail and carrier deferrals,
-provider activation and deployment decisions explicit.
+scope. Keep the selected Cliniko financial-work ownership, real-mail deferral,
+restricted carrier test scope, provider activation and deployment decisions explicit.
 ## Optional signed outbound callback: acceptance still unexecuted
 
 Local signed HTTP, actual emitted voice/SQL, killed-worker and logical-restore
@@ -332,7 +334,7 @@ and staff ownership. Keep real identifiers and private source material out of
 the repository. Future outbound contact/capacity decisions retain their own
 owners; a reason, clinical success, memo, completed notification or closed staff
 task establishes no complete whole-call no-stop truth or contact release.
-No recording, deferred carrier traffic, payment, deployment or default
+No recording, clinic carrier traffic, payment, deployment or default
 activation is authorized by this proposal.
 
 
