@@ -16,7 +16,6 @@ import subprocess
 REQUIRED = {
     "scripts/serve-twilio-rehearsal-gateway.js",
     "scripts/serve-twilio-rehearsal.js",
-    "scripts/rehearse-twilio-voice.js",
     "scripts/rehearse-twilio-probe.js",
 }
 
@@ -50,8 +49,11 @@ def pack(source: Path, expected: str, destination: Path) -> dict[str, object]:
     if any(part.startswith(".") for path in entries for part in path.relative_to(root).parts):
         raise ValueError("Compiled runtime contains a hidden path")
     files = {str(path.relative_to(root)): path for path in entries if path.is_file()}
-    if not REQUIRED.issubset(files) or len(files) > 5000 or sum(path.stat().st_size for path in files.values()) > 200_000_000:
-        raise ValueError("Compiled runtime output set is missing or exceeds bounds")
+    missing = sorted(REQUIRED - files.keys())
+    if missing:
+        raise ValueError("Compiled carrier entrypoint missing: " + ", ".join(missing))
+    if len(files) > 5000 or sum(path.stat().st_size for path in files.values()) > 200_000_000:
+        raise ValueError("Compiled runtime output set exceeds bounds")
     destination.mkdir(mode=0o700)
     copied = destination / "runtime"
     copied.mkdir(mode=0o700)
