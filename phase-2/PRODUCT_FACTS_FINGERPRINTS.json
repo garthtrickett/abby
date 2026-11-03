@@ -524,7 +524,7 @@
     "test/storage/postgres-financial-unlinked-class-expiry.test.ts": "d67485b520a40b7bd39849ed979d7eab0ec9dbdbd3104be72893a2203f009561",
     "test/storage/postgres-guardian-booking-memo.test.ts": "ab30cc4e33d54eb466a71133f8354922f03dbf2f94bf22888371bff6c7d5c53b",
     "test/storage/postgres-guardian-change-memo.test.ts": "03e696a3ecabccd4fce352eb35cc6195b14f1c6e476063701bd134634e804ddd",
-    "test/storage/postgres-guardian-file-records.test.ts": "d68bc27b84e0751e3ca13e5ffd14f070cbdc14ff2b355b80a7794852a43ec975",
+    "test/storage/postgres-guardian-file-records.test.ts": "39a41491bbc26085ac0cfc2a2095fb8a4fd78a1d89b4a3f42597ac18dad41711",
     "test/storage/postgres-guardian-records.test.ts": "7da732a51b7e845a8d062576ffd04a77d852ca09a4a7abf7a68a0f2612f9abcf",
     "test/storage/postgres-guardian-registered-email.test.ts": "20a961b9af63be36f453a2b3f9ee897f88f8961cb7197e1bfaba60e7d5e63c12",
     "test/storage/postgres-incoming-clinical-voice.test.ts": "fffdfb064476b485b520ac303b3d7118be67acf5b1df3104ca7150a9737e6aab",
