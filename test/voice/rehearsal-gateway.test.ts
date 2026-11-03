@@ -54,10 +54,24 @@ test("rehearsal gateway forwards only exact public test routes, body and signatu
   }
   assert.deepEqual(seen, [
     "target:POST:/twilio/inbound:synthetic-signature:CallSid=CA1&From=%2B15550000001",
+    "target:GET:/healthz:undefined:",
     "caller:GET:/healthz::",
     `caller:POST:/voice-rehearsal/${token}/0:signed-callback:CallStatus=ringing`,
     `caller:POST:/fallback-ringing/${token}:signed-callback:CallStatus=ringing`,
   ]);
+});
+
+test("rehearsal gateway withholds caller health token while target is unavailable", async t => {
+  const target = createServer((_request, response) => { response.writeHead(503); response.end(); });
+  let callerHealthReads = 0;
+  const caller = createServer((_request, response) => { callerHealthReads++;
+    response.writeHead(200); response.end("run-token"); });
+  const targetPort = await listen(target), callerPort = await listen(caller);
+  const gateway = createTwilioRehearsalGateway({ target: targetPort, caller: callerPort });
+  const port = await listen(gateway.server);
+  t.after(async () => { await gateway.stop(); await close(target); await close(caller); });
+  const response = await fetch(`http://127.0.0.1:${port}/healthz`);
+  assert.equal(response.status, 503); assert.equal(callerHealthReads, 0);
 });
 
 test("rehearsal gateway preserves real Twilio callback signatures across one public origin", async t => {

@@ -66,6 +66,8 @@ to the target listener (default 3120). It routes only the caller's `/healthz`,
 separate caller listener (default 3121). Other routes return 404. Its window is
 bounded to one hour and shutdown closes proxied media sockets. It has no clinic
 host, speech adapter, outbound dialler or provider-setting access.
+Its public health token is withheld unless the target's local health endpoint
+also answers, so a missing target cannot pass the caller's pre-dial check.
 
 With both local listeners and gateway running under the host's tracked-work and
 admission procedure, expose the gateway port through **one new** temporary

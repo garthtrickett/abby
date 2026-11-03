@@ -24,18 +24,40 @@ export function createTwilioRehearsalGateway(ports: Ports) {
   const server = createServer((incoming, outgoing) => {
     const port = route(incoming.method, incoming.url);
     if (!port) { outgoing.writeHead(404, { "cache-control": "no-store" }); outgoing.end(); return; }
-    const upstream = request({ hostname: "127.0.0.1", port, method: incoming.method,
-      path: incoming.url, headers: incoming.headers, timeout: 10_000 }, response => {
-      outgoing.writeHead(response.statusCode ?? 502, response.headers); response.pipe(outgoing);
+    const forward = () => {
+      if (outgoing.destroyed || outgoing.writableEnded) return;
+      const upstream = request({ hostname: "127.0.0.1", port, method: incoming.method,
+        path: incoming.url, headers: incoming.headers, timeout: 10_000 }, response => {
+        outgoing.writeHead(response.statusCode ?? 502, response.headers); response.pipe(outgoing);
+      });
+      upstream.on("timeout", () => upstream.destroy(new Error("Rehearsal upstream timed out")));
+      upstream.on("error", () => {
+        if (!outgoing.headersSent) outgoing.writeHead(502, { "cache-control": "no-store" });
+        outgoing.end();
+      });
+      incoming.on("aborted", () => upstream.destroy());
+      outgoing.on("close", () => upstream.destroy());
+      incoming.pipe(upstream);
+    };
+    if (incoming.method !== "GET" || incoming.url !== "/healthz") { forward(); return; }
+    let targetAccepted = false;
+    const unavailable = () => {
+      if (targetAccepted || outgoing.destroyed || outgoing.writableEnded) return;
+      outgoing.writeHead(503, { "cache-control": "no-store" }); outgoing.end();
+    };
+    const targetHealth = request({ hostname: "127.0.0.1", port: ports.target,
+      method: "GET", path: "/healthz", signal: AbortSignal.timeout(3_000) }, response => {
+      response.on("end", () => {
+        if (response.statusCode === 200) { targetAccepted = true; forward(); }
+        else unavailable();
+      });
+      response.on("error", unavailable);
+      response.on("aborted", unavailable);
+      response.resume();
     });
-    upstream.on("timeout", () => upstream.destroy(new Error("Rehearsal upstream timed out")));
-    upstream.on("error", () => {
-      if (!outgoing.headersSent) outgoing.writeHead(502, { "cache-control": "no-store" });
-      outgoing.end();
-    });
-    incoming.on("aborted", () => upstream.destroy());
-    outgoing.on("close", () => upstream.destroy());
-    incoming.pipe(upstream);
+    targetHealth.on("error", unavailable);
+    outgoing.on("close", () => targetHealth.destroy());
+    targetHealth.end();
   });
   server.on("upgrade", (incoming, client, head) => {
     if (incoming.method !== "GET" || incoming.url !== "/twilio/media/") {
