@@ -114,6 +114,13 @@ target report yields `unverified`, never an inferred pass. The fixed 25-second
 lead-in and three-second interruption cadence may need measured tuning after a
 real call; do not count a synthetic script as carrier proof.
 
+For a single temporary public origin, the test-only
+`voice:serve-rehearsal-gateway -- --serve` command routes the target's signed
+HTTP/WebSocket paths to port 3120 and this caller's exact health/callback paths
+to port 3121. Expose only its loopback port 3119 through a fresh tunnel; see
+the [restricted target setup](../phase-2/TWILIO_REHEARSAL_TARGET.md#one-temporary-public-tunnel-for-target-and-caller).
+This does not start either listener, change Twilio settings or place a call.
+
 Primary protocol references: [Calls API](https://www.twilio.com/docs/voice/api/call-resource),
 [Gather](https://www.twilio.com/docs/voice/twiml/gather),
 [Say](https://www.twilio.com/docs/voice/twiml/say),

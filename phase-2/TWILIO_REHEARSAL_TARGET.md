@@ -57,6 +57,27 @@ For signed fallback ringing events, the optional
 or a fragment. The caller must separately authenticate exact parent/child events;
 requesting fallback or observing a completed leg alone cannot prove ringing.
 
+### One temporary public tunnel for target and caller
+
+The optional `voice:serve-rehearsal-gateway` command binds only to loopback
+(default port 3119) and routes the exact signed target webhook and media socket
+to the target listener (default 3120). It routes only the caller's `/healthz`,
+`/voice-rehearsal/<run>/<step>` and `/fallback-ringing/<run>` requests to the
+separate caller listener (default 3121). Other routes return 404. Its window is
+bounded to one hour and shutdown closes proxied media sockets. It has no clinic
+host, speech adapter, outbound dialler or provider-setting access.
+
+With both local listeners and gateway running under the host's tracked-work and
+admission procedure, expose the gateway port through **one new** temporary
+HTTPS/WSS tunnel. Set the target's webhook URL to `<base>/twilio/inbound`, its
+stream URL to `wss://<host>/twilio/media/`, the caller's callback base to
+`<base>` and the fallback callback to
+`<base>/fallback-ringing/<fresh-32-hex-token>`. Check the target locally and
+the caller's public health token before placing a call. Preserve the existing
+Twilio number configuration for restoration; change its webhook only after the
+new isolated target is listening. Never reuse an old URL merely because it is
+present in a private environment file.
+
 ## Verification and remaining work
 
 The local target tests use injected speech adapters and real loopback signed
