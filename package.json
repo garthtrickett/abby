@@ -58,7 +58,8 @@
     "build:runtime": "tsc --project tsconfig.runtime.json",
     "build:voice-tests": "tsc --project tsconfig.voice-test.json",
     "voice:ops:queue-work": "node dist/runtime/scripts/check-cliniko-queue-work.js",
-    "voice:rehearse-carrier": "node scripts/rehearse-twilio-voice.ts"
+    "voice:rehearse-carrier": "node scripts/rehearse-twilio-voice.ts",
+    "voice:serve-rehearsal": "node dist/runtime/scripts/serve-twilio-rehearsal.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
