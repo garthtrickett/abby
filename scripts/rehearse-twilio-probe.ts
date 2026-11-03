@@ -98,7 +98,8 @@ async function main() {
     let result: ReturnType<typeof qualifyRehearsalObservation> | undefined;
     let observation: Readonly<{ targetCallSid: string; targetStatus: string;
       childrenComplete: boolean; children: readonly Readonly<{ sid: string; status: string }>[] }> | undefined;
-    for (let index = 0; index < 6 && !controller.signal.aborted; index++) {
+    const readDeadline = Date.now() + 20_000;
+    for (let index = 0; index < 15 && Date.now() < readDeadline && !controller.signal.aborted; index++) {
       try {
         const target = await observer.target(targetSid), children = await observer.children(targetSid);
         observation = { targetCallSid: target.sid, targetStatus: target.status,
@@ -109,7 +110,7 @@ async function main() {
           ...(fallbackEvents ? { fallbackEvents } : {}) });
         if (result.carrierScenarioPassed) break;
       } catch { /* A provider read failure cannot become a passing observation. */ }
-      if (index < 5) await delay(1_000);
+      if (index < 14 && Date.now() < readDeadline) await delay(1_000);
     }
     if (!result) throw Error("Complete carrier observation unavailable");
     save({ phase: "qualified", result, observation });

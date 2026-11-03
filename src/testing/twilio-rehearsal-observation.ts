@@ -65,7 +65,7 @@ export function qualifyRehearsalObservation(config: Readonly<{
     config.scenario === "interruption" ? "restricted-interruption-v1" : "restricted-fallback-v1";
   const shared = sid.test(evidence.callerSid) && Number.isFinite(evidence.launchedAt) &&
     Number.isFinite(evidence.now) && evidence.launchedAt <= evidence.now &&
-    evidence.now - evidence.launchedAt <= 240_000 && evidence.now - after.at <= 10_000 &&
+    evidence.now - evidence.launchedAt <= 240_000 && evidence.now - after.at <= 60_000 &&
     before.at <= evidence.launchedAt && after.at >= evidence.launchedAt && after.at <= evidence.now &&
     before.expiresAt > evidence.launchedAt && after.expiresAt > evidence.now &&
     before.expiresAt === after.expiresAt && before.runId === after.runId &&

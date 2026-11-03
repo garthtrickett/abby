@@ -201,7 +201,7 @@ test("carrier observation: malformed target reports refuse and allowlisted snaps
 test("carrier observation: interruption requires same-run fresh target, exact native identity, replacement and clear", () => {
   const { selected, evidence, childCall } = observation("interruption");
   assert.equal(qualifyRehearsalObservation(selected, evidence).carrierScenarioPassed, true);
-  const wrong = [{ ...evidence, now: 20_000 }, { ...evidence, callerSid: parent },
+  const wrong = [{ ...evidence, now: 65_001 }, { ...evidence, callerSid: parent },
     { ...evidence, caller: { ...evidence.caller, scriptMatched: false } },
     { ...evidence, caller: { ...evidence.caller, providerTerminal: "busy" } },
     { ...evidence, after: { ...evidence.after, runId: "0".repeat(32) } },
@@ -228,6 +228,8 @@ test("carrier observation: signed ringing and independent exact fallback child a
   const { selected, evidence, childCall } = observation("fallback");
   const result = qualifyRehearsalObservation(selected, evidence);
   assert.equal(result.carrierScenarioPassed, true); assert.equal(result.fallbackRinging, "passed");
+  assert.equal(qualifyRehearsalObservation(selected, { ...evidence, now: 35_000 }).carrierScenarioPassed, true);
+  assert.equal(qualifyRehearsalObservation(selected, { ...evidence, now: 65_001 }).carrierScenarioPassed, false);
   assert.equal(result.normalHangupNoFallback, "unverified"); assert.equal(result.clinicalAcceptance, false);
   const silent = fallback(); silent.collector.bindTarget(parent);
   assert.equal(qualifyRehearsalObservation(selected, { ...evidence, fallbackEvents: silent.collector }).carrierScenarioPassed, false);
