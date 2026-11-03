@@ -90,11 +90,34 @@ export function createRestrictedTwilioTarget(config: RestrictedTargetConfig, pro
     throw new RangeError("invalid restricted rehearsal configuration");
   }
   let active = 0, total = 0, closed = false;
+  let cleanupFailed = false, stopping: Promise<void> | undefined;
+  const settling = new Set<Promise<void>>();
+  function track<T>(operation: Promise<T>): Promise<T> {
+    const settled = operation.then(() => {}, () => { cleanupFailed = true; })
+      .finally(() => settling.delete(settled));
+    settling.add(settled);
+    return operation;
+  }
+  const activeCallClaims: ActiveCallClaims = {
+    async claim(account, call) {
+      if (closed) return undefined;
+      return track(Promise.resolve().then(() => config.activeCallClaims.claim(account, call)).then(lease => {
+        if (!lease) return undefined;
+        let released: Promise<void> | undefined;
+        let finish!: () => void;
+        // Keep ownership visible even while an in-flight claim finishes after
+        // the HTTP listener closes. The transport still owns when to release it.
+        track(new Promise<void>(resolve => { finish = resolve; }));
+        return { lost: lease.lost, release: () => released ??= track(
+          Promise.resolve().then(() => lease.release()).finally(finish)) };
+      }));
+    },
+  };
   const seen = new Set<string>();
   const within = () => !closed && now() < config.endAt;
   const state = () => ({ active, total, windowOpen: within(), expiresAt: new Date(config.endAt).toISOString() });
   const server = createTwilioIngressServer({
-    ingress: new RehearsalIngress(config), activeCallClaims: config.activeCallClaims, health: async () => true,
+    ingress: new RehearsalIngress(config), activeCallClaims, health: async () => true,
     admitWebhook: async event => Boolean(event && within() && total < 6 && active === 0 &&
       event.dialedNumber === config.number && event.presentedCallerNumber === config.caller &&
       !seen.has(event.key.providerCallRef)),
@@ -128,10 +151,13 @@ export function createRestrictedTwilioTarget(config: RestrictedTargetConfig, pro
         pending.add(promise);
         void promise.finally(() => pending.delete(promise)).catch(() => {});
       }
-      async function cleanup() {
-        if (done) return;
-        done = true; epoch++; clearTimeout(duration); stream.close();
-        await media.stop(); await Promise.allSettled([...pending]); active--; emit();
+      let cleanupPromise: Promise<void> | undefined;
+      function cleanup(): Promise<void> {
+        return cleanupPromise ??= track((async () => {
+          done = true; epoch++; clearTimeout(duration); stream.close();
+          try { await media.stop(); await Promise.allSettled([...pending]); }
+          finally { active--; emit(); }
+        })());
       }
       function fail(stage: FailureStage) {
         if (done) return;
@@ -192,8 +218,14 @@ export function createRestrictedTwilioTarget(config: RestrictedTargetConfig, pro
       };
     },
   });
-  return { server, state, stop: () => {
+  return { server, state, stop: (): Promise<void> => {
     closed = true;
-    return new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    return stopping ??= (async () => {
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+      // Claim completion can register its eventual release while shutdown is
+      // waiting, so drain successive sets rather than taking one early snapshot.
+      while (settling.size) await Promise.all([...settling]);
+      if (cleanupFailed) throw new Error("rehearsal cleanup unavailable");
+    })();
   } };
 }

@@ -47,7 +47,9 @@ The report path must be new; restarting against an existing report refuses.
 Reports contain a fresh run ID, phase, expiry, aggregate counts and the current
 test call's opaque provider ID and fixed classifications. Speech and audio are
 transient. A missing or stale report supplies no passing evidence. Shutdown closes
-admission and lets bounded active work clean up.
+admission and waits for bounded media cleanup, in-flight ownership claims and
+their database lease releases. A release failure prevents a successful `stopped`
+report. Repeated shutdown requests share the same completion promise.
 
 For signed fallback ringing events, the optional
 `ABBY_REHEARSAL_FALLBACK_CALLBACK_URL` must be an HTTPS URL ending in
@@ -60,7 +62,9 @@ requesting fallback or observing a completed leg alone cannot prove ringing.
 The local target tests use injected speech adapters and real loopback signed
 HTTP/WebSocket traffic. They exercise the idle quiet burst, greeting/replies,
 clear-fence interruption, private-canary handling, caller stop, digit-nine
-closure, expired admission, six-session exhaustion and reporting failure.
+closure, expired admission, six-session exhaustion and reporting failure. Controlled
+shutdown cases hold media cleanup and lease release open, including a late claim,
+and verify that completion cannot be reported early or after a release failure.
 
 The committed `voice:rehearse-carrier` caller still qualifies its separate
 scripted dialogue. Portable interruption/fallback caller orchestration, repeated

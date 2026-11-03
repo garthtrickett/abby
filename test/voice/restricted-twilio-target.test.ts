@@ -40,6 +40,11 @@ async function until(condition: () => boolean | undefined) {
   for (let attempt = 0; attempt < 500; attempt++) { if (condition()) return; await delay(10); }
   throw Error("Local rehearsal condition timed out");
 }
+function gate() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(done => { resolve = done; });
+  return { promise, resolve };
+}
 async function fixture(t: TestContext, options = config(), speech = providers(),
   report: (stats: RehearsalCallStatistics) => void = () => {}) {
   const app = createRestrictedTwilioTarget(options, speech, report), sockets: WebSocket[] = [];
@@ -161,6 +166,58 @@ test("restricted target: unavailable reporting cannot erase greeting or prevent 
   const call = await f.open(); await until(() => call.counts().packets > 0);
   call.send({ event: "stop", stop: { accountSid, callSid: firstSid } }); await until(() => f.app.state().active === 0);
   assert.equal(f.app.state().total, 1);
+});
+
+test("restricted target: shutdown settles live media and ownership release before reporting completion",
+  { timeout: 10_000 }, async t => {
+  const mediaClosing = gate(), mediaClosed = gate(), releasing = gate(), released = gate();
+  const speech = providers(), options = { ...config(), activeCallClaims: { async claim() {
+    return { lost: new Promise<void>(() => {}), async release() { releasing.resolve(); await released.promise; } };
+  } } };
+  const f = await fixture(t, options, { ...speech, transcription: () => ({
+    accept: async () => ok([]), flush: async () => ok([]),
+    async close() { mediaClosing.resolve(); await mediaClosed.promise; },
+  }) });
+  let finished = false;
+  try {
+    const call = await f.open(); await until(() => call.counts().packets > 0);
+    const stopping = f.app.stop(); assert.equal(f.app.stop(), stopping);
+    void stopping.then(() => { finished = true; });
+    await Promise.all([mediaClosing.promise, releasing.promise, call.closed]);
+    assert.equal(finished, false); assert.equal(f.app.state().active, 1);
+    mediaClosed.resolve(); await until(() => f.app.state().active === 0);
+    assert.equal(finished, false, "ownership release must also settle");
+    released.resolve(); await stopping; assert.equal(finished, true);
+    assert.equal(f.app.state().windowOpen, false);
+  } finally { mediaClosed.resolve(); released.resolve(); }
+});
+
+test("restricted target: shutdown waits for a late claim and its release without creating a call",
+  { timeout: 10_000 }, async t => {
+  const claiming = gate(), claimed = gate(), releasing = gate(), released = gate();
+  const options = { ...config(), activeCallClaims: { async claim() {
+    claiming.resolve(); await claimed.promise;
+    return { lost: new Promise<void>(() => {}), async release() { releasing.resolve(); await released.promise; } };
+  } } };
+  const f = await fixture(t, options); let finished = false;
+  try {
+    const call = await f.open(); await claiming.promise;
+    const stopping = f.app.stop(); void stopping.then(() => { finished = true; });
+    await call.closed; assert.equal(finished, false);
+    claimed.resolve(); await releasing.promise; assert.equal(finished, false);
+    released.resolve(); await stopping;
+    assert.equal(f.app.state().total, 0); assert.equal(f.app.state().active, 0);
+  } finally { claimed.resolve(); released.resolve(); }
+});
+
+test("restricted target: failed ownership release refuses a successful shutdown result",
+  { timeout: 10_000 }, async t => {
+  const f = await fixture(t, { ...config(), activeCallClaims: { async claim() {
+    return { lost: new Promise<void>(() => {}), async release() { throw Error("storage unavailable"); } };
+  } } });
+  const call = await f.open(); await until(() => call.counts().packets > 0);
+  await assert.rejects(f.app.stop(), /rehearsal cleanup unavailable/);
+  await call.closed; assert.equal(f.app.state().active, 0);
 });
 
 test("restricted target CLI: fresh private report, loopback startup, explicit mode and existing-report refusal",
