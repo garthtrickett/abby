@@ -1,0 +1,56 @@
+name: Restricted carrier serving artifact
+
+on:
+  push:
+    branches:
+      - codex/abby-carrier-serving-artifact
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.repository == 'garthtrickett/abby'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      # The merged carrier source; artifact use still requires its resulting-main CI.
+      ABBY_EXPECTED_SOURCE_SHA: 0aa4457cdba71600b11ba6dc04ebf4c5e929332d
+    steps:
+      - name: Check out reviewed artifact driver
+        uses: actions/checkout@v4
+        with:
+          path: driver
+          persist-credentials: false
+      - name: Check out exact main source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.ABBY_EXPECTED_SOURCE_SHA }}
+          path: source
+          persist-credentials: false
+      - name: Verify source identity
+        shell: bash
+        run: test "$(git -C source rev-parse HEAD)" = "$ABBY_EXPECTED_SOURCE_SHA"
+      - name: Select pinned Node version
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.0'
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+      - name: Install exact dependencies
+        working-directory: source
+        run: npm ci
+      - name: Compile serving and test entrypoints
+        working-directory: source
+        env:
+          NODE_OPTIONS: --max-old-space-size=1536
+        run: npm run build:voice-tests
+      - name: Bind every emitted file to source and lock
+        run: python3 driver/.github/scripts/pack-carrier-serving-artifact.py --source source --expected "$ABBY_EXPECTED_SOURCE_SHA" --output carrier-artifact
+      - name: Publish short-lived source-pinned artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: abby-carrier-serving-${{ env.ABBY_EXPECTED_SOURCE_SHA }}
+          path: carrier-artifact/
+          if-no-files-found: error
+          retention-days: 3
