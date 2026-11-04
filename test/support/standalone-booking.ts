@@ -20,11 +20,13 @@ import { callerVerificationFixture, verificationCanaries, verificationNow } from
 import { resultValue } from "./agent-appointment-proposals.ts";
 
 export async function standaloneBookingFixture(options: { activate?: boolean; scope?: LocationScope; verificationBudget?: PatientVerificationBudget; rateBudget?: ClinikoRequestBudget;
+  capturePolicy?: NonNullable<Parameters<typeof callerVerificationFixture>[0]>["capturePolicy"];
   memoFor?: (config: import("../../src/cliniko/booking-write.ts").ClinikoBookingConfig & { scope: LocationScope; rateBudget: ClinikoRequestBudget }, port: typeof fetch) => import("../../src/standalone/cliniko-booking-memo.ts").ClinikoBookingMemoConfig;
   financialFor?: (config: import("../../src/cliniko/booking-write.ts").ClinikoBookingConfig & { scope: LocationScope; rateBudget: ClinikoRequestBudget }, port: typeof fetch) => import("../../src/standalone/cliniko-financial-booking-preparation.ts").FinancialBookingPreparationConfig;
   fetchPort?: typeof fetch; fetchAround?: (port: typeof fetch) => typeof fetch;
   authorityFor?: (config: Omit<ClinikoBookingOffersConfig, "policy">, port: typeof fetch) => Promise<ClinikoBookingAuthority>; operation?: PatientOperation; staffWorkEnabled?: boolean; lostRecall?: boolean; lostBooking?: boolean; appointmentChanges?: true } = {}) {
   const f = await callerVerificationFixture({ ...(options.activate === undefined ? {} : { activate: options.activate }), operation: options.operation ?? "appointments.book", bookingExecute: true,
+    ...(options.capturePolicy ? { capturePolicy: options.capturePolicy } : {}),
     ...(options.appointmentChanges ? { cancellationExecute: true, reschedulingExecute: true } : {}),
     ...(options.staffWorkEnabled === undefined ? {} : { staffWorkEnabled: options.staffWorkEnabled }), ...(options.scope ? { scope: options.scope } : {}) });
   f.session.dispose();

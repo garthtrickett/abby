@@ -16,7 +16,8 @@ import { resultValue } from "./agent-appointment-proposals.ts";
 import { standaloneBookingFixture } from "./standalone-booking.ts";
 import { verificationNow } from "./caller-verification.ts";
 
-export async function bookingOffersFixture(options: { fetchAround?: (port: typeof fetch) => typeof fetch; budget?: ClinikoRequestBudget; timeoutMs?: number; scope?: LocationScope; verificationBudget?: PatientVerificationBudget; fetchPort?: typeof fetch; folder?: string; offerTtlSeconds?: number; availabilityPlan?: BookingApproval["availabilityPlan"]; maxAdvanceDays?: number; appointmentChanges?: true } = {}) {
+export async function bookingOffersFixture(options: { fetchAround?: (port: typeof fetch) => typeof fetch; budget?: ClinikoRequestBudget; timeoutMs?: number; scope?: LocationScope; verificationBudget?: PatientVerificationBudget; fetchPort?: typeof fetch; folder?: string; offerTtlSeconds?: number; availabilityPlan?: BookingApproval["availabilityPlan"]; maxAdvanceDays?: number; appointmentChanges?: true;
+  capturePolicy?: NonNullable<Parameters<typeof standaloneBookingFixture>[0]>["capturePolicy"] } = {}) {
   const folder = options.folder ?? await mkdtemp(join(tmpdir(), "abby-booking-offers-")), path = join(folder, "booking.json"), accountPath = join(folder, "accounts.json");
   let sourceConfig: ClinikoBookingOffersConfig, sourceFetch: typeof fetch;
   let approval: BookingApproval, source: ClinikoBookingOffers, policy: OwnerFileBookingPolicy, directory: OwnerFileAdminDirectory;
@@ -27,6 +28,7 @@ export async function bookingOffersFixture(options: { fetchAround?: (port: typeo
   const replace = async (file: string, value: unknown) => { await writeFile(`${file}.new`, JSON.stringify(value), { mode: 0o600 }); await rename(`${file}.new`, file); };
   try {
     const f = await standaloneBookingFixture({ ...(options.appointmentChanges ? { appointmentChanges: true } : {}), ...(options.fetchPort ? { fetchPort: options.fetchPort } : {}), ...(options.scope ? { scope: options.scope } : {}), ...(options.verificationBudget ? { verificationBudget: options.verificationBudget } : {}), ...(options.budget ? { rateBudget: options.budget } : {}),
+      ...(options.capturePolicy ? { capturePolicy: options.capturePolicy } : {}),
       fetchAround: port => { const base: typeof fetch = async (value, init) => {
         const url = new URL(String(value)); traffic.push(`${init?.method ?? "GET"} ${url.pathname}`);
         assert.equal(url.origin, "https://api.au5.cliniko.com"); assert.equal(init?.redirect, "error");
