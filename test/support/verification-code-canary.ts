@@ -1,5 +1,8 @@
 import crypto from "node:crypto";
 import { syncBuiltinESMExports } from "node:module";
+import { lstatSync, realpathSync } from "node:fs";
+import { basename, dirname } from "node:path";
+import { tmpdir } from "node:os";
 
 export type CanaryClockWindow = Readonly<{ sinceMs: number; throughMs: number }>;
 type ScopedCanaries = Readonly<{ window: CanaryClockWindow; close: () => void;
@@ -140,6 +143,34 @@ export function installDirectSqlVerificationCanaries(excluded: ReadonlySet<strin
  * gets its own pre-issue window and restores the issuer after its owner closes. */
 export function installScopedDirectSqlVerificationCanaries(excluded: ReadonlySet<string>): ScopedCanaries {
   return installSampler(directSqlExclusions(excluded));
+}
+
+/** This voice fixture owns a private Unix-socket database in both CI modes;
+ * ambient DATABASE_URL and direct-SQL eligibility cannot establish ownership. */
+export function assertWorkflowVerificationCanaryContext(connectionString: string): void {
+  try {
+    const entry = process.argv[1]?.replaceAll("\\", "/"), target = new URL(connectionString);
+    const socket = target.searchParams.get("host"), parent = socket ? dirname(socket) : "";
+    if (process.env.NODE_TEST_CONTEXT !== "child-v8" ||
+        !entry?.endsWith("/test/voice/representative-change-call.test.ts") ||
+        target.protocol !== "postgresql:" || target.hostname !== "localhost" || target.port !== "5432" ||
+        target.username !== "postgres" || target.password || target.pathname !== "/postgres" || target.hash ||
+        [...target.searchParams.keys()].join(",") !== "host" || !socket || basename(socket) !== "socket" ||
+        !/^abby-browser-pg-[a-zA-Z0-9]{6}$/.test(basename(parent)) || dirname(parent) !== realpathSync(tmpdir()) ||
+        realpathSync(parent) !== parent || realpathSync(socket) !== socket) throw new Error();
+    const info = lstatSync(parent);
+    if (!info.isDirectory() || !lstatSync(socket).isDirectory() || info.uid !== process.getuid?.() ||
+        (info.mode & 0o077) !== 0) throw new Error();
+  } catch { throw Error("Verification canary sampling requires the owned representative-change voice fixture"); }
+}
+
+export function installScopedWorkflowVerificationCanaries(connectionString: string,
+  excluded: ReadonlySet<string>): ScopedCanaries {
+  assertWorkflowVerificationCanaryContext(connectionString);
+  if (!(excluded instanceof Set) || excluded.size > 100000 ||
+      [...excluded].some(value => typeof value !== "string" || !/^[0-9]{6}$/.test(value)))
+    throw Error("Invalid synthetic workflow pre-challenge exclusions");
+  return installSampler(new Set(excluded));
 }
 
 function directSqlExclusions(excluded: ReadonlySet<string>): ReadonlySet<string> {

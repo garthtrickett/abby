@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { distinctFromClock, drawDistinctCode, drawSqlCanaryCode, assertDirectSqlVerificationCanaryContext, installDirectSqlVerificationCanaries, installScopedDirectSqlVerificationCanaries, installMemoRecoveryVerificationCanaries, installClinicalVerificationCanaries, installResendVerificationCanaries, installStagedVerificationCanaries } from "../support/verification-code-canary.ts";
 import { withIsolatedVerificationSql, assertIsolatedVerificationCanary } from "../support/isolated-verification-sql.ts";
+import { assertWorkflowVerificationCanaryContext, installScopedWorkflowVerificationCanaries } from "../support/verification-code-canary.ts";
 
 test("numeric verification canaries reject every real timestamp substring across decimal rollovers", () => {
   for (const sinceMs of [1792470200000, 1792470990000, 1792479990000]) {
@@ -64,6 +65,9 @@ test("direct SQL canary instrumentation cannot change crypto in an unrelated tes
   assert.throws(() => assertDirectSqlVerificationCanaryContext(), /isolated direct SQL/);
   assert.throws(() => installDirectSqlVerificationCanaries(new Set()), /isolated direct SQL/);
   assert.throws(() => installScopedDirectSqlVerificationCanaries(new Set()), /isolated direct SQL/);
+  const unrelated = "postgresql://postgres@localhost:5432/postgres?host=%2Ftmp%2Funowned%2Fsocket";
+  assert.throws(() => assertWorkflowVerificationCanaryContext(unrelated), /owned representative-change/);
+  assert.throws(() => installScopedWorkflowVerificationCanaries(unrelated, new Set()), /owned representative-change/);
   assert.equal(crypto.randomInt, before);
 });
 
