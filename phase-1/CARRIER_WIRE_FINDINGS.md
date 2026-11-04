@@ -22,6 +22,17 @@ the playback clear but then failed with `mediaOverloaded`; its cause remains
 under investigation. The original keypad probe fell back after `invalidMedia`,
 so a connected fallback leg from that probe does not prove correct keypad handling.
 
+A later restricted main `0aa4457c` call passed dialogue and normal hangup without
+an unexpected child leg. Its interruption call had only one completed playback
+and remains unverified. A separate fresh fallback call passed signed ringing
+and independent exact-child readback. After the scripted caller gained a
+20-second settling interval, a fresh main `6b0ce9fe` interruption call passed
+with two turns, two completed playbacks, one interruption and one acknowledged
+clear. The original overload and keypad failures remain historical failures;
+these later selected passes do not diagnose the original queue-overflow cause
+or establish broader interruption reliability. See the [current carrier
+rehearsal evidence](AUTOMATED_CARRIER_REHEARSAL.md).
+
 These are fixed public test phrases on an allowlisted diagnostic server. They
 supply no clinic workflow acceptance, speech-quality qualification or production
 activation. Operational receipts retain call IDs privately; audio and recognized
