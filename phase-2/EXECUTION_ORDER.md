@@ -1,5 +1,14 @@
 # Abby execution order
 
+**Local class creation receipt body qualification, 4 November 2026:** The actual
+class writer stays uncertain for oversized, invalid UTF-8 and malformed JSON
+HTTP 201 responses in ordinary and approved-pass requests. All six variants
+require zero acknowledgement callbacks, one POST, no GET and consumed no-replay.
+The full source file passes 13 tests and affected strict passes. This is
+source-only verification with unchanged production code, bounds and defaults;
+new-head CI, delivery and real acceptance remain separate. See [scope and
+evidence](EXECUTION_PROGRESS.md#class-creation-receipt-body-boundaries-4-november-2026).
+
 ## Restricted carrier test scope, 3 November 2026
 
 The owner subsequently authorized an isolated Abby Twilio number, a dedicated

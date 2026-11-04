@@ -1,4 +1,13 @@
-# Scenario manifest, version 1.251
+# Scenario manifest, version 1.253
+
+E2E-392/E2E-406 add six source-only class creation body-fault variants across
+ordinary and approved-pass requests: oversized otherwise valid JSON, invalid
+UTF-8 inside otherwise valid JSON, and truncated JSON. Uncertainty, zero
+acknowledgement callbacks, one POST/no GET and no action replay remain required.
+The complete source file passes 13 tests and affected strict passes. Existing
+synthetic/compiled evidence is retained; no fresh serving, SQL, whole-project CI,
+clinic acceptance or full-call promotion follows. See [scope and
+validation](../phase-2/EXECUTION_PROGRESS.md#class-creation-receipt-body-boundaries-4-november-2026).
 
 E2E-426 adds the optional non-patient guardian route with distinct caller proof, independent clinic patient/action records, separate patient proof and four signed administrative workflows. Missing/revoked approvals refuse without source fallback; all-column and complete unfiltered backup/restore privacy pass. This is synthetic voice evidence. Production record provisioning, real clinic authority, carrier and full-call acceptance remain planned. Earlier scenario identities and evidence tiers are unchanged.
 
