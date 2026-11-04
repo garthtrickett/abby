@@ -5773,3 +5773,15 @@ were removed after natural completion. This is local source qualification;
 whole-project hosted checks, review and normal delivery remain required.
 Production source and provider settings are unchanged; real clinic, acoustic
 and carrier acceptance are not supplied by these synthetic cases.
+
+## Staged movement process output and backup privacy, 4 November 2026
+
+The E2E-417 native process fixture now qualifies captured worker stdout/stderr
+and unfiltered data-only backup privacy alongside its existing all-column SQL
+scans. Both original quota-window and killed-sender/cold-discovery cases pass;
+affected strict passes. Worker pipe closure is awaited before inspection,
+including the killed original sender. Native180, phase/effect checks and
+210s/30s deadlines are unchanged. No production change, serving emission,
+backup restore, whole-project typecheck or real acceptance is claimed.
+Fresh exact-head/actual-main qualification and the full Stage 7 requirement
+reconciliation remain separate. See [commands, limits and evidence](EXECUTION_PROGRESS.md#staged-movement-process-output-and-backup-privacy-4-november-2026).

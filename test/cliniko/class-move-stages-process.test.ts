@@ -9,6 +9,7 @@ import { connectPostgres } from "../../src/storage/connect.ts";
 import { migrate } from "../../src/storage/migrate.ts";
 import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-scan.ts";
 import { classPassMoveFixture } from "../support/class-pass-move.ts";
+import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 
 const url = process.env.DATABASE_URL;
 async function withProvider(run: (environment: Awaited<ReturnType<typeof start>>) => Promise<void>) {
@@ -32,28 +33,33 @@ async function start() {
   });
   server.listen(0, "127.0.0.1"); await once(server, "listening"); const address = server.address(); assert.ok(address && typeof address !== "string");
   const proxy = `http://127.0.0.1:${address.port}`;
-  return { f, db, target: target.toString(), proxy, traffic, errors,
+  return { f, db, target: target.toString(), proxy, traffic, errors, outputs: [] as (() => string)[],
     async close() { f.lifetime.abort(); server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(e => e ? reject(e) : resolve()));
       await db.destroy(); await sql.raw(`drop database "${name}"`).execute(admin); await admin.destroy(); } };
 }
 function worker(e: Awaited<ReturnType<typeof start>>, mode: "complete" | "park" | "discover") {
   const child = fork(new URL("../support/class-move-stages-worker.ts", import.meta.url), [mode], {
-    execArgv: [], stdio: ["pipe", "ignore", "pipe", "ipc"], env: { ...process.env, DATABASE_URL: e.target },
+    execArgv: [], stdio: ["pipe", "pipe", "pipe", "ipc"], env: { ...process.env, DATABASE_URL: e.target },
   });
-  const messages: Record<string, unknown>[] = []; let errors = "";
+  const messages: Record<string, unknown>[] = []; let errors = "", output = "";
   child.on("message", m => { if (m && typeof m === "object") messages.push(m as Record<string, unknown>); });
+  child.stdout!.on("data", b => { output += String(b); });
   child.stderr!.on("data", b => { errors += String(b); });
-  const exit = once(child, "exit");
+  e.outputs.push(() => output + errors);
+  // Process exit can precede the final pipe data. Drain both streams before
+  // privacy checks, including after killing the parked original owner.
+  const closed = once(child, "close");
+  void closed.catch(() => {});
   child.stdin!.end(JSON.stringify(mode === "discover" ? { scope: e.f.scope, proxy: e.proxy, recallTypeId: "7" } :
     { scope: e.f.scope, proxy: e.proxy, request: e.f.request, source: e.f.config.source, destination: e.f.config.destination, now: e.f.config.clock() }));
-  return { child, messages, exit,
-    async done() { const [code] = await exit; assert.equal(code, 0, errors || e.errors.join("\n")); },
+  return { child, messages, closed,
+    async done() { const [code] = await closed; assert.equal(code, 0, errors || e.errors.join("\n")); },
     async until(kind: string) {
       const stop = Date.now() + 12000;
       while (!messages.some(m => m.kind === kind) && child.exitCode === null && Date.now() < stop) await new Promise(resolve => setTimeout(resolve, 5));
       assert.ok(messages.some(m => m.kind === kind), `${kind}: ${errors || e.errors.join("\n")}`);
     },
-    async kill() { if (child.exitCode === null && child.signalCode === null) { child.kill("SIGKILL"); await exit; } },
+    async kill() { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); await closed; },
   };
 }
 async function privacy(e: Awaited<ReturnType<typeof start>>) {
@@ -61,6 +67,11 @@ async function privacy(e: Awaited<ReturnType<typeof start>>) {
   const canaries = [e.f.request.actionId, "private-class-proof", "synthetic-private-stage-proof-1", "synthetic-private-stage-proof-2", "synthetic-private-stage-proof-3", "source-entitlement", "destination-entitlement", "811222333444555666",
     ...Array.from({ length: Math.ceil(payload.length / 200) }, (_, i) => payload.slice(Math.min(i * 200, payload.length - 4), (i + 1) * 200))];
   const scan = await scanPatientDataCanaries(e.db, canaries.map((value, i) => ({ label: `stage_canary_${i}`, value }))); assert.equal(scan.ok, true); if (scan.ok) assert.deepEqual(scan.value, []);
+  for (const output of e.outputs) for (const value of canaries)
+    assert.equal(output().includes(value), false, "staged worker output excludes private native and proof values");
+  for (let offset = 0; offset < canaries.length; offset += 12)
+    assert.deepEqual(await scanDisposableBackupCanaries(e.target, canaries.slice(offset, offset + 12)
+      .map((value, index) => ({ label: `stage_backup_${offset + index}`, value }))), []);
 }
 
 test("E2E-417 real PostgreSQL quota windows admit four separate native phases without raising the account limit", { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 210000 }, async () => {

@@ -8555,3 +8555,47 @@ Source command:
 ```sh
 node scripts/test-node.mjs --test --test-concurrency=1 --test-reporter=tap test/cliniko/class-booking-acknowledgement.test.ts
 ```
+
+## Staged movement process output and backup privacy, 4 November 2026
+
+Stage 7 and the E2E-419 remaining serving-boundary item 7 require process-loss
+privacy evidence. The existing E2E-417 native process fixture checked every SQL
+column but discarded worker stdout and did not inspect a backup. This was a
+qualification gap; no production disclosure or other product defect was found.
+
+The same two original tests now capture stdout and stderr from every worker,
+including the killed sender and cold discoverer. They wait for process `close`
+so final pipe bytes cannot arrive after inspection. The existing action, proof,
+entitlement, case and encoded-review canaries must be absent from those outputs,
+all SQL columns and an unfiltered data-only `pg_dump`. Scans reuse the existing
+backup helper in batches of at most twelve. This adds no restore qualification.
+
+Both original PostgreSQL cases pass without skips (work1793792677505): four
+separately confirmed native phases over three real quota resets, then actual
+sender SIGKILL and read-only cold discovery using only clinic/account/type
+configuration. Original native180, phase/effect checks and 210s/30s case deadlines
+remain. Affected strict TypeScript passes (work1793792563445). The test/worker
+source runs directly; no serving rebuild, emitted-graph test, whole-project
+typecheck, provider request or clinic acceptance is claimed.
+
+The Node scope peaked at252620800B under1GiB; the external PostgreSQL scope
+peaked at138575872B under512MiB. Both retained Swap0 and zero OOM/high/max events.
+Dump clients were separately capped at256MiB, Swap0 and half a CPU; their peaks
+were not measured. The owned server, its recorded volume and both recorded dump
+clients are independently absent after terminal. Dump clients requested
+automatic anonymous-volume removal; no wider unattached-volume cleanup is
+claimed. Source pins and raw log SHA256 remain verified in the private receipts.
+
+This scoped native-process evidence complements the existing signed serving,
+renewal, correction, concurrent-actor and independent staff cases. It does not
+close all of Stage 7, qualify a whole combined graph, authorize recovery mutation,
+or establish human clinic/staff, speech/provider acceptance or activation.
+Fresh final metadata/review, qualified-parent integration, exact new-head CI
+and actual-main qualification remain separate delivery gates.
+
+Source command, with an isolated disposable PostgreSQL database and
+`ABBY_ISOLATED_POSTGRES_PROBE=1`:
+
+```sh
+node scripts/test-node.mjs --test --test-concurrency=1 --test-reporter=tap test/cliniko/class-move-stages-process.test.ts
+```

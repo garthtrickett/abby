@@ -1,4 +1,11 @@
-# Scenario manifest, version 1.253
+# Scenario manifest, version 1.254
+
+E2E-417 retains its two original native process cases and now checks captured
+worker output after pipe closure, every SQL column and unfiltered data-only
+backup privacy, including killed-sender/cold-discoverer output. Both cases and
+affected strict pass with unchanged native180 and deadlines. This adds no
+restore, full-call, whole-graph/cloud or real acceptance claim. See the
+[scope and evidence](../phase-2/EXECUTION_PROGRESS.md#staged-movement-process-output-and-backup-privacy-4-november-2026).
 
 E2E-392/E2E-406 add six source-only class creation body-fault variants across
 ordinary and approved-pass requests: oversized otherwise valid JSON, invalid
