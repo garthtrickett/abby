@@ -195,3 +195,22 @@ refusal journeys, not full-call acoustic/carrier or real clinic acceptance.
 Other operations, guardian/contact grants, classes, financial and outbound
 authority retain their separate scope. Final metadata/review, own exact-head CI,
 normal delivery and independent resulting-main qualification remain gates.
+
+## Booking followed by other-subject enquiry candidate, 3 November 2026
+
+The test-only candidate adds both directions after a committed individual
+booking: a related-patient booking followed by a verified caller enquiry, and a
+caller booking followed by a freshly verified related-patient enquiry. Source
+controls and emitted signed HTTP/media/PostgreSQL cases assert the new read's
+exact patient ID, independent actor and subject proofs, immutable first booking
+receipt, no second write and no replay of the first booking proof. Withdrawing
+the next subject's permission after verification blocks the read before it
+reaches the native appointment reader in both directions.
+
+The signed driver retains the real 61-second quota window, native 180-request
+budget, full SQL privacy scan, unfiltered backup and restore, unrelated rows and
+owned cleanup. Production source and runtime defaults are unchanged. Final
+exact-head PostgreSQL evidence, review and normal delivery remain pending. These
+selected synthetic cases do not establish other operation orders, a general
+representative grant, full-call or real clinic, carrier, speech or staff
+acceptance.
