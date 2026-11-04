@@ -4,6 +4,7 @@ import { PostgresClinikoRequestBudget } from "../../src/storage/postgres-cliniko
 import { PostgresPatientVerificationBudget } from "../../src/storage/postgres-patient-verification-budget.ts";
 import { classBookingFixture } from "./class-booking.ts";
 import { resultValue } from "./agent-appointment-proposals.ts";
+import { setTimeout as pause } from "node:timers/promises";
 
 const input = JSON.parse(await new Promise<string>(resolve => { let text = "";
   process.stdin.on("data", part => { text += String(part); }); process.stdin.on("end", () => resolve(text)); }));
@@ -18,12 +19,27 @@ try {
     const reader = resultValue(ClinikoRecallReader.create({ scope: input.scope, apiKey, contactEmail: "test@example.test", rateBudget: budget }, providerPort));
     const found = resultValue(await reader.discoverPendingReviews(input.scope, "7"));
     process.stdout.write(JSON.stringify({ pending: found.pending.length, valid: found.pending.filter(row => row.kind === "review").length,
-      clinicalWrites: 0, replayed: false }) + "\n");
+      classPassReviews: found.pending.filter(row => row.kind === "review" && row.envelope.request.operation.kind === "classBook" &&
+        row.envelope.request.operation.pass !== undefined).length, clinicalWrites: 0, replayed: false }) + "\n");
   } else {
-    const f = await classBookingFixture({ scope: input.scope, folder: input.folder, budget,
+    const f = await classBookingFixture({ scope: input.scope, folder: input.folder, passes: input.passes === true, budget,
       verificationBudget: new PostgresPatientVerificationBudget(db, input.scope), fetchAround: () => providerPort });
     try {
-      await f.verify(); const action = await f.propose(); resultValue(await f.confirm()); resultValue(await f.drain());
+      await f.verify(); const action = await f.propose();
+      const confirmed = resultValue(await f.confirm());
+      const notice = confirmed.pendingPresentationId ? confirmed.presentations[confirmed.pendingPresentationId] : undefined;
+      if (notice?.kind === "notice" && notice.confirmationWaitSeconds) {
+        // PostgreSQL's shared180 budget uses real time. Do not refill it by
+        // advancing only the fixture clock, or skip the played wait/new yes.
+        await f.play();
+        let remaining = notice.confirmationWaitSeconds + 1;
+        while (remaining > 0) {
+          const seconds = Math.min(15, remaining);
+          await pause(seconds * 1000); await f.pause(seconds); remaining -= seconds;
+        }
+        resultValue(await f.confirm());
+      }
+      resultValue(await f.drain());
       if ((await f.state()).actions[action.key]?.status !== "committed") throw new Error("synthetic class commit did not finish");
       await fetch(input.proxy + "/owner-finished", { method: "POST", body: "completed", signal: AbortSignal.timeout(15_000) });
     } finally { await f.close(); }

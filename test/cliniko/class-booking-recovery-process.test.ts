@@ -14,15 +14,21 @@ import { scanPatientDataCanaries } from "../../src/storage/patient-data-canary-s
 import { scanDisposableBackupCanaries } from "../storage/backup-canary-scan.ts";
 import { classAttendanceFixture, classAttendee, classLink } from "../support/class-attendance.ts";
 import { verificationCanaries, verificationNow } from "../support/caller-verification.ts";
+import { classPassHistoryFixture, visibleArchivedCase, visibleCaseRows } from "../support/class-pass-history.ts";
+import { decodeClinikoReview } from "../../src/cliniko/review-request.ts";
 
+for (const passes of [false, true])
 for (const stage of ["review", "prepared", "during", "acknowledged"] as const)
-  test(`E2E-392 actual class owner SIGKILL at ${stage} leaves provider review discoverable without a replacement send`,
-    { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: 75_000 }, async () => {
+  test(`E2E-392 actual ${passes ? "approved-pass class" : "class"} owner SIGKILL at ${stage} leaves provider review discoverable without a replacement send`,
+    // New pass cases include a real shared-budget wait and renewed played yes.
+    // Ordinary-case deadlines and all production proof/offer limits stay exact.
+    { skip: process.env.ABBY_ISOLATED_POSTGRES_PROBE !== "1", timeout: passes ? 150_000 : 75_000 }, async () => {
   const adminUrl = process.env.DATABASE_URL; assert.ok(adminUrl);
   const admin = connectPostgres(adminUrl), name = `abby_class_kill_${randomUUID().replaceAll("-", "")}`;
   const target = new URL(adminUrl); target.pathname = `/${name}`;
   const folder = await mkdtemp(join(tmpdir(), "abby-class-kill-")), scope = { tenantId: `class-kill-${randomUUID()}`, clinicId: "clinic", locationId: "main" };
   const native = classAttendanceFixture({ scope, now: verificationNow, patientId: verificationCanaries[2]! });
+  const pass = passes ? classPassHistoryFixture(verificationCanaries[2]!) : undefined;
   const recalls: Record<string, unknown>[] = [], mutations: string[] = [], children: ReturnType<typeof spawn>[] = [], output: string[] = [];
   let db: ReturnType<typeof connectPostgres> | undefined, created = false, posts = 0, held = false, checkpoint!: () => void;
   const ready = new Promise<void>(resolve => { checkpoint = resolve; });
@@ -33,6 +39,17 @@ for (const stage of ["review", "prepared", "during", "acknowledged"] as const)
       if (url.pathname === "/owner-finished") { checkpoint(); return; }
       if (method !== "GET" && url.pathname.startsWith("/v1/")) mutations.push(`${method} ${url.pathname}`);
       if (stage === "prepared" && !held && recalls.length && method === "GET") { held = true; checkpoint(); return; }
+      if (pass && url.pathname.startsWith(`/v1/patient_cases/${pass.caseId}`)) {
+        assert.equal(method, "GET");
+        if (url.pathname === `/v1/patient_cases/${pass.caseId}`) {
+          if (visibleArchivedCase(url, pass.record)) send(pass.record); else response.writeHead(404).end();
+          return;
+        }
+        assert.equal(url.pathname, `/v1/patient_cases/${pass.caseId}/attendees`);
+        assert.deepEqual(url.searchParams.getAll("q[]"), ["archived_at:*", "cancelled_at:*", "deleted_at:*"]);
+        const page = Number(url.searchParams.get("page")), rows = visibleCaseRows(url, pass.rows);
+        send({ attendees: rows.slice((page - 1) * 100, page * 100), total_entries: rows.length }); return;
+      }
       if (method === "POST") {
         const chunks: Buffer[] = []; for await (const part of incoming) chunks.push(Buffer.from(part));
         const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
@@ -42,7 +59,12 @@ for (const stage of ["review", "prepared", "during", "acknowledged"] as const)
           recalls.push(row); if (stage === "review") checkpoint(); else send(row, 201); return;
         }
         assert.equal(url.pathname, "/v1/attendees"); posts++;
+        assert.equal(body.patient_case_id, pass?.caseId);
         const row = { ...classAttendee("401", body.booking_id, body.patient_id), notes: body.notes };
+        if (pass) {
+          Object.assign(row, { arrived: null, patient_case: classLink("patient_cases", pass.caseId) });
+          pass.rows.push(row); (pass.record.attendee_ids as string[]).push("401");
+        }
         native.attendees.push(row); if (stage === "during") checkpoint(); else send(row, 201); return;
       }
       if (url.pathname === "/v1/recalls") { send({ recalls, total_entries: recalls.length }); return; }
@@ -59,23 +81,36 @@ for (const stage of ["review", "prepared", "during", "acknowledged"] as const)
     const proxy = `http://127.0.0.1:${address.port}`;
     const launch = (mode: "send" | "recover") => {
       const child = spawn(process.execPath, ["test/support/class-booking-recovery-worker.ts"], {
-        cwd: new URL("../../", import.meta.url), env: { DATABASE_URL: target.toString() }, stdio: ["pipe", "pipe", "pipe"], signal: AbortSignal.timeout(35_000) });
+        cwd: new URL("../../", import.meta.url), env: { DATABASE_URL: target.toString() }, stdio: ["pipe", "pipe", "pipe"],
+        signal: AbortSignal.timeout(mode === "send" && passes ? 90_000 : 35_000) });
       children.push(child); let stdout = "", stderr = "";
       child.stdout.on("data", data => { stdout += String(data); }); child.stderr.on("data", data => { stderr += String(data); });
       const exited = once(child, "exit").then(([code, signal]) => { output.push(stdout, stderr); return { code, signal, stdout, stderr }; });
-      child.stdin.end(JSON.stringify({ mode, scope, proxy, ...(mode === "send" ? { folder } : {}) }));
+      child.stdin.end(JSON.stringify({ mode, scope, proxy, ...(mode === "send" ? { folder, passes } : {}) }));
       return { child, exited };
     };
     const owner = launch("send");
     await Promise.race([ready, owner.exited.then(result => { throw new Error(`owner exited before checkpoint: ${result.stderr}`); })]);
     assert.equal(owner.child.kill("SIGKILL"), true); assert.equal((await owner.exited).signal, "SIGKILL");
-    const priorMutations = mutations.length, recovered = await launch("recover").exited;
+    const priorMutations = mutations.length, originalPass = structuredClone(pass), recovered = await launch("recover").exited;
     assert.equal(recovered.code, 0, recovered.stderr);
-    assert.deepEqual(JSON.parse(recovered.stdout), { pending: 1, valid: 1, clinicalWrites: 0, replayed: false });
+    assert.deepEqual(JSON.parse(recovered.stdout), { pending: 1, valid: 1, classPassReviews: Number(passes), clinicalWrites: 0, replayed: false });
     assert.equal(mutations.length, priorMutations, "fresh recovery must make no provider mutation");
     assert.equal(recalls.length, 1); assert.equal(recalls[0]!.recalled, false);
     assert.equal(posts, ["during", "acknowledged"].includes(stage) ? 1 : 0);
-    const canaries = [...verificationCanaries, String(recalls[0]!.notes).split("\n")[0]!, "2026-10-08T10:00:00.000Z"]
+    const decoded = decodeClinikoReview(recalls[0]!.notes); assert.ok(decoded.ok);
+    assert.equal(decoded.value.request.operation.kind, "classBook");
+    const operation = decoded.value.request.operation; assert.ok(operation.kind === "classBook");
+    assert.equal(operation.pass?.patientCaseId, pass?.caseId);
+    if (pass) {
+      assert.deepEqual(pass, originalPass, "cold discovery changes neither the native pass nor its associations");
+      assert.equal(operation.pass?.maximum, 2); assert.equal(operation.pass?.used, 1);
+      assert.equal(pass.rows.length, 1 + posts);
+      assert.deepEqual(pass.record.attendee_ids, posts ? ["601", "401"] : ["601"]);
+    }
+    const canaries = [...verificationCanaries, String(recalls[0]!.notes).split("\n")[0]!, "2026-10-08T10:00:00.000Z",
+      ...(operation.pass ? [operation.pass.patientCaseId, operation.pass.entitlementRef, operation.pass.usageFingerprint,
+        "private-pass-name-canary", "private-pass-notes-canary", "private-pass-referral-canary"] : [])]
       .map((value, index) => ({ label: `class_kill_${index}`, value }));
     assert.deepEqual(await scanPatientDataCanaries(db, canaries), { ok: true, value: [] });
     assert.deepEqual(await scanDisposableBackupCanaries(target.toString(), canaries), []);
