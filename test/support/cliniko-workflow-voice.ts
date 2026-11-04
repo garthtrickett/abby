@@ -31,6 +31,8 @@ import { bookingMenuDeadlineMs } from "../../src/reference/booking-menu-turns.ts
 import { reschedulingMenuDeadlineMs } from "../../src/reference/rescheduling-menu-turns.ts";
 import { appointmentProposalEvidenceDeadlineMs } from "../../src/reference/text-reception.ts";
 
+export const syntheticWorkflowAccountSid = `AC${"4".repeat(32)}`;
+
 export async function voiceUntil(check: () => boolean, label: string, timeoutMs = 10_000) {
   const deadline = Date.now() + timeoutMs;
   while (!check() && Date.now() < deadline) await new Promise<void>(resolve => setTimeout(resolve, 5));
@@ -57,8 +59,12 @@ export async function clinikoWorkflowVoiceFixture(db: Kysely<Database>, config: 
     beforeWriteResponse?: () => Promise<void>;
     transitionTrace?: true;
     beforeBookingMenuRead?: () => void;
+    /** A source-test identity can prove a pre-challenge public-hash collision. */
+    syntheticCallSid?: string;
     transcriptFinal?: (event: Extract<TranscriptEvent, { kind: "segmentFinal" }>) => readonly TranscriptEvent[] } = {}) {
-  const accountSid = `AC${"4".repeat(32)}`, callSid = `CA${randomUUID().replaceAll("-", "")}`, streamSid = `MZ${randomUUID().replaceAll("-", "")}`;
+  const accountSid = syntheticWorkflowAccountSid, callSid = options.syntheticCallSid ?? `CA${randomUUID().replaceAll("-", "")}`,
+    streamSid = `MZ${randomUUID().replaceAll("-", "")}`;
+  if (!/^CA[a-f0-9]{32}$/.test(callSid)) throw new Error("Invalid synthetic workflow call identity");
   const webhookUrl = "https://workflow.example.test/twilio/inbound", streamUrl = "wss://workflow.example.test/twilio/media/";
   let mediaElapsedMs = 0;
   const mediaClock = (options.classMove || options.steadyMedia) ? new SyntheticMediaTimeline() : undefined;

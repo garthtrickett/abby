@@ -1,7 +1,7 @@
 {
-  "verifiedDate": "2026-11-03",
+  "verifiedDate": "2026-11-04",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "04727fb51b8822a102baa4f75be9dd99b866a2ab2757bd5394811ae2d8a3978e",
+  "factsSha256": "b5d89a941b3823f0da048665055a5b922ec14fb1cba121a8b96b4525e1322515",
   "sources": {
     ".github/workflows/text-contract.yml": "20f47909d711b7a7d2b3916a8ef0756345b414dff225184989cd8056b5b6179b",
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
@@ -50,6 +50,7 @@
     "phase-2/SHARED_BUDGET_STORAGE_READINESS.md": "1b7610be2df75b6fc3afd03fd0360b3eadd9d47a6f09b0fe75694544ecc0f419",
     "phase-2/STRIPE_FINANCIAL_CONTRACT.md": "79d5430ec6e6a9915b738cd0a47f1a0a31cbfe37420dcc63a78bd2df59d4ff4b",
     "phase-2/STRIPE_PROVIDER_REHEARSAL.md": "ada8e554c9ff98bc17b1cff20ed15aed0a98e0672a3a60b1130e40730559b05d",
+    "phase-2/THIRTEEN_GAP_IMPLEMENTATION.md": "946c2b7ff5a7e81bed56ad6b01d5f713169ab90cb7e27b4bef8761db670c89ca",
     "phase-2/TWILIO_ABBY_OUTBOUND_CONVERSATION.md": "77eb6790d432e27c10d327d73fbe52293b34a950c9d3e84890e58448c94f178c",
     "phase-2/TWILIO_OUTBOUND_FINALITY.md": "e734fc9feb6b68a1f5c9c570da038e091d2517f38679623f214926ba3ea2b724",
     "phase-2/TWILIO_OUTBOUND_INGRESS.md": "f9a72ca7cde94119887f9bee693df633c3d79f5c8cf280241551fa696a2e29f9",
@@ -593,8 +594,9 @@
     "test/support/class-move-recovery-worker.ts": "a012d174394eb404998103edbf52be7180779405d044ac6c7c787c366a50ddf3",
     "test/support/class-move-recovery.ts": "1d0c1cedbb269c6fb6ffd3d0d42be995aedc91faec81865cdb7df4ea7b6ccbbc",
     "test/support/class-provider-proxy.ts": "8970ff5b3a3267fc84cd7276dbf0b72a7331d3b1887bac2a8709066fb447719f",
-    "test/support/cliniko-workflow-voice.ts": "3c8f0e3ac6b04c35dffb4077cc1016cad7ddbc6cf749d196664b527eea60012f",
+    "test/support/cliniko-workflow-voice.ts": "7a2adb9cf91f2599c70b4301833347003994de0762704d08af8334563d4bb1f1",
     "test/support/cross-operation-tasks.ts": "06be248edb9afa02ffe16a1a1db2db933896b1fe4f3599e83e3bc1c4bd1a9443",
+    "test/support/disposable-postgres.ts": "51831904ea3bd2ad6f0d79a285bbe12e0ae2720caf042527550a978f842967b7",
     "test/support/financial-caller-context.ts": "0760baba1711a02daec935ed0cdf2883792c04a898c5010f64e76294db6aedf9",
     "test/support/financial-class-caller-chain.ts": "ea5772175db55ba8cb2e352f44bd91b7ccc321dad08aac90a34542bea28fbdf7",
     "test/support/financial-class-caller-context.ts": "d4f94d407444fcbf03a8cc35db9bef0849e5f61abc100f021daa07e5c83801ae",
@@ -645,7 +647,7 @@
     "test/support/signed-class-booking-memo-sql.ts": "ae1825770ab6deb477d54f30f3a88a2c53290dd1784a40e5b9b50688e387e115",
     "test/support/signed-class-cancellation-memo-sql.ts": "9e8fb5ca7704b0326743aca420727da1a0bfbd9733fb22dc4238f9f23f6ba66d",
     "test/support/signed-staged-class-movement-memo-sql.ts": "b9e01e9b32fd3760073f3d6423140fb6718e9adc80286b7bcdafade0df579e1f",
-    "test/support/sql-verification-canary.ts": "eb9fbdc3ad0f92114c19a9e67567725b6307e340e19a8d38688bb9c82e03c504",
+    "test/support/sql-verification-canary.ts": "eb95e6ca5c728e8363499ed2b4746c7048e4b6b03fb9a5c291b5c6c4f5798646",
     "test/support/staged-class-move-journey.ts": "1ccd1366cab58b19988a25f6002dda416ae4e8dc711ad614b0471c7be460ace5",
     "test/support/start-synthetic-clinical-runner.ts": "9ebcd464d94b735aee30dff738c7d756d60f2ad3a243408b0f686098a9166107",
     "test/support/start-synthetic-financial-voice-runner.ts": "5f4c053c57f0306fb103c94aabb8d8cec0e9fbf730a010991220e5e2f780b2ba",
@@ -654,7 +656,7 @@
     "test/support/synthetic-media-timeline.ts": "da5985153a34b822c7d29f3d4fafe9968977121a0dab1109adb76f87e989b35c",
     "test/support/twilio-outbound-conversation.ts": "a962f03483baa47a01f67834324eb0e54cfd8c8e9b75962713e6e730706ad14d",
     "test/support/twilio-outbound-finality-worker.mjs": "b6502925cdd06ca4b2f5ccbbbb3653408a064630175fc3aadfc73baf5d838783",
-    "test/support/verification-code-canary.ts": "36fa19794bccb7eee072bdf8d8f4957931ddaa3938081b0ee72f6e58b3fe7538",
+    "test/support/verification-code-canary.ts": "2e3e92eeb063bc663079c4315fcd1ddb2aad6399b0dc843a583292c9a6dcb466",
     "test/text/booking-menu-deadline.test.ts": "cf2c6f24a08c0846e65fbc9be9a4646b18a0f734b6fe0dd9cf1c2da2e7fcc022",
     "test/text/class-movement-consent.test.ts": "1ff94adb26665cb9d686c0efa99d40864b8fd54e3436d41026e0f9cf2a6317af",
     "test/text/class-movement-receipt.test.ts": "663c5de1ba65b9a2032481080a54fe59a2f92d454e5ef87b30932f9fc7af7491",
@@ -706,6 +708,7 @@
     "test/voice/private-patient-correction-input.test.ts": "992e3050bb898979d19813a71840820714552fcdf3cc100089707c51bf64e9cf",
     "test/voice/private-resend-finalization.test.ts": "8a8160a983a7990a1cf754c33abd03f6b0d9f11b461b7ea2cb00b0b0865a6649",
     "test/voice/related-self-private-input.test.ts": "d5c89253c27e00ac9e9428d01b7e395df763a78f6453c5f2348a173f4ad770ae",
+    "test/voice/representative-change-call.test.ts": "6d08ec42aa0bc5f7c8cc3fc42ebb61f0322e0bdeee966bcab59cf305fd57223b",
     "test/voice/resend-task-sequence-runner.test.ts": "4a7e876b2313e1e95904cdc37c1706db4bd61f3b7376b1171608c1e65bc08301",
     "test/voice/service-catalogue-booking.test.ts": "147a58a7f5ea3477c155f17e36e5d28b3ef4310ab889d46699092df591072841",
     "test/voice/service-practitioner-preference.test.ts": "9320b676b56b5fbb571d47c39faf8def329e5e98f54e6cc512dc6cb402a2ce04",
@@ -722,6 +725,6 @@
     "test/voice/twilio-outbound-stop-receiver.test.ts": "8c36bed64ad31a312fa678754b7368ef703f3e5dca011c698d4df7670d98bd16",
     "test/voice/twilio-outbound-stop-speech.test.ts": "d0cb417f573f625abf1598f1ac9555fca03f7f04fcca0b75a54e51e3420a846d",
     "test/voice/twilio-renewal-during-turn.test.ts": "f7b2e52b2822899e66c82150125e580ab6b0574535526a03f3d0116f89997cd6",
-    "test/voice/verification-code-canary.test.ts": "0e959cce61db7e1abf791e7ac110d1f062a635c2e5e2164eddfd2a5dd7c853f0"
+    "test/voice/verification-code-canary.test.ts": "0e76ee85d743b89da26fcd1bdc4765d78441d568fdc34514170ac8aee620fd53"
   }
 }

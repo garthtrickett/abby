@@ -14,7 +14,8 @@ const docker = async (...args: string[]) => (await execute("docker", args, { tim
 /** Each owner receives migrated PostgreSQL and a private socket. Never infer a
  * database from ambient credentials or a default localhost connection. */
 export async function createDisposablePostgres(): Promise<Readonly<{
-  db: ReturnType<typeof connectPostgres>; connectionString: string; close(): Promise<void>;
+  db: ReturnType<typeof connectPostgres>; connectionString: string;
+  snapshot(): Promise<string>; close(): Promise<void>;
 }>> {
   const folder = await mkdtemp(join(tmpdir(), "abby-browser-pg-"));
   const socket = join(folder, "socket");
@@ -46,7 +47,15 @@ export async function createDisposablePostgres(): Promise<Readonly<{
       }
       catch { if (Date.now() >= deadline) throw new Error("disposable PostgreSQL did not become ready"); await delay(50); }
     }
-    await migrate(db); return { db, connectionString, close };
+    await migrate(db);
+    // Use this exact server's client tooling. Text-mode jobs need only Docker,
+    // and must not accidentally dump an ambient database or older host server.
+    const snapshot = async () => {
+      if (!container || closing) throw new Error("Disposable PostgreSQL snapshot unavailable");
+      return (await execute("docker", ["exec", container, "pg_dump", "-U", "postgres", "--no-owner", "--no-privileges", "postgres"],
+        { timeout: 10_000, maxBuffer: 8_000_000 })).stdout;
+    };
+    return { db, connectionString, snapshot, close };
   } catch (error) {
     try { await close(); } catch (cleanup) { throw new AggregateError([error, cleanup], "PostgreSQL setup or cleanup failed"); }
     throw error;
@@ -54,10 +63,11 @@ export async function createDisposablePostgres(): Promise<Readonly<{
 }
 
 /** Each case owns fresh PostgreSQL and a private socket; Docker leaves the browser's host network alone. */
-export async function withDisposablePostgres(run: (db: ReturnType<typeof connectPostgres>, connectionString: string) => Promise<void>): Promise<void> {
+export async function withDisposablePostgres(run: (db: ReturnType<typeof connectPostgres>, connectionString: string,
+  snapshot: () => Promise<string>) => Promise<void>): Promise<void> {
   const resource = await createDisposablePostgres();
   let originalFailure: unknown;
-  try { await run(resource.db, resource.connectionString); }
+  try { await run(resource.db, resource.connectionString, resource.snapshot); }
   catch (error) { originalFailure = error; throw error; }
   finally {
     try { await resource.close(); }
