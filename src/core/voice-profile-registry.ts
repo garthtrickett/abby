@@ -1,5 +1,5 @@
 import { err, ok } from "./model.ts";
-import type { Result } from "./model.ts";
+import type { LocationScope, Result } from "./model.ts";
 import type { PolicyFailure } from "./host.ts";
 import type { ReadinessFailure } from "./readiness.ts";
 import { systemTimer } from "./timer.ts";
@@ -17,6 +17,8 @@ export type VoiceProfileDeclaration = Readonly<{
 }>;
 /** Host code proves the adapter pair, approved presentation and pinned quality configuration together. */
 export interface VoiceProfileRegistry {
+  /** Present only when an adapter's approved source is confined to one location. */
+  readonly locationScope?: LocationScope;
   resolve(scope: VoiceClinicScope, signal?: AbortSignal): Promise<Result<VoiceProfileDeclaration, ReadinessFailure>>;
 }
 export const voiceProfileUnready = (): Result<never, ReadinessFailure> => err({ kind: "readinessFailed", missing: ["voiceProfile"] });

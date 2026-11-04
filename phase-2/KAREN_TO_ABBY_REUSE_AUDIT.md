@@ -268,6 +268,19 @@ Abby already has scenario manifests and repeated speech/intent evaluation. Add t
 
 ### R13 Suggest public clinic vocabulary without bypassing speech gates
 
+**Local optional implementation, 4 November 2026:** The current approved booking
+catalogue is separated from explicit public-field approval and a versioned owner
+review with persistent removals. The existing authenticated admin surfaces now
+have an optional public-term editor with Origin/current-session checks,
+stale-editor refusal and uncertain-save readback. A per-location live registry
+captures reviews for new sessions without restart; the exact dictionary still
+requires independent physical speech-quality evidence. Source/emitted/browser
+qualification, final review, normal delivery, clinic provisioning and acoustic
+acceptance remain separate. The failed local heap-limited whole-project check
+is preserved; full exact-head strict CI remains required. This is not a default
+provider change or an R13 completion claim. See [the review and integration
+contract](PUBLIC_CLINIC_VOCABULARY.md).
+
 **Extend gap 4.** Karen's `transcriber/profile/profileInputs.ts` canonicalizes selected services, practitioners, locations, specialties/categories and free-text company information. Those inputs are not intrinsically public or patient-free. `profileBuildService.ts` computes hashes/diffs, respects removed terms and caps suggestions; save hooks plus a reconciliation sweep cover missed writers. The existing flow map also records a stale-editor overwrite/suppression race worth testing rather than inheriting.
 
 Abby already bounds transcription context, verifies actual realtime session configuration and versions voice settings. Whitelist approved public clinic terminology before extraction; do not treat unreviewed free text as public by default. An authorized clinic owner reviews suggestions before they reach transcription. Suggestions preserve manual edits/removals and conflict on stale versions. No per-call patient-name vocabulary, discipline-derived clinical authority, automatic speech-provider fallback or VAPI-specific settings are transferred.
