@@ -39,6 +39,7 @@ import { createStandaloneTransientVoiceCall } from "./transient-voice-compositio
 import { ClinikoVoiceClinicalHost } from "./cliniko-voice-clinical-host.ts";
 import { ClinikoClinicalLocationGroup } from "./cliniko-clinical-location-group.ts";
 import { sameScope } from "./appointment-change-authority.ts";
+import { validVoiceLocationScope } from "../core/voice-profile.ts";
 
 type ClinikoVoiceRouteBase = Readonly<{
   dialedNumber: string;
@@ -174,6 +175,10 @@ export async function createStandaloneClinikoVoiceServer(config: ClinikoVoiceSer
     }
   }
   const allRoutes = [...routes.values()].flat();
+  const vocabularyScope = config.voiceProfiles?.locationScope;
+  if (vocabularyScope !== undefined && (!validVoiceLocationScope(vocabularyScope) || !allRoutes.every(route => sameScope(route.scope, vocabularyScope)))) {
+    throw new RangeError("location-scoped voice profile does not cover every route");
+  }
   const checkBudgetSchema = allRoutes[0]!.rateBudget.schemaCompatible.bind(allRoutes[0]!.rateBudget);
   const budgetSchemaReady = boundedHealthCheck(async () => {
     if (!await checkBudgetSchema()) throw new Error("shared budget storage unavailable");

@@ -1,7 +1,7 @@
+import { clinicVocabularyFixture as fixture, vocabularyScope as scope } from "../support/clinic-vocabulary.ts";
 import assert from "node:assert/strict";
 import { EventEmitter, once } from "node:events";
-import { chmod, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { chmod, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 import WebSocket from "ws";
@@ -10,8 +10,7 @@ import { proposeClinicVocabulary, reviewClinicVocabulary, vocabularyRevision } f
 import type { PublicVocabularyCatalogue } from "../../src/core/clinic-vocabulary.ts";
 import { captureVoiceProfile } from "../../src/core/voice-profile-registry.ts";
 import { OwnerFileClinicVocabulary } from "../../src/standalone/owner-file-clinic-vocabulary.ts";
-import type { ClinicVocabularyApproval, PublicVocabularyCatalogueReader } from "../../src/standalone/owner-file-clinic-vocabulary.ts";
-import type { AdminAccount, AdminDirectory } from "../../src/standalone/identity/magic-link.ts";
+import type { ClinicVocabularyApproval } from "../../src/standalone/owner-file-clinic-vocabulary.ts";
 import { ClinicVocabularyReview } from "../../src/standalone/clinic-vocabulary-review.ts";
 import { ApprovedCatalogueVocabulary } from "../../src/standalone/approved-catalogue-vocabulary.ts";
 import { OwnerFileServiceCatalogue } from "../../src/standalone/owner-file-service-catalogue.ts";
@@ -19,9 +18,11 @@ import type { ServiceCatalogueApproval } from "../../src/standalone/owner-file-s
 import { OpenAIVoiceProfileHost } from "../../src/voice/openai-voice-profile.ts";
 import { bindReviewedDeepgramVocabulary } from "../../src/voice/reviewed-deepgram-transcription.ts";
 import type { MediaFrame } from "../../src/voice/media-turn-controller.ts";
+import { ReviewedClinicVoiceProfiles } from "../../src/standalone/reviewed-clinic-voice-profiles.ts";
+import { vocabularyDashboard } from "../support/vocabulary-dashboard.ts";
 
 const signal = () => AbortSignal.timeout(5_000);
-const scope = { tenantId: "synthetic", clinicId: "main", locationId: "north" };
+
 const frame = (sessionId: string): MediaFrame => ({ sessionId, sequence: 0,
   capturedAt: "2026-11-04T00:00:00.000Z", bytes: new Uint8Array(640).fill(12) });
 class Socket extends EventEmitter {
@@ -39,42 +40,7 @@ async function closeRequested(socket: Socket) {
   const signal = AbortSignal.timeout(5_000);
   while (!socket.sent.includes('{"type":"CloseStream"}')) await once(socket, "sent", { signal });
 }
-async function fixture() {
-  const folder = await mkdtemp(join(tmpdir(), "abby-vocabulary-"));
-  const path = join(folder, "public-vocabulary.json");
-  let inventory: PublicVocabularyCatalogue = { scope, version: "inventory.v1", complete: true,
-    items: [{ ref: "service", kind: "service", publicText: "Physiotherapy" },
-      { ref: "unapproved", kind: "practitioner", publicText: "Unpublished Person" }], approvedPublicRefs: ["service"] };
-  const proposal = proposeClinicVocabulary(inventory); assert.ok(proposal.ok);
-  const reviewed = reviewClinicVocabulary(inventory, undefined, { ...proposal.value,
-    manualPublicTerms: [], selectedTerms: proposal.value.suggestions });
-  // The review input schema deliberately does not accept an echoed whole proposal.
-  assert.equal(reviewed.ok, false);
-  const saved = reviewClinicVocabulary(inventory, undefined, { expectedRevision: proposal.value.expectedRevision,
-    catalogueHash: proposal.value.catalogueHash, manualPublicTerms: [], selectedTerms: proposal.value.suggestions });
-  assert.ok(saved.ok);
-  let row: ClinicVocabularyApproval = { scope, revision: "approval.v1", approverRef: "admin",
-    approvedAt: "2026-11-03T00:00:00.000Z", effectiveFrom: "2026-11-03T00:00:00.000Z",
-    effectiveUntil: "2026-11-05T00:00:00.000Z", approved: true, enabled: true, vocabulary: saved.value };
-  let member: AdminAccount | undefined = { email: "synthetic@example.test", membershipVersion: "membership.v1",
-    actor: { actorRef: "admin", role: "clinicAdmin", scope } };
-  let onInventory: (() => Promise<void>) | undefined;
-  const directory: AdminDirectory = { async findByRef() { return ok(member); }, async findByEmail() { return ok(member); } };
-  const catalogue: PublicVocabularyCatalogueReader = { async current() {
-    await onInventory?.(); return ok(structuredClone(inventory));
-  } };
-  const replace = async (patch: Partial<ClinicVocabularyApproval>) => {
-    row = { ...row, ...patch }; await writeFile(path + ".next", JSON.stringify(row), { mode: 0o600 });
-    await rename(path + ".next", path);
-  };
-  await replace({});
-  const config = { path, scope, directory, catalogue, clock: () => "2026-11-04T00:00:00.000Z" };
-  return { path, config, replace, get row() { return structuredClone(row); },
-    changeInventory(value: PublicVocabularyCatalogue) { inventory = value; },
-    get inventory() { return structuredClone(inventory); }, revoke() { member = undefined; },
-    duringInventory(action: () => Promise<void>) { onInventory = action; },
-    async close() { await rm(folder, { recursive: true, force: true }); } };
-}
+
 
 test("reviewed owner vocabulary reaches actual Nova-3 requests and exact profile identity without granting speech quality", async () => {
   const f = await fixture(), sockets: Socket[] = [], requests: URL[] = [];
@@ -344,5 +310,84 @@ test("a provisioned owner approval cannot send a selected unpublished field to t
     assert.ok(proposal.ok, "the current owner can repair a malformed selection without activating it");
     assert.equal(proposal.value.selectedTerms.includes("Unpublished Person"), false);
     assert.deepEqual(proposal.value.suggestions, ["Physiotherapy"]);
+  } finally { await f.close(); }
+});
+
+for (const implementation of ["source", "actual emitted"] as const) {
+test(`${implementation} live voice registry sees an owner save without restart and requires fresh exact dictionary quality`, async () => {
+  const f = await vocabularyDashboard(), approved = new Set<string>(), requests: URL[] = [];
+  try {
+    const Registry = implementation === "source" ? ReviewedClinicVoiceProfiles : (await import(new URL(
+      "../../dist/runtime/src/standalone/reviewed-clinic-voice-profiles.js", import.meta.url).href) as
+      typeof import("../../src/standalone/reviewed-clinic-voice-profiles.ts")).ReviewedClinicVoiceProfiles;
+    const registry = new Registry({ vocabulary: f.config,
+      speech: { apiKey: "synthetic-key", mode: "conversation", quality: (_scope, configurationHash) => approved.has(configurationHash)
+        ? ok({ configurationHash, qualityVersion: "synthetic-only" }) : err({ kind: "readinessFailed", missing: ["voiceProfile"] }) },
+      deepgram: { apiKey: "synthetic-key", socketFactory(raw) {
+        requests.push(new URL(raw)); const socket = new Socket(); queueMicrotask(() => socket.open()); return socket as unknown as WebSocket;
+      } } });
+    const clinic = { tenantId: scope.tenantId, clinicId: scope.clinicId }, settings = { version: "1", locale: "en-AU", voiceId: "coral" };
+    const initial = await registry.resolve(clinic); assert.ok(initial.ok);
+    assert.ok(initial.value.profiles.every(profile => !profile.ready));
+    for (const profile of initial.value.profiles) approved.add(profile.configurationHash);
+    const first = await captureVoiceProfile(registry, clinic, settings); assert.ok(first.ok);
+    const old = registry.create(first.value, "old-call", {}); assert.ok(old.ok);
+    try {
+      assert.ok((await old.value.transcription.accept(frame("old-call"), 1, signal())).ok);
+      assert.deepEqual(requests[0]!.searchParams.getAll("keyterm"), ["Physiotherapy"]);
+      const read = await fetch(f.url + "/api/clinic-vocabulary", { headers: f.headers }); assert.equal(read.status, 200);
+      const proposal = (await read.json()).value;
+      const saved = await fetch(f.url + "/api/clinic-vocabulary", { method: "POST", headers: { ...f.headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedBinding: proposal.expectedBinding, expectedRevision: proposal.expectedRevision,
+          catalogueHash: proposal.catalogueHash, manualPublicTerms: ["Fresh published alias"], selectedTerms: [], manualPublicConfirmed: true }) });
+      assert.equal(saved.status, 200);
+      const changed = await registry.resolve(clinic); assert.ok(changed.ok);
+      assert.ok(changed.value.profiles.every(profile => !profile.ready));
+      assert.equal(registry.create(first.value, "stale-profile", {}).ok, false);
+      assert.equal((await old.value.transcription.flush(1, signal())).ok, false);
+      assert.equal(requests.length, 1);
+      for (const profile of changed.value.profiles) approved.add(profile.configurationHash);
+      const selected = await captureVoiceProfile(registry, clinic, settings); assert.ok(selected.ok);
+      assert.notEqual(selected.value.configurationHash, first.value.configurationHash);
+      assert.notEqual(selected.value.transcriptionVersion, first.value.transcriptionVersion);
+      const current = registry.create(selected.value, "new-call", {}); assert.ok(current.ok);
+      try {
+        assert.ok((await current.value.transcription.accept(frame("new-call"), 1, signal())).ok);
+        assert.deepEqual(requests[1]!.searchParams.getAll("keyterm"), ["Fresh published alias"]);
+        assert.equal((await registry.resolve({ ...clinic, clinicId: "other" })).ok, false);
+      } finally { await current.value.transcription.close?.(); }
+    } finally { await old.value.transcription.close?.(); }
+  } finally { await f.close(); }
+});
+}
+
+test("an older overlapping vocabulary resolution cannot replace or clear a newer captured voice factory", async () => {
+  const f = await fixture(); let entered!: () => void, release!: () => void, heldOnce = false;
+  const started = new Promise<void>(resolve => { entered = resolve; }), held = new Promise<void>(resolve => { release = resolve; });
+  try {
+    f.duringInventory(async () => { if (!heldOnce) { heldOnce = true; entered(); await held; } });
+    const registry = new ReviewedClinicVoiceProfiles({ vocabulary: f.config,
+      speech: { apiKey: "synthetic-key", mode: "conversation", quality: (_scope, configurationHash) => ok({ configurationHash, qualityVersion: "synthetic-only" }) },
+      deepgram: { apiKey: "synthetic-key" } });
+    const clinic = { tenantId: scope.tenantId, clinicId: scope.clinicId };
+    const older = registry.resolve(clinic); await started;
+    const selected = await captureVoiceProfile(registry, clinic, { version: "1", locale: "en-AU", voiceId: "coral" }); assert.ok(selected.ok);
+    release(); assert.equal((await older).ok, false);
+    const current = registry.create(selected.value, "latest-call", {}); assert.ok(current.ok);
+    await current.value.transcription.close?.();
+  } finally { release(); await f.close(); }
+});
+
+test("an incomplete current vocabulary catalogue withdraws the live profile without provider fallback", async () => {
+  const f = await fixture();
+  try {
+    const registry = new ReviewedClinicVoiceProfiles({ vocabulary: f.config,
+      speech: { apiKey: "synthetic-key", mode: "conversation", quality: (_scope, configurationHash) => ok({ configurationHash, qualityVersion: "synthetic-only" }) },
+      deepgram: { apiKey: "synthetic-key" } });
+    const clinic = { tenantId: scope.tenantId, clinicId: scope.clinicId };
+    const selected = await captureVoiceProfile(registry, clinic, { version: "1", locale: "en-AU", voiceId: "coral" }); assert.ok(selected.ok);
+    f.changeInventory({ ...f.inventory, complete: false } as unknown as PublicVocabularyCatalogue);
+    assert.equal((await registry.resolve(clinic)).ok, false);
+    assert.equal(registry.create(selected.value, "withdrawn", {}).ok, false);
   } finally { await f.close(); }
 });

@@ -79,7 +79,8 @@
     "scripts/check-cliniko-queue-work.ts",
     "src/standalone/clinic-vocabulary-review.ts",
     "src/standalone/approved-catalogue-vocabulary.ts",
-    "src/voice/reviewed-deepgram-transcription.ts"
+    "src/voice/reviewed-deepgram-transcription.ts",
+    "src/standalone/reviewed-clinic-voice-profiles.ts"
   ],
   "include": []
 }

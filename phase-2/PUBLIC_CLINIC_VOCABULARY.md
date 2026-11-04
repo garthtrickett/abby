@@ -44,12 +44,21 @@ empty explicitly reviewed dictionary if desired. Keep its containing directory
 owned by the service user with mode 0700, and the JSON file with mode 0600.
 Do not put these files, their private paths or clinic-specific contents in Git.
 
-The backend `ClinicVocabularyReview` service offers `propose` and `save`. An
-embedding admin surface must supply its authenticated actor from the existing
-identity boundary, never a request-body actor. This implementation permits the
-current named approving clinic administrator at the exact location. It does not
-create an admin HTTP route, a new authentication mechanism or authority for an
-assistant/model to approve its own suggestions.
+The backend `ClinicVocabularyReview` service offers `propose` and `save`.
+Supply it through `ClinikoAdminDashboardConfig.vocabularyReview`, or through the
+existing authenticated host's `vocabularyReviewFor` callback. The optional
+`/api/clinic-vocabulary` route uses the existing current identity, exact Host and
+POST Origin checks. The body cannot choose an actor, scope, file or provider.
+Only the current named approving clinic administrator at the exact location may
+review. Identity is rechecked at write commit as well as request dispatch.
+There is no second authentication mechanism or assistant/model self-approval.
+
+Both full and availability-setup dashboard bundles provide the optional Clinic
+terms editor. It appears only on a configured administrator surface. Additional
+manual terms require an explicit public-publication confirmation. A stale editor
+must reload; a lost or unverifiable save response disables resubmission until
+current state is read. No write is automatically replayed. Unconfigured
+surfaces retain their prior markup and do not request the optional endpoint.
 
 Proposals write nothing. A save supplies the exact expected approval binding,
 saved revision, current catalogue hash, explicitly public manual terms and
@@ -60,7 +69,7 @@ removed public term. Versions increase even when an owner returns to earlier
 terms, so an old editor cannot revive an earlier revision.
 
 Application writers serialize using an exclusive owner-file review lock, then
-recheck the saved binding, current owner membership and source before atomic
+recheck the saved binding, current owner membership and source and current request authority before atomic
 replacement. Only one competing review can commit. A stale or malformed save
 preserves the accepted file. A crash-left lock is refused; reconcile the actual
 writer and file before operator cleanup. There is no automatic lock stealing,
@@ -96,6 +105,20 @@ revocation while a turn is finalizing discards its transcript. Cancelling or
 closing one call preserves the independent ownership of other calls. This
 does not supply clinical action authority or provider fallback.
 
+`ReviewedClinicVoiceProfiles` is the optional live `voiceProfiles` implementation
+for an existing standalone voice server or admin composition. It captures owner
+files afresh on each profile resolution, so an accepted review is seen by later
+sessions without a restart. The bounded factory map holds only the latest ready
+profile hashes. A slower old resolver cannot overwrite or clear a newer result;
+a failed current capture withdraws old factories. Existing captured adapter
+ports retain their own current-source guards.
+
+Its `locationScope` is enforced by the admin and voice-server compositions: a
+location-bound catalogue cannot be installed over routes at another location.
+The default OpenAI registry has no added restriction or configuration change.
+Pass the same scope and private source files to the review and voice
+compositions; neither object is installed automatically by this extension.
+
 The existing profile quality callback must separately qualify the exact new
 configuration. A changed approval or vocabulary cannot inherit evidence from
 an earlier configuration. No real Krisp access, denoising comparison, repeated
@@ -105,9 +128,12 @@ results and the unchanged gate.
 
 ## Qualification still required
 
-Before delivery, finish current strict checking, review the public-only source
-boundary and concurrent save/abort/revocation behavior, update affected product
-facts, run applicable source and serving checks, and qualify exact PR and actual
-main CI. Exercise any embedding admin surface and per-location route wiring
-before activation. Current local evidence is recorded privately; this document
+Before delivery, finish combined source/emitted/browser checking, review the
+public-only source and concurrent save/abort/revocation boundaries, and qualify
+unchanged full-project strict checking plus exact PR and actual-main CI. A local
+whole-project attempt exhausted its 1536 MiB Node heap before its test phase;
+that failure is preserved and supplies no typecheck pass. The narrower inherited
+graph and serving checks retain their distinct scopes. Clinic provisioning,
+representative per-location call latency and all acoustic/clinic acceptance must
+still be exercised before activation. Current local evidence is recorded privately; this document
 does not claim those delivery or operating gates have passed.

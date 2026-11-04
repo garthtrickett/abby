@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { err, ok } from "./model.ts";
 import type { LocationScope, Result } from "./model.ts";
 import { validVoiceLocationScope, validVoiceRef, validVoiceVersion } from "./voice-profile.ts";
+import { validVocabularyTerms } from "./public-vocabulary-terms.ts";
+export { validVocabularyTerms } from "./public-vocabulary-terms.ts";
 
 export type VocabularyFailure = Readonly<{ kind: "invalidVocabulary" | "staleVocabulary" }>;
 export type PublicVocabularyItem = Readonly<{
@@ -31,14 +33,6 @@ const exact = (value: unknown, keys: string): value is Record<string, unknown> =
 const sameScope = (a: LocationScope, b: LocationScope): boolean => a.tenantId === b.tenantId &&
   a.clinicId === b.clinicId && a.locationId === b.locationId;
 const scopeValue = (scope: LocationScope): readonly string[] => [scope.tenantId, scope.clinicId, scope.locationId];
-
-/** Existing Nova-3 request limits. No coercion, weights, sparse arrays or silent truncation. */
-export function validVocabularyTerms(value: unknown): value is readonly string[] {
-  return Array.isArray(value) && value.length <= 50 && Array.from(value).every(term =>
-    typeof term === "string" && !!term.trim() && term === term.trim() && term.length <= 80 &&
-    !/[\u0000-\u001f\u007f,:;]/.test(term)) && Buffer.byteLength(value.join(" "), "utf8") <= 1_000 &&
-    new Set(value.map(key)).size === value.length;
-}
 
 function catalogue(value: PublicVocabularyCatalogue): Readonly<{ hash: string; terms: readonly string[] }> | undefined {
   if (!exact(value, "approvedPublicRefs,complete,items,scope,version") || !validVoiceLocationScope(value.scope) ||

@@ -8,6 +8,7 @@ import { proposeClinicVocabulary, reviewClinicVocabulary } from "../core/clinic-
 import type { ClinicVocabulary, VocabularyProposal } from "../core/clinic-vocabulary.ts";
 import type { HostActor } from "../reference/command-gateway.ts";
 import { approvalInstant } from "./owner-file-clinic-approval.ts";
+import { awaitUntilAbort } from "../shared/await-until-abort.ts";
 import { OwnerFileClinicVocabulary } from "./owner-file-clinic-vocabulary.ts";
 import type { ClinicVocabularyConfig } from "./owner-file-clinic-vocabulary.ts";
 
@@ -47,7 +48,8 @@ export class ClinicVocabularyReview {
       return found.ok ? ok({ ...found.value.proposal, expectedBinding: found.value.state.binding }) : found;
     } catch { return unavailable(); }
   }
-  async save(actor: HostActor, input: Review, signal: AbortSignal): Promise<Result<ClinicVocabulary, Failure>> {
+  async save(actor: HostActor, input: Review, signal: AbortSignal,
+    stillAuthorized?: () => Promise<boolean>): Promise<Result<ClinicVocabulary, Failure>> {
     let lock: Awaited<ReturnType<typeof open>> | undefined;
     let temporary: string | undefined;
     const config = this.#config, lockPath = config.path + ".review-lock";
@@ -82,6 +84,8 @@ export class ClinicVocabularyReview {
       if (!again.ok) return again;
       const fresh = proposeClinicVocabulary(again.value.catalogue, again.value.approval.vocabulary);
       if (!fresh.ok || fresh.value.catalogueHash !== input.catalogueHash || signal.aborted) return err({ kind: "staleVocabulary" });
+      if (stillAuthorized && !await awaitUntilAbort(Promise.resolve().then(stillAuthorized), signal)) return unavailable();
+      if (signal.aborted) return unavailable();
       await rename(temporary, config.path); temporary = undefined;
       const folder = await open(parent, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
       try { await folder.sync(); } finally { await folder.close(); }

@@ -1,4 +1,5 @@
 import type { VoiceProfileRegistry } from "../core/voice-profile-registry.ts";
+import { validVoiceLocationScope } from "../core/voice-profile.ts";
 import { createServer } from "node:http";
 import type { RequestListener, Server } from "node:http";
 import type { Kysely } from "kysely";
@@ -19,6 +20,7 @@ import { createStandaloneClinikoSetup } from "./cliniko-setup-composition.ts";
 import { validKeypadGreetingText } from "./keypad-greeting.ts";
 import { createHostAuthenticatedDashboardRequestHandler } from "./dashboard/server.ts";
 import type { HostDashboardIdentity } from "./dashboard/server.ts";
+import type { ClinicVocabularyReview } from "./clinic-vocabulary-review.ts";
 
 export type ClinikoAdminDashboardConfig = Readonly<{
   db: Kysely<Database>;
@@ -35,6 +37,7 @@ export type ClinikoAdminDashboardConfig = Readonly<{
   signOutPath?: string;
   bundlePath: string;
   voiceProfiles?: VoiceProfileRegistry;
+  vocabularyReview?: ClinicVocabularyReview;
   fetch?: typeof fetch;
   now?: () => string;
 }>;
@@ -55,6 +58,9 @@ export async function createStandaloneClinikoAdminDashboardHandler(config: Clini
   if (config.sevenDayAvailabilityEnabled !== undefined &&
       typeof config.sevenDayAvailabilityEnabled !== "boolean") return err({ kind: "invalidConfig" });
   const scope = structuredClone(config.scope);
+  const voiceScope = config.voiceProfiles?.locationScope;
+  if (voiceScope !== undefined && (!validVoiceLocationScope(voiceScope) || ["tenantId", "clinicId", "locationId"].some(key =>
+    voiceScope[key as keyof LocationScope] !== scope[key as keyof LocationScope]))) return err({ kind: "invalidConfig" });
   const privacy = await checkStandaloneTextDatabase(config.db);
   if (!privacy.ok) return privacy;
   let rateBudget: PostgresClinikoRequestBudget;
@@ -76,6 +82,7 @@ export async function createStandaloneClinikoAdminDashboardHandler(config: Clini
       greetingTextValidator: text => validKeypadGreetingText(text, config.sevenDayAvailabilityEnabled === true),
       resolveActor: config.resolveActor,
       ...(config.readSpeechGate ? { readSpeechGate: config.readSpeechGate } : {}),
+      ...(config.vocabularyReview ? { vocabularyReviewFor: () => config.vocabularyReview! } : {}),
       ...(config.unauthorized ? { unauthorized: config.unauthorized } : {}),
       ...(config.signOutPath ? { signOutPath: config.signOutPath } : {}),
       gatewayFor: actor => {

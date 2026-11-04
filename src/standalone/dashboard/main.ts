@@ -1,6 +1,7 @@
 import { FetchDashboardPort } from "./api.ts";
 import { DashboardController } from "./controller.ts";
 import { AvailabilitySetupPanel } from "./availability-setup-panel.ts";
+import { ClinicVocabularyPanel } from "./clinic-vocabulary-panel.ts";
 
 const root = document.getElementById("app");
 if (!root) throw new Error("dashboard root missing");
@@ -9,3 +10,5 @@ if (!setupRoot) throw new Error("availability setup root missing");
 const port = new FetchDashboardPort();
 void new DashboardController(root, port).load();
 void new AvailabilitySetupPanel(setupRoot, port).load();
+const vocabularyRoot = document.getElementById("clinic-vocabulary");
+if (vocabularyRoot) void new ClinicVocabularyPanel(vocabularyRoot).load();

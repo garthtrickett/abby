@@ -258,16 +258,18 @@ Abby already has scenario manifests and repeated speech/intent evaluation. Add t
 
 ### R13 Suggest public clinic vocabulary without bypassing speech gates
 
-**Local optional implementation, 4 November 2026:** A backend extension now
-separates the current approved booking catalogue from explicit public-field
-approval, preserves owner-edited terms and removal history, and serializes
-versioned owner-file review saves. The optional Nova-3 factory pins its exact
-approval/dictionary into the existing physical profile and confines it to the
-owning clinic. Changed approvals/sources and a cancellation held before provider
-construction refuse stale use. Source and serving qualification, final review,
-normal delivery, embedding admin/route wiring and all existing acoustic/clinic
-acceptance remain separate. This is not a default provider change or an R13
-completion claim. See [the review and integration contract](PUBLIC_CLINIC_VOCABULARY.md).
+**Local optional implementation, 4 November 2026:** The current approved booking
+catalogue is separated from explicit public-field approval and a versioned owner
+review with persistent removals. The existing authenticated admin surfaces now
+have an optional public-term editor with Origin/current-session checks,
+stale-editor refusal and uncertain-save readback. A per-location live registry
+captures reviews for new sessions without restart; the exact dictionary still
+requires independent physical speech-quality evidence. Source/emitted/browser
+qualification, final review, normal delivery, clinic provisioning and acoustic
+acceptance remain separate. The failed local heap-limited whole-project check
+is preserved; full exact-head strict CI remains required. This is not a default
+provider change or an R13 completion claim. See [the review and integration
+contract](PUBLIC_CLINIC_VOCABULARY.md).
 
 **Extend gap 4.** Karen's `transcriber/profile/profileInputs.ts` canonicalizes selected services, practitioners, locations, specialties/categories and free-text company information. Those inputs are not intrinsically public or patient-free. `profileBuildService.ts` computes hashes/diffs, respects removed terms and caps suggestions; save hooks plus a reconciliation sweep cover missed writers. The existing flow map also records a stale-editor overwrite/suppression race worth testing rather than inheriting.
 
