@@ -232,6 +232,16 @@ Abby already has content fingerprints, approved public FAQ provisioning, source/
 
 **Acceptance:** CRUD and bulk edits invalidate each consumer across serving processes, or satisfy an explicitly approved bounded freshness contract. Revoked facts stop being usable under Abby's snapshot contract; partial answers acknowledge their limits; numbers and prices are exact; retrieval errors cannot become “not offered”; no patient content enters public facts or logs.
 
+**Maintained owner-file process candidate, 4 November 2026:** A new
+[source/process witness](../test/voice/clinic-faq-process-freshness.test.ts) keeps
+separate voice-selector and agent workers alive through shared-file replacement,
+reordering, removal, revocation and malformed/unsafe reads. Old calls retain
+their snapshot boundary; fresh calls on the same PIDs see exact updated public
+contact/fee text. The current source contracts are preserved, with no new cache,
+editor or runtime default. Local 2/2 source/process controls and the inherited affected strict graph pass;
+whole-project hosted checks, review and delivery remain separate. This does not qualify a different embedded
+SQL editor or real clinic/provider acceptance. See [the selected scope](KNOWLEDGE_CATALOGUE.md#owner-file-process-freshness-candidate-4-november-2026).
+
 **Karen witnesses:** `server/src/__tests__/services/faq/faqAnswerService.test.ts`, `server/src/__tests__/transient/faqSearchController.test.ts` and `server/src/__tests__/knowledge.crosslayer.test.ts` under `server/src/__tests__`. [Answer source](/home/gust/code/karen-website-dev/server/src/services/faq/faqAnswerService.ts).
 
 ### R11 Maintain code backed product facts separately from support advice

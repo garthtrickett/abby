@@ -102,9 +102,21 @@ under the two-playback requirement. A separate fresh fallback call passed with
 a signed ringing callback and one independently observed child leg. The test
 webhook was restored after both windows, and their temporary services and
 databases were removed. These results do not establish clinic acceptance or
-speech quality. The interruption caller now waits briefly after its matched
-final callback so the replacement playback can complete; it still needs a new
-real-carrier pass before interruption is claimed.
+speech quality. The interruption caller now waits 20 seconds after its matched
+final callback so the replacement playback can complete.
+
+A fresh interruption-only carrier call on merged main `6b0ce9fe` then passed the
+unchanged gate: two recognized turns, two completed playbacks, one interruption,
+one acknowledged clear, a completed caller and the matching inbound target leg.
+The earlier one-playback result remains unverified. The saved webhook was
+restored and independently read back; temporary listeners, tunnel and the owned
+disposable PostgreSQL container were removed. All 772 serving-output hashes
+were reverified after the call. Only the intended scripted-caller module differs
+from the earlier qualified main artifact. Private receipts are retained under
+`~/.local/state/abby-carrier-gateway-20261103/`, with the current summary in
+`rehearsal-window-sequence-v11.json`. These selected carrier passes do not
+qualify noisy speech, general clinic conversations, keypad workflows or staff
+acceptance.
 
 For a fallback probe, configure the restricted target's
 `ABBY_REHEARSAL_FALLBACK_CALLBACK_URL` to a fresh HTTPS
