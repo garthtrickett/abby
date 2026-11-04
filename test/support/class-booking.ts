@@ -1,4 +1,4 @@
-import { visibleCaseRows, visibleArchivedCase } from "./class-pass-history.ts";
+import { classPassHistoryFixture, visibleCaseRows, visibleArchivedCase } from "./class-pass-history.ts";
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -45,11 +45,8 @@ export async function classBookingFixture(options: { passes?: boolean; fetchArou
   const classPermission = { allows: options.financialFor ? declareClinikoRequestCost(permit, costBinding, 0) : permit };
   const recalls: Record<string, unknown>[] = [], writes: Record<string, unknown>[] = [], cancellations: Record<string, unknown>[] = [];
   const lifetime = new AbortController(), path = join(f.folder, "class.json");
-  const caseId = "811222333444555666", entitlementRef = "synthetic-private-pass-entitlement";
-  const caseRows: Record<string, unknown>[] = [{ ...classAttendee("601", "81", verificationCanaries[2]!), arrived: true, patient_case: classLink("patient_cases", caseId) }];
-  const caseRecord: Record<string, unknown> = { id: caseId, ...classLink("patient_cases", caseId), patient: classLink("patients", verificationCanaries[2]!), attendee_ids: ["601"],
-    max_sessions: 2, include_cancelled_attendees: false, include_dna_attendees: false, issue_date: "2026-10-01", expiry_date: "2026-10-31",
-    closed_at: null, archived_at: null, name: "private-pass-name-canary", notes: "private-pass-notes-canary", referral: "private-pass-referral-canary" };
+  const { caseId, record: caseRecord, rows: caseRows } = classPassHistoryFixture(verificationCanaries[2]!);
+  const entitlementRef = "synthetic-private-pass-entitlement";
   let passAllowed = true, passSelection: ClassPassSelection = { patientCaseId: caseId, entitlementRef }, onCaseRead = (_path: string) => {};
   const passQueries: ClassPassAuthorityQuery[] = [];
   const selectPass: ClassPassAuthority["select"] = async query => {

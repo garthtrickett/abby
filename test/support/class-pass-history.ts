@@ -1,6 +1,20 @@
 import assert from "node:assert/strict";
 import { classAttendee, classLink } from "./class-attendance.ts";
 
+/** One already-used session and one remaining place in a synthetic native pass.
+ * Callers own each returned record/history; no state is shared between cases. */
+export function classPassHistoryFixture(patientId: string) {
+  const caseId = "811222333444555666";
+  const rows: Record<string, unknown>[] = [{ ...classAttendee("601", "81", patientId), arrived: true,
+    patient_case: classLink("patient_cases", caseId) }];
+  const record: Record<string, unknown> = { id: caseId, ...classLink("patient_cases", caseId),
+    patient: classLink("patients", patientId), attendee_ids: ["601"], max_sessions: 2,
+    include_cancelled_attendees: false, include_dna_attendees: false, issue_date: "2026-10-01", expiry_date: "2026-10-31",
+    closed_at: null, archived_at: null, name: "private-pass-name-canary", notes: "private-pass-notes-canary",
+    referral: "private-pass-referral-canary" };
+  return { caseId, record, rows };
+}
+
 /** A native fixture default may hide each inactive state independently. Keep
  * this provider model independent of the reader's query construction. */
 export function visibleCaseRows(url: URL, rows: Record<string, unknown>[]) {

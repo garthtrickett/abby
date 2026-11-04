@@ -1,5 +1,33 @@
 # Execution progress and evidence
 
+## Approved-pass class creation crash recovery, 4 November 2026
+
+The booking plan's process-loss matrix now has local evidence for an approved
+native class pass, alongside the four existing ordinary-class cases. Actual
+owners are killed during the review response, after review/preparation, during
+the attendee send and after its acknowledgement. A fresh reader receives only
+the configured provider account, clinic scope and synthetic endpoint. It
+rediscovers the native pass review without the original patient, case, marker
+or send context and makes no provider mutation. The exact reviewed case,
+one-used-of-two entitlement and native attendee association are checked privately;
+discovery neither restores a session nor proves payment or patient notification.
+
+All eight process cases and the facts guard pass with a real PostgreSQL 180
+account budget, full SQL/backup/output canaries and owned cleanup. The pass
+worker plays any required wait notice, waits real time while renewing the live
+session, then obtains another affirmative turn. It does not refill the budget
+by changing the fixture clock or extend proof/offer expiry. The new pass-only
+sender/case bounds are 90s/150s to cover that real wait; existing ordinary 35s/75s
+bounds and production deadlines are unchanged. The Node scope peaked at
+221,626,368 bytes with no OOM events; its separate PostgreSQL cap was 512 MiB.
+
+Only tests, a shared synthetic pass fixture and reviewed documentation change.
+Current serving emission, shared-fixture preservation, final review, own-head CI,
+actual-main delivery and clinic/provider acceptance retain their separate gates.
+This closes one local evidence omission, not the whole booking matrix, gap 10
+or the execution goal. See [the process cases](../test/cliniko/class-booking-recovery-process.test.ts)
+and [the original requirements](PROVIDER_ACKNOWLEDGED_BOOKING_PLAN.md#required-verification).
+
 ## Separate streamed fixed FFT speech comparison, 31 October 2026
 
 One fixed external FFT + unchanged Nova-3/public-vocabulary cohort completed all eighteen original noisy recognitions and fails the unchanged gate: six critical misses, 22.73% WER and 263 ms final p95, with no provider failures, empty/truncated output or delayed finals. NS-005 and NS-006 remain critical in every repeat. Separate cohorts do not establish statistical significance or equivalence to Krisp/Vapi.
