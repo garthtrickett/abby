@@ -24,17 +24,21 @@ const { commandProgress } = await import(new URL("src/reference/command-progress
 const { ok } = await import(new URL("src/core/model.js", emitted).href) as typeof import("../../src/core/model.ts");
 const { CallerVerificationSession } = await import(new URL("src/standalone/caller-verification-session.js", emitted).href) as typeof import("../../src/standalone/caller-verification-session.ts");
 
-for (const { outcome, callerFirst, enquiryFirst } of [
-  { outcome: "accepted", callerFirst: false, enquiryFirst: false },
-  { outcome: "nativePermissionWithdrawn", callerFirst: false, enquiryFirst: false },
-  { outcome: "accepted", callerFirst: true, enquiryFirst: false },
-  { outcome: "accepted", callerFirst: false, enquiryFirst: true },
-  { outcome: "nativePermissionWithdrawn", callerFirst: false, enquiryFirst: true },
-  { outcome: "accepted", callerFirst: true, enquiryFirst: true },
-  { outcome: "subjectOmitted", callerFirst: false, enquiryFirst: false },
-  { outcome: "subjectAmbiguous", callerFirst: false, enquiryFirst: false },
+for (const { outcome, callerFirst, enquiryFirst, enquirySecond } of [
+  { outcome: "accepted", callerFirst: false, enquiryFirst: false, enquirySecond: false },
+  { outcome: "nativePermissionWithdrawn", callerFirst: false, enquiryFirst: false, enquirySecond: false },
+  { outcome: "accepted", callerFirst: true, enquiryFirst: false, enquirySecond: false },
+  { outcome: "accepted", callerFirst: false, enquiryFirst: true, enquirySecond: false },
+  { outcome: "nativePermissionWithdrawn", callerFirst: false, enquiryFirst: true, enquirySecond: false },
+  { outcome: "accepted", callerFirst: true, enquiryFirst: true, enquirySecond: false },
+  { outcome: "subjectOmitted", callerFirst: false, enquiryFirst: false, enquirySecond: false },
+  { outcome: "subjectAmbiguous", callerFirst: false, enquiryFirst: false, enquirySecond: false },
+  { outcome: "accepted", callerFirst: false, enquiryFirst: false, enquirySecond: true },
+  { outcome: "accepted", callerFirst: true, enquiryFirst: false, enquirySecond: true },
+  { outcome: "nativePermissionWithdrawn", callerFirst: false, enquiryFirst: false, enquirySecond: true },
+  { outcome: "relatedPermissionWithdrawn", callerFirst: true, enquiryFirst: false, enquirySecond: true },
 ] as const)
-test(`actual emitted signed ${callerFirst ? "native-self" : "related"}${enquiryFirst ? " enquiry" : ""} then ${outcome.startsWith("subject") ? "unresolved-related" : callerFirst ? "related" : "native-self"} booking: ${outcome}`, { timeout: 240_000 }, async context => {
+test(`actual emitted signed ${callerFirst ? "native-self" : "related"}${enquiryFirst ? " enquiry" : ""} then ${outcome.startsWith("subject") ? "unresolved-related" : callerFirst ? "related" : "native-self"} ${enquirySecond ? "enquiry" : "booking"}: ${outcome}`, { timeout: 240_000 }, async context => {
   const subjectFault = outcome === "subjectOmitted" || outcome === "subjectAmbiguous";
   const admin = connectPostgres(adminUrl), name = `abby_test_related_self_${randomUUID().replaceAll("-", "").slice(0, 24)}`;
   const restoreName = `${name}_restored`, target = new URL(adminUrl), restoreTarget = new URL(adminUrl);
@@ -50,7 +54,7 @@ test(`actual emitted signed ${callerFirst ? "native-self" : "related"}${enquiryF
     const original = await db.selectFrom("outbound_effect_barriers").selectAll().execute();
     canary = await captureScopedSqlVerificationCanaryWindow(db, target.toString());
     const budget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-session-au5", maxPerMinute: 180 });
-    f = await relatedSelfTaskSequenceFixture({ budget, subjectIds: ["583746192837465", "683746192837465"], ...(enquiryFirst ? { enquiry: true as const } : {}) }); f.flow.dispose();
+    f = await relatedSelfTaskSequenceFixture({ budget, subjectIds: ["583746192837465", "683746192837465"], ...(enquiryFirst || enquirySecond ? { enquiry: true as const } : {}) }); f.flow.dispose();
     if (subjectFault) {
       const first = f.base.r.patients.get(f.base.r.subjectIds[0])!, second = f.base.r.patients.get(f.base.r.subjectIds[1])!;
       second.first_name = first.first_name; second.last_name = first.last_name;
@@ -162,8 +166,8 @@ test(`actual emitted signed ${callerFirst ? "native-self" : "related"}${enquiryF
       assert.equal(serving.writeRequests.length, 1); assert.equal(fixture.base.f.recalls.length, 1);
       assert.equal(Object.keys((await serving.state()).actions).length, 1);
     } else {
-      if (callerFirst) await verifyRelated(1);
-      else { await verifyCaller(2); assert.equal(firstOwner!.closed, true); }
+      if (callerFirst) await verifyRelated(1, enquirySecond ? "appointments.read" : "book");
+      else { await verifyCaller(2, enquirySecond ? "appointments.read" : "book"); assert.equal(firstOwner!.closed, true); }
       if (first) {
         if (first.mutation.request.kind !== "book") throw Error("wrong original operation");
         assert.equal((await serving.flow.resolveBooking(f.base.f.scope, first.mutation.request.patient.verificationRef,
@@ -172,12 +176,30 @@ test(`actual emitted signed ${callerFirst ? "native-self" : "related"}${enquiryF
         assert.ok(firstRead); assert.equal((await serving.flow.publicIntentContext())?.lastAction, null);
         assert.equal(serving.writes.length, 0);
       }
-      const second = await book(outcome === "nativePermissionWithdrawn" ? () => fixture.denySelf() : undefined);
-      if (outcome === "accepted") {
-        assert.equal(second.status, "committed"); assert.equal(serving.writes.length, priorWrites + 1);
-        assert.equal(serving.writeRequests[priorWrites]!.body.patient_id, callerFirst ? f.base.r.subjectIds[0] : verificationCanaries[2]);
-        if (first) { assert.notEqual(first.key, second.key); assert.notEqual(first.hostRef, second.hostRef); }
-      } else { assert.notEqual(second.status, "committed"); assert.equal(serving.writes.length, priorWrites); }
+      if (enquirySecond) {
+        const priorReads = fixture.enquiryPatientIds.length;
+        if (outcome === "nativePermissionWithdrawn") fixture.denySelf();
+        if (outcome === "relatedPermissionWithdrawn") fixture.base.revokeSubject();
+        await serving.turn("Appointments");
+        const read = (await serving.state()).appointmentReads.at(-1); assert.ok(read);
+        if (outcome === "accepted") {
+          assert.equal(read.status, "shown"); assert.equal(read.shownCount, 1);
+          assert.equal(fixture.enquiryPatientIds.at(-1), callerFirst ? fixture.base.r.subjectIds[0] : verificationCanaries[2]);
+        } else {
+          assert.equal(read.status, "failed");
+          assert.equal(fixture.enquiryPatientIds.length, priorReads, "withdrawn proof must not reach the appointment reader");
+        }
+        await serving.mark();
+        assert.equal(serving.writes.length, priorWrites); assert.equal(serving.writeRequests.length, priorWrites);
+        assert.equal(Object.keys((await serving.state()).actions).length, 1);
+      } else {
+        const second = await book(outcome === "nativePermissionWithdrawn" ? () => fixture.denySelf() : undefined);
+        if (outcome === "accepted") {
+          assert.equal(second.status, "committed"); assert.equal(serving.writes.length, priorWrites + 1);
+          assert.equal(serving.writeRequests[priorWrites]!.body.patient_id, callerFirst ? f.base.r.subjectIds[0] : verificationCanaries[2]);
+          if (first) { assert.notEqual(first.key, second.key); assert.notEqual(first.hostRef, second.hostRef); }
+        } else { assert.notEqual(second.status, "committed"); assert.equal(serving.writes.length, priorWrites); }
+      }
     }
     if (first) {
       assert.deepEqual((await serving.state()).actions[first.key], receipt);
