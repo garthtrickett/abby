@@ -137,6 +137,34 @@ test("vocabulary revocation while Nova-3 flushes discards the transcript and clo
 });
 
 const actor = { actorRef: "admin", role: "clinicAdmin" as const, scope };
+for (const implementation of ["source", "actual emitted"] as const) {
+test(`${implementation} vocabulary save preserves owner withdrawal during final authentication`, async () => {
+  const Review = implementation === "source" ? ClinicVocabularyReview : (await import(new URL(
+    "../../dist/runtime/src/standalone/clinic-vocabulary-review.js", import.meta.url).href) as
+    typeof import("../../src/standalone/clinic-vocabulary-review.ts")).ClinicVocabularyReview;
+  for (const scenario of ["approval", "membership", "catalogue", "permissions"] as const) {
+    const f = await fixture();
+    try {
+      const editor = new Review(f.config), proposed = await editor.propose(actor, signal()); assert.ok(proposed.ok);
+      let accepted = "";
+      const saved = await editor.save(actor, { expectedBinding: proposed.value.expectedBinding,
+        expectedRevision: proposed.value.expectedRevision, catalogueHash: proposed.value.catalogueHash,
+        manualPublicTerms: ["Published clinic alias"], selectedTerms: [] }, signal(), async () => {
+        if (scenario === "approval") await f.replace({ enabled: false });
+        if (scenario === "membership") f.revoke();
+        if (scenario === "catalogue") f.changeInventory({ ...f.inventory, version: "withdrawn-during-authentication" });
+        if (scenario === "permissions") await chmod(f.path, 0o644);
+        accepted = await readFile(f.path, "utf8");
+        return true;
+      });
+      assert.equal(saved.ok, false, scenario);
+      assert.equal(await readFile(f.path, "utf8"), accepted, scenario);
+      assert.deepEqual(await readdir(join(f.path, "..")), ["public-vocabulary.json"], "owned temporary file and lock removed");
+    } finally { await f.close(); }
+  }
+});
+}
+
 test("owner review persists manual edits and removals and rejects stale saves after a catalogue refresh", async () => {
   const f = await fixture();
   try {

@@ -71,7 +71,9 @@ terms, so an old editor cannot revive an earlier revision.
 Application writers serialize using an exclusive owner-file review lock, then
 recheck the saved binding, current owner membership and source and current request authority before atomic
 replacement. Only one competing review can commit. A stale or malformed save
-preserves the accepted file. A crash-left lock is refused; reconcile the actual
+preserves the accepted file. Owner approval, membership, catalogue and permissions
+are rechecked after the final asynchronous sign-in lookup, so a withdrawal during
+that lookup cannot be overwritten by the review. A crash-left lock is refused; reconcile the actual
 writer and file before operator cleanup. There is no automatic lock stealing,
 retry, rollback or historical evidence rewriting. All application writers must
 use this service; a raw operator edit invalidates existing captured bindings and

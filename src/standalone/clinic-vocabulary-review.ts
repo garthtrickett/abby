@@ -80,11 +80,13 @@ export class ClinicVocabularyReview {
       temporary = config.path + ".review-" + randomUUID();
       const output = await open(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
       try { await output.writeFile(bytes); await output.sync(); } finally { await output.close(); }
+      // Authentication may suspend independently of the owner/source reads.
+      // Recheck the captured approval after it so a withdrawal cannot be revived.
+      if (stillAuthorized && !await awaitUntilAbort(Promise.resolve().then(stillAuthorized), signal)) return unavailable();
       const again = await found.value.captured.reviewState(signal);
       if (!again.ok) return again;
       const fresh = proposeClinicVocabulary(again.value.catalogue, again.value.approval.vocabulary);
       if (!fresh.ok || fresh.value.catalogueHash !== input.catalogueHash || signal.aborted) return err({ kind: "staleVocabulary" });
-      if (stillAuthorized && !await awaitUntilAbort(Promise.resolve().then(stillAuthorized), signal)) return unavailable();
       if (signal.aborted) return unavailable();
       await rename(temporary, config.path); temporary = undefined;
       const folder = await open(parent, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
