@@ -306,7 +306,7 @@ dump/restore and unrelated barrier retention. Only the expected opaque memo excl
 added for an authorized dispatched memo; private contact/patient/proof/call/file-path,
 memo content, source root, MAC and key canaries remain excluded.
 
-All 28 cases comprise 13 unchanged guardian-file preservation cases and 15 memo cases.
+All 28 cases comprise 13 retained guardian-file preservation cases and 15 memo cases.
 Affected graph strict TypeScript and a fresh 780-file serving build passed; the first
 local whole-project compiler exceeded its imposed heap and is not a strict pass. Final
 exact-head whole-project CI, review, normal delivery and actual-main qualification
@@ -317,3 +317,26 @@ changes. The memo native endpoint is synthetic. Real clinic record provisioning,
 authority, template/author/viewer/retention permissions, staff/provider/speech
 acceptance and activation remain independent; there is no new attachment or note
 operation.
+
+## Guardian memo source-marker review refinement, 4 November 2026
+
+Independent review found that clinical source-marker canaries came only from memo POSTs,
+omitting native source markers in the nine wrong-patient, withdrawn-permission and
+clinically uncertain memo cases. The driver now derives and requires the actual native
+booking or owned-review marker whenever the clinical write occurs, includes it directly
+in every applicable public, all-column SQL, unfiltered dump and restored-database scan,
+and checks any dispatched memo against that same source. A memo POST is no longer needed
+to test clinical source privacy.
+
+Corrected affected strict TypeScript and all 28 signed SQL cases pass. The 13 existing
+guardian-file cases are retained; their accepted clinical writes receive the same
+stronger source canaries. All 780 serving TypeScript inputs and emitted artifacts remain
+exact to the earlier fresh build; this correction requires no new serving emission.
+Independent specification and standards rechecks found no residual source finding.
+Original runs and the original review finding remain preserved.
+
+This remains test-only qualification with unchanged request budgets, deadlines,
+independent grants and clinical-result rules. Final metadata review, new exact-head
+whole-project CI, normal delivery and actual-main qualification remain separate. Real
+clinic, provider, staff, speech, legal authority, viewer/author/retention and activation
+acceptance are unchanged.

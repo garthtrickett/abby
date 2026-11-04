@@ -188,6 +188,10 @@ test(`actual emitted signed guardian file records ${operation}: ${outcome}${memo
       assert.equal(f.reads.some(raw => new URL(raw).pathname === "/v1/individual_appointments"), false);
       assert.equal(serving.writes.length, 0);
     }
+    const sourceRef = serving.writeRequests.length === 0 ? undefined : operation === "book"
+      ? /^Abby booking ([0-9a-f-]+)$/.exec(String(serving.writeRequests[0]!.body.notes))?.[1]
+      : resultValue(decodeClinikoReview(f.base.f.recalls[0]!.notes)).marker;
+    if (serving.writeRequests.length > 0) assert.ok(sourceRef);
     if (memoOutcome) {
       assert.ok(memo);
       if (memoOutcome === "clinicalUncertain") {
@@ -202,9 +206,7 @@ test(`actual emitted signed guardian file records ${operation}: ${outcome}${memo
           assert.equal(decoded.patientId, authorityRecord.subjectPatientId); assert.notEqual(decoded.patientId, identityRecord.contactId);
           assert.notEqual(decoded.patientId, verificationCanaries[2]); assert.equal(decoded.direction, "inbound");
           assert.equal(decoded.outcome.kind, operation === "book" ? "bookingConfirmed" : operation === "cancel" ? "cancellationObserved" : "reschedulingObserved");
-          const source = operation === "book" ? /^Abby booking ([0-9a-f-]+)$/.exec(String(serving.writeRequests[0]!.body.notes))?.[1]
-            : resultValue(decodeClinikoReview(f.base.f.recalls[0]!.notes)).marker;
-          assert.ok(source); assert.equal(decoded.sourceActionRef, source);
+          assert.equal(decoded.sourceActionRef, sourceRef);
           const binding = administrativeMemoRecordBinding(memo.config.native, memo.authentication)!;
           const own = (await sql<(typeof original)[number]>`select * from outbound_effect_barriers
             where tenant_id = ${f.base.f.scope.tenantId} and effect_ref = ${decoded.actionRef}::uuid`.execute(db)).rows;
@@ -228,6 +230,7 @@ test(`actual emitted signed guardian file records ${operation}: ${outcome}${memo
     assert.equal(f.reads.some(path => path.endsWith(`/patients/${verificationCanaries[2]}`)), false, "guardian caller never needs a patient identity");
     const values = [f.identityPath, f.authorityPath, ...verificationCanaries, f.flowConfig.cliniko.apiKey, identityRecord.contactId, identityRecord.recordRef, identityRecord.recordVersion,
       authorityRecord.authorityRef, authorityRecord.subjectPatientId, f.state.guardianEmail, ...serving.privateTranscripts,
+      ...(sourceRef ? [sourceRef] : []),
       ...(memo ? [memo.key.toString("hex"), memo.key.toString("base64"), ...memo.posts.flatMap(row => {
         const decoded = resultValue(decodeAdministrativeMemo(row.content));
         return [String(row.content), JSON.stringify(row), decoded.sourceActionRef, decoded.authentication];
