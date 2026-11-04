@@ -5737,3 +5737,39 @@ The optional [read-only diagnostic](QUEUE_WORK_FRESHNESS.md) distinguishes actua
 ### Review-corrected R23 freshness boundaries
 
 The current local correction passes45 behavioral controls plus both metadata checks, whole strict TypeScript,743 fixture-inclusive outputs with all741 prior outputs exact, and nine actual user-manager OS/process observations with synthetic commands. It adds a separate conservative suspend-inclusive age bound while keeping monotonic event ordering; uncertainty cannot certify recent work. Actual recovery and an unchanged completion aged beyond the full60s+210s allowance are observed. The first live-memory admission refusal and incomplete native age fixture are retained, alongside the earlier inventory and activation-order failures. Final docs-only metadata, both fixed-head reviews and ordinary own/main delivery remain gates. This neither installs monitoring nor closes clinic/provider/source/restore/retention/acoustic/human acceptance or the original thirteen gaps. See [current scope and limits](QUEUE_WORK_FRESHNESS.md#review-corrections-and-current-qualification).
+
+## Related-change privacy canary qualification, 4 November 2026
+
+A full PR run on the documentation-only carrier candidate failed one existing
+signed related-patient reschedule privacy assertion: 7,394 PostgreSQL cases
+passed, one failed and one existing case was skipped. Its raw log did not identify
+the private value, so its historical identity remains unknown. A controlled
+signed reschedule then reproduced the same assertion after a committed change
+by making a challenge code equal a value already present in public state.
+Neither failure is rewritten as a pass.
+
+The correction changes only test fixtures and their source controls. Each owned
+representative-change case captures legitimate database numbers before issuing
+any challenge and rejects prospective codes matching its prior public state.
+The actual registered-email issuer, private input, independent caller/patient
+authority, played consent, exact target and write count remain. Issued secrets
+cannot be added to exclusions. Original public/all-column privacy checks are
+retained, and a full unfiltered backup scan is added. The exact disposable
+container supplies its own dump client; text-mode CI gains no host PostgreSQL
+client dependency. Unrelated test workers cannot install this sampler.
+
+The new forced-collision case chooses a bounded synthetic provider identity
+whose actual public call hash contains an eligible code. It forces that draw
+through the real issuer and proves rejection before delivery, followed by the
+unchanged clinical and privacy assertions. The first corrective run passed the
+three original journeys and both guards but failed this new case's random-hash
+precondition (5/6); that failure remains recorded. Its deterministic successor
+passes all six selected controls, zero skips. The two retained direct-SQL tests
+also pass: schema/unrelated-row collisions are rejected, and an actual
+post-issue leak remains visible in every-column and full-backup checks.
+
+The affected inherited strict graph passes. Owned databases and socket folders
+were removed after natural completion. This is local source qualification;
+whole-project hosted checks, review and normal delivery remain required.
+Production source and provider settings are unchanged; real clinic, acoustic
+and carrier acceptance are not supplied by these synthetic cases.

@@ -5,6 +5,7 @@ import type { Kysely } from "kysely";
 import type Database from "../../src/storage/generated/Database.ts";
 import { assertDirectSqlVerificationCanaryContext, distinctFromClock, installDirectSqlVerificationCanaries, installScopedDirectSqlVerificationCanaries } from "./verification-code-canary.ts";
 import type { CanaryClockWindow } from "./verification-code-canary.ts";
+import { assertWorkflowVerificationCanaryContext, installScopedWorkflowVerificationCanaries } from "./verification-code-canary.ts";
 
 /** Snapshot BEFORE any fixture challenge. Schema constants and existing
  * legitimate rows can otherwise equal a six-digit code in the full SQL backup.
@@ -24,13 +25,30 @@ export async function captureSqlVerificationCanaryExclusions(db: Kysely<Database
   const target = new URL(connectionString), expected = new URL(process.env.DATABASE_URL!);
   expected.pathname = target.pathname;
   assert.ok(target.href === expected.href, "Canary snapshot must use the isolated fixture server and credentials");
+  return captureExistingSqlNumbers(db, connectionString);
+}
+
+/** The owner supplies its exact container's unfiltered dump, before any code
+ * is issued. No host pg_dump version or ambient server is selected here. */
+export async function captureScopedWorkflowVerificationCanaryWindow(db: Kysely<Database>, connectionString: string,
+  snapshot: () => Promise<string>): Promise<ReturnType<typeof installScopedWorkflowVerificationCanaries>> {
+  assertWorkflowVerificationCanaryContext(connectionString);
+  const excluded = await captureExistingSqlNumbers(db, connectionString, snapshot);
+  return installScopedWorkflowVerificationCanaries(connectionString, excluded);
+}
+
+async function captureExistingSqlNumbers(db: Kysely<Database>, connectionString: string,
+  ownedSnapshot?: () => Promise<string>): Promise<ReadonlySet<string>> {
+  const target = new URL(connectionString);
   const current = await sql<{ name: string }>`select current_database() as name`.execute(db);
   assert.ok(current.rows.length === 1 && current.rows[0]!.name === decodeURIComponent(target.pathname.slice(1)),
     "Canary snapshot must use the exact connected fixture database");
   const rows = await db.selectFrom("cliniko_request_budgets").select("sent_at_ms").limit(20001).execute();
   assert.ok(rows.length <= 20000, "Synthetic prior-clock snapshot exceeds its declared bound");
-  const snapshot = execFileSync("pg_dump", [connectionString, "--no-owner", "--no-privileges"],
+  const snapshot = ownedSnapshot ? await ownedSnapshot() : execFileSync("pg_dump", [connectionString, "--no-owner", "--no-privileges"],
     { timeout: 10000, maxBuffer: 8000000 }).toString();
+  assert.ok(typeof snapshot === "string" && Buffer.byteLength(snapshot) <= 8_000_000,
+    "Synthetic pre-challenge snapshot exceeds its declared bound");
   const excluded = new Set<string>();
   for (const text of [snapshot, ...rows.map(row => JSON.stringify(row.sent_at_ms))]) {
     for (const part of text.matchAll(/[0-9]{6,}/g)) {
