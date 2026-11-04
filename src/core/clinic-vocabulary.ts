@@ -10,7 +10,7 @@ export type PublicVocabularyItem = Readonly<{
   ref: string; kind: "service" | "practitioner" | "location" | "specialty"; publicText: string;
 }>;
 /** Trusted host inventory, never a caller/model-provided object. Completeness and
- * publication approval are independent assertions; neither follows from Cliniko membership. */
+ * publication approval are independent assertions; neither follows from catalogue membership. */
 export type PublicVocabularyCatalogue = Readonly<{
   scope: LocationScope; version: string; complete: true;
   items: readonly PublicVocabularyItem[]; approvedPublicRefs: readonly string[];
