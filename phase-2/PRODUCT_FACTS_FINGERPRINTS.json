@@ -1,7 +1,7 @@
 {
   "verifiedDate": "2026-11-04",
   "factsFile": "phase-2/PRODUCT_FACTS.md",
-  "factsSha256": "b5d89a941b3823f0da048665055a5b922ec14fb1cba121a8b96b4525e1322515",
+  "factsSha256": "a655280822e705c380d942cfc0714b79db2efdc92bac58451ecb12272729e85b",
   "sources": {
     ".github/workflows/text-contract.yml": "20f47909d711b7a7d2b3916a8ef0756345b414dff225184989cd8056b5b6179b",
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
@@ -18,7 +18,7 @@
     "eval/baselines/deepgram-phonecall-noise-20261023-v1.json": "d45c89ba174917c07d893c6ce17ccdf7aab1d890746c725ceada8838d74b3d3c",
     "eval/baselines/deepgram-rnnoise-clinic-noise-20261024-v1.json": "6b87bcbf559d61415235de365e8d5d3f2e147b4272af1204500133ba4f73c0f6",
     "eval/baselines/synthetic-speech-current-20261023-v1.json": "580a8a0ce39ec937a490a495022ba88fd2d7f3a4def0250c761d1f491dd71140",
-    "phase-1/CARRIER_WIRE_FINDINGS.md": "726559e6f19b9050d8022feda248b9bb68501e440613066ff0b75e2b5467ca0e",
+    "phase-1/CARRIER_WIRE_FINDINGS.md": "3aa52b5ddd00c8104632fe688287f887a1e707e1d373ffb9e8e72fd9b7e7e8cd",
     "phase-1/DEEPGRAM_TRANSCRIPTION.md": "412156102fd03217736bc06b72a58bfbd6bcbd34ea5ecf34aa3bd103363d9170",
     "phase-1/MEDIA_STARTUP_BURSTS.md": "736701834c3e2f5e5c8211c37f0cab00f33cd464d9985a48c245e489b457862c",
     "phase-1/OPENAI_REALTIME_TRANSCRIPTION.md": "49651d21fa207fb842c36b54ebd7d9d82052ef197c1105a3e280f67b000bde59",
