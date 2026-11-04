@@ -5,6 +5,7 @@ import { AvailabilitySetupPanel } from "./availability-setup-panel.ts";
 import { SpeechGatePanel } from "./speech-gate-panel.ts";
 import { OperationalDailyPanel } from "./operational-daily-panel.ts";
 import { GreetingSetupPanel } from "./greeting-setup-panel.ts";
+import { ClinicVocabularyPanel } from "./clinic-vocabulary-panel.ts";
 
 const root = document.getElementById("availability-setup");
 if (!root) throw new Error("availability setup root missing");
@@ -26,3 +27,6 @@ void new AutomationSetupPanel(automationRoot, new FetchDashboardPort()).load();
 const voiceRoot = document.getElementById("voice-setup");
 if (!voiceRoot) throw new Error("voice setup root missing");
 void new VoiceSetupPanel(voiceRoot, new FetchDashboardPort()).load();
+
+const vocabularyRoot = document.getElementById("clinic-vocabulary");
+if (vocabularyRoot) void new ClinicVocabularyPanel(vocabularyRoot).load();

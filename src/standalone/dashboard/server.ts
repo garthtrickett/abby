@@ -13,9 +13,11 @@ import { validNotificationKind, validNotificationOwner } from "../../core/notifi
 import { validVoiceSettingValue } from "../../core/voice-profile.ts";
 import { publicSpeechGateStatus } from "../speech-gate-public-status.ts";
 import { ClinikoPatientCorrectionRecovery } from "../cliniko-patient-correction-recovery.ts";
+import type { ClinicVocabularyReview } from "../clinic-vocabulary-review.ts";
+import { clinicVocabularyHttp } from "./clinic-vocabulary-http.ts";
 
 const maxCommandBytes = 24_000;
-const document = (signOutPath?: string) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body>${signOutPath ? `<nav><a href="${signOutPath}">Sign out</a></nav>` : ""}<main><div id="app"></div><div id="availability-setup"></div><div id="greeting-setup"></div><div id="voice-setup"></div><div id="automation-setup"></div><div id="speech-gate"></div><div id="operational-daily"></div></main><script type="module" src="/app.js"></script></body></html>`;
+const document = (signOutPath?: string, vocabulary = false) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Abby clinic dashboard</title><link rel="stylesheet" href="/style.css"></head><body>${signOutPath ? `<nav><a href="${signOutPath}">Sign out</a></nav>` : ""}<main><div id="app"></div><div id="availability-setup"></div><div id="greeting-setup"></div><div id="voice-setup"></div>${vocabulary ? `<div id="clinic-vocabulary"></div>` : ""}<div id="automation-setup"></div><div id="speech-gate"></div><div id="operational-daily"></div></main><script type="module" src="/app.js"></script></body></html>`;
 const setupCommands = new Set([
   "clinic.availability.businesses.list.v1", "clinic.availability.practitioners.list.v1",
   "clinic.availability.types.list.v1", "clinic.availability.selection.inspect.v1",
@@ -84,6 +86,8 @@ export type HostDashboardIdentity = Readonly<{
   gatewayFor: (actor: HostActor) => CommandGateway | Promise<CommandGateway>;
   /** Optional owner report reader; the response is reduced to fixed aggregate fields. */
   readSpeechGate?: () => Promise<unknown>;
+  /** Optional current-owner public-term review; it grants no speech quality or activation. */
+  vocabularyReviewFor?: (actor: HostActor) => ClinicVocabularyReview | Promise<ClinicVocabularyReview>;
   /** Optional privileged account recovery; identity and investigation/quiescence authority are host-owned. */
   confirmationResendRecoveryFor?: (actor: HostActor, request: IncomingMessage) => ClinikoConfirmationResendRecovery | Promise<ClinikoConfirmationResendRecovery>;
   classMovementRecoveryFor?: (actor: HostActor, request: IncomingMessage) => ClinikoClassMoveRecovery | Promise<ClinikoClassMoveRecovery>;
@@ -118,6 +122,7 @@ export async function createHostAuthenticatedDashboardRequestHandler(identity: H
         !/^\/[A-Za-z0-9/_-]+$/.test(identity.signOutPath) || identity.signOutPath.startsWith("//"))) ||
       (identity.greetingTextValidator !== undefined && typeof identity.greetingTextValidator !== "function") ||
       (identity.readSpeechGate !== undefined && typeof identity.readSpeechGate !== "function") ||
+      (identity.vocabularyReviewFor !== undefined && typeof identity.vocabularyReviewFor !== "function") ||
       (identity.classMovementRecoveryFor !== undefined && typeof identity.classMovementRecoveryFor !== "function") ||
       (identity.correctionRecoveryFor !== undefined && typeof identity.correctionRecoveryFor !== "function") ||
       (identity.confirmationResendRecoveryFor !== undefined && typeof identity.confirmationResendRecoveryFor !== "function")) {
@@ -141,6 +146,19 @@ export async function createHostAuthenticatedDashboardRequestHandler(identity: H
       const gateway = await identity.gatewayFor(actor);
       if (!(gateway instanceof CommandGateway) || !gateway.matchesActor(actor)) {
         return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+      }
+      if (new URL(request.url ?? "/", "http://localhost").pathname === "/api/clinic-vocabulary") {
+        if (!identity.vocabularyReviewFor) return json(response, 404, { ok: false, error: { kind: "notFound" } });
+        if (actor.role !== "clinicAdmin" || request.method === "POST" && !acceptsCommandOrigin(request, boundOrigin.origin)) {
+          return json(response, 403, { ok: false, error: { kind: "forbidden" } });
+        }
+        const review = await identity.vocabularyReviewFor(actor);
+        return clinicVocabularyHttp({ request, actor, review, resolveActor: () => identity.resolveActor(request),
+          readBody: () => body(request), reply: (status, value) => json(response, status, value) });
+      }
+      if (request.method === "GET" && new URL(request.url ?? "/", "http://localhost").pathname === "/" &&
+          identity.vocabularyReviewFor && actor.role === "clinicAdmin") {
+        return asset(response, "text/html; charset=utf-8", document(identity.signOutPath, true));
       }
       return handle(request, response, gateway, bundle, stylesheet, boundOrigin.origin, identity.surface,
         identity.readSpeechGate, actor.role === "clinicAdmin", identity.greetingTextValidator, identity.signOutPath,

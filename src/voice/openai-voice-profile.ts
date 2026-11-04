@@ -3,7 +3,7 @@ import { VOICE_LOCALES as locales, VOICE_PRESENTATION_VERSION } from "../core/vo
 import { createHash } from "node:crypto";
 import { ok } from "../core/model.ts";
 import type { Result } from "../core/model.ts";
-import { validVoiceProfile, validVoiceRef, validVoiceScope } from "../core/voice-profile.ts";
+import { sameVoiceScope, validVoiceProfile, validVoiceRef, validVoiceScope } from "../core/voice-profile.ts";
 import type { VoiceClinicScope, VoiceProfile } from "../core/voice-profile.ts";
 import type { ReadinessFailure } from "../core/readiness.ts";
 import { voiceProfileUnready } from "../core/voice-profile-registry.ts";
@@ -27,7 +27,7 @@ export type OpenAIVoiceProfileConfig = Readonly<{
   socketFactory?: OpenAIRealtimeTranscriptionConfig["socketFactory"];
   speechSocketFactory?: OpenAISpeechProviderConfig["speechSocketFactory"];
   /** An embedding host may supply a different, explicitly versioned transcription adapter. */
-  customTranscription?: Readonly<{ version: string; create: (sessionId: string) => TranscriptionPort }>;
+  customTranscription?: Readonly<{ version: string; scope?: VoiceClinicScope; create: (sessionId: string) => TranscriptionPort }>;
   /** Patient-free evidence must prove this exact physical configuration and operating mode. */
   quality?: (scope: VoiceClinicScope, configurationHash: string) => Result<SpeechQualityEvidence, ReadinessFailure>;
 }>;
@@ -47,6 +47,7 @@ export class OpenAIVoiceProfileHost implements VoiceProfileRegistry, SpeechAdapt
   constructor(config: OpenAIVoiceProfileConfig) {
     if (!config || !["conversation", "keypadAvailability"].includes(config.mode)) throw new RangeError("invalid voice profile configuration");
     if (config.customTranscription && (!validVoiceRef(config.customTranscription.version) ||
+      config.customTranscription.scope !== undefined && !validVoiceScope(config.customTranscription.scope) ||
       config.customTranscription.version === "openai-transcription.v1" || typeof config.customTranscription.create !== "function")) throw new RangeError("invalid custom transcription configuration");
     const primaryModel = config.primaryModel ?? "gpt-4o-mini-tts";
     // Preserve the existing model choice; unknown models advertise no proven pairs.
@@ -60,14 +61,16 @@ export class OpenAIVoiceProfileHost implements VoiceProfileRegistry, SpeechAdapt
       if ((config.runtime?.playbackOptions?.firstChunkDeadlineMs ?? config.runtime?.playbackOptions?.stepDeadlineMs ?? 2_000) <= (config.primaryFirstChunkMs ?? 1_500)) throw new RangeError("speech fallback deadline unavailable");
     } else if (config.primaryFirstChunkMs !== undefined) throw new RangeError("speech fallback model required");
     this.config = { ...config, primaryModel, runtime: structuredClone(config.runtime ?? {}),
-      ...(config.customTranscription ? { customTranscription: { ...config.customTranscription } } : {}) };
+      ...(config.customTranscription ? { customTranscription: { ...config.customTranscription,
+        ...(config.customTranscription.scope ? { scope: Object.freeze({ ...config.customTranscription.scope }) } : {}) } } : {}) };
     this.voices = this.primary.voices.filter(voice => !this.fallback || this.fallback.voices.includes(voice));
   }
   private descriptor(locale: string, voiceId: string, runtime: VoiceRuntimeOptions) {
     return { schemaVersion: 1, mode: this.config.mode, locale, voiceId,
       presentationVersion: VOICE_PRESENTATION_VERSION, transcriptionVersion: this.config.customTranscription?.version ?? "openai-transcription.v1",
       synthesisVersion: this.synthesisVersion, hostVersion: "openai-voice-profile.v1",
-      transcription: this.config.customTranscription ? { provider: "host", version: this.config.customTranscription.version }
+      transcription: this.config.customTranscription ? { provider: "host", version: this.config.customTranscription.version,
+        ...(this.config.customTranscription.scope ? { scope: this.config.customTranscription.scope } : {}) }
         : { provider: "openai", model: "gpt-live-transcribe", context: { prompt: "English clinic reception.", languages: ["en"] } },
       speech: { primaryModel: this.config.primaryModel!, fallbackModel: this.config.fallbackModel ?? null,
         primaryFirstChunkMs: this.config.fallbackModel ? this.config.primaryFirstChunkMs ?? 1_500 : null,
@@ -86,7 +89,8 @@ export class OpenAIVoiceProfileHost implements VoiceProfileRegistry, SpeechAdapt
     } catch { return undefined; }
   }
   async resolve(scope: VoiceClinicScope): Promise<Result<VoiceProfileDeclaration, ReadinessFailure>> {
-    if (!validVoiceScope(scope) || !this.voices.length) return voiceProfileUnready();
+    if (!validVoiceScope(scope) || !this.voices.length || this.config.customTranscription?.scope &&
+        !sameVoiceScope(scope, this.config.customTranscription.scope)) return voiceProfileUnready();
     const bound = structuredClone(scope);
     return ok({ scope: bound, hostVersion: "openai-voice-profile.v1", locales,
       voices: this.voices.map(id => ({ id, label: id[0]!.toUpperCase() + id.slice(1) })),
@@ -100,6 +104,7 @@ export class OpenAIVoiceProfileHost implements VoiceProfileRegistry, SpeechAdapt
   }
   create(profile: VoiceProfile, sessionId: string, runtime: VoiceRuntimeOptions): Result<BoundSpeechAdapters, ReadinessFailure> {
     if (!profile || !validVoiceProfile(profile, profile.scope) ||
+        this.config.customTranscription?.scope && !sameVoiceScope(profile.scope, this.config.customTranscription.scope) ||
         !locales.some(item => item.id === profile.locale) || !this.voices.includes(profile.voiceId)) return voiceProfileUnready();
     const hash = this.hash(profile.locale, profile.voiceId, runtime);
     const descriptor = this.descriptor(profile.locale, profile.voiceId, runtime);
