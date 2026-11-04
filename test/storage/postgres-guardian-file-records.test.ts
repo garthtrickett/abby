@@ -30,7 +30,15 @@ const { GuardianVerificationSession } = await import(new URL("src/standalone/gua
 const { CallerVerificationSession } = await import(new URL("src/standalone/caller-verification-session.js", emitted).href) as typeof import("../../src/standalone/caller-verification-session.ts");
 const { PrivateRepresentativeVoiceInput } = await import(new URL("src/standalone/private-representative-voice-input.js", emitted).href) as typeof import("../../src/standalone/private-representative-voice-input.ts");
 
-const scenarios = [
+const { subjectMemoFixture } = await import(new URL("test/support/subject-memo.js", emitted).href) as typeof import("../support/subject-memo.ts");
+const { decodeAdministrativeMemo } = await import(new URL("src/cliniko/administrative-memo.js", emitted).href) as typeof import("../../src/cliniko/administrative-memo.ts");
+const { administrativeMemoRecordBinding } = await import(new URL("src/cliniko/administrative-memo-records.js", emitted).href) as typeof import("../../src/cliniko/administrative-memo-records.ts");
+const { decodeClinikoReview } = await import(new URL("src/cliniko/review-request.js", emitted).href) as typeof import("../../src/cliniko/review-request.ts");
+
+type MemoOutcome = "accepted" | "wrongSubjectGrant" | "withdrawn" | "lostStored" | "clinicalUncertain";
+type Scenario = Readonly<{ operation: "book" | "appointments.read" | "cancel" | "reschedule";
+  outcome: "accepted" | "missingIdentity" | "missingAuthority" | "withdrawnBeforeConsent"; memoOutcome?: MemoOutcome }>;
+const scenarios: readonly Scenario[] = [
   { operation: "book", outcome: "accepted" },
   { operation: "book", outcome: "missingIdentity" },
   { operation: "book", outcome: "missingAuthority" },
@@ -44,21 +52,27 @@ const scenarios = [
   { operation: "reschedule", outcome: "accepted" },
   { operation: "reschedule", outcome: "missingAuthority" },
   { operation: "reschedule", outcome: "withdrawnBeforeConsent" },
-] as const;
-for (const { operation, outcome } of scenarios)
-test(`actual emitted signed guardian file records ${operation}: ${outcome}`, { timeout: 240_000 }, async context => {
+  ...(["book", "cancel", "reschedule"] as const).flatMap(operation =>
+    (["accepted", "wrongSubjectGrant", "withdrawn", "lostStored", "clinicalUncertain"] as const)
+      .map(memoOutcome => ({ operation, outcome: "accepted" as const, memoOutcome }))),
+];
+for (const { operation, outcome, memoOutcome } of scenarios)
+test(`actual emitted signed guardian file records ${operation}: ${outcome}${memoOutcome ? ` with memo ${memoOutcome}` : ""}`, { timeout: 240_000 }, async context => {
   const admin = connectPostgres(adminUrl), name = `abby_test_guardian_files_${randomUUID().replaceAll("-", "").slice(0, 24)}`;
   const restoreName = `${name}_restored`, target = new URL(adminUrl), restoreTarget = new URL(adminUrl);
   target.pathname = `/${name}`; restoreTarget.pathname = `/${restoreName}`;
   let created = false, restored = false, db: ReturnType<typeof connectPostgres> | undefined, copyDb: ReturnType<typeof connectPostgres> | undefined;
   let f: Awaited<ReturnType<typeof guardianFileRecordFixture>> | undefined, call: Awaited<ReturnType<typeof clinikoWorkflowVoiceFixture>> | undefined;
   let canary: Awaited<ReturnType<typeof captureScopedSqlVerificationCanaryWindow>> | undefined;
+  let memo: ReturnType<typeof subjectMemoFixture> | undefined;
   try {
     await sql.raw(`create database "${name}"`).execute(admin); created = true;
     db = connectPostgres(target.toString()); await migrate(db);
     const unrelated = { tenantId: `unrelated-${randomUUID()}`, clinicId: "clinic", locationId: "main" }, retained = randomUUID();
     resultValue(await new PostgresOutboundEffectBarrier(db, unrelated, "e".repeat(64)).claimOnce(retained));
     const original = await db.selectFrom("outbound_effect_barriers").selectAll().execute();
+    let expectedBarriers = original;
+    const ordered = (rows: typeof original) => [...rows].sort((a, b) => a.effect_ref.localeCompare(b.effect_ref));
     canary = await captureScopedSqlVerificationCanaryWindow(db, target.toString());
     const budget = new PostgresClinikoRequestBudget(db, { apiKey: "synthetic-session-au5", maxPerMinute: 180 });
     f = await guardianFileRecordFixture({ operation, both: true, budget, subjectIds: ["583746192837465", "683746192837465"] }); f.flow.dispose();
@@ -71,11 +85,20 @@ test(`actual emitted signed guardian file records ${operation}: ${outcome}`, { t
     });
     const fixture = f, began = performance.now(), identityRecord = structuredClone(f.state.identity!), authorityRecord = structuredClone(f.state.authority!);
     const clock = () => { const now = new Date(Date.parse(verificationNow) + performance.now() - began).toISOString(); fixture.base.f.setTime(now); return now; };
-    call = await clinikoWorkflowVoiceFixture(db, { ...f.flowConfig, clock, verificationBudget: new PostgresPatientVerificationBudget(db, f.base.f.scope) }, flow => {
+    if (memoOutcome) memo = subjectMemoFixture({ scope: f.base.f.scope, ...f.flowConfig.cliniko,
+      authorRef: "clinic-approved-admin-memo", policy: { version: "admin-actions-v1", digest: "a".repeat(64) },
+      clock: () => call?.currentTime() ?? clock(), deadlineMs: 5000 }, authorityRecord.subjectPatientId, {
+      ...(memoOutcome === "wrongSubjectGrant" ? { approvedPatientId: f.base.r.subjectIds[1] } : {}),
+      ...(memoOutcome === "lostStored" ? { lostStored: true } : {}),
+      barrierFor: (scope, binding) => new PostgresOutboundEffectBarrier(db!, scope, binding),
+    });
+    const retention = memo;
+    call = await clinikoWorkflowVoiceFixture(db, { ...f.flowConfig, clock, ...(memo ? { memo: memo.config } : {}), verificationBudget: new PostgresPatientVerificationBudget(db, f.base.f.scope) }, flow => {
       const ordinary = createOpenAIClinicalIntentResolver({ apiKey: "synthetic", model: "synthetic", owner: flow, clinicDate: () => "2026-10-04",
         fetch: async () => { throw Error("guardian identity and patient fields cannot require a public model request"); } });
       return async (turn, signal) => {
         if (turn.text === "Yes") return ok({ kind: "affirm" });
+        if (turn.text === "What happened?") return ok({ kind: "outcome" });
         if (turn.text === "Times") return ok({ kind: "bookingMenu", from: "2026-10-08", to: "2026-10-08" });
         if (turn.text === "First option") return ok({ kind: "bookingChoice", choice: 1 });
         if (turn.text === "Check appointments") return ok({ kind: "appointmentEnquiry", from: verificationNow, to: "2026-10-09T06:00:00.000Z" });
@@ -89,7 +112,11 @@ test(`actual emitted signed guardian file records ${operation}: ${outcome}`, { t
         if (turn.text === "Select target" || turn.text === "Select offer") return ok({ kind: "reschedulingChoice", stage: turn.text === "Select target" ? "targets" : "offers", choice: 1 });
         return ordinary(turn, signal);
       };
-    }, { clinicalHost: true, steadyMedia: true, ...(operation === "cancel" || operation === "reschedule" ? { nativeIndividualChanges: true } : {}) });
+    }, { clinicalHost: true, steadyMedia: true, ...(operation === "cancel" || operation === "reschedule" ? { nativeIndividualChanges: true } : {}),
+      ...(memoOutcome ? { beforeWriteResponse: async () => {
+        if (memoOutcome === "clinicalUncertain") throw Error("Synthetic clinical acknowledgement lost after native write");
+        if (memoOutcome === "withdrawn") { assert.ok(retention); retention.control.permitted = false; }
+      } } : {}) });
     const serving = call;
     const callSessionId = (await serving.state()).sessionLease?.sessionId; assert.ok(callSessionId);
     const request = operation === "book" ? "Book an appointment for my daughter" : operation === "cancel" ? "Cancel an appointment for my daughter"
@@ -148,7 +175,9 @@ test(`actual emitted signed guardian file records ${operation}: ${outcome}`, { t
           await serving.turn("Yes");
           const after = (await serving.state()).actions[action.key]!;
           if (outcome === "withdrawnBeforeConsent") { assert.notEqual(after.status, "committed"); assert.equal(serving.writes.length, 0); }
-          else { assert.equal(after.status, "committed"); assert.equal(serving.writes.length, 1);
+          else { if (memoOutcome === "clinicalUncertain") assert.ok(["uncertain", "needsReview"].includes(after.status));
+            else assert.equal(after.status, "committed");
+            assert.equal(serving.writes.length, 1);
             assert.equal(serving.writeRequests[0]!.path, operation === "book" ? "/v1/individual_appointments" : operation === "cancel" ? "/v1/individual_appointments/91/cancel" : "/v1/individual_appointments/91");
             if (operation === "book") assert.equal(serving.writeRequests[0]!.body.patient_id, authorityRecord.subjectPatientId);
           }
@@ -159,10 +188,53 @@ test(`actual emitted signed guardian file records ${operation}: ${outcome}`, { t
       assert.equal(f.reads.some(raw => new URL(raw).pathname === "/v1/individual_appointments"), false);
       assert.equal(serving.writes.length, 0);
     }
+    const sourceRef = serving.writeRequests.length === 0 ? undefined : operation === "book"
+      ? /^Abby booking ([0-9a-f-]+)$/.exec(String(serving.writeRequests[0]!.body.notes))?.[1]
+      : resultValue(decodeClinikoReview(f.base.f.recalls[0]!.notes)).marker;
+    if (serving.writeRequests.length > 0) assert.ok(sourceRef);
+    if (memoOutcome) {
+      assert.ok(memo);
+      if (memoOutcome === "clinicalUncertain") {
+        assert.deepEqual(memo.outcomes, []); assert.equal(memo.posts.length, 0); assert.equal(memo.rows.length, 0);
+      } else {
+        await voiceUntil(() => retention!.outcomes.length === 1, "independent non-patient guardian memo completion");
+        const denied = memoOutcome === "wrongSubjectGrant" || memoOutcome === "withdrawn";
+        assert.equal(memo.posts.length, denied ? 0 : 1); assert.equal(memo.rows.length, denied ? 0 : 1);
+        assert.equal(memo.outcomes[0]!.kind, denied ? "unavailable" : memoOutcome === "lostStored" ? "uncertain" : "accepted");
+        if (!denied) {
+          const decoded = resultValue(decodeAdministrativeMemo(memo.posts[0]!.content));
+          assert.equal(decoded.patientId, authorityRecord.subjectPatientId); assert.notEqual(decoded.patientId, identityRecord.contactId);
+          assert.notEqual(decoded.patientId, verificationCanaries[2]); assert.equal(decoded.direction, "inbound");
+          assert.equal(decoded.outcome.kind, operation === "book" ? "bookingConfirmed" : operation === "cancel" ? "cancellationObserved" : "reschedulingObserved");
+          assert.equal(decoded.sourceActionRef, sourceRef);
+          const binding = administrativeMemoRecordBinding(memo.config.native, memo.authentication)!;
+          const own = (await sql<(typeof original)[number]>`select * from outbound_effect_barriers
+            where tenant_id = ${f.base.f.scope.tenantId} and effect_ref = ${decoded.actionRef}::uuid`.execute(db)).rows;
+          assert.equal(own.length, 1); assert.equal(own[0]!.clinic_id, f.base.f.scope.clinicId);
+          assert.equal(own[0]!.location_id, f.base.f.scope.locationId); assert.equal(own[0]!.owner_binding, binding);
+          expectedBarriers = [...original, ...own];
+          assert.deepEqual(resultValue(await new PostgresOutboundEffectBarrier(db, f.base.f.scope, binding).claimOnce(decoded.actionRef)), { claimed: false });
+        }
+      }
+      const before = structuredClone(Object.values((await serving.state()).actions).at(-1)!);
+      await serving.mark(); await serving.turn("What happened?");
+      const afterReport = Object.values((await serving.state()).actions).at(-1)!;
+      if (memoOutcome === "clinicalUncertain") {
+        assert.deepEqual(afterReport.mutation, before.mutation); assert.equal(afterReport.key, before.key);
+        assert.ok(["uncertain", "needsReview"].includes(afterReport.status)); assert.equal(afterReport.hostRef, undefined);
+        assert.deepEqual(memo.outcomes, []);
+      } else assert.deepEqual(afterReport, before);
+      assert.equal(serving.writes.length, 1); assert.equal(memo.posts.length, memoOutcome === "accepted" || memoOutcome === "lostStored" ? 1 : 0);
+    }
     const state = await serving.state();
     assert.equal(f.reads.some(path => path.endsWith(`/patients/${verificationCanaries[2]}`)), false, "guardian caller never needs a patient identity");
     const values = [f.identityPath, f.authorityPath, ...verificationCanaries, f.flowConfig.cliniko.apiKey, identityRecord.contactId, identityRecord.recordRef, identityRecord.recordVersion,
       authorityRecord.authorityRef, authorityRecord.subjectPatientId, f.state.guardianEmail, ...serving.privateTranscripts,
+      ...(sourceRef ? [sourceRef] : []),
+      ...(memo ? [memo.key.toString("hex"), memo.key.toString("base64"), ...memo.posts.flatMap(row => {
+        const decoded = resultValue(decodeAdministrativeMemo(row.content));
+        return [String(row.content), JSON.stringify(row), decoded.sourceActionRef, decoded.authentication];
+      })] : []),
       "synthetic-workflow-voice-token", ...proofRefs, ...f.base.mail.flatMap(row => [row.email, row.code]), f.base.r.identity.firstName, f.base.r.identity.lastName, f.base.r.identity.dateOfBirth];
     const publicData = JSON.stringify([serving.modelTurns, serving.transcripts, commandProgress(state, "guardian-records"), await serving.flow.publicIntentContext()]);
     for (const value of values) if (value.length >= 4) assert.equal(publicData.includes(value), false);
@@ -176,17 +248,18 @@ test(`actual emitted signed guardian file records ${operation}: ${outcome}`, { t
     const dump = execFileSync("pg_dump", [target.toString(), "--no-owner", "--no-privileges"], { timeout: 10_000, maxBuffer: 8_000_000 });
     const text = dump.toString(), escaped = (value: string) => value.replaceAll("\\", "\\\\").replaceAll("\n", "\\n").replaceAll("\r", "\\r").replaceAll("\t", "\\t");
     for (const value of secrets) for (const form of [value, escaped(value), JSON.stringify(value).slice(1, -1), escaped(JSON.stringify(value).slice(1, -1))]) assert.equal(text.includes(form), false);
-    assert.ok(text.includes(retained)); assert.deepEqual(await db.selectFrom("outbound_effect_barriers").selectAll().execute(), original);
+    assert.ok(text.includes(retained)); assert.deepEqual(ordered(await db.selectFrom("outbound_effect_barriers").selectAll().execute()), ordered(expectedBarriers));
     await sql.raw(`create database "${restoreName}"`).execute(admin); restored = true;
     execFileSync("psql", [restoreTarget.toString(), "--no-psqlrc", "--set=ON_ERROR_STOP=1"], { input: dump, timeout: 10_000, maxBuffer: 8_000_000 });
     copyDb = connectPostgres(restoreTarget.toString());
     for (let n = 0; n < probes.length; n += 12) assert.deepEqual(resultValue(await scanPatientDataCanaries(copyDb, probes.slice(n, n + 12))), []);
-    assert.deepEqual(await copyDb.selectFrom("outbound_effect_barriers").selectAll().execute(), original);
+    assert.deepEqual(ordered(await copyDb.selectFrom("outbound_effect_barriers").selectAll().execute()), ordered(expectedBarriers));
     const budgets = await db.selectFrom("cliniko_request_budgets").select(["max_per_minute", "sent_at_ms"]).execute();
     if (outcome !== "missingIdentity") { assert.equal(budgets.length, 1); assert.equal(budgets[0]!.max_per_minute, 180);
       const sent = budgets[0]!.sent_at_ms; assert.ok(Array.isArray(sent) && sent.length <= 180); }
   } finally {
     try { await call?.close(); } finally {
+      memo?.close();
       try { await f?.close(); } finally {
         canary?.close(); await copyDb?.destroy(); await db?.destroy();
         try { if (restored) await sql.raw(`drop database "${restoreName}" with (force)`).execute(admin);
