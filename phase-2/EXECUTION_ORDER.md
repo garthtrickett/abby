@@ -1,5 +1,22 @@
 # Abby execution order
 
+**Local staged movement process privacy qualification, 4 November 2026:**
+The two original E2E-417 PostgreSQL cases now check captured worker stdout/stderr
+and unfiltered data-only backups as well as every SQL column, including after
+sender process loss. Both cases and affected strict pass with unchanged native
+quota and deadlines. This is scoped native-process evidence; Stage 7 completion,
+combined-graph/cloud delivery, restore and real acceptance remain separate.
+See [scope and evidence](EXECUTION_PROGRESS.md#staged-movement-process-output-and-backup-privacy-4-november-2026).
+
+**Local class creation receipt body qualification, 4 November 2026:** The actual
+class writer stays uncertain for oversized, invalid UTF-8 and malformed JSON
+HTTP 201 responses in ordinary and approved-pass requests. All six variants
+require zero acknowledgement callbacks, one POST, no GET and consumed no-replay.
+The full source file passes 13 tests and affected strict passes. This is
+source-only verification with unchanged production code, bounds and defaults;
+new-head CI, delivery and real acceptance remain separate. See [scope and
+evidence](EXECUTION_PROGRESS.md#class-creation-receipt-body-boundaries-4-november-2026).
+
 **Local non-patient guardian memo composition, 4 November 2026:** All 28 corrected
 emitted signed SQL cases pass: thirteen retained guardian-file cases and fifteen new
 independent-memo cases across booking, cancellation and rescheduling.

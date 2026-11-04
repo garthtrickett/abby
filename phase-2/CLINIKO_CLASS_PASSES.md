@@ -889,3 +889,48 @@ This is the verifier/native handoff contract. Caller/SAM stage presentation,
 fresh consent and private renewal routing, admitted host provisioning and human
 resolution remain to be integrated. No real email, clinic, acoustic or carrier
 acceptance follows from these synthetic checks.
+
+## Class creation receipt body boundaries, 4 November 2026
+
+The booking plan requires the class path to retain the individual path's failure
+matrix. The class writer uses `boundedClinikoJson`, while the individual writer
+has a distinct bounded parser; existing individual malformed-body checks do not
+prove the class boundary. No product defect is established by this coverage gap.
+
+One new source test calls the actual `executeBookingOnce` for both ordinary and
+independently approved-pass requests with three HTTP 201 body faults: oversized
+otherwise valid native JSON, invalid UTF-8 inside an otherwise valid optional
+string, and truncated JSON. All six variants remain uncertain, invoke no
+acknowledgement callback, issue exactly one POST and no GET, and reject reuse of
+the same action without another request. The valid oversized receipt and
+otherwise valid invalid-UTF-8 receipt distinguish the real size/decoder limits
+from incidental JSON failure. Existing exact acknowledgements, authority,
+preparation ordering, capacity/pass races and held-response cases remain.
+
+The complete class acknowledgement source file passes all 13 tests, zero skips
+or failures (work1793789104662); the new top-level test contains six variants.
+Affected strict TypeScript passes (work1793789509065). Production source,
+dependencies, body-size limits, deadlines, quota and runtime defaults are
+unchanged. These source-only checks use no generated serving artifacts,
+PostgreSQL or live provider. They claim neither a fresh serving build nor a
+whole-project typecheck. Final metadata/review, qualified-parent integration,
+new exact-head CI and actual-main delivery remain separate. Broader composed,
+clinic/staff/provider/speech acceptance and activation remain open.
+
+Source command:
+
+```sh
+node scripts/test-node.mjs --test --test-concurrency=1 --test-reporter=tap test/cliniko/class-booking-acknowledgement.test.ts
+```
+
+## Staged movement process output and backup privacy, 4 November 2026
+
+The E2E-417 native process fixture now qualifies captured worker stdout/stderr
+and unfiltered data-only backup privacy alongside its existing all-column SQL
+scans. Both original quota-window and killed-sender/cold-discovery cases pass;
+affected strict passes. Worker pipe closure is awaited before inspection,
+including the killed original sender. Native180, phase/effect checks and
+210s/30s deadlines are unchanged. No production change, serving emission,
+backup restore, whole-project typecheck or real acceptance is claimed.
+Fresh exact-head/actual-main qualification and the full Stage 7 requirement
+reconciliation remain separate. See [commands, limits and evidence](EXECUTION_PROGRESS.md#staged-movement-process-output-and-backup-privacy-4-november-2026).

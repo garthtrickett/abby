@@ -45,6 +45,29 @@ test("E2E-392/E2E-406 class creation acknowledges exact no-pass/pass responses w
   }
 });
 
+test("E2E-392/E2E-406 malformed, invalid UTF-8 and oversized creation bodies stay uncertain without acknowledgement or replay", async () => {
+  for (const pass of [false, true]) for (const fault of ["oversized", "invalidUtf8", "malformedJson"] as const) {
+    const f = classAttendanceFixture(), q = request(pass), native = responseRow(q);
+    const prefix = JSON.stringify(native).slice(0, -1);
+    // The invalid byte sits inside an otherwise valid optional field, so a
+    // nonfatal decoder would incorrectly accept the exact native receipt.
+    const body = fault === "oversized" ? JSON.stringify({ ...native, padding: "x".repeat(1_000_001) })
+      : fault === "invalidUtf8" ? Uint8Array.from([...new TextEncoder().encode(`${prefix},"padding":"`), 0xff, ...new TextEncoder().encode('"}')])
+      : prefix;
+    const methods: string[] = []; let acknowledged = 0;
+    const writer = resultValue(ClinikoClassAttendanceWriter.create(f.config, async (_url, init) => {
+      methods.push(init?.method ?? "GET"); return new Response(body, { status: 201 });
+    }));
+    const checks = { beforeSend: async () => true, current: () => true, acknowledged: () => { acknowledged++; } };
+    assert.deepEqual(await writer.executeBookingOnce(q, new AbortController().signal, checks),
+      { ok: true, value: { kind: "uncertain" } }, JSON.stringify({ pass, fault }));
+    assert.equal(acknowledged, 0); assert.deepEqual(methods, ["POST"]);
+    const repeated = await writer.executeBookingOnce(q, new AbortController().signal, checks);
+    assert.ok(!repeated.ok && repeated.error.kind === "invalidQuery");
+    assert.equal(acknowledged, 0); assert.deepEqual(methods, ["POST"]);
+  }
+});
+
 test("a native class acknowledgement survives later abort/observer failure while held parsing remains uncertain", async () => {
   for (const failure of ["abortAfterAck", "observer", "heldBody"] as const) {
     const f = classAttendanceFixture(), q = request(), stop = new AbortController();

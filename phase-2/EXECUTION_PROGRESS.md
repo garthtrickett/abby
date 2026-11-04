@@ -8587,3 +8587,80 @@ independent grants and clinical-result rules. Final metadata review, new exact-h
 whole-project CI, normal delivery and actual-main qualification remain separate. Real
 clinic, provider, staff, speech, legal authority, viewer/author/retention and activation
 acceptance are unchanged.
+
+## Class creation receipt body boundaries, 4 November 2026
+
+The booking plan requires the class path to retain the individual path's failure
+matrix. The class writer uses `boundedClinikoJson`, while the individual writer
+has a distinct bounded parser; existing individual malformed-body checks do not
+prove the class boundary. No product defect is established by this coverage gap.
+
+One new source test calls the actual `executeBookingOnce` for both ordinary and
+independently approved-pass requests with three HTTP 201 body faults: oversized
+otherwise valid native JSON, invalid UTF-8 inside an otherwise valid optional
+string, and truncated JSON. All six variants remain uncertain, invoke no
+acknowledgement callback, issue exactly one POST and no GET, and reject reuse of
+the same action without another request. The valid oversized receipt and
+otherwise valid invalid-UTF-8 receipt distinguish the real size/decoder limits
+from incidental JSON failure. Existing exact acknowledgements, authority,
+preparation ordering, capacity/pass races and held-response cases remain.
+
+The complete class acknowledgement source file passes all 13 tests, zero skips
+or failures (work1793789104662); the new top-level test contains six variants.
+Affected strict TypeScript passes (work1793789509065). Production source,
+dependencies, body-size limits, deadlines, quota and runtime defaults are
+unchanged. These source-only checks use no generated serving artifacts,
+PostgreSQL or live provider. They claim neither a fresh serving build nor a
+whole-project typecheck. Final metadata/review, qualified-parent integration,
+new exact-head CI and actual-main delivery remain separate. Broader composed,
+clinic/staff/provider/speech acceptance and activation remain open.
+
+Source command:
+
+```sh
+node scripts/test-node.mjs --test --test-concurrency=1 --test-reporter=tap test/cliniko/class-booking-acknowledgement.test.ts
+```
+
+## Staged movement process output and backup privacy, 4 November 2026
+
+Stage 7 and the E2E-419 remaining serving-boundary item 7 require process-loss
+privacy evidence. The existing E2E-417 native process fixture checked every SQL
+column but discarded worker stdout and did not inspect a backup. This was a
+qualification gap; no production disclosure or other product defect was found.
+
+The same two original tests now capture stdout and stderr from every worker,
+including the killed sender and cold discoverer. They wait for process `close`
+so final pipe bytes cannot arrive after inspection. The existing action, proof,
+entitlement, case and encoded-review canaries must be absent from those outputs,
+all SQL columns and an unfiltered data-only `pg_dump`. Scans reuse the existing
+backup helper in batches of at most twelve. This adds no restore qualification.
+
+Both original PostgreSQL cases pass without skips (work1793792677505): four
+separately confirmed native phases over three real quota resets, then actual
+sender SIGKILL and read-only cold discovery using only clinic/account/type
+configuration. Original native180, phase/effect checks and 210s/30s case deadlines
+remain. Affected strict TypeScript passes (work1793792563445). The test/worker
+source runs directly; no serving rebuild, emitted-graph test, whole-project
+typecheck, provider request or clinic acceptance is claimed.
+
+The Node scope peaked at252620800B under1GiB; the external PostgreSQL scope
+peaked at138575872B under512MiB. Both retained Swap0 and zero OOM/high/max events.
+Dump clients were separately capped at256MiB, Swap0 and half a CPU; their peaks
+were not measured. The owned server, its recorded volume and both recorded dump
+clients are independently absent after terminal. Dump clients requested
+automatic anonymous-volume removal; no wider unattached-volume cleanup is
+claimed. Source pins and raw log SHA256 remain verified in the private receipts.
+
+This scoped native-process evidence complements the existing signed serving,
+renewal, correction, concurrent-actor and independent staff cases. It does not
+close all of Stage 7, qualify a whole combined graph, authorize recovery mutation,
+or establish human clinic/staff, speech/provider acceptance or activation.
+Fresh final metadata/review, qualified-parent integration, exact new-head CI
+and actual-main qualification remain separate delivery gates.
+
+Source command, with an isolated disposable PostgreSQL database and
+`ABBY_ISOLATED_POSTGRES_PROBE=1`:
+
+```sh
+node scripts/test-node.mjs --test --test-concurrency=1 --test-reporter=tap test/cliniko/class-move-stages-process.test.ts
+```

@@ -1,4 +1,20 @@
-# Scenario manifest, version 1.252
+# Scenario manifest, version 1.254
+
+E2E-417 retains its two original native process cases and now checks captured
+worker output after pipe closure, every SQL column and unfiltered data-only
+backup privacy, including killed-sender/cold-discoverer output. Both cases and
+affected strict pass with unchanged native180 and deadlines. This adds no
+restore, full-call, whole-graph/cloud or real acceptance claim. See the
+[scope and evidence](../phase-2/EXECUTION_PROGRESS.md#staged-movement-process-output-and-backup-privacy-4-november-2026).
+
+E2E-392/E2E-406 add six source-only class creation body-fault variants across
+ordinary and approved-pass requests: oversized otherwise valid JSON, invalid
+UTF-8 inside otherwise valid JSON, and truncated JSON. Uncertainty, zero
+acknowledgement callbacks, one POST/no GET and no action replay remain required.
+The complete source file passes 13 tests and affected strict passes. Existing
+synthetic/compiled evidence is retained; no fresh serving, SQL, whole-project CI,
+clinic acceptance or full-call promotion follows. See [scope and
+validation](../phase-2/EXECUTION_PROGRESS.md#class-creation-receipt-body-boundaries-4-november-2026).
 
 E2E-426 adds the optional non-patient guardian route with distinct caller proof, independent clinic patient/action records, separate patient proof and four signed administrative workflows. Missing/revoked approvals refuse without source fallback; all-column and complete unfiltered backup/restore privacy pass. This is synthetic voice evidence. Production record provisioning, real clinic authority, carrier and full-call acceptance remain planned. Fifteen additional signed SQL cases compose this same non-patient route with independent administrative-memo grants across booking, cancellation and rescheduling, while retaining the thirteen existing file-source cases. Wrong-subject or withdrawn memo permission cannot erase clinical success; lost memo acknowledgement remains uncertain and unknown clinical writes produce no success memo. The native clinical source marker is scanned independently of memo dispatch, including the nine zero-memo-POST failure modes. Full-call status and earlier scenario identities/evidence tiers remain unchanged.
 
