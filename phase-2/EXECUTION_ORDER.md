@@ -1,5 +1,17 @@
 # Abby execution order
 
+**Local non-patient guardian memo composition, 4 November 2026:** All 28 emitted signed
+SQL cases pass: thirteen retained guardian-file cases and fifteen new independent-memo
+cases across booking, cancellation and rescheduling. Wrong-patient/withdrawn memo
+permission preserves clinical truth; lost memo acknowledgements remain uncertain without
+replay, and uncertain clinical writes produce no success memo. The native 180-per-minute
+budget, existing deadlines, all-column and unfiltered backup/restore privacy remain.
+Affected strict and a fresh 780-file serving build pass; final exact-head whole-project
+CI, review, normal delivery and actual-main qualification remain separate. This is
+test-only engineering, with clinic policy/authority/access/retention,
+staff/provider/speech and activation acceptance still open. See [scope and
+evidence](EXECUTION_PROGRESS.md#non-patient-guardian-administrative-memos-4-november-2026).
+
 ## Restricted carrier test scope, 3 November 2026
 
 The owner subsequently authorized an isolated Abby Twilio number, a dedicated

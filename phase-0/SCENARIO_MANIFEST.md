@@ -1,6 +1,6 @@
-# Scenario manifest, version 1.251
+# Scenario manifest, version 1.252
 
-E2E-426 adds the optional non-patient guardian route with distinct caller proof, independent clinic patient/action records, separate patient proof and four signed administrative workflows. Missing/revoked approvals refuse without source fallback; all-column and complete unfiltered backup/restore privacy pass. This is synthetic voice evidence. Production record provisioning, real clinic authority, carrier and full-call acceptance remain planned. Earlier scenario identities and evidence tiers are unchanged.
+E2E-426 adds the optional non-patient guardian route with distinct caller proof, independent clinic patient/action records, separate patient proof and four signed administrative workflows. Missing/revoked approvals refuse without source fallback; all-column and complete unfiltered backup/restore privacy pass. This is synthetic voice evidence. Production record provisioning, real clinic authority, carrier and full-call acceptance remain planned. Fifteen additional signed SQL cases compose this same non-patient route with independent administrative-memo grants across booking, cancellation and rescheduling, while retaining the thirteen existing file-source cases. Wrong-subject or withdrawn memo permission cannot erase clinical success; lost memo acknowledgement remains uncertain and unknown clinical writes produce no success memo. Full-call status and earlier scenario identities/evidence tiers remain unchanged.
 
 **R02 review correction, 27 October 2026:** Five actual emitted signed SQL cases
 now pass, including a return to the original practitioner followed by an explicit
