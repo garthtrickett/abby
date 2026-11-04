@@ -361,7 +361,7 @@ test(`${implementation} live voice registry sees an owner save without restart a
 });
 }
 
-test("an older overlapping vocabulary resolution cannot replace or clear a newer captured voice factory", async () => {
+test("healthy concurrent vocabulary resolutions both retain independent current declarations and factories", async () => {
   const f = await fixture(); let entered!: () => void, release!: () => void, heldOnce = false;
   const started = new Promise<void>(resolve => { entered = resolve; }), held = new Promise<void>(resolve => { release = resolve; });
   try {
@@ -370,10 +370,34 @@ test("an older overlapping vocabulary resolution cannot replace or clear a newer
       speech: { apiKey: "synthetic-key", mode: "conversation", quality: (_scope, configurationHash) => ok({ configurationHash, qualityVersion: "synthetic-only" }) },
       deepgram: { apiKey: "synthetic-key" } });
     const clinic = { tenantId: scope.tenantId, clinicId: scope.clinicId };
-    const older = registry.resolve(clinic); await started;
+    const first = registry.resolve(clinic); await started;
+    const second = registry.resolve(clinic); release();
+    const [one, two] = await Promise.all([first, second]); assert.ok(one.ok && two.ok);
+    assert.notEqual(one.value, two.value); assert.notEqual(one.value.profiles, two.value.profiles);
+    assert.deepEqual(one.value.profiles.map(profile => profile.configurationHash), two.value.profiles.map(profile => profile.configurationHash));
     const selected = await captureVoiceProfile(registry, clinic, { version: "1", locale: "en-AU", voiceId: "coral" }); assert.ok(selected.ok);
-    release(); assert.equal((await older).ok, false);
     const current = registry.create(selected.value, "latest-call", {}); assert.ok(current.ok);
+    await current.value.transcription.close?.();
+  } finally { release(); await f.close(); }
+});
+
+test("an aborted vocabulary-profile waiter cannot cancel another healthy caller's current resolution", async () => {
+  const f = await fixture(); let entered!: () => void, release!: () => void, heldOnce = false;
+  const started = new Promise<void>(resolve => { entered = resolve; }), held = new Promise<void>(resolve => { release = resolve; });
+  try {
+    f.duringInventory(async () => { if (!heldOnce) { heldOnce = true; entered(); await held; } });
+    const registry = new ReviewedClinicVoiceProfiles({ vocabulary: f.config,
+      speech: { apiKey: "synthetic-key", mode: "conversation", quality: (_scope, configurationHash) => ok({ configurationHash, qualityVersion: "synthetic-only" }) },
+      deepgram: { apiKey: "synthetic-key" } });
+    const clinic = { tenantId: scope.tenantId, clinicId: scope.clinicId }, controller = new AbortController();
+    const cancelled = registry.resolve(clinic, controller.signal); await started;
+    const healthy = registry.resolve(clinic); controller.abort();
+    assert.equal((await cancelled).ok, false); release();
+    const result = await healthy; assert.ok(result.ok);
+    const { ready, ...physical } = result.value.profiles.find(profile => profile.locale === "en-AU" && profile.voiceId === "coral")!;
+    assert.equal(ready, true);
+    const profile = { ...physical, scope: clinic, settingsVersion: "1", hostVersion: result.value.hostVersion };
+    const current = registry.create(profile, "healthy-call", {}); assert.ok(current.ok);
     await current.value.transcription.close?.();
   } finally { release(); await f.close(); }
 });

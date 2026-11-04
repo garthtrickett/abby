@@ -109,8 +109,9 @@ does not supply clinical action authority or provider fallback.
 for an existing standalone voice server or admin composition. It captures owner
 files afresh on each profile resolution, so an accepted review is seen by later
 sessions without a restart. The bounded factory map holds only the latest ready
-profile hashes. A slower old resolver cannot overwrite or clear a newer result;
-a failed current capture withdraws old factories. Existing captured adapter
+profile hashes. Concurrent requests share one bounded current-source read and
+receive separate declaration objects. An aborted waiter cannot cancel another
+healthy caller. A failed current capture withdraws old factories. Existing captured adapter
 ports retain their own current-source guards.
 
 Its `locationScope` is enforced by the admin and voice-server compositions: a
