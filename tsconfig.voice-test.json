@@ -76,7 +76,10 @@
     "test/support/representative-change-call.ts",
     "test/support/incoming-clinical-call-flow.ts",
     "test/support/twilio-outbound-unanswered-producer.ts",
-    "scripts/check-cliniko-queue-work.ts"
+    "scripts/check-cliniko-queue-work.ts",
+    "src/standalone/clinic-vocabulary-review.ts",
+    "src/standalone/approved-catalogue-vocabulary.ts",
+    "src/voice/reviewed-deepgram-transcription.ts"
   ],
   "include": []
 }

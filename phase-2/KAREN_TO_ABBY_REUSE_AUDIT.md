@@ -258,6 +258,17 @@ Abby already has scenario manifests and repeated speech/intent evaluation. Add t
 
 ### R13 Suggest public clinic vocabulary without bypassing speech gates
 
+**Local optional implementation, 4 November 2026:** A backend extension now
+separates the current approved booking catalogue from explicit public-field
+approval, preserves owner-edited terms and removal history, and serializes
+versioned owner-file review saves. The optional Nova-3 factory pins its exact
+approval/dictionary into the existing physical profile and confines it to the
+owning clinic. Changed approvals/sources and a cancellation held before provider
+construction refuse stale use. Source and serving qualification, final review,
+normal delivery, embedding admin/route wiring and all existing acoustic/clinic
+acceptance remain separate. This is not a default provider change or an R13
+completion claim. See [the review and integration contract](PUBLIC_CLINIC_VOCABULARY.md).
+
 **Extend gap 4.** Karen's `transcriber/profile/profileInputs.ts` canonicalizes selected services, practitioners, locations, specialties/categories and free-text company information. Those inputs are not intrinsically public or patient-free. `profileBuildService.ts` computes hashes/diffs, respects removed terms and caps suggestions; save hooks plus a reconciliation sweep cover missed writers. The existing flow map also records a stale-editor overwrite/suppression race worth testing rather than inheriting.
 
 Abby already bounds transcription context, verifies actual realtime session configuration and versions voice settings. Whitelist approved public clinic terminology before extraction; do not treat unreviewed free text as public by default. An authorized clinic owner reviews suggestions before they reach transcription. Suggestions preserve manual edits/removals and conflict on stale versions. No per-call patient-name vocabulary, discipline-derived clinical authority, automatic speech-provider fallback or VAPI-specific settings are transferred.
