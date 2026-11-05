@@ -324,6 +324,8 @@ Follow the audit's [preservation checklist](KAREN_TO_ABBY_REUSE_AUDIT.md#preserv
 
 The audit used Karen `34a642be8da7884b924eb02e7ccae731bd428276`; remote retrieval was not verified. Its summaries preserve lessons, not the whole source. Avoid placing a wholesale Karen archive, credentials or patient material in Abby.
 
+**Owner clarification, 5 November 2026:** Only the uploaded Karen snapshot is available to the owner; no alternate original repository or archive is expected. The source question is closed. Use the [current reference and its provenance limits](KAREN_TO_ABBY_REUSE_AUDIT.md#current-owner-supplied-reference-19-october-2026) for independent Abby engineering. The original audited revision and dirty/local-only work remain unverified preservation limits, so this clarification does not satisfy the deletion exit below or authorize removal.
+
 **Exit:** The operator has a concrete preservation inventory and verified recovery evidence before deciding to delete anything. Source removal, service shutdown and credential/data-retention decisions remain separate owner actions. Unavailable remote access blocks deletion readiness; it need not block independent Abby engineering.
 
 ### 2 Establish the actual Abby delivery baseline
