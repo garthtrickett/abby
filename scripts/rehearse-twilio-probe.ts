@@ -8,7 +8,8 @@ import { rehearsalCarrier, runRehearsal } from "../src/testing/twilio-rehearsal-
 import { createRehearsalServer } from "../src/testing/twilio-rehearsal-server.ts";
 import { TwilioRehearsalFallback } from "../src/testing/twilio-rehearsal-fallback.ts";
 import { rehearsalLegObserver } from "../src/testing/twilio-rehearsal-legs.ts";
-import { qualifyRehearsalObservation, rehearsalTargetSnapshot } from "../src/testing/twilio-rehearsal-observation.ts";
+import { rehearsalTargetSnapshot } from "../src/testing/twilio-rehearsal-observation.ts";
+import { observeRehearsalCarrier } from "../src/testing/twilio-rehearsal-carrier-observation.ts";
 import { TwilioVoiceRehearsal } from "../src/testing/twilio-voice-rehearsal.ts";
 import type { RehearsalScenario } from "../src/testing/twilio-voice-rehearsal.ts";
 
@@ -96,24 +97,11 @@ async function main() {
     const targetSid = after.latest?.callSid;
     if (!targetSid) throw Error("Exact target identity unavailable");
     fallbackEvents?.bindTarget(targetSid);
-    let result: ReturnType<typeof qualifyRehearsalObservation> | undefined;
-    let observation: Readonly<{ targetCallSid: string; targetStatus: string;
-      childrenComplete: boolean; children: readonly Readonly<{ sid: string; status: string }>[] }> | undefined;
-    const readDeadline = Date.now() + 20_000;
-    for (let index = 0; index < 15 && Date.now() < readDeadline && !controller.signal.aborted; index++) {
-      try {
-        const target = await observer.target(targetSid), children = await observer.children(targetSid);
-        observation = { targetCallSid: target.sid, targetStatus: target.status,
-          childrenComplete: children.complete, children: children.calls.map(child => ({ sid: child.sid, status: child.status })) };
-        result = qualifyRehearsalObservation({ accountSid, caller, number, fallback: fallbackNumber,
-          scenario: scenario as RehearsalScenario }, {
-          callerSid: callSid, launchedAt, now: Date.now(), caller: callerSummary, before, after, target, children,
-          ...(fallbackEvents ? { fallbackEvents } : {}) });
-        if (result.carrierScenarioPassed) break;
-      } catch { /* A provider read failure cannot become a passing observation. */ }
-      if (index < 14 && Date.now() < readDeadline) await delay(1_000);
-    }
-    if (!result) throw Error("Complete carrier observation unavailable");
+    const { result, observation } = await observeRehearsalCarrier({ accountSid, caller, number,
+      fallback: fallbackNumber, scenario: scenario as RehearsalScenario }, {
+      callerSid: callSid, launchedAt, caller: callerSummary, before, after,
+      ...(fallbackEvents ? { fallbackEvents } : {}) }, observer, { signal: controller.signal });
+    if (controller.signal.aborted) throw Error("Carrier observation canceled");
     save({ phase: "qualified", result, observation });
     console.log(JSON.stringify(result));
     if (!result.carrierScenarioPassed) process.exitCode = 1;

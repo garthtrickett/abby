@@ -158,3 +158,9 @@ Cancellation is rechecked after caller eligibility and after writing launch inte
 before any physical call is created. A cancellation received while reading the
 exact call's terminal status invalidates the run and cleans up that owned leg;
 a matched dialogue cannot become a passing result after cancellation.
+
+The richer probe also checks cancellation after each final target/child read and
+before returning qualification. Cancellation during otherwise matching readback
+must not produce a passing journal. See the [5 November coverage audit and
+synthetic synthesis refresh](VOICE_VALIDATION_2026-11-05.md) for the scoped carrier
+evidence, remaining gaps and corrective regression cases.

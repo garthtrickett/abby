@@ -12,6 +12,7 @@ import type { RehearsalScenario } from "../../src/testing/twilio-voice-rehearsal
 import type { RehearsalCallStatistics } from "../../src/testing/restricted-twilio-target.ts";
 import { rehearsalLegObserver } from "../../src/testing/twilio-rehearsal-legs.ts";
 import { createRehearsalServer } from "../../src/testing/twilio-rehearsal-server.ts";
+import { observeRehearsalCarrier } from "../../src/testing/twilio-rehearsal-carrier-observation.ts";
 
 const accountSid = "AC" + "1".repeat(32), callSid = "CA" + "2".repeat(32);
 const parent = "CA" + "4".repeat(32), child = "CA" + "5".repeat(32);
@@ -316,4 +317,76 @@ test("carrier leg readback: wrong account/parent, incomplete page and invalid pa
       assert.equal((await read(payload).children(parent)).complete, false);
     } else await assert.rejects(read(payload).children(parent));
   }
+});
+
+test("carrier final readback: cancellation during either matching provider read cannot qualify any scenario", async () => {
+  for (const scenario of ["dialogue", "interruption", "fallback"] as const) {
+    for (const cancelAt of ["before", "target", "children"] as const) {
+      const { selected, evidence } = observation(scenario);
+      const controller = new AbortController();
+      let targetReads = 0, childReads = 0;
+      if (cancelAt === "before") controller.abort();
+      const observer = {
+        async target() { targetReads++; if (cancelAt === "target") controller.abort(); return evidence.target; },
+        async children() { childReads++; if (cancelAt === "children") controller.abort(); return evidence.children; },
+      };
+      // These exact inputs pass without cancellation; the cancellation must be
+      // what prevents a false pass, rather than a mismatched fixture.
+      assert.equal(qualifyRehearsalObservation(selected, evidence).carrierScenarioPassed, true);
+      await assert.rejects(observeRehearsalCarrier(selected, evidence, observer,
+        { signal: controller.signal, now: () => evidence.now }), /Carrier observation canceled/);
+      assert.equal(targetReads, cancelAt === "before" ? 0 : 1);
+      assert.equal(childReads, cancelAt === "children" ? 1 : 0);
+    }
+  }
+});
+
+test("carrier final readback: matching scenarios pass and retain only allowlisted observation fields", async () => {
+  for (const scenario of ["dialogue", "interruption", "fallback"] as const) {
+    const { selected, evidence } = observation(scenario);
+    const result = await observeRehearsalCarrier(selected, evidence, {
+      async target() { return { ...evidence.target, privateCanary: "never retain" }; },
+      async children() { return evidence.children; },
+    }, { signal: new AbortController().signal, now: () => evidence.now });
+    assert.equal(result.result.carrierScenarioPassed, true);
+    assert.equal(result.result.clinicalAcceptance, false);
+    assert(!JSON.stringify(result).includes("never retain"));
+  }
+});
+
+test("carrier final readback: transient failure may recover, but cancellation while waiting stops reads", async () => {
+  const { selected, evidence } = observation("dialogue");
+  let targetReads = 0, waits = 0;
+  const observer = { async target() {
+    if (++targetReads === 1) throw Error("private provider failure");
+    return evidence.target;
+  }, async children() { return evidence.children; } };
+  const result = await observeRehearsalCarrier(selected, evidence, observer,
+    { signal: new AbortController().signal, now: () => evidence.now, wait: async () => { waits++; } });
+  assert.equal(result.result.carrierScenarioPassed, true);
+  assert.equal(targetReads, 2); assert.equal(waits, 1);
+  const controller = new AbortController(); targetReads = 0;
+  await assert.rejects(observeRehearsalCarrier(selected, evidence, observer,
+    { signal: controller.signal, now: () => evidence.now, wait: async () => { controller.abort(); } }),
+  /Carrier observation canceled/);
+  assert.equal(targetReads, 1);
+});
+
+test("carrier final readback: exhausted or incomplete observations remain unverified without extending limits", async () => {
+  const { selected, evidence } = observation("interruption");
+  let reads = 0, now = evidence.now;
+  const observer = { async target() { reads++; return evidence.target; },
+    async children() { return { complete: false, calls: [] }; } };
+  const result = await observeRehearsalCarrier(selected, evidence, observer,
+    { signal: new AbortController().signal, now: () => now, wait: async () => { now += 1_000; } });
+  assert.equal(result.result.carrierScenarioPassed, false); assert.equal(reads, 15);
+  reads = 0; now = evidence.now;
+  await observeRehearsalCarrier(selected, evidence, observer,
+    { signal: new AbortController().signal, now: () => now, wait: async () => { now += 20_000; } });
+  assert.equal(reads, 1);
+  await assert.rejects(observeRehearsalCarrier(selected, evidence, {
+    async target() { throw Error("private provider failure"); },
+    async children() { assert.fail("failed target read must not fetch children"); },
+  }, { signal: new AbortController().signal, now: () => evidence.now, wait: async () => {} }),
+  /Complete carrier observation unavailable/);
 });

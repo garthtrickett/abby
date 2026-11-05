@@ -56,6 +56,18 @@ is `unverified`. Any other provider remains an unselected experiment requiring
 its own exact configuration and qualification. Synthetic results do not close
 the representative acoustic or clinic/provider acceptance gates below.
 
+## Fresh synthesis checkpoint, 5 November 2026
+
+The [fresh comparison](../phase-1/VOICE_VALIDATION_2026-11-05.md#fresh-synthesis)
+retains the original forty-job synthesis gate. The default primary/fallback
+profile now fails: 39 jobs queued and one became uncertain after primary audio
+started. Its successful-job first-chunk p95 is 3,143 ms; that does not hide the
+failed job. The separately declared `tts-1` candidate passed all forty jobs with
+1,813 ms first-chunk p95. Neither profile is newly selected for serving. The
+October synthesis pass above remains historical evidence, not the latest
+default-profile result. Recognition, representative calls and release readiness
+remain separately unqualified.
+
 ## Optional Deepgram diagnostics, 23 October 2026
 
 The [optional adapter and private comparisons](../phase-1/DEEPGRAM_TRANSCRIPTION.md)
