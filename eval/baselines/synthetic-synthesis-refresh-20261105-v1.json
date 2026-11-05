@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "kind": "fresh-synthetic-synthesis-comparison",
+  "sourceHead": "5d6e7fa554db88a6ec8047308d545c7dc6302590",
+  "profiles": [
+    {
+      "profile": "default",
+      "runAt": "2026-11-05T06:43:14.701Z",
+      "configuration": {
+        "primaryModel": "gpt-4o-mini-tts",
+        "fallbackModel": "tts-1",
+        "voice": "coral",
+        "primaryFirstChunkMs": 1500,
+        "combinedFirstChunkMs": 5000,
+        "laterStepMs": 2000,
+        "maxUtteranceMs": 20000,
+        "corpusVersion": "speech-loop-v1",
+        "corpusSha256": "b02fc915affa082502d417bf3eaaecb4435c14c00947c40ecda3e57ee7578857",
+        "sourceSha256": "37d8cbd77d2f1819e8d960f04f336bed04d9af1b69636aee89e8ca2a4b1c1b16",
+        "repeats": 20,
+        "concurrency": 4,
+        "nodeVersion": "v22.23.2"
+      },
+      "counts": {
+        "queued": 39,
+        "notSent": 0,
+        "uncertain": 1,
+        "primary": 37,
+        "fallback": 3,
+        "firstChunkMisses": 0
+      },
+      "candidateGate": {
+        "status": "fail",
+        "failures": [
+          "failedJobs"
+        ],
+        "metrics": {
+          "jobs": 40,
+          "failedJobs": 1,
+          "lateJobs": 0,
+          "firstChunkP95Ms": 3143,
+          "utteranceP95Ms": 3307
+        },
+        "thresholds": {
+          "version": "speech-synthetic-latency-v1",
+          "minJobs": 40,
+          "repeatsPerCase": 20,
+          "maxP95FirstChunkMs": 3500,
+          "maxIndividualFirstChunkMs": 5000,
+          "maxP95UtteranceMs": 6000,
+          "maxFailedJobs": 0
+        }
+      },
+      "reportSha256": "5721722560d549126ab19cc2c1b5e15914897b1ea808ad9b4edd0f91487133fa",
+      "incompleteJobs": [
+        {
+          "caseId": "SL-001",
+          "repeat": 17,
+          "selected": "primary",
+          "outcome": "uncertain",
+          "chunks": 185,
+          "firstChunkMs": 901,
+          "totalMs": 3573
+        }
+      ]
+    },
+    {
+      "profile": "tts1-candidate",
+      "runAt": "2026-11-05T06:43:33.518Z",
+      "configuration": {
+        "primaryModel": "tts-1",
+        "fallbackModel": "tts-1",
+        "voice": "coral",
+        "primaryFirstChunkMs": 2500,
+        "combinedFirstChunkMs": 5000,
+        "laterStepMs": 2000,
+        "maxUtteranceMs": 20000,
+        "corpusVersion": "speech-loop-v1",
+        "corpusSha256": "b02fc915affa082502d417bf3eaaecb4435c14c00947c40ecda3e57ee7578857",
+        "sourceSha256": "37d8cbd77d2f1819e8d960f04f336bed04d9af1b69636aee89e8ca2a4b1c1b16",
+        "repeats": 20,
+        "concurrency": 4,
+        "nodeVersion": "v22.23.2"
+      },
+      "counts": {
+        "queued": 40,
+        "notSent": 0,
+        "uncertain": 0,
+        "primary": 40,
+        "fallback": 0,
+        "firstChunkMisses": 0
+      },
+      "candidateGate": {
+        "status": "pass",
+        "failures": [],
+        "metrics": {
+          "jobs": 40,
+          "failedJobs": 0,
+          "lateJobs": 0,
+          "firstChunkP95Ms": 1813,
+          "utteranceP95Ms": 2420
+        },
+        "thresholds": {
+          "version": "speech-synthetic-latency-v1",
+          "minJobs": 40,
+          "repeatsPerCase": 20,
+          "maxP95FirstChunkMs": 3500,
+          "maxIndividualFirstChunkMs": 5000,
+          "maxP95UtteranceMs": 6000,
+          "maxFailedJobs": 0
+        }
+      },
+      "reportSha256": "d8808775b4a546712a0d9bed0ef7b5d2399b9c17cbcb207dd8dd743c445f4fef",
+      "incompleteJobs": []
+    }
+  ],
+  "providerRequestsMayIncludePreAudioFallback": true,
+  "queueTimingNotAudibleTiming": true,
+  "runtimeSelectionChanged": false,
+  "humanReviewStatus": "pending",
+  "liveCallStatus": "notRun",
+  "releaseGate": "unverified"
+}

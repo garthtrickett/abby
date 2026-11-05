@@ -7,7 +7,7 @@
     "docs/adr/0002-provider-acknowledged-booking.md": "c4d0f8213bf3eb73a5e904604ac73a0e06463036cae32ccfd8ed450d42f934a4",
     "docs/adr/0003-class-movement-staff-resolution.md": "683bdd10660afc00309bac21e32ceda976573aa5e29aca4106fb1cddcb71b62f",
     "eval/NOVA3_CLINIC_PROFILE.md": "6dcfa9c25fcac476c528a608a160cf138e1e987894fb8d3b54443e62c08f1245",
-    "eval/SPEECH_QUALITY_GATE.md": "8e743d968cb34a8fd63b4d2cf126934a5e5f4625dbff434d128a8eceb1e7425a",
+    "eval/SPEECH_QUALITY_GATE.md": "696627b27f7e3ac0c0fc2ae5a5d3d05d80bdf1de6f2a6be29e498a4a784e213f",
     "eval/baselines/deepgram-afftdn-clinic-noise-20261031-v1.json": "61aaca0ed16d828d4a6d896e7eec8d773ca2bb000327d996b201ea198fd14718",
     "eval/baselines/deepgram-clinic-vocabulary-noise-20261023-v1.json": "bc4277e79babef625dd27b44168f2e629efd9c5b36fa0edf42a68c7a7df032be",
     "eval/baselines/deepgram-complete-turn-nova3-noise-20261023-v1.json": "951c9f9eb95a322d037729efef2971127013c827aca43f0571b0be2eb9e7cf70",
