@@ -76,3 +76,44 @@ compilation and the compiled CLI plus focused voice regressions passed 51/51,
 with no skips or cancellations. This is an affected graph, not a whole-project
 serving build. A future carrier rehearsal on the corrective source remains a
 separate observation, not a result invented from these tests.
+
+## Case-level speech and listener boundary, 6 November 2026
+
+A separate patient-free analysis rehashed the private original reports for four
+predeclared Nova-3 noisy-speech profiles: public vocabulary alone, RNNoise,
+DeepFilterNet3 and fixed FFT denoising. Each used the same six cases three times.
+Every profile failed the unchanged critical-term/WER gate. The table gives the
+three verdicts for each fixed case, without exposing recognized text or audio.
+
+| Profile | NS-004 availability date | NS-005 booking request | NS-006 urgent language |
+| --- | --- | --- | --- |
+| Vocabulary alone | mismatch ×3 | critical ×3 | critical ×3 |
+| RNNoise | mismatch ×3 | mismatch ×3 | critical ×3 |
+| DeepFilterNet3 | mismatch ×3 | mismatch ×3 | critical ×3 |
+| Fixed FFT | mismatch ×3 | critical ×3 | critical ×3 |
+
+NS-006 remained critical in all twelve attempts and NS-004 mismatched in all
+twelve. Exact token inspection found the pinned urgent term `chest` absent in all
+twelve NS-006 transcripts; `pain` was absent in nine. NS-005 changed
+classification across the separate cohorts. These results
+identify persistent fixture-level failures; they do not rank filters causally or
+substitute for the selected Krisp experiment. No new provider request was made
+for this analysis, no gate was relaxed and no profile was promoted. The private
+case-only receipt is `/home/gust/.local/state/abby-current-plan-20261106/speech-case-analysis-v1.json`.
+
+The carrier probe's Twilio marks establish transport playback completion, but
+cannot measure what the independent caller actually heard after interruption.
+Twilio's [unidirectional Media Streams](https://www.twilio.com/docs/voice/twiml/stream)
+can fork both tracks from the scripted caller leg to a signed WSS listener.
+On that leg, `outbound_track` is the scripted caller's speech sent to Abby;
+`inbound_track` is Abby's speech heard by the scripted caller. The
+[message format](https://www.twilio.com/docs/voice/media-streams/websocket-messages)
+provides per-track media timestamps and 8 kHz μ-law payloads. A prospective
+restricted test can correlate the scripted caller's second utterance onset on
+`outbound_track` with the end of Abby speech on `inbound_track`, using only
+fixed public test phrases and an in-memory bounded window. It must authenticate
+the exact call/stream, reject missing or disordered media, and report an unknown
+result when Abby's speech cannot be isolated from other audio on the inbound
+track. No patient audio, raw payload or transcript belongs in the journal
+or repository. This is a test design, not a measured audible-silence result or
+permission to claim the representative-call gate.
