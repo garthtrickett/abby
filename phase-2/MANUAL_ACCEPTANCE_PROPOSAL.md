@@ -1,5 +1,7 @@
 # Proposed operator acceptance
 
+The [current-source trial checklist](CLINIC_TRIAL_CHECKLIST_2026-11-06.md) maps all twelve worksheet rows to the existing demo target and keeps missing clinic/staff inputs visible.
+
 The [clinic setup and rehearsal command](CLINIC_SETUP_AND_REHEARSAL.md) supplies a twelve-scenario local worksheet pinned to the current committed source and six owner configuration areas. It records self-reported staff observations only; missing configuration, failed/unrun scenarios and source drift remain visible. It neither replaces the observations below nor supplies activation authority.
 
 Status: proposal only, updated 3 November 2026. Full current-candidate acceptance

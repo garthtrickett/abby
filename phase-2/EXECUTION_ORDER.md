@@ -1,5 +1,7 @@
 # Abby execution order
 
+**Current-main selected evidence, 6 November 2026:** The [reconciliation](CURRENT_MAIN_RECONCILIATION_2026-11-06.md) verifies selected thirteen-gap, class/pass and Karen witnesses against merged main `463a4ac3`; it does not close acoustic or clinic acceptance. The [current-source supervised checklist](CLINIC_TRIAL_CHECKLIST_2026-11-06.md) keeps unrun human observations explicit.
+
 **Local staged movement process privacy qualification, 4 November 2026:**
 The two original E2E-417 PostgreSQL cases now check captured worker stdout/stderr
 and unfiltered data-only backups as well as every SQL column, including after
