@@ -2,7 +2,27 @@
 
 This prepares the supervised exercise required by [execution stage 11](EXECUTION_ORDER.md#11-complete-combined-qualification-and-activation-acceptance). Engineering baseline: actual merged Abby main `463a4ac3104c329f1dd39d2ed08f6e478aeddeea`, with [four passing CI jobs](https://github.com/garthtrickett/abby/actions/runs/41999130934). Before a trial, prepare the worksheet from the **actual deployed candidate commit**, not this historical baseline. The [operator acceptance proposal](MANUAL_ACCEPTANCE_PROPOSAL.md) and [worksheet command](CLINIC_SETUP_AND_REHEARSAL.md#rehearsal-worksheet-command) govern the exercise; this page identifies the observations to arrange. It records no staff approval or completed scenario.
 
-The existing Cliniko demo account is the target for a patient-free rehearsal. Prior demo catalogue/lifecycle checks are useful setup evidence, not approval of today's source, policy, staff or payment work. The demo account timezone was recorded as `Asia/Jakarta`; confirm the actual trial location and supported country (`AU`, `UK`, `NZ` or `CA`) rather than labelling that timezone an Australian clinic. Use only clinic-approved synthetic contacts and owned fixtures. Check current account access, exact service/practitioner/location policy, booking/cancellation/rescheduling terms, fee/waiver decisions, and confidential memo settings before any provider action.
+The existing Cliniko demo account is the target for a patient-free rehearsal.
+On merged main `8c0eb25f`, a bounded read-only catalogue check passed with one
+business, one practitioner, two appointment types and nine metadata GETs. Its
+inspected selection was unavailable because online booking was disabled. A
+separate read confirmed the business still uses `Asia/Jakarta`. A later single
+read-only business GET on merged main `42c093f2` reported `country_code: AU`
+and `country: Australia`. These metadata reads accessed no patients and made
+no writes. Private receipts in
+`/home/gust/.local/state/abby-current-plan-20261106/` are
+`cliniko-demo-catalogue-readonly-20261106.json`,
+`cliniko-demo-timezone-readonly-20261106.json`, and
+`cliniko-demo-country-readonly-20261106.json`.
+
+These checks refresh setup evidence, not approval of source, policy, staff or
+payment work. Confirm with the clinic owner that this Australian business
+metadata identifies the intended trial location and reconcile its Jakarta
+timezone before using country-specific terms or opening a trial.
+Use only clinic-approved synthetic contacts and owned fixtures. Check exact
+service/practitioner/location policy, booking/cancellation/rescheduling terms,
+fee/waiver decisions, and confidential memo settings before any provider
+action.
 
 The worksheet requires six owner configuration areas: `catalogue`, `cancellation`, `rescheduling`, `payments`, `staff`, and `memos`. Record `null` for an absent area; never infer approval from a code default, a demo setting or a historical Karen value. Prepare a fresh mode-0600 owner-only binding with those six paths, the exact clinic/location scope and verified country. The command hashes decoded owner files and binds the current clean commit. Reprepare after any source, scope or policy change.
 
@@ -20,5 +40,7 @@ The worksheet requires six owner configuration areas: `catalogue`, `cancellation
 | `memo-content` | Inspect a confidential Cliniko communication memo for only verified administrative facts on the exact patient. | Clinic approves wording, native subject and API author policy. |
 | `memo-access-retention` | Verify intended viewers and retention; check withdrawal or wrong-subject refusal. | Clinic approves access and retention; treatment/appointment notes remain separate. |
 | `cleanup` | Independently read fixture outcomes and remove only the owned synthetic records; record any unresolved state. | Cleanup has a named human owner and protected evidence reference. |
+
+Outbound [contact-review acceptance](OUTBOUND_STAFF_REVIEW.md#clinic-observations-still-required) is a separate scoped exercise. Staff must be able to find the clinic-owned pending review, while unresolved contact remains blocked; opening or closing the task cannot establish a whole-call no-stop result or grant reconsent. The twelve-row worksheet does not score this separate contact decision, and no such staff observation is recorded here.
 
 For each actually observed row, the staff worksheet stores only `passed` or `failed`, an opaque observer reference, time and a private evidence reference. Leave unrun rows `notRun`; do not copy prior synthetic or agent-demo results into them. The CLI's `observationsRecorded` status is self-reported evidence only and always has `activationAuthorized:false`. Keep the protected native observations in the clinic-approved private destination. The failed acoustic gate, human policy/sign-off, real sender and provider acceptance, and activation decision retain their separate gates.
