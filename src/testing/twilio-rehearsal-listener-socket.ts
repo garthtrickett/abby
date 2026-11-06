@@ -36,17 +36,21 @@ export function createRehearsalListenerSocket(config: Readonly<{
     },
     handleUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer) {
       const signature = header(request.headers["x-twilio-signature"]);
+      let signed = false;
+      try { signed = Boolean(signature && validateRequest(config.authToken, signature, url.href, {})); }
+      catch { /* Invalid public upgrade cannot become a stream. */ }
       if (claimed || request.method !== "GET" || request.url !== url.pathname ||
-          now() >= config.expiresAt || !signature ||
-          !validateRequest(config.authToken, signature, url.href, {})) { deny(socket); return; }
+          now() >= config.expiresAt || !signed) { deny(socket); return; }
       claimed = true;
-      websocket.handleUpgrade(request, socket, head, client => {
-        client.on("message", (data, binary) => {
-          if (binary || !frames.accept(data.toString("utf8"))) client.close(1008);
+      try {
+        websocket.handleUpgrade(request, socket, head, client => {
+          client.on("message", (data, binary) => {
+            if (binary || !frames.accept(data.toString("utf8"))) client.close(1008);
+          });
+          client.on("error", () => { frames.finish(); settled(); client.terminate(); });
+          client.on("close", () => { frames.finish(); settled(); });
         });
-        client.on("error", () => { frames.finish(); settled(); client.terminate(); });
-        client.on("close", () => { frames.finish(); settled(); });
-      });
+      } catch { frames.finish(); settled(); socket.destroy(); }
     },
     close() {
       for (const client of websocket.clients) client.terminate();
