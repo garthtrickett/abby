@@ -144,10 +144,26 @@ real call; do not count a synthetic script as carrier proof.
 
 For a single temporary public origin, the test-only
 `voice:serve-rehearsal-gateway -- --serve` command routes the target's signed
-HTTP/WebSocket paths to port 3120 and this caller's exact health/callback paths
+HTTP/WebSocket paths to port 3120 and this caller's exact health/callback and
+test-only media paths
 to port 3121. Expose only its loopback port 3119 through a fresh tunnel; see
 the [restricted target setup](../phase-2/TWILIO_REHEARSAL_TARGET.md#one-temporary-public-tunnel-for-target-and-caller).
 This does not start either listener, change Twilio settings or place a call.
+
+The interruption probe now optionally forks both tracks of its **scripted
+caller leg** with a signed, exact-run Twilio Media Stream. On that leg,
+`outbound` is the fixed scripted phrases sent toward Abby and `inbound` is
+Abby's audio delivered toward the caller. The fork decodes μ-law only in
+memory, discards every payload immediately and saves bounded timing/energy
+metadata. It rejects a mismatched caller, stream or account, reordered or
+missing sequence/chunk, malformed payload and incomplete stop. A candidate
+silence lag is reported only if two scripted speech bursts and continuous
+target-track coverage surround the second burst. It is a **diagnostic
+candidate**, not an audible-interruption pass: the energy threshold is not yet
+calibrated on real carrier audio, a natural target pause could coincide with
+the burst, and the handset path remains outside the fork. No live listener
+result has been claimed on this source. The existing transport and clinic gates
+stay separate.
 
 Primary protocol references: [Calls API](https://www.twilio.com/docs/voice/api/call-resource),
 [Gather](https://www.twilio.com/docs/voice/twiml/gather),

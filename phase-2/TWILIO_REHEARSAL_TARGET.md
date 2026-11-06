@@ -62,7 +62,8 @@ requesting fallback or observing a completed leg alone cannot prove ringing.
 The optional `voice:serve-rehearsal-gateway` command binds only to loopback
 (default port 3119) and routes the exact signed target webhook and media socket
 to the target listener (default 3120). It routes only the caller's `/healthz`,
-`/voice-rehearsal/<run>/<step>` and `/fallback-ringing/<run>` requests to the
+`/voice-rehearsal/<run>/<step>` and `/fallback-ringing/<run>` requests, plus the
+test-only signed `/voice-rehearsal-media/<run>` socket, to the
 separate caller listener (default 3121). Other routes return 404. Its window is
 bounded to one hour and shutdown closes proxied media sockets. It has no clinic
 host, speech adapter, outbound dialler or provider-setting access.

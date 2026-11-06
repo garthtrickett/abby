@@ -60,10 +60,13 @@ export function createTwilioRehearsalGateway(ports: Ports) {
     targetHealth.end();
   });
   server.on("upgrade", (incoming, client, head) => {
-    if (incoming.method !== "GET" || incoming.url !== "/twilio/media/") {
+    const targetMedia = incoming.method === "GET" && incoming.url === "/twilio/media/";
+    const callerMedia = incoming.method === "GET" &&
+      /^\/voice-rehearsal-media\/[a-f0-9]{32}$/.test(incoming.url ?? "");
+    if (!targetMedia && !callerMedia) {
       client.end("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n"); return;
     }
-    const upstream = connect(ports.target, "127.0.0.1");
+    const upstream = connect(targetMedia ? ports.target : ports.caller, "127.0.0.1");
     sockets.add(client); sockets.add(upstream);
     const close = () => { client.destroy(); upstream.destroy(); sockets.delete(client); sockets.delete(upstream); };
     upstream.setTimeout(240_000, close);
