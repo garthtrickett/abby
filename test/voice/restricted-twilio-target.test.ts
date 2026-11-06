@@ -186,6 +186,42 @@ test("restricted target: private metadata identifies the failed media boundary w
   await call.closed;
 });
 
+test("restricted target: synthesis failure before output reports definitely not sent", async t => {
+  const reports: RehearsalCallStatistics[] = [];
+  const speech = providers();
+  const f = await fixture(t, config(), { ...speech, synthesis: {
+    async *stream() { throw Error("synthetic provider unavailable"); }
+  } }, report => reports.push(report));
+  const call = await f.open();
+  await until(() => reports.some(report => report.failed));
+  const failed = reports.find(report => report.failed);
+  assert(failed);
+  assert.equal(failed.failureStage, "synthesis");
+  assert.equal(failed.playbackQueueFailure, "notSent");
+  assert.equal(failed.repliesQueued, 0);
+  assert.equal(call.counts().packets, 0);
+  assert.equal(Object.keys(failed).some(key => /audio|transcript|text|payload/i.test(key)), false);
+  await call.closed;
+});
+
+test("restricted target: synthesis failure after an output attempt reports uncertainty", async t => {
+  const reports: RehearsalCallStatistics[] = [];
+  const speech = providers();
+  const f = await fixture(t, config(), { ...speech, synthesis: {
+    async *stream() { yield new Uint8Array(640); throw Error("synthetic provider tail unavailable"); }
+  } }, report => reports.push(report));
+  const call = await f.open();
+  await until(() => reports.some(report => report.failed));
+  const failed = reports.find(report => report.failed);
+  assert(failed);
+  assert.equal(failed.failureStage, "synthesis");
+  assert.equal(failed.playbackQueueFailure, "uncertain");
+  assert.equal(failed.repliesQueued, 0);
+  assert(call.counts().packets > 0);
+  assert.equal(Object.keys(failed).some(key => /audio|transcript|text|payload/i.test(key)), false);
+  await call.closed;
+});
+
 test("restricted target: shutdown settles live media and ownership release before reporting completion",
   { timeout: 10_000 }, async t => {
   const mediaClosing = gate(), mediaClosed = gate(), releasing = gate(), released = gate();
