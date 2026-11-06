@@ -42,7 +42,9 @@ function silenceCandidate(inbound: readonly Frame[], outbound: readonly Frame[])
   const onset = bursts[1]!.start;
   const before = inbound.reduce((total, frame) => total +
     (loud(frame) && frame.atMs >= onset - 500 && frame.atMs < onset ? frame.durationMs : 0), 0);
-  if (before < 100 || !inbound.some(frame => frame.atMs >= onset + 1_500)) return undefined;
+  if (before < 100 || !inbound.some(frame => loud(frame) &&
+      frame.atMs < onset && frame.atMs + frame.durationMs > onset - 100) ||
+      !inbound.some(frame => frame.atMs >= onset + 1_500)) return undefined;
   let previousEnd: number | undefined;
   for (const frame of inbound) {
     if (frame.atMs < onset - 500 || frame.atMs > onset + 1_500) continue;

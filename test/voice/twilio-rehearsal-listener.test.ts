@@ -80,6 +80,20 @@ test("caller-leg energy yields a timing candidate while keeping audio and outcom
   assert.deepEqual(summary.silenceCandidate, { secondUtteranceAtMs: 2_200,
     targetActiveBeforeMs: 300, candidateSilenceLagMs: 60 });
   assert(!JSON.stringify(summary).includes("payload"));
+
+  const naturalPause = new RehearsalListenerFrames(accountSid, runId);
+  naturalPause.bindCall(callSid); naturalPause.accept(connected()); naturalPause.accept(start());
+  sequence = 2;
+  for (let index = 0; index < 200; index++) {
+    const timestamp = index * 20;
+    naturalPause.accept(timedMedia(sequence++, "inbound", index + 1, timestamp,
+      timestamp >= 1_900 && timestamp < 2_060 ? 0 : 0xff));
+    naturalPause.accept(timedMedia(sequence++, "outbound", index + 1, timestamp,
+      timestamp < 120 || timestamp >= 2_200 && timestamp < 2_320 ? 0 : 0xff));
+  }
+  naturalPause.accept(stop(sequence));
+  assert.equal(naturalPause.summary().status, "captured");
+  assert.equal(naturalPause.summary().silenceCandidate, undefined);
 });
 
 test("listener upgrade needs the exact signed public WSS URL and cannot accept another stream", async t => {
