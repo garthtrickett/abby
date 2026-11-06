@@ -14,11 +14,14 @@ import type { TranscriptFailure } from "../voice/turn-assembler.ts";
 
 type FailureStage = "none" | "decode" | "media" | "synthesis" | "clear" | "duration";
 type TargetFailure = TranscriptFailure | Readonly<{ kind: "sessionClosed" | "outputUnavailable" }>;
+type PlaybackQueueFailure = "notSent" | "uncertain" | "exception";
 export type RehearsalCallStatistics = Readonly<{
   session: number; callSid: string; started: boolean; turns: number; repliesQueued: number;
   played: number; interruptions: number; clearAcknowledged: number; dtmfFallback: boolean;
   stopped: boolean; failed: boolean; failureStage: FailureStage;
   mediaFailureKind?: MediaFailure["kind"] | TargetFailure["kind"] | undefined;
+  /** Queue result only; it carries no spoken text, audio or provider error body. */
+  playbackQueueFailure?: PlaybackQueueFailure | undefined;
   active: number; total: number; expiresAt: string;
 }>;
 export type RestrictedTargetConfig = Readonly<{
@@ -130,7 +133,8 @@ export function createRestrictedTwilioTarget(config: RestrictedTargetConfig, pro
       const stats = { session: total, callSid: auth.event.key.providerCallRef, started: false, turns: 0,
         repliesQueued: 0, played: 0, interruptions: 0, clearAcknowledged: 0,
         dtmfFallback: false, stopped: false, failed: false, failureStage: "none" as FailureStage,
-        mediaFailureKind: undefined as MediaFailure["kind"] | TargetFailure["kind"] | undefined };
+        mediaFailureKind: undefined as MediaFailure["kind"] | TargetFailure["kind"] | undefined,
+        playbackQueueFailure: undefined as PlaybackQueueFailure | undefined };
       const emit = () => {
         // A reporting failure cannot change audio/playback truth. The caller
         // must independently require fresh complete evidence before claiming a pass.
@@ -170,9 +174,9 @@ export function createRestrictedTwilioTarget(config: RestrictedTargetConfig, pro
         const expected = epoch, id = `rehearsal-${++replyNumber}`; current = id;
         background(playback.enqueue(id, text, () => !done && epoch === expected && current === id).then(result => {
           if (done || epoch !== expected) return;
-          if (result !== "queued") { fail("synthesis"); return; }
+          if (result !== "queued") { stats.playbackQueueFailure = result; fail("synthesis"); return; }
           stats.repliesQueued++; emit();
-        }).catch(() => fail("synthesis")));
+        }).catch(() => { stats.playbackQueueFailure = "exception"; fail("synthesis"); }));
       }
       const target: MediaTurnTarget<void, TargetFailure> = {
         async speechStarted() {

@@ -137,3 +137,38 @@ result when Abby's speech cannot be isolated from other audio on the inbound
 track. No patient audio, raw payload or transcript belongs in the journal
 or repository. This is a test design, not a measured audible-silence result or
 permission to claim the representative-call gate.
+
+## Current-source restricted phone result, 6 November 2026
+
+Merged main `50fc40a3` passed all four exact-head CI jobs, including 7,466
+PostgreSQL tests with zero failures and six ordered controls. Its 783-output
+serving build was qualified before one allowlisted interruption call. Twilio's
+caller leg completed, but the restricted target failed at synthesis before its
+first reply was queued or played. The scripted greeting and interruption were
+therefore **not qualified**. The original number webhook was read back after
+restoration; the disposable database and listeners exited. The private receipt
+`/home/gust/.local/state/abby-current-plan-20261106/phone-window-main50-20261106-evidence-v1.json`
+preserves hashes and counts without speech or audio. There was no automatic
+retry.
+
+A separate one-shot diagnostic then used the same fixed public greeting and
+single `gpt-4o-mini-tts` adapter with a fake output queue, placing no carrier
+call. The provider returned audio over HTTP 200; all 895 chunks queued, with
+a 1,467 ms first chunk. This proves that one later request worked, not why the
+phone call failed or that the acoustic or carrier gate passes. Its private
+count-and-timing receipt is
+`/home/gust/.local/state/abby-carrier-listener-20261106/greeting-synthesis-main50-20261106-v1.json`.
+
+The restricted target previously kept only the broad `synthesis` failure stage.
+It now reports the playback queue's bounded `notSent` or `uncertain` result,
+or an exceptional rejection, without retaining provider errors, text or audio.
+Signed-wire regressions distinguish failure before any output attempt from an
+uncertain failure after a chunk was sent. This diagnostic addition does not
+reclassify the earlier call, select a new speech profile, or authorize another
+carrier call or clinic traffic.
+
+The candidate passes whole-project strict TypeScript, the voice-test build and
+all 13 restricted-target signed-wire cases locally. The first two whole-project
+compiler attempts ran out of their imposed V8 heap without a type verdict; the
+unchanged check passed with a separately admitted 3 GiB execution cap. Exact-head
+CI, normal delivery and another real carrier observation remain separate.
