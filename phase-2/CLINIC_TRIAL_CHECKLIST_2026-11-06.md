@@ -6,14 +6,19 @@ The existing Cliniko demo account is the target for a patient-free rehearsal.
 On merged main `8c0eb25f`, a bounded read-only catalogue check passed with one
 business, one practitioner, two appointment types and nine metadata GETs. Its
 inspected selection was unavailable because online booking was disabled. A
-separate read confirmed the business still uses `Asia/Jakarta`; neither check
-read patients or wrote to Cliniko. Private receipts are
-`/home/gust/.local/state/abby-current-plan-20261106/cliniko-demo-catalogue-readonly-20261106.json`
-and `cliniko-demo-timezone-readonly-20261106.json` in the same directory.
+separate read confirmed the business still uses `Asia/Jakarta`. A later single
+read-only business GET on merged main `42c093f2` reported `country_code: AU`
+and `country: Australia`. These metadata reads accessed no patients and made
+no writes. Private receipts in
+`/home/gust/.local/state/abby-current-plan-20261106/` are
+`cliniko-demo-catalogue-readonly-20261106.json`,
+`cliniko-demo-timezone-readonly-20261106.json`, and
+`cliniko-demo-country-readonly-20261106.json`.
 
 These checks refresh setup evidence, not approval of source, policy, staff or
-payment work. Confirm the actual trial location and supported country (`AU`,
-`UK`, `NZ` or `CA`) rather than labelling that timezone an Australian clinic.
+payment work. Confirm with the clinic owner that this Australian business
+metadata identifies the intended trial location and reconcile its Jakarta
+timezone before using country-specific terms or opening a trial.
 Use only clinic-approved synthetic contacts and owned fixtures. Check exact
 service/practitioner/location policy, booking/cancellation/rescheduling terms,
 fee/waiver decisions, and confidential memo settings before any provider
