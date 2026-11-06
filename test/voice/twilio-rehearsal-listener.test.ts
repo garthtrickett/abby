@@ -22,10 +22,10 @@ const start = (sid = callSid) => frame({ event: "start", sequenceNumber: "1", st
     customParameters: { runId } } });
 const media = (sequence: number, track: "inbound" | "outbound", byte: number) => frame({
   event: "media", sequenceNumber: String(sequence), streamSid,
-  media: { track, chunk: "1", timestamp: "0", payload: Buffer.alloc(160, byte).toString("base64") } });
-const timedMedia = (sequence: number, track: "inbound" | "outbound", chunk: number,
+  media: { track, chunk: String(sequence - 1), timestamp: "0", payload: Buffer.alloc(160, byte).toString("base64") } });
+const timedMedia = (sequence: number, track: "inbound" | "outbound",
   timestamp: number, byte: number) => frame({ event: "media", sequenceNumber: String(sequence), streamSid,
-  media: { track, chunk: String(chunk), timestamp: String(timestamp),
+  media: { track, chunk: String(sequence - 1), timestamp: String(timestamp),
     payload: Buffer.alloc(160, byte).toString("base64") } });
 const stop = (sequence: number) => frame({ event: "stop", sequenceNumber: String(sequence), streamSid,
   stop: { accountSid, callSid } });
@@ -69,9 +69,9 @@ test("caller-leg energy yields a timing candidate while keeping audio and outcom
     const timestamp = index * 20;
     const targetSpeaking = timestamp >= 1_900 && timestamp < 2_260;
     const scriptSpeaking = timestamp < 120 || timestamp >= 2_200 && timestamp < 2_320;
-    assert(listener.accept(timedMedia(sequence++, "inbound", index + 1, timestamp,
+    assert(listener.accept(timedMedia(sequence++, "inbound", timestamp,
       targetSpeaking ? 0 : 0xff)));
-    assert(listener.accept(timedMedia(sequence++, "outbound", index + 1, timestamp,
+    assert(listener.accept(timedMedia(sequence++, "outbound", timestamp,
       scriptSpeaking ? 0 : 0xff)));
   }
   listener.accept(stop(sequence));
@@ -86,9 +86,9 @@ test("caller-leg energy yields a timing candidate while keeping audio and outcom
   sequence = 2;
   for (let index = 0; index < 200; index++) {
     const timestamp = index * 20;
-    naturalPause.accept(timedMedia(sequence++, "inbound", index + 1, timestamp,
+    naturalPause.accept(timedMedia(sequence++, "inbound", timestamp,
       timestamp >= 1_900 && timestamp < 2_060 ? 0 : 0xff));
-    naturalPause.accept(timedMedia(sequence++, "outbound", index + 1, timestamp,
+    naturalPause.accept(timedMedia(sequence++, "outbound", timestamp,
       timestamp < 120 || timestamp >= 2_200 && timestamp < 2_320 ? 0 : 0xff));
   }
   naturalPause.accept(stop(sequence));

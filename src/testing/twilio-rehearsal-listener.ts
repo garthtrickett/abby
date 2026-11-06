@@ -3,7 +3,7 @@
  * not qualify intelligibility or audible interruption by itself. */
 type Track = "inbound" | "outbound";
 type Frame = Readonly<{ atMs: number; durationMs: number; meanAbsPcm: number }>;
-type TrackState = { chunk: number; lastEndMs: number; gaps: number; frames: Frame[] };
+type TrackState = { lastEndMs: number; gaps: number; frames: Frame[] };
 const sid = (prefix: string, value: unknown): value is string =>
   typeof value === "string" && new RegExp(`^${prefix}[0-9a-f]{32}$`, "i").test(value);
 const object = (value: unknown): value is Record<string, unknown> =>
@@ -71,13 +71,14 @@ export class RehearsalListenerFrames {
   readonly #runId: string;
   #phase: "connected" | "started" | "stopped" | "failed" | "new" = "new";
   #sequence = 0;
+  #mediaChunk = 0;
   #streamSid: string | undefined;
   #streamCallSid: string | undefined;
   #boundCallSid: string | undefined;
   #reason: string | undefined;
   readonly #tracks: Record<Track, TrackState> = {
-    inbound: { chunk: 0, lastEndMs: 0, gaps: 0, frames: [] },
-    outbound: { chunk: 0, lastEndMs: 0, gaps: 0, frames: [] },
+    inbound: { lastEndMs: 0, gaps: 0, frames: [] },
+    outbound: { lastEndMs: 0, gaps: 0, frames: [] },
   };
 
   constructor(accountSid: string, runId: string) {
@@ -143,7 +144,9 @@ export class RehearsalListenerFrames {
     }
     const track = this.#tracks[media.track as Track];
     const chunk = number(media.chunk), atMs = number(media.timestamp);
-    if (chunk !== track.chunk + 1 || atMs === undefined ||
+    // Twilio numbers media chunks across both tracks, while timestamps and
+    // signal coverage belong to each track independently.
+    if (chunk !== this.#mediaChunk + 1 || atMs === undefined ||
         track.frames.length >= 10_000) return this.#fail("mediaGapOrLimit");
     const bytes = Buffer.from(media.payload, "base64");
     if (bytes.length < 80 || bytes.length > 800 ||
@@ -151,9 +154,9 @@ export class RehearsalListenerFrames {
       return this.#fail("invalidPayload");
     }
     const durationMs = bytes.length / 8;
-    if (track.chunk && atMs < track.lastEndMs) return this.#fail("overlappingTimestamp");
-    if (track.chunk && atMs - track.lastEndMs > 40) track.gaps++;
-    track.chunk = chunk;
+    if (track.frames.length && atMs < track.lastEndMs) return this.#fail("overlappingTimestamp");
+    if (track.frames.length && atMs - track.lastEndMs > 40) track.gaps++;
+    this.#mediaChunk = chunk;
     track.lastEndMs = atMs + durationMs;
     track.frames.push({ atMs, durationMs, meanAbsPcm: meanAbsMulaw(bytes) });
     return true;
