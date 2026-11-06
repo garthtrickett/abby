@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
 import { getExpectedTwilioSignature } from "twilio/lib/webhooks/webhooks.js";
-import { ok } from "../../src/core/model.ts";
+import { err, ok } from "../../src/core/model.ts";
 import type { RestrictedTargetConfig, RehearsalSpeech, RehearsalCallStatistics } from "../../src/testing/restricted-twilio-target.ts";
 
 const { createRestrictedTwilioTarget } = await import(new URL(
@@ -166,6 +166,24 @@ test("restricted target: unavailable reporting cannot erase greeting or prevent 
   const call = await f.open(); await until(() => call.counts().packets > 0);
   call.send({ event: "stop", stop: { accountSid, callSid: firstSid } }); await until(() => f.app.state().active === 0);
   assert.equal(f.app.state().total, 1);
+});
+
+test("restricted target: private metadata identifies the failed media boundary without retaining speech", async t => {
+  const reports: RehearsalCallStatistics[] = [];
+  const speech = providers();
+  const f = await fixture(t, config(), { ...speech, transcription: () => ({
+    accept: async () => err({ kind: "transcriptionUnavailable" as const }),
+    flush: async () => ok([]),
+  }) }, report => reports.push(report));
+  const call = await f.open();
+  call.audio(true); call.audio(true);
+  await until(() => reports.some(report => report.failed));
+  const failed = reports.find(report => report.failed);
+  assert(failed);
+  assert.equal(failed.failureStage, "media");
+  assert.equal(failed.mediaFailureKind, "transcriptionUnavailable");
+  assert.equal(Object.keys(failed).some(key => /audio|transcript|text|payload/i.test(key)), false);
+  await call.closed;
 });
 
 test("restricted target: shutdown settles live media and ownership release before reporting completion",

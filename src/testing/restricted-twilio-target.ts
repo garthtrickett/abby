@@ -6,7 +6,7 @@ import { TwilioSignedIngress } from "../voice/twilio-signed-ingress.ts";
 import type { TwilioSignedIngressConfig, SignedTwilioWebhook } from "../voice/twilio-signed-ingress.ts";
 import { TwilioMediaStream } from "../voice/twilio-media-stream.ts";
 import { MediaTurnController } from "../voice/media-turn-controller.ts";
-import type { MediaTurnTarget, TranscriptionPort } from "../voice/media-turn-controller.ts";
+import type { MediaFailure, MediaTurnTarget, TranscriptionPort } from "../voice/media-turn-controller.ts";
 import { StreamedPlaybackPort } from "../voice/streamed-playback-port.ts";
 import type { SpeechSynthesisPort } from "../voice/streamed-playback-port.ts";
 import { TurnAssembler } from "../voice/turn-assembler.ts";
@@ -18,6 +18,7 @@ export type RehearsalCallStatistics = Readonly<{
   session: number; callSid: string; started: boolean; turns: number; repliesQueued: number;
   played: number; interruptions: number; clearAcknowledged: number; dtmfFallback: boolean;
   stopped: boolean; failed: boolean; failureStage: FailureStage;
+  mediaFailureKind?: MediaFailure["kind"] | TargetFailure["kind"];
   active: number; total: number; expiresAt: string;
 }>;
 export type RestrictedTargetConfig = Readonly<{
@@ -128,7 +129,8 @@ export function createRestrictedTwilioTarget(config: RestrictedTargetConfig, pro
       seen.add(auth.event.key.providerCallRef); total++;
       const stats = { session: total, callSid: auth.event.key.providerCallRef, started: false, turns: 0,
         repliesQueued: 0, played: 0, interruptions: 0, clearAcknowledged: 0,
-        dtmfFallback: false, stopped: false, failed: false, failureStage: "none" as FailureStage };
+        dtmfFallback: false, stopped: false, failed: false, failureStage: "none" as FailureStage,
+        mediaFailureKind: undefined as MediaFailure["kind"] | TargetFailure["kind"] | undefined };
       const emit = () => {
         // A reporting failure cannot change audio/playback truth. The caller
         // must independently require fresh complete evidence before claiming a pass.
@@ -137,7 +139,8 @@ export function createRestrictedTwilioTarget(config: RestrictedTargetConfig, pro
       const sessionId = randomUUID();
       let transcription: TranscriptionPort;
       try { transcription = providers.transcription(sessionId); }
-      catch { stats.failed = true; stats.failureStage = "media"; emit(); throw new Error("rehearsal speech unavailable"); }
+      catch { stats.failed = true; stats.failureStage = "media";
+        stats.mediaFailureKind = "transcriptionUnavailable"; emit(); throw new Error("rehearsal speech unavailable"); }
       active++;
       const stream = new TwilioMediaStream({ accountSid: auth.event.key.accountRef,
         callSid: auth.event.key.providerCallRef, sessionId, startedAt: auth.streamStartedAt, send });
@@ -202,7 +205,7 @@ export function createRestrictedTwilioTarget(config: RestrictedTargetConfig, pro
             media.observePendingCorrection(event.frame);
             if (!media.consumePendingSilence(event.frame)) {
               const progressed = await media.acceptMedia(event.frame);
-              if (!progressed.ok) { fail("media"); return progressed; }
+              if (!progressed.ok) { stats.mediaFailureKind = progressed.error.kind; fail("media"); return progressed; }
             }
           } else if (event.kind === "played") {
             const completed = await playback.acceptCompletion(event.completion, async () => true);
