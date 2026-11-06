@@ -182,3 +182,26 @@ before returning qualification. Cancellation during otherwise matching readback
 must not produce a passing journal. See the [5 November coverage audit and
 synthetic synthesis refresh](VOICE_VALIDATION_2026-11-05.md) for the scoped carrier
 evidence, remaining gaps and corrective regression cases.
+
+## Listener-fork rehearsal on 6 November 2026
+
+One restricted interruption call ran against merged main `42c093f2` with the
+test-only caller-leg listener enabled. The carrier reported the caller leg
+completed. The target admitted one session, played one reply, observed one
+interruption and acknowledged one clear, then failed in its media path. It did
+not complete the scripted dialogue, so interruption, audible silence and
+normal-hangup qualification remain **unverified** on this source. This result
+does not reverse the separate earlier carrier pass on `6b0ce9fe` or establish
+clinic or speech acceptance. No audio or transcript was persisted.
+
+The original Twilio voice webhook was restored and read back; the temporary
+gateway, listener, tunnel and disposable database exited. The temporarily
+paused EBS preview was restored with its preserved database and a new HTTPS
+origin. The target's existing `media` failure stage does not identify whether
+the failing boundary was transcription, ordering, queue pressure or another
+media condition. The private receipt is
+`~/.local/state/abby-current-plan-20261106/phone-window-20261106-evidence-v1.json`.
+The diagnostic change here records the allowlisted media failure kind in the
+private target report without retaining speech content or changing admission,
+playback, qualification or call-retry behavior. A future real call remains a
+separate guarded run, not a result inferred from this diagnostic change.
