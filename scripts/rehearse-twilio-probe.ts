@@ -73,12 +73,17 @@ async function main() {
   // Exclusive journal creation occurs before a listener or provider create.
   closeSync(openSync(journal, "wx", 0o600));
   let callSid: string | undefined;
+  // A callback during server shutdown cannot replace the final listener result.
+  let finalized = false;
   const save = (receipt: unknown) => {
+    if (finalized) return;
     if (receipt && typeof receipt === "object" && "callSid" in receipt && typeof receipt.callSid === "string")
       callSid = receipt.callSid;
     const temporary = resolve(dirname(journal), `.${runId}.tmp`);
     writeFileSync(temporary, JSON.stringify({ runId, at: new Date().toISOString(), ...plan, callSid, receipt }) + "\n", { mode: 0o600 });
     renameSync(temporary, journal);
+    if (receipt && typeof receipt === "object" && "phase" in receipt && receipt.phase === "qualified")
+      finalized = true;
   };
   save({ phase: "prepared", targetRunId: before.runId, targetTotal: before.total });
   const server = createRehearsalServer(rehearsal, () => save({ phase: "callback", summary: rehearsal.summary() }),
