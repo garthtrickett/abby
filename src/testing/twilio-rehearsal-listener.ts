@@ -45,12 +45,14 @@ function silenceCandidate(inbound: readonly Frame[], outbound: readonly Frame[])
   if (before < 100 || !inbound.some(frame => loud(frame) &&
       frame.atMs < onset && frame.atMs + frame.durationMs > onset - 100) ||
       !inbound.some(frame => frame.atMs >= onset + 1_500)) return undefined;
-  let previousEnd: number | undefined;
+  const coverageStart = onset - 500, coverageEnd = onset + 1_500;
+  let coveredThrough = coverageStart;
   for (const frame of inbound) {
-    if (frame.atMs < onset - 500 || frame.atMs > onset + 1_500) continue;
-    if (previousEnd !== undefined && frame.atMs - previousEnd > 40) return undefined;
-    previousEnd = frame.atMs + frame.durationMs;
+    if (frame.atMs + frame.durationMs <= coverageStart || frame.atMs >= coverageEnd) continue;
+    if (frame.atMs - coveredThrough > 40) return undefined;
+    coveredThrough = Math.max(coveredThrough, frame.atMs + frame.durationMs);
   }
+  if (coveredThrough < coverageEnd) return undefined;
   let quietAt: number | undefined;
   for (const frame of inbound) {
     if (frame.atMs + frame.durationMs <= onset) continue;

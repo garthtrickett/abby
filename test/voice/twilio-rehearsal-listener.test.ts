@@ -94,6 +94,22 @@ test("caller-leg energy yields a timing candidate while keeping audio and outcom
   naturalPause.accept(stop(sequence));
   assert.equal(naturalPause.summary().status, "captured");
   assert.equal(naturalPause.summary().silenceCandidate, undefined);
+
+  const missingTail = new RehearsalListenerFrames(accountSid, runId);
+  missingTail.bindCall(callSid); missingTail.accept(connected()); missingTail.accept(start());
+  sequence = 2;
+  for (let index = 0; index < 200; index++) {
+    const timestamp = index * 20;
+    if (timestamp < 2_500 || timestamp >= 3_800) {
+      assert(missingTail.accept(timedMedia(sequence++, "inbound", timestamp,
+        timestamp >= 1_900 && timestamp < 2_260 ? 0 : 0xff)));
+    }
+    assert(missingTail.accept(timedMedia(sequence++, "outbound", timestamp,
+      timestamp < 120 || timestamp >= 2_200 && timestamp < 2_320 ? 0 : 0xff)));
+  }
+  missingTail.accept(stop(sequence));
+  assert.equal(missingTail.summary().status, "captured");
+  assert.equal(missingTail.summary().silenceCandidate, undefined);
 });
 
 test("listener upgrade needs the exact signed public WSS URL and cannot accept another stream", async t => {
