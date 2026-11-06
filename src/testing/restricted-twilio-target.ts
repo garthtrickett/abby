@@ -18,7 +18,7 @@ export type RehearsalCallStatistics = Readonly<{
   session: number; callSid: string; started: boolean; turns: number; repliesQueued: number;
   played: number; interruptions: number; clearAcknowledged: number; dtmfFallback: boolean;
   stopped: boolean; failed: boolean; failureStage: FailureStage;
-  mediaFailureKind?: MediaFailure["kind"] | TargetFailure["kind"];
+  mediaFailureKind?: MediaFailure["kind"] | TargetFailure["kind"] | undefined;
   active: number; total: number; expiresAt: string;
 }>;
 export type RestrictedTargetConfig = Readonly<{
