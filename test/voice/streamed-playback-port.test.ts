@@ -85,6 +85,40 @@ test("explicit first-chunk refusal is not sent, while a stalled synthesis step i
   assert.ok(Date.now() - startedAt < 1_000);
 });
 
+test("a later synthesis stall after queued audio stays uncertain and clears that playback", async () => {
+  let aborted = false, reads = 0, finishes = 0;
+  const sent: number[] = [], cleared: string[] = [];
+  const playback = new StreamedPlaybackPort({
+    stream(_text, signal) {
+      return { [Symbol.asyncIterator]() {
+        return { next: () => {
+          reads++;
+          if (reads === 1) return Promise.resolve({ done: false as const, value: chunk() });
+          return new Promise<IteratorResult<Uint8Array>>(resolve => {
+            signal.addEventListener("abort", () => { aborted = true;
+              resolve({ done: true, value: undefined }); }, { once: true });
+          });
+        } };
+      } };
+    },
+  }, {
+    async queueChunk(_id, sequence) { sent.push(sequence); return "queued"; },
+    async finishQueue() { finishes++; return "queued"; },
+    async clear(id) { cleared.push(id); return true; },
+  }, { stepDeadlineMs: 50, firstChunkDeadlineMs: 500 });
+
+  assert.equal(await playback.enqueue("late-stall", "Approved words", () => true), "uncertain");
+  assert.equal(aborted, true);
+  assert.deepEqual(sent, [0]);
+  assert.deepEqual(cleared, ["late-stall"]);
+  assert.equal(finishes, 0);
+  assert.equal(await playback.enqueue("late-stall", "Approved words", () => true), "uncertain");
+  const late = await playback.acceptCompletion({ playbackId: "late-stall", lastSequence: 0,
+    status: "played" }, async () => true);
+  assert.equal(late.ok, false);
+  if (!late.ok) assert.equal(late.error.kind, "playbackUnknown");
+});
+
 test("clear aborts in-flight synthesis and rejects a late completion", async () => {
   let entered!: () => void;
   const waiting = new Promise<void>(resolve => { entered = resolve; });
