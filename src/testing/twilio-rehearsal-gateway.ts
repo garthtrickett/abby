@@ -62,7 +62,7 @@ export function createTwilioRehearsalGateway(ports: Ports) {
   server.on("upgrade", (incoming, client, head) => {
     const targetMedia = incoming.method === "GET" && incoming.url === "/twilio/media/";
     const callerMedia = incoming.method === "GET" &&
-      /^\/voice-rehearsal-media\/[a-f0-9]{32}$/.test(incoming.url ?? "");
+      /^\/voice-rehearsal-media\/[a-f0-9]{32}\/$/.test(incoming.url ?? "");
     if (!targetMedia && !callerMedia) {
       client.end("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n"); return;
     }

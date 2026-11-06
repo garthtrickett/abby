@@ -17,7 +17,7 @@ export function createRehearsalListenerSocket(config: Readonly<{
   const url = new URL(config.publicUrl);
   if (!/^AC[0-9a-f]{32}$/i.test(config.accountSid) || !config.authToken ||
       !/^[a-f0-9]{32}$/.test(config.runId) || url.protocol !== "wss:" ||
-      url.pathname !== `/voice-rehearsal-media/${config.runId}` ||
+      url.pathname !== `/voice-rehearsal-media/${config.runId}/` ||
       url.search || url.hash || url.username || url.password ||
       !Number.isSafeInteger(config.expiresAt)) throw Error("Invalid listener socket configuration");
   const frames = new RehearsalListenerFrames(config.accountSid, config.runId);

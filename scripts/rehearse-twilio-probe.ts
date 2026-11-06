@@ -39,7 +39,7 @@ async function main() {
   if (!runId || configuredFallback && configuredFallback.href !== new URL(`/fallback-ringing/${runId}`, expectedFallbackBase).href)
     throw Error("Invalid fallback callback route");
   const expiresAt = Date.now() + 300_000;
-  const listenerUrl = scenario === "interruption" ? new URL(`/voice-rehearsal-media/${runId}`, expectedFallbackBase) : undefined;
+  const listenerUrl = scenario === "interruption" ? new URL(`/voice-rehearsal-media/${runId}/`, expectedFallbackBase) : undefined;
   if (listenerUrl) listenerUrl.protocol = "wss:";
   const rehearsal = new TwilioVoiceRehearsal({ accountSid, authToken, from: caller, to: number,
     callbackBase, runId, expiresAt, scenario: scenario as RehearsalScenario,

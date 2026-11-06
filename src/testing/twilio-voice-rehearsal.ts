@@ -56,7 +56,7 @@ export class TwilioVoiceRehearsal {
         !Number.isSafeInteger(config.expiresAt) || config.expiresAt <= now() ||
         config.expiresAt > now() + 300_000 || !["dialogue", "interruption", "fallback"].includes(scenario) ||
         stream && (scenario !== "interruption" || stream.protocol !== "wss:" ||
-          stream.host !== base.host || stream.pathname !== `/voice-rehearsal-media/${config.runId}` ||
+          stream.host !== base.host || stream.pathname !== `/voice-rehearsal-media/${config.runId}/` ||
           stream.search || stream.hash || stream.username || stream.password))
       throw new Error("Invalid rehearsal configuration");
     this.config = Object.freeze({ ...config }); this.base = base; this.now = now;

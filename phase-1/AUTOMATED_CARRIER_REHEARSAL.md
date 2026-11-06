@@ -158,8 +158,10 @@ memory, discards every payload immediately and saves bounded timing/energy
 metadata. It rejects a mismatched caller, stream or account, reordered or
 missing sequence/chunk, malformed payload and incomplete stop. A candidate
 silence lag is reported only if two scripted speech bursts and continuous
-target-track coverage surround the second burst. It is a **diagnostic
-candidate**, not an audible-interruption pass: the energy threshold is not yet
+target-track coverage surround the second burst. The signed WSS path ends in
+`/`, following [Twilio's WebSocket signature guidance](https://www.twilio.com/docs/usage/security#validating-requests-are-coming-from-twilio);
+the gateway accepts only that exact path. It is a **diagnostic candidate**,
+not an audible-interruption pass: the energy threshold is not yet
 calibrated on real carrier audio, a natural target pause could coincide with
 the burst, and the handset path remains outside the fork. No live listener
 result has been claimed on this source. The existing transport and clinic gates

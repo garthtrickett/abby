@@ -13,7 +13,7 @@ import { TwilioVoiceRehearsal } from "../../src/testing/twilio-voice-rehearsal.t
 const accountSid = `AC${"1".repeat(32)}`, callSid = `CA${"2".repeat(32)}`;
 const streamSid = `MZ${"3".repeat(32)}`, runId = "4".repeat(32);
 const authToken = "synthetic-test-only", base = "https://test.example";
-const publicUrl = `wss://test.example/voice-rehearsal-media/${runId}`;
+const publicUrl = `wss://test.example/voice-rehearsal-media/${runId}/`;
 const frame = (event: unknown) => JSON.stringify(event);
 const connected = () => frame({ event: "connected", protocol: "Call", version: "1.0.0" });
 const start = (sid = callSid) => frame({ event: "start", sequenceNumber: "1", streamSid,
@@ -103,7 +103,7 @@ test("listener upgrade needs the exact signed public WSS URL and cannot accept a
   server.on("upgrade", (request, socket, head) => listener.handleUpgrade(request, socket, head));
   server.listen(0, "127.0.0.1"); await once(server, "listening");
   const address = server.address(); assert(address && typeof address === "object");
-  const local = `ws://127.0.0.1:${address.port}/voice-rehearsal-media/${runId}`;
+  const local = `ws://127.0.0.1:${address.port}/voice-rehearsal-media/${runId}/`;
   t.after(async () => { listener.close(); await new Promise<void>(done => server.close(() => done())); });
 
   const forged = new WebSocket(local, { headers: { "x-twilio-signature": "forged" } });
@@ -113,6 +113,10 @@ test("listener upgrade needs the exact signed public WSS URL and cannot accept a
   assert.equal(response.statusCode, 403); request.destroy();
 
   const signature = getExpectedTwilioSignature(authToken, publicUrl, {});
+  const wrongPath = new WebSocket(local.slice(0, -1), { headers: { "x-twilio-signature": signature } });
+  wrongPath.on("error", () => {});
+  const [, wrongPathResponse] = await once(wrongPath, "unexpected-response");
+  assert.equal(wrongPathResponse.statusCode, 403);
   const valid = new WebSocket(local, { headers: { "x-twilio-signature": signature } });
   await once(valid, "open");
   for (const packet of [connected(), start(), media(2, "inbound", 0),
@@ -159,7 +163,7 @@ test("one public rehearsal gateway routes signed caller media to the isolated li
     await new Promise<void>(done => caller.close(() => done()));
     await new Promise<void>(done => target.close(() => done())); });
 
-  const socket = new WebSocket(`ws://127.0.0.1:${gatewayAddress.port}/voice-rehearsal-media/${runId}`,
+  const socket = new WebSocket(`ws://127.0.0.1:${gatewayAddress.port}/voice-rehearsal-media/${runId}/`,
     { headers: { "x-twilio-signature": getExpectedTwilioSignature(authToken, publicUrl, {}) } });
   await once(socket, "open");
   for (const packet of [connected(), start(), media(2, "inbound", 0),
