@@ -1,11 +1,13 @@
 import { createServer } from "node:http";
 import type { TwilioVoiceRehearsal } from "./twilio-voice-rehearsal.ts";
 import type { RehearsalRequest } from "./twilio-voice-rehearsal.ts";
+import type { createRehearsalListenerSocket } from "./twilio-rehearsal-listener-socket.ts";
 const header = (value: string | string[] | undefined) => typeof value === "string" ? value : undefined;
 
-/** Callback listener only: no clinical services or general-purpose conversation. */
+/** Restricted caller callbacks and optional signed media fork only. */
 export function createRehearsalServer(rehearsal: TwilioVoiceRehearsal, changed: () => void, healthToken: string,
-  fallback?: Readonly<{ path: string; accept(request: RehearsalRequest): Readonly<{ status: number }> }>) {
+  fallback?: Readonly<{ path: string; accept(request: RehearsalRequest): Readonly<{ status: number }> }>,
+  listener?: ReturnType<typeof createRehearsalListenerSocket>) {
   if (fallback && !/^\/fallback-ringing\/[a-f0-9]{32}$/.test(fallback.path)) throw Error("Invalid fallback callback path");
   const server = createServer((request, response) => {
     void (async () => {
@@ -28,5 +30,9 @@ export function createRehearsalServer(rehearsal: TwilioVoiceRehearsal, changed: 
   });
   server.requestTimeout = 10_000;
   server.headersTimeout = 10_000;
+  server.on("upgrade", (request, socket, head) => {
+    if (listener) listener.handleUpgrade(request, socket, head);
+    else socket.end("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
+  });
   return server;
 }

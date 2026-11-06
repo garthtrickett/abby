@@ -6,7 +6,7 @@ export type RehearsalScenario = "dialogue" | "interruption" | "fallback";
 export type RehearsalConfig = Readonly<{
   accountSid: string; authToken: string; from: string; to: string;
   callbackBase: string; runId: string; expiresAt: number; now?: () => number;
-  scenario?: RehearsalScenario;
+  scenario?: RehearsalScenario; listenerStreamUrl?: string;
 }>;
 export type RehearsalRequest = Readonly<{
   method: string; target: string; contentType?: string; signature?: string; body: string;
@@ -48,12 +48,16 @@ export class TwilioVoiceRehearsal {
     const base = new URL(config.callbackBase);
     const now = config.now ?? Date.now;
     const scenario = config.scenario ?? "dialogue";
+    const stream = config.listenerStreamUrl ? new URL(config.listenerStreamUrl) : undefined;
     if (!/^AC[0-9a-f]{32}$/.test(config.accountSid) || !config.authToken ||
         !phone.test(config.from) || !phone.test(config.to) || config.from === config.to ||
         !/^[a-f0-9]{32}$/.test(config.runId) || base.protocol !== "https:" ||
         base.username || base.password || base.search || base.hash || base.pathname !== "/" ||
         !Number.isSafeInteger(config.expiresAt) || config.expiresAt <= now() ||
-        config.expiresAt > now() + 300_000 || !["dialogue", "interruption", "fallback"].includes(scenario))
+        config.expiresAt > now() + 300_000 || !["dialogue", "interruption", "fallback"].includes(scenario) ||
+        stream && (scenario !== "interruption" || stream.protocol !== "wss:" ||
+          stream.host !== base.host || stream.pathname !== `/voice-rehearsal-media/${config.runId}/` ||
+          stream.search || stream.hash || stream.username || stream.password))
       throw new Error("Invalid rehearsal configuration");
     this.config = Object.freeze({ ...config }); this.base = base; this.now = now;
     this.scenario = scenario;
@@ -78,6 +82,10 @@ export class TwilioVoiceRehearsal {
   initialTwiml(): string {
     if (this.scenario === "dialogue") return this.gather(0);
     const response = new VoiceResponse();
+    if (this.scenario === "interruption" && this.config.listenerStreamUrl) {
+      const stream = response.start().stream({ url: this.config.listenerStreamUrl, track: "both_tracks" });
+      stream.parameter({ name: "runId", value: this.config.runId });
+    }
     // The greeting finishes before a fixed public probe; this is not adaptive
     // speech timing or a recognition-quality qualification.
     response.pause({ length: 25 });

@@ -6,6 +6,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { ownedBodyBytes } from "../src/shared/owned-body-bytes.ts";
 import { rehearsalCarrier, runRehearsal } from "../src/testing/twilio-rehearsal-run.ts";
 import { createRehearsalServer } from "../src/testing/twilio-rehearsal-server.ts";
+import { createRehearsalListenerSocket } from "../src/testing/twilio-rehearsal-listener-socket.ts";
 import { TwilioRehearsalFallback } from "../src/testing/twilio-rehearsal-fallback.ts";
 import { rehearsalLegObserver } from "../src/testing/twilio-rehearsal-legs.ts";
 import { rehearsalTargetSnapshot } from "../src/testing/twilio-rehearsal-observation.ts";
@@ -38,14 +39,18 @@ async function main() {
   if (!runId || configuredFallback && configuredFallback.href !== new URL(`/fallback-ringing/${runId}`, expectedFallbackBase).href)
     throw Error("Invalid fallback callback route");
   const expiresAt = Date.now() + 300_000;
+  const listenerUrl = scenario === "interruption" ? new URL(`/voice-rehearsal-media/${runId}/`, expectedFallbackBase) : undefined;
+  if (listenerUrl) listenerUrl.protocol = "wss:";
   const rehearsal = new TwilioVoiceRehearsal({ accountSid, authToken, from: caller, to: number,
-    callbackBase, runId, expiresAt, scenario: scenario as RehearsalScenario });
+    callbackBase, runId, expiresAt, scenario: scenario as RehearsalScenario,
+    ...(listenerUrl ? { listenerStreamUrl: listenerUrl.href } : {}) });
   const fallbackEvents = configuredFallback && new TwilioRehearsalFallback({ accountSid, authToken,
     callbackUrl: configuredFallback.href, fallback: fallbackNumber, expiresAt });
   const plan = { mode, scenario, calls: 1, maxConnectedSeconds: 180,
     callerSuffix: caller.slice(-4), destinationSuffix: number.slice(-4),
     fallbackSuffix: fallbackNumber.slice(-4), callbackOrigin: expectedFallbackBase.origin,
-    clinicalAcceptance: false, speechQualificationPassed: false, recordingEnabled: false };
+    clinicalAcceptance: false, speechQualificationPassed: false, recordingEnabled: false,
+    listenerMediaEnabled: Boolean(listenerUrl) };
   if (mode === "--dry-run") { console.log(JSON.stringify(plan)); return; }
   const carrier = rehearsalCarrier(accountSid, authToken, caller, number);
   if (mode === "--preflight") {
@@ -57,6 +62,8 @@ async function main() {
   const port = Number(e.ABBY_REHEARSAL_PORT ?? "3121");
   if (!Number.isSafeInteger(port) || port < 1024 || port > 65535 || !await carrier.eligibleCaller())
     throw Error("Probe route or caller is unavailable");
+  const listener = listenerUrl && createRehearsalListenerSocket({ accountSid, authToken,
+    runId, publicUrl: listenerUrl.href, expiresAt });
   const reportPath = resolve(reportName!), journal = resolve(journalName!);
   const readTarget = () => rehearsalTargetSnapshot(JSON.parse(readFileSync(reportPath, "utf8")), Date.now());
   const before = readTarget();
@@ -66,16 +73,22 @@ async function main() {
   // Exclusive journal creation occurs before a listener or provider create.
   closeSync(openSync(journal, "wx", 0o600));
   let callSid: string | undefined;
+  // A callback during server shutdown cannot replace the final listener result.
+  let finalized = false;
   const save = (receipt: unknown) => {
+    if (finalized) return;
     if (receipt && typeof receipt === "object" && "callSid" in receipt && typeof receipt.callSid === "string")
       callSid = receipt.callSid;
     const temporary = resolve(dirname(journal), `.${runId}.tmp`);
     writeFileSync(temporary, JSON.stringify({ runId, at: new Date().toISOString(), ...plan, callSid, receipt }) + "\n", { mode: 0o600 });
     renameSync(temporary, journal);
+    if (receipt && typeof receipt === "object" && "phase" in receipt && receipt.phase === "qualified")
+      finalized = true;
   };
   save({ phase: "prepared", targetRunId: before.runId, targetTotal: before.total });
   const server = createRehearsalServer(rehearsal, () => save({ phase: "callback", summary: rehearsal.summary() }),
-    runId, fallbackEvents ? { path: configuredFallback!.pathname, accept: request => fallbackEvents.accept(request) } : undefined);
+    runId, fallbackEvents ? { path: configuredFallback!.pathname, accept: request => fallbackEvents.accept(request) } : undefined,
+    listener);
   server.listen(port, "127.0.0.1"); await once(server, "listening");
   const controller = new AbortController(), interrupt = () => controller.abort();
   process.once("SIGTERM", interrupt); process.once("SIGINT", interrupt);
@@ -87,6 +100,7 @@ async function main() {
     const launchedAt = Date.now();
     const callerSummary = await runRehearsal(rehearsal, carrier, save, { signal: controller.signal });
     if (!callSid || !/^CA[0-9a-f]{32}$/.test(callSid)) throw Error("Exact caller identity unavailable");
+    listener?.bindCall(callSid);
     // Target's asynchronous stream cleanup may lag the caller terminal. Reads
     // are bounded and cannot place a second call or invent a missing event.
     let after = readTarget();
@@ -102,10 +116,14 @@ async function main() {
       callerSid: callSid, launchedAt, caller: callerSummary, before, after,
       ...(fallbackEvents ? { fallbackEvents } : {}) }, observer, { signal: controller.signal });
     if (controller.signal.aborted) throw Error("Carrier observation canceled");
-    save({ phase: "qualified", result, observation });
+    // The fork is diagnostic. Transport playback and this metadata remain
+    // independent; neither may silently upgrade the audible-interruption gate.
+    const listenerObservation = listener ? await listener.waitForTerminal(5_000) : undefined;
+    save({ phase: "qualified", result, observation, listener: listenerObservation });
     console.log(JSON.stringify(result));
     if (!result.carrierScenarioPassed) process.exitCode = 1;
   } finally {
+    listener?.close();
     server.closeAllConnections(); await new Promise<void>(done => server.close(() => done()));
     process.removeListener("SIGTERM", interrupt); process.removeListener("SIGINT", interrupt);
   }
