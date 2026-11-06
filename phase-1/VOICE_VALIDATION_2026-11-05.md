@@ -34,6 +34,26 @@ existing optional Realtime synthesis adapter is a separate transport and needs
 its own exact-profile qualification; this checkpoint performs no migration.
 No speech-recognition, Krisp, representative-call or clinic gate is closed here.
 
+### Patient-free synthesis stage diagnostic, 6 November 2026
+
+An additional stage-only diagnostic used the same two fixed messages, twenty
+repeats each, concurrency four, `coral`, and the default
+`gpt-4o-mini-tts` / `tts-1` selection with its 1,500 ms primary bound. The
+production synthesis source was unchanged from the 5 November cohort. All 40
+jobs queued; 31 selected primary and nine selected fallback. No source stream
+error occurred, and all output queues completed. This did not reproduce the
+earlier uncertain job, so its cause remains unproven.
+
+The unchanged synthetic gate still **failed**: first queued chunk p95 was
+3,584 ms against a 3,500 ms limit. Utterance p95 was 3,964 ms, with no failed
+or late jobs. This is a single diagnostic cohort, not a replacement for the
+39/40 original result. Its private count-and-timing-only evaluation receipt is
+`/home/gust/.local/state/abby-current-plan-20261106/synthesis-stage-diagnostic-main42-evaluation-v1.json`;
+the underlying private report has SHA-256
+`7792b1724a3afa44131d9a05b38d839859f5d08894d2ebe0c3c43dd3ec50e0bc`.
+No text or audio was saved, no live call was placed, and the default runtime
+profile remains unqualified and unchanged.
+
 ## Automated phone coverage
 
 The [caller guide](AUTOMATED_CARRIER_REHEARSAL.md) distinguishes the basic caller
